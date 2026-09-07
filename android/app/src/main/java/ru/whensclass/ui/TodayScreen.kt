@@ -54,6 +54,8 @@ import ru.whensclass.data.ScheduleDto
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
 import ru.whensclass.widget.formatFetchedAt
+import ru.whensclass.widget.kindName
+import ru.whensclass.widget.roomLabel
 import ru.whensclass.widget.lessonTime
 import ru.whensclass.widget.shortenName
 
@@ -262,16 +264,15 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
             )
 
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(4.dp))
+            // Тип занятия и аудитория — то, ради чего сюда и заглядывают,
+            // поэтому они идут сразу под названием и заметно, а не подписью
+            // мелким шрифтом.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                lesson.kind?.let { Kind(it) }
-                lesson.room?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
+                kindName(lesson.kind)?.let { Chip(it, filled = false) }
+                when {
+                    lesson.url != null -> Chip("Онлайн", filled = true)
+                    else -> roomLabel(lesson.room)?.let { Chip(it, filled = true) }
                 }
             }
 
@@ -297,19 +298,26 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
     }
 }
 
-/** Тип занятия капсулой — короткая пометка, которую видно, но которая не шумит. */
+/**
+ * Капсула-пометка. Залитая — для того, что ищут глазами (аудитория, «Онлайн»),
+ * контурная — для того, что просто уточняет (тип занятия).
+ */
 @Composable
-private fun Kind(kind: String) {
+private fun Chip(text: String, filled: Boolean) {
     Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+        shape = RoundedCornerShape(8.dp),
+        color = if (filled) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.padding(end = 6.dp),
     ) {
         Text(
-            kind,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (filled) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (filled) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
 }

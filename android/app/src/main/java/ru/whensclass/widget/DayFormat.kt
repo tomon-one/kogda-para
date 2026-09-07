@@ -93,6 +93,41 @@ fun lessonTime(bells: Map<String, List<String>>, number: Int): String? {
     return "$start–$end"
 }
 
+/**
+ * Расшифровка сокращений из таблицы колледжа.
+ *
+ * «Лек» и «Пр» понятны не всем и не сразу, а тип занятия — это первое, что
+ * ищут глазами вместе с аудиторией. Незнакомое сокращение оставляем как есть:
+ * колледж может завести новое, и лучше показать непонятное, чем ничего.
+ */
+fun kindName(kind: String?): String? = when (kind?.trim()?.lowercase()) {
+    null, "" -> null
+    "лек" -> "Лекция"
+    "пр" -> "Практика"
+    "лаб" -> "Лабораторная"
+    "сем" -> "Семинар"
+    "конс" -> "Консультация"
+    "экз" -> "Экзамен"
+    "зач" -> "Зачёт"
+    "диф.зач" -> "Диф. зачёт"
+    "курс.р." -> "Курсовая"
+    else -> kind
+}
+
+/**
+ * Подпись аудитории.
+ *
+ * Голая «272» в строке читается как что угодно — номер пары, число студентов.
+ * К номеру дописываем «каб.», а осмысленные названия вроде «Спортзал
+ * Б.Хмельницкого 2» оставляем как есть.
+ */
+fun roomLabel(room: String?): String? {
+    val text = room?.trim().orEmpty()
+    if (text.isEmpty()) return null
+    val looksLikeNumber = text.length <= 8 && text.all { it.isDigit() || it in "/-.абвгАБВГ" }
+    return if (looksLikeNumber) "каб. $text" else text
+}
+
 /** «Трухачев Даниил Дмитриевич» -> «Трухачев Д. Д.»: иначе не влезает в строку. */
 fun shortenName(fullName: String): String {
     val parts = fullName.trim().split(" ").filter { it.isNotEmpty() }

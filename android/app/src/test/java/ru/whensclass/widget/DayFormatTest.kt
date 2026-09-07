@@ -82,4 +82,26 @@ class DayFormatTest {
         assertEquals("ещё не обновлялось", formatFetchedAt(0))
         assertTrue(formatFetchedAt(System.currentTimeMillis()).startsWith("обновлено в"))
     }
+
+    @Test
+    fun `сокращения типов занятий расшифровываются`() {
+        assertEquals("Лекция", kindName("Лек"))
+        assertEquals("Практика", kindName("Пр"))
+        assertEquals("Курсовая", kindName("Курс.р."))
+        assertNull(kindName(null))
+        // Незнакомое оставляем как есть: колледж заводит новые пометки.
+        assertEquals("Вебинар", kindName("Вебинар"))
+    }
+
+    @Test
+    fun `номер аудитории подписывается, название — нет`() {
+        assertEquals("каб. 272", roomLabel("272"))
+        assertEquals("каб. 171/3", roomLabel("171/3"))
+        assertEquals(
+            "Спортзал Б.Хмельницкого 2",
+            roomLabel("Спортзал Б.Хмельницкого 2"),
+        )
+        assertNull(roomLabel(null))
+        assertNull(roomLabel("  "))
+    }
 }

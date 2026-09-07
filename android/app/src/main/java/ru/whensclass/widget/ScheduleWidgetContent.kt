@@ -230,43 +230,52 @@ private fun LessonRow(
 
 @Composable
 private fun Details(lesson: LessonDto, colors: Palette) {
+    // Отдельной строкой и цветом основного текста: тип занятия и аудитория —
+    // то, ради чего в виджет и смотрят. Преподаватель уходит строкой ниже и
+    // приглушённым: его имя обычно и так известно.
     val place = buildString {
-        lesson.kind?.let { append(it) }
-        lesson.room?.let {
+        kindName(lesson.kind)?.let { append(it) }
+        if (lesson.url != null) {
             if (isNotEmpty()) append(" · ")
-            append(it)
-        }
-        lesson.teachers.firstOrNull()?.let {
-            if (isNotEmpty()) append(" · ")
-            append(shortenName(it))
+            append("онлайн")
+        } else {
+            roomLabel(lesson.room)?.let {
+                if (isNotEmpty()) append(" · ")
+                append(it)
+            }
         }
     }
+
     if (place.isNotEmpty()) {
+        val row = GlanceModifier.fillMaxWidth()
         Text(
-            place,
+            if (lesson.url != null) "$place · копировать ссылку" else place,
+            maxLines = 1,
+            style = TextStyle(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (lesson.url != null) colors.accent else colors.text,
+            ),
+            modifier = lesson.url?.let { url ->
+                val context = LocalContext.current
+                row.clickable(actionStartActivity(CopyLinkActivity.intent(context, url)))
+            } ?: row,
+        )
+    }
+
+    lesson.teachers.firstOrNull()?.let {
+        Text(
+            shortenName(it),
             maxLines = 1,
             style = TextStyle(fontSize = 11.sp, color = colors.textDim),
         )
     }
+
     if (lesson.isCancelled) {
         Text(
             lesson.note?.let { "отменена — $it" } ?: "отменена",
             maxLines = 1,
             style = TextStyle(fontSize = 11.sp, color = colors.error),
-        )
-    }
-    lesson.url?.let { url ->
-        val context = LocalContext.current
-        // Отдельной строкой, а не рядом с преподавателем: рядом они не
-        // помещаются и наезжают друг на друга. Саму ссылку не печатаем — она
-        // длинная и нечитаемая, нажатие кладёт её в буфер обмена.
-        Text(
-            "онлайн · копировать ссылку",
-            maxLines = 1,
-            style = TextStyle(fontSize = 11.sp, color = colors.accent),
-            modifier = GlanceModifier
-                .fillMaxWidth()
-                .clickable(actionStartActivity(CopyLinkActivity.intent(context, url))),
         )
     }
 }
