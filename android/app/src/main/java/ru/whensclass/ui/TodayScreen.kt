@@ -93,6 +93,8 @@ fun TodayScreen(
     groupName: String,
     loadTeachers: suspend () -> List<GroupDto>,
     loadTeacherSchedule: suspend (String) -> ScheduleDto?,
+    pinnedTeachers: List<String> = emptyList(),
+    onTogglePinnedTeacher: (String) -> Unit = {},
     schedule: ScheduleDto?,
     fetchedAt: Long,
     hasUpdate: Boolean,
@@ -187,7 +189,12 @@ fun TodayScreen(
 
             when (tab) {
                 Tab.TEACHERS -> {
-                    TeacherScreen(loadTeachers = loadTeachers, loadSchedule = loadTeacherSchedule)
+                    TeacherScreen(
+                        loadTeachers = loadTeachers,
+                        loadSchedule = loadTeacherSchedule,
+                        pinned = pinnedTeachers,
+                        onTogglePin = onTogglePinnedTeacher,
+                    )
                     return@Column
                 }
                 else -> Unit

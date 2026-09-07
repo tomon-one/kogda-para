@@ -43,6 +43,8 @@ import ru.whensclass.data.ScheduleDto
 fun TeacherScreen(
     loadTeachers: suspend () -> List<GroupDto>,
     loadSchedule: suspend (String) -> ScheduleDto?,
+    pinned: List<String> = emptyList(),
+    onTogglePin: (String) -> Unit = {},
 ) {
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
     var picked by remember { mutableStateOf<GroupDto?>(null) }
@@ -114,29 +116,45 @@ fun TeacherScreen(
             }
 
             else -> {
-                val filtered = remember(list, query) {
-                    if (query.isBlank()) list
+                val filtered = remember(list, query, pinned) {
+                    val found = if (query.isBlank()) list
                     else list.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                    // Закреплённые — наверх: за ними и заходят.
+                    found.sortedBy { if (it.id in pinned) 0 else 1 }
                 }
                 LazyColumn(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(filtered, key = { it.id }) { teacher ->
+                        val isPinned = teacher.id in pinned
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surface,
+                            color = if (isPinned) MaterialTheme.colorScheme.surfaceVariant
+                            else MaterialTheme.colorScheme.surface,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(
-                                teacher.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 48.dp)
-                                    .clickable { picked = teacher }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    teacher.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 48.dp)
+                                        .clickable { picked = teacher }
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                )
+                                Text(
+                                    if (isPinned) "★" else "☆",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (isPinned) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .heightIn(min = 48.dp)
+                                        .clickable { onTogglePin(teacher.id) }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                )
+                            }
                         }
                     }
                 }

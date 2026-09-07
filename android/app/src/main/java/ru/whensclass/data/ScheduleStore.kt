@@ -51,6 +51,26 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_NOTIFY_CHANGES] = if (enabled) "1" else "0" }
     }
 
+    /**
+     * Закреплённые преподаватели — их показываем вверху списка.
+     *
+     * Списком в полторы сотни фамилий пользоваться каждый день невозможно, а
+     * смотрят обычно одних и тех же: своих или собственное расписание, если
+     * приложением пользуется преподаватель.
+     */
+    val pinnedTeachers: Flow<List<String>> = context.dataStore.data.map {
+        it[KEY_PINNED_TEACHERS]?.split("\n")?.filter(String::isNotBlank).orEmpty()
+    }
+
+    suspend fun togglePinnedTeacher(id: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_PINNED_TEACHERS]?.split("\n")?.filter(String::isNotBlank)
+                .orEmpty()
+            val next = if (id in current) current - id else current + id
+            prefs[KEY_PINNED_TEACHERS] = next.joinToString("\n")
+        }
+    }
+
     /** Прочитано ли приветствие при первом запуске. */
     val welcomeSeen: Flow<Boolean> = context.dataStore.data.map { it[KEY_WELCOME] == "1" }
 
@@ -130,5 +150,6 @@ class ScheduleStore(private val context: Context) {
         val KEY_WELCOME = stringPreferencesKey("welcome_seen")
         val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
         val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")
+        val KEY_PINNED_TEACHERS = stringPreferencesKey("pinned_teachers")
     }
 }

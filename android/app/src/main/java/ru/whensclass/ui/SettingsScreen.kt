@@ -19,7 +19,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -76,6 +81,18 @@ fun SettingsScreen(
     onUpdate: () -> Unit,
     onBack: () -> Unit,
 ) {
+    var askOwnTime by remember { mutableStateOf(false) }
+    if (askOwnTime) {
+        OwnTimeDialog(
+            current = notifyBefore,
+            onDismiss = { askOwnTime = false },
+            onPick = {
+                onNotifyBefore(it)
+                askOwnTime = false
+            },
+        )
+    }
+
     val scroll = rememberScrollState()
     var updateOffset by remember { mutableIntStateOf(0) }
 
@@ -152,6 +169,14 @@ fun SettingsScreen(
                             onPick = { onNotifyBefore(minutes) },
                         )
                     }
+                    // Готовых значений хватает не всем: кто-то едет ровно сорок
+                    // семь минут и хочет именно столько.
+                    MinutesChip(
+                        label = if (notifyBefore !in NOTIFY_OPTIONS) minutesLabel(notifyBefore)
+                        else "Своё",
+                        selected = notifyBefore !in NOTIFY_OPTIONS,
+                        onPick = { askOwnTime = true },
+                    )
                 }
             }
 
@@ -263,7 +288,7 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Link("Нашли ошибку? Напишите мне в Telegram", "https://t.me/toomonn")
-            Link("GitHub автора", "https://github.com/Tomonj1")
+            Link("GitHub автора", "https://github.com/tomon-one")
         }
     }
     }
@@ -295,6 +320,8 @@ private fun Link(text: String, url: String) {
 /** Насколько заранее можно попросить напоминание. */
 private val NOTIFY_OPTIONS = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180, 240)
 private const val DEFAULT_NOTIFY_BEFORE = 20
+private const val MIN_NOTIFY = 10
+private const val MAX_NOTIFY = 240
 
 private fun minutesLabel(minutes: Int): String = when {
     minutes < 60 -> "$minutes мин"
@@ -302,8 +329,52 @@ private fun minutesLabel(minutes: Int): String = when {
     else -> "${minutes / 60} ч ${minutes % 60} мин"
 }
 
+/**
+ * Своё время напоминания.
+ *
+ * Границы взяты из здравого смысла: меньше десяти минут предупреждать поздно,
+ * дольше четырёх часов — уже не про эту пару.
+ */
 @Composable
-private fun MinutesChip(minutes: Int, selected: Boolean, onPick: () -> Unit) {
+private fun OwnTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
+    var value by remember { mutableStateOf(current.takeIf { it > 0 }?.toString().orEmpty()) }
+    val minutes = value.toIntOrNull()
+    val valid = minutes != null && minutes in MIN_NOTIFY..MAX_NOTIFY
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("За сколько предупредить") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { new -> value = new.filter { it.isDigit() }.take(3) },
+                    label = { Text("Минут") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                Text(
+                    "От $MIN_NOTIFY минут до ${MAX_NOTIFY / 60} часов",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { minutes?.let(onPick) }, enabled = valid) { Text("Сохранить") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
+}
+
+@Composable
+private fun MinutesChip(
+    minutes: Int = 0,
+    label: String = minutesLabel(minutes),
+    selected: Boolean,
+    onPick: () -> Unit,
+) {
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = if (selected) MaterialTheme.colorScheme.primary
@@ -311,7 +382,7 @@ private fun MinutesChip(minutes: Int, selected: Boolean, onPick: () -> Unit) {
         modifier = Modifier.padding(end = 6.dp, bottom = 6.dp).clickable(onClick = onPick),
     ) {
         Text(
-            minutesLabel(minutes),
+            label,
             style = MaterialTheme.typography.labelLarge,
             color = if (selected) MaterialTheme.colorScheme.onPrimary
             else MaterialTheme.colorScheme.onSurface,

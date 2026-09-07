@@ -106,6 +106,7 @@ private fun App(startDay: String? = null) {
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
     val notifyBefore by container.store.notifyBefore.collectAsState(initial = 0)
     val notifyChanges by container.store.notifyChanges.collectAsState(initial = true)
+    val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
     val theme = ThemeChoice.from(storedTheme)
 
     var screen by remember { mutableStateOf(Screen.TODAY) }
@@ -239,6 +240,10 @@ private fun App(startDay: String? = null) {
                         groupName = groupName.orEmpty(),
                         loadTeachers = { container.repository.teachers() },
                         loadTeacherSchedule = { container.repository.teacherSchedule(it) },
+                        pinnedTeachers = pinnedTeachers,
+                        onTogglePinnedTeacher = { id ->
+                            scope.launch { container.store.togglePinnedTeacher(id) }
+                        },
                         schedule = schedule,
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,

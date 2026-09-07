@@ -23,8 +23,8 @@ class Settings(BaseSettings):
 
     # Оповещения владельцу о поломках. Без них служба работает как прежде,
     # просто молча.
-    telegram_token: str | None = None
-    telegram_chat: str | None = None
+    alert_email: str | None = None
+    alert_from: str = "whensclass@localhost"
 
     state_dir: str = "var"
     timezone: str = "Asia/Novosibirsk"
