@@ -49,7 +49,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Экраны приложения. Их три, поэтому обходимся без библиотеки навигации. */
+// Пока обкатываем приветствие — показываем его при каждом запуске. Перед
+// раздачей одногруппникам вернуть false, чтобы читали его один раз.
+private const val ALWAYS_SHOW_WELCOME = true
+
+/** Экраны приложения. Их четыре, поэтому обходимся без библиотеки навигации. */
 // Порядок важен: по нему считается, куда «едет» экран при переходе.
 private enum class Screen { WELCOME, GROUPS, TODAY, SETTINGS }
 
@@ -114,7 +118,9 @@ private fun App() {
     // Проверяем обновление один раз при запуске: чаще незачем, сборки выходят
     // не по расписанию.
     LaunchedEffect(Unit) { update = container.updates.check() }
+    var welcomeDone by remember { mutableStateOf(false) }
     val current = when {
+        ALWAYS_SHOW_WELCOME && !welcomeDone -> Screen.WELCOME
         !welcomeSeen -> Screen.WELCOME
         groupName == null -> Screen.GROUPS
         else -> screen
@@ -148,7 +154,10 @@ private fun App() {
             ) { target ->
                 when (target) {
                     Screen.WELCOME -> WelcomeScreen(
-                        onContinue = { scope.launch { container.store.markWelcomeSeen() } },
+                        onContinue = {
+                            welcomeDone = true
+                            scope.launch { container.store.markWelcomeSeen() }
+                        },
                     )
 
                     Screen.GROUPS -> GroupPickerScreen(

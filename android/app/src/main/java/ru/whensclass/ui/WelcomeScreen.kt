@@ -23,7 +23,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import ru.whensclass.R
+
+/** Та самая таблица, из которой берётся расписание. */
+private const val SCHEDULE_URL =
+    "https://docs.google.com/spreadsheets/d/" +
+        "1FiMov0r4UUDKT6A56NWMImpoUakDC2YDevgaOpJQ7Qc/edit?gid=656498718"
 
 /**
  * Первый запуск: коротко о том, что это за приложение и чего от него не ждать.
@@ -62,20 +74,15 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 
         Point(
             "Сделано студентом для студентов",
-            "Приложение неофициальное: колледж к нему отношения не имеет и за " +
-                "него не отвечает.",
+            AnnotatedString("Приложение неофициальное, и колледж к нему отношения не имеет."),
         )
-        Point(
-            "Расписание не наше",
-            "Оно берётся из общей таблицы колледжа. Что написано там — то и " +
-                "покажет приложение. За ошибки в расписании и за пропущенные " +
-                "пары мы не отвечаем: когда это важно, сверяйтесь с таблицей.",
-        )
+        Point("Расписание не наше", scheduleSourceText())
         Point(
             "О вас ничего не собирается",
-            "Ни имени, ни номера, ни местоположения. На сервер уходит только " +
-                "название выбранной группы — иначе непонятно, чьё расписание " +
-                "присылать. Учётной записи нет, рекламы и слежки тоже.",
+            AnnotatedString(
+                "Ни имени, ни номера, ни местоположения. На сервер уходит только " +
+                    "название выбранной группы.",
+            ),
         )
 
         Spacer(Modifier.height(28.dp))
@@ -89,8 +96,32 @@ fun WelcomeScreen(onContinue: () -> Unit) {
     }
 }
 
+/** Абзац про источник расписания — со ссылкой прямо на таблицу колледжа. */
 @Composable
-private fun Point(title: String, text: String) {
+private fun scheduleSourceText(): AnnotatedString = buildAnnotatedString {
+    append("Оно берётся из ")
+    withLink(
+        LinkAnnotation.Url(
+            SCHEDULE_URL,
+            TextLinkStyles(
+                style = SpanStyle(
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline,
+                ),
+            ),
+        ),
+    ) {
+        append("гугл таблицы расписания")
+    }
+    append(
+        " колледжа. Что написано там, то и покажет приложение. За ошибки в " +
+            "расписании и за пропущенные пары мы не отвечаем, и когда это важно, " +
+            "сверяйтесь с таблицей.",
+    )
+}
+
+@Composable
+private fun Point(title: String, text: AnnotatedString) {
     Row(modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
         // Точка выравнивается по первой строке заголовка, а не по верху блока.
         Surface(

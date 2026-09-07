@@ -147,7 +147,7 @@ fun TodayScreen(
             Column(modifier = Modifier.padding(padding).padding(24.dp)) {
                 Text("Расписание ещё не загружено", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Проверьте интернет и нажмите обновление вверху.",
+                    "Проверьте интернет или напишите @toomonn",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -65,7 +65,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 if (lesson == null || next == null) {
                     Text(
                         if (schedule == null) "Расписание не загружено"
-                        else "Дальше пар не найдено",
+                        else "Дальше пар нет",
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
                     Text(

@@ -64,7 +64,7 @@ fun ScheduleWidgetContent(
         when {
             groupName == null -> Hint("Откройте приложение и выберите свою группу", colors)
             schedule == null -> Hint("Расписание ещё не загружено", colors)
-            today == null -> Hint("На этот день расписание ещё не опубликовано", colors)
+            today == null -> Hint("Расписание на этот день ещё не опубликовано", colors)
             today.lessons.isEmpty() -> Hint("Пар нет", colors)
             else -> Lessons(today.lessons, schedule.bells, day, colors)
         }

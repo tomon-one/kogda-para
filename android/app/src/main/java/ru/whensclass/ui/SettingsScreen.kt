@@ -108,13 +108,13 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(
-                    if (updateReady) "Файл скачан, осталось подтвердить установку."
-                    else "Скачается с нашего сервера. Установку Android попросит " +
-                        "подтвердить — сам он приложения не ставит.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (!updateReady) {
+                    Text(
+                        "Скачается с нашего сервера.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 TextButton(onClick = onUpdate) {
                     Text(if (updateReady) "Установить" else "Скачать обновление")
                 }
@@ -131,7 +131,7 @@ fun SettingsScreen(
                 TextButton(onClick = onCheckUpdate, enabled = !checkingUpdate) {
                     Text(
                         when {
-                            checkingUpdate -> "Проверяю…"
+                            checkingUpdate -> "Проверка…"
                             updateChecked -> "Проверить ещё раз"
                             else -> "Проверить обновления"
                         }
@@ -164,20 +164,20 @@ fun SettingsScreen(
 
         Section("Данные") {
             Text(
-                "На сервер уходит только название вашей группы — иначе непонятно, " +
-                    "чьё расписание присылать. Больше ничего: ни имени, ни номера, " +
-                    "ни местоположения. Учётной записи нет, аналитики и рекламы нет.",
+                "На сервер уходит только название вашей группы. Больше ничего: " +
+                    "ни имени, ни номера, ни местоположения. Учётной записи нет, " +
+                    "аналитики и рекламы нет. Всё для вашего удобства ;)",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
 
         Section("Ответственность") {
             Text(
-                "Расписание берётся из общей таблицы колледжа. Что написано там — " +
+                "Расписание берётся из общей таблицы колледжа. Что написано там, " +
                     "то и покажет приложение: за ошибки, замены и опоздавшие " +
                     "обновления мы не отвечаем.\n\n" +
-                    "Если однажды всё сломается — постараемся починить, но сроков " +
-                    "не обещаем. Пропущенная пара остаётся на вашей совести, даже " +
+                    "Если однажды что-то сломается, я постараюсь починить, но сроков " +
+                    "не обещаю. Пропущенная пара остаётся на вашей совести, даже " +
                     "если приложение в этот момент показывало ерунду. Сверяйтесь " +
                     "с таблицей, когда это важно.",
                 style = MaterialTheme.typography.bodySmall,
@@ -191,7 +191,7 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Link("Нашли ошибку — напишите в Telegram", "https://t.me/toomonn")
+            Link("Нашли ошибку? Напишите мне в Telegram", "https://t.me/toomonn")
             Link("GitHub автора", "https://github.com/Tomonj1")
         }
     }
