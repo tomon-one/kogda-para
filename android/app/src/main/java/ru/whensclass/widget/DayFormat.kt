@@ -25,10 +25,12 @@ fun formatDayTitleShort(day: LocalDate): String {
 
 fun formatDayTitle(day: LocalDate): String {
     val today = LocalDate.now()
+    // «Послезавтра» человек и так посчитает по дате, а вот «вчера» помогает:
+    // прошедшие дни остаются в списке, и их надо отличать с одного взгляда.
     val prefix = when (day) {
         today -> "сегодня"
         today.plusDays(1) -> "завтра"
-        today.plusDays(2) -> "послезавтра"
+        today.minusDays(1) -> "вчера"
         else -> null
     }
     val date = day.format(DAY_FORMAT)

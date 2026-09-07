@@ -64,10 +64,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -102,7 +104,7 @@ private val TIME_COLUMN = 92.dp
 fun TodayScreen(
     startDay: String? = null,
     groupName: String,
-    loadTeachers: suspend () -> List<GroupDto>,
+    teachers: List<GroupDto>?,
     loadTeacherSchedule: suspend (String) -> ScheduleDto?,
     pinnedTeachers: List<String> = emptyList(),
     onTogglePinnedTeacher: (String) -> Unit = {},
@@ -182,15 +184,7 @@ fun TodayScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             ScheduleTabs(
                 current = tab,
-                onPick = { picked ->
-                    if (picked.ready) {
-                        tab = picked
-                    } else {
-                        // Листы с пересдачами и экзаменами колледж публикует
-                        // в свой срок; вкладки стоят, чтобы их ждали здесь.
-                        scope.launch { snackbar.showSnackbar(picked.emptyMessage) }
-                    }
-                },
+                onPick = { picked -> tab = picked },
             )
 
             Spacer(Modifier.height(8.dp))
@@ -198,13 +192,19 @@ fun TodayScreen(
             when (tab) {
                 Tab.TEACHERS -> {
                     TeacherScreen(
-                        loadTeachers = loadTeachers,
+                        teachers = teachers,
                         loadSchedule = loadTeacherSchedule,
                         pinned = pinnedTeachers,
                         onTogglePin = onTogglePinnedTeacher,
                     )
                     return@Column
                 }
+
+                Tab.RETAKES, Tab.EXAMS -> {
+                    ComingSoon(tab)
+                    return@Column
+                }
+
                 else -> Unit
             }
 
@@ -313,6 +313,34 @@ private fun ScheduleTabs(current: Tab, onPick: (Tab) -> Unit) {
     }
 }
 
+/**
+ * Раздел, который колледж пока не опубликовал.
+ *
+ * Вкладка стоит на месте нарочно: пересдачи и экзамены появляются в свой срок,
+ * и человек должен знать, где их искать, когда появятся.
+ */
+@Composable
+private fun ComingSoon(tab: Tab) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            tab.emptyMessage,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            "Колледж публикует такие листы отдельно и заранее. Как только они " +
+                "появятся в общей таблице, расписание будет здесь.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
 @Composable
 private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit) {
     Tab(
@@ -365,6 +393,7 @@ private fun DayCard(
 ) {
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
     val isToday = date == today
+    val past = date != null && date.isBefore(today)
     val current = if (isToday) currentLessonNumber(bells, today) else null
 
     Surface(
@@ -372,7 +401,9 @@ private fun DayCard(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
-        Column {
+        // Прошедший день не выбрасываем — иногда нужно вспомнить, что было
+        // в начале недели, — но приглушаем, чтобы он не спорил с сегодняшним.
+        Column(modifier = if (past) Modifier.alpha(0.45f) else Modifier) {
             DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday)
 
             if (day.lessons.isEmpty()) {

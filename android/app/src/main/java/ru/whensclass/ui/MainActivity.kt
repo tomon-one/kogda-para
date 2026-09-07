@@ -116,6 +116,10 @@ private fun App(startDay: String? = null) {
     var refreshing by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
     var focusUpdate by remember { mutableStateOf(false) }
+    // Список преподавателей грузим один раз за запуск и держим здесь: если
+    // держать его во вкладке, он перезагружается на каждое переключение.
+    var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
+    LaunchedEffect(Unit) { teachers = container.repository.teachers() }
 
     val refreshNow: () -> Unit = {
         scope.launch {
@@ -238,7 +242,7 @@ private fun App(startDay: String? = null) {
                     Screen.TODAY -> TodayScreen(
                         startDay = startDay,
                         groupName = groupName.orEmpty(),
-                        loadTeachers = { container.repository.teachers() },
+                        teachers = teachers,
                         loadTeacherSchedule = { container.repository.teacherSchedule(it) },
                         pinnedTeachers = pinnedTeachers,
                         onTogglePinnedTeacher = { id ->

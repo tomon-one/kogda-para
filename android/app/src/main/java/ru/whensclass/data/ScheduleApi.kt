@@ -33,13 +33,17 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
 
     fun groups(): GroupsDto = get("/v1/groups").let(json::decodeFromString)
 
-    fun schedule(groupId: String, days: Int = 7): ScheduleDto =
-        get("/v1/schedule/$groupId?days=$days").let(json::decodeFromString)
+    fun schedule(groupId: String, from: java.time.LocalDate? = null, days: Int = 7):
+        ScheduleDto = get(
+        "/v1/schedule/$groupId?days=$days" + (from?.let { "&from=$it" } ?: ""),
+    ).let(json::decodeFromString)
 
     fun teachers(): TeachersDto = get("/v1/teachers").let(json::decodeFromString)
 
-    fun teacher(teacherId: String, days: Int = 7): ScheduleDto =
-        get("/v1/teacher/$teacherId?days=$days").let(json::decodeFromString)
+    fun teacher(teacherId: String, from: java.time.LocalDate? = null, days: Int = 7):
+        ScheduleDto = get(
+        "/v1/teacher/$teacherId?days=$days" + (from?.let { "&from=$it" } ?: ""),
+    ).let(json::decodeFromString)
 
     private fun get(path: String): String {
         val request = Request.Builder().url(baseUrl.trimEnd('/') + path).build()

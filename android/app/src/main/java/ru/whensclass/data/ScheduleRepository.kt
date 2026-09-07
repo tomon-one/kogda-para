@@ -14,8 +14,22 @@ import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 
 /** Что случилось при обновлении — приложению есть что показать, виджету нет. */
-/** Сколько дней держим на телефоне: неделю вперёд, чтобы листать без сети. */
+/** Сколько дней держим на телефоне: неделя целиком. */
 const val DAYS = 7
+
+/**
+ * С какого дня показывать расписание.
+ *
+ * Обычно — с понедельника текущей недели: прошедшие пары никуда не деваются,
+ * иногда нужно вспомнить, что было в начале недели. В воскресенье неделя уже
+ * прожита, поэтому показываем следующую.
+ */
+fun weekStart(today: java.time.LocalDate = java.time.LocalDate.now()): java.time.LocalDate =
+    if (today.dayOfWeek == java.time.DayOfWeek.SUNDAY) {
+        today.plusDays(1)
+    } else {
+        today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+    }
 
 sealed interface RefreshResult {
     data object Updated : RefreshResult
@@ -103,7 +117,7 @@ class ScheduleRepository(
 
     /** Расписание преподавателя — берём по запросу, на телефоне не храним. */
     suspend fun teacherSchedule(teacherId: String): ScheduleDto? = withContext(Dispatchers.IO) {
-        runCatching { api.teacher(teacherId, days = DAYS) }.getOrNull()
+        runCatching { api.teacher(teacherId, from = weekStart(), days = DAYS) }.getOrNull()
     }
 
     suspend fun selectGroup(group: GroupDto) {
@@ -137,7 +151,7 @@ class ScheduleRepository(
                     return@withContext RefreshResult.AlreadyFresh
                 }
             }
-            val fresh = api.schedule(groupId, days = DAYS)
+            val fresh = api.schedule(groupId, from = weekStart(), days = DAYS)
             val previous = schedule.first()
             store.putSchedule(json.encodeToString(fresh), fresh.generatedAt)
             updateWidgets()

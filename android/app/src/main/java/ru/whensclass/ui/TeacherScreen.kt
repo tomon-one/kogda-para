@@ -41,18 +41,16 @@ import ru.whensclass.data.ScheduleDto
  */
 @Composable
 fun TeacherScreen(
-    loadTeachers: suspend () -> List<GroupDto>,
+    teachers: List<GroupDto>?,
     loadSchedule: suspend (String) -> ScheduleDto?,
     pinned: List<String> = emptyList(),
     onTogglePin: (String) -> Unit = {},
 ) {
-    var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
     var picked by remember { mutableStateOf<GroupDto?>(null) }
     var schedule by remember { mutableStateOf<ScheduleDto?>(null) }
     var loading by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) { teachers = loadTeachers() }
     LaunchedEffect(picked) {
         val teacher = picked ?: return@LaunchedEffect
         loading = true
