@@ -126,13 +126,6 @@ fun TodayScreen(
     val today = remember { LocalDate.now() }
     val listState = rememberLazyListState()
 
-    // Открываемся на сегодняшнем дне — или на том, который попросил виджет.
-    LaunchedEffect(schedule, startDay) {
-        val target = startDay ?: today.toString()
-        val index = schedule?.days?.indexOfFirst { it.date >= target } ?: -1
-        if (index > 0) listState.scrollToItem(index)
-    }
-
     // Преподаватель открывает приложение на своём разделе.
     var tab by remember(teacherMode) {
         mutableStateOf(if (teacherMode) Tab.TEACHERS else Tab.STUDENTS)
@@ -253,7 +246,12 @@ fun TodayScreen(
             return@Scaffold
         }
 
-        ScheduleDays(schedule = schedule, today = today, listState = listState)
+        ScheduleDays(
+            schedule = schedule,
+            today = today,
+            listState = listState,
+            startDay = startDay,
+        )
         }
     }
 }
@@ -423,7 +421,16 @@ fun ScheduleDays(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     showGroups: Boolean = false,
+    startDay: String? = null,
 ) {
+    // Открываемся на сегодняшнем дне: неделя показывается с понедельника,
+    // и без этого расписание начинается с прожитых дней.
+    LaunchedEffect(schedule, startDay) {
+        val target = startDay ?: today.toString()
+        val index = schedule.days.indexOfFirst { it.date >= target }
+        if (index > 0) listState.scrollToItem(index)
+    }
+
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),

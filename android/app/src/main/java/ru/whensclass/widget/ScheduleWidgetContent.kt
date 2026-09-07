@@ -11,8 +11,6 @@ import androidx.glance.LocalContext
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
@@ -184,14 +182,16 @@ private fun Lessons(
         return
     }
     val current = currentLessonNumber(bells, day)
-    // Высоту список получает от вызывающего: без явной доли он в некоторых
-    // оболочках схлопывается в ноль, и пары просто не рисуются.
-    LazyColumn(modifier = modifier) {
-        items(lessons, itemId = { it.number.toLong() }) { lesson ->
-            Column(modifier = GlanceModifier.fillMaxWidth()) {
-                LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)
-                Spacer(GlanceModifier.height(6.dp))
-            }
+    // Обычный столбец, а не ленивый список.
+    //
+    // Ленивый список в виджете рисуется через системный адаптер, которому
+    // нужен живой процесс приложения: стоит выгрузить приложение из памяти —
+    // и виджет остаётся с одной шапкой на чёрном фоне. Пар в дне не больше
+    // шести, ленивость тут ничего не экономит.
+    Column(modifier = modifier) {
+        lessons.forEach { lesson ->
+            LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)
+            Spacer(GlanceModifier.height(6.dp))
         }
     }
 }
