@@ -40,6 +40,22 @@ class ScheduleStore(private val context: Context) {
 
     suspend fun currentGroupId(): String? = groupId.first()
 
+    /**
+     * Всё, что нужно виджету, за одно чтение.
+     *
+     * Раньше он спрашивал хранилище по разу на каждое поле — четыре обращения
+     * к диску на каждую перерисовку, и переключение дня заметно подтормаживало.
+     */
+    suspend fun widgetState(): WidgetState {
+        val prefs = context.dataStore.data.first()
+        return WidgetState(
+            groupName = prefs[KEY_GROUP_NAME],
+            scheduleJson = prefs[KEY_SCHEDULE],
+            fetchedAt = prefs[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L,
+            theme = prefs[KEY_THEME] ?: "system",
+        )
+    }
+
     suspend fun selectGroup(id: String, name: String) {
         context.dataStore.edit {
             it[KEY_GROUP_ID] = id
@@ -58,9 +74,21 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
+    /** Отмечает, что расписание проверяли, даже если оно не изменилось. */
+    suspend fun touchChecked() {
+        context.dataStore.edit { it[KEY_FETCHED_AT] = System.currentTimeMillis().toString() }
+    }
+
     suspend fun putGroups(body: String) {
         context.dataStore.edit { it[KEY_GROUPS] = body }
     }
+
+    data class WidgetState(
+        val groupName: String?,
+        val scheduleJson: String?,
+        val fetchedAt: Long,
+        val theme: String,
+    )
 
     private companion object {
         val KEY_GROUP_ID = stringPreferencesKey("group_id")

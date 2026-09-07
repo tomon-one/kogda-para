@@ -9,7 +9,7 @@ import androidx.glance.state.PreferencesGlanceStateDefinition
 import ru.whensclass.work.SyncWorker
 
 /**
- * Переключение «сегодня / завтра».
+ * Переключение дня в виджете.
  *
  * День хранится в состоянии конкретного виджета, а не в общих настройках:
  * два виджета на экране могут показывать разные дни, и это разумно.

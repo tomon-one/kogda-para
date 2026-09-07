@@ -31,7 +31,7 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
 
     fun groups(): GroupsDto = get("/v1/groups").let(json::decodeFromString)
 
-    fun schedule(groupId: String, days: Int = 3): ScheduleDto =
+    fun schedule(groupId: String, days: Int = 7): ScheduleDto =
         get("/v1/schedule/$groupId?days=$days").let(json::decodeFromString)
 
     private fun get(path: String): String {

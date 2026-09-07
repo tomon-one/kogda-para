@@ -11,6 +11,9 @@ import kotlinx.serialization.json.Json
 import ru.whensclass.widget.ScheduleWidget
 
 /** Что случилось при обновлении — приложению есть что показать, виджету нет. */
+/** Сколько дней держим на телефоне: неделю вперёд, чтобы листать без сети. */
+const val DAYS = 7
+
 sealed interface RefreshResult {
     data object Updated : RefreshResult
     data object AlreadyFresh : RefreshResult
@@ -63,10 +66,14 @@ class ScheduleRepository(
             if (!force) {
                 val meta = api.meta()
                 if (meta.generatedAt == store.generatedAt.first()) {
+                    // Данные те же, но проверку показать надо: иначе кажется,
+                    // что кнопка обновления не работает.
+                    store.touchChecked()
+                    ScheduleWidget().updateAll(context)
                     return@withContext RefreshResult.AlreadyFresh
                 }
             }
-            val fresh = api.schedule(groupId)
+            val fresh = api.schedule(groupId, days = DAYS)
             store.putSchedule(json.encodeToString(fresh), fresh.generatedAt)
             ScheduleWidget().updateAll(context)
             RefreshResult.Updated

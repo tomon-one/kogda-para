@@ -33,8 +33,11 @@ class Settings(BaseSettings):
     # Только ASCII: HTTP-заголовки кириллицу не переносят.
     user_agent: str = "WhensClass/0.1 (NGOK schedule widget; student project)"
 
-    # Сколько дней отдавать виджету по умолчанию: сегодня, завтра, послезавтра.
+    # Сколько дней отдавать виджету по умолчанию.
     default_days: int = 3
+    # На сколько дней вперёд держим расписание. Неделя часто перешагивает
+    # границу листа, поэтому при необходимости склеиваем два.
+    window_days: int = 8
 
 
 settings = Settings()

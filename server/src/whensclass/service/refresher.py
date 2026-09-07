@@ -28,27 +28,39 @@ class Refresher:
         self.status = "empty"          # empty | ok | stale
         self.checked_at: dt.datetime | None = None
         self.last_error: str | None = None
-        self._source_etag: str | None = None
-        self._sheet: tuple[str, str | None] | None = None
+        self._source_etags: dict[str, str | None] = {}
+        self._sheets: list[tuple[str, str | None]] | None = None
 
     def refresh(self, today: dt.date | None = None, force: bool = False) -> bool:
         """Перечитывает таблицу. True, если снимок обновился."""
         today = today or dt.date.today()
         self.checked_at = dt.datetime.now(dt.timezone.utc)
         try:
-            if self._sheet is None or force:
-                self._sheet = sheet_index.resolve_for(today, self.state_dir)
-            title, gid = self._sheet
+            if self._sheets is None or force:
+                self._sheets = sheet_index.resolve_window(
+                    today, settings.window_days, self.state_dir, deep=force
+                )
 
-            text, etag = gsheets.fetch_sheet_csv(
-                gid=gid, title=title or None, etag=None if force else self._source_etag
-            )
-            if text is None:
-                # Google ответил 304: таблица не менялась.
+            snapshot = None
+            unchanged = 0
+            for title, gid in self._sheets:
+                text, etag = gsheets.fetch_sheet_csv(
+                    gid=gid,
+                    title=title or None,
+                    etag=None if force else self._source_etags.get(title),
+                )
+                if text is None:
+                    # Google ответил 304: этот лист не менялся.
+                    unchanged += 1
+                    continue
+                self._source_etags[title] = etag
+                current = parse_csv(text, title or f"gid {gid}")
+                snapshot = current if snapshot is None else snapshot.merged_with(current)
+
+            if snapshot is None:
+                # Не изменился ни один лист — перерисовывать нечего.
                 self.status = "ok"
                 return False
-
-            snapshot = parse_csv(text, title or f"gid {gid}")
         except SourceFormatChanged as exc:
             # Самый опасный случай: таблицу переделали. Держим прежнее.
             self._fail(f"формат таблицы изменился: {exc}")
@@ -62,11 +74,15 @@ class Refresher:
 
         coverage = snapshot.coverage
         if coverage and not (coverage[0] <= today <= coverage[1]):
-            # Лист устарел — на следующем заходе поищем новый.
-            log.info("лист %r больше не покрывает %s", snapshot.sheet_title, today)
-            self._sheet = None
+            # Сегодняшний день вышел за край листа — набор листов пора
+            # пересобрать. То, что окно шире листа, поводом не считаем:
+            # следующий лист ищется ночью, чтобы не выгружать книгу впустую.
+            log.info(
+                "лист %r больше не покрывает %s — пересоберу набор",
+                snapshot.sheet_title, today,
+            )
+            self._sheets = None
 
-        self._source_etag = etag
         self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
         self.status = "ok"
         self.last_error = None
@@ -79,7 +95,7 @@ class Refresher:
     def _fail(self, message: str) -> None:
         self.last_error = message
         self.status = "stale" if self.store.snapshot else "empty"
-        self._sheet = None
+        self._sheets = None
         log.error("%s (состояние: %s)", message, self.status)
 
 

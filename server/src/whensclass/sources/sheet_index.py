@@ -97,6 +97,58 @@ def candidates(sheets: list[SheetInfo], day: dt.date) -> list[SheetInfo]:
     return sorted(picked, key=distance)
 
 
+def resolve_window(
+    start: dt.date, days: int, state_dir: pathlib.Path, deep: bool = False
+) -> list[tuple[str, str | None]]:
+    """Листы, покрывающие ближайшие `days` дней, по порядку.
+
+    Неделя вперёд часто перешагивает границу листа: лист живёт две недели,
+    а в пятницу человек уже смотрит понедельник. Поэтому берём не один лист,
+    а все, что попадают в окно, — если следующий уже опубликован.
+
+    С `deep=False` соседний лист берём только из памяти: искать его в сети —
+    это выгрузка всей книги, и делать её каждые двадцать минут незачем.
+    """
+    first = resolve_for(start, state_dir)
+    sheets = [first]
+
+    if settings.sheet_title or settings.sheet_gid:
+        return sheets
+
+    end = start + dt.timedelta(days=days - 1)
+    index = SheetIndex(state_dir)
+    covered_to = _covered_to(index, first[0])
+    if covered_to is None or covered_to >= end:
+        return sheets
+
+    # Окно выходит за край текущего листа — ищем следующий.
+    following = index.covering(covered_to + dt.timedelta(days=1))
+    if following is None:
+        if not deep:
+            # Искать соседний лист в сети — это выгрузка всей книги на два
+            # десятка мегабайт. Раз в сутки (deep) не жалко, каждые двадцать
+            # минут — уже расточительство.
+            return sheets
+        try:
+            following = resolve_for(covered_to + dt.timedelta(days=1), state_dir)
+        except LookupError:
+            log.info("следующий лист ещё не опубликован, отдаём что есть")
+            return sheets
+    if following and following[0] != first[0]:
+        sheets.append(following)
+    return sheets
+
+
+def _covered_to(index: SheetIndex, title: str) -> dt.date | None:
+    info = index.known.get(title)
+    if not info:
+        return None
+    try:
+        return dt.date.fromisoformat(info["to"])
+    except (KeyError, ValueError):
+        return None
+
+
 def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]:
     """Возвращает (название листа, gid) для даты.
 

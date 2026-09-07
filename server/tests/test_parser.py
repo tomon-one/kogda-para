@@ -112,3 +112,37 @@ def test_column_step_must_be_four():
               "Дисциплина Преподаватель В-3", "", "", "Ауд. "]
     with pytest.raises(SourceFormatChanged):
         build_column_map([header], min_groups=3)
+
+
+def test_merged_snapshot_keeps_both_weeks(fixture_csv):
+    """Соседние листы склеиваются: неделя вперёд часто их перешагивает."""
+    first = parse_csv(fixture_csv, "лист А", FIXTURE)
+    second = parse_csv(fixture_csv, "лист Б", FIXTURE)
+
+    # Подменяем даты второго листа на следующие две недели.
+    shift = dt.timedelta(days=14)
+    second.dates = [d + shift for d in second.dates]
+    second.schedule = {
+        gid: {day + shift: lessons for day, lessons in by_date.items()}
+        for gid, by_date in second.schedule.items()
+    }
+
+    merged = first.merged_with(second)
+
+    assert merged.dates == sorted(set(first.dates) | set(second.dates))
+    assert merged.coverage == (first.dates[0], second.dates[-1])
+    assert {g.id for g in merged.groups} == {g.id for g in first.groups}
+    assert merged.total_lessons() == first.total_lessons() + second.total_lessons()
+
+
+def test_merge_prefers_the_current_sheet(fixture_csv):
+    """Если день есть в обоих листах, верим текущему: его правят свежее."""
+    current = parse_csv(fixture_csv, "текущий", FIXTURE)
+    other = parse_csv(fixture_csv, "соседний", FIXTURE)
+    group = next(g for g in current.groups if g.name == "ИСП-924/2")
+    day = current.dates[0]
+    other.schedule[group.id][day] = []
+
+    merged = current.merged_with(other)
+
+    assert merged.schedule[group.id][day] == current.schedule[group.id][day]

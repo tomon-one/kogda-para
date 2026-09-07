@@ -55,6 +55,29 @@ class Snapshot:
     def coverage(self) -> tuple[date, date] | None:
         return (self.dates[0], self.dates[-1]) if self.dates else None
 
+    def merged_with(self, other: "Snapshot") -> "Snapshot":
+        """Приклеивает соседний лист.
+
+        Листы колледжа идут подряд и не пересекаются по датам, а состав групп
+        в них один и тот же. Если группа встречается в обоих, берём её пары из
+        обоих листов; даты, которые есть в первом, вторым не переписываем —
+        текущий лист главнее, он свежее правится.
+        """
+        combined = Snapshot(
+            sheet_title=f"{self.sheet_title} + {other.sheet_title}",
+            groups=list(self.groups),
+        )
+        known = {g.id for g in self.groups}
+        combined.groups += [g for g in other.groups if g.id not in known]
+
+        for gid in {g.id for g in combined.groups}:
+            by_date = dict(other.schedule.get(gid, {}))
+            by_date.update(self.schedule.get(gid, {}))
+            combined.schedule[gid] = by_date
+
+        combined.dates = sorted(set(self.dates) | set(other.dates))
+        return combined
+
     def total_lessons(self) -> int:
         return sum(
             len(lessons)

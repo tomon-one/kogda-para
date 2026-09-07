@@ -56,7 +56,8 @@ fun ScheduleWidgetContent(
             .cornerRadius(16.dp)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
-        Header(groupName ?: "Расписание", day, offset, fetchedAt, colors)
+        val lastDay = schedule?.days?.size?.minus(1)?.coerceIn(0, ScheduleWidget.MAX_OFFSET) ?: 0
+        Header(groupName ?: "Расписание", day, offset, fetchedAt, lastDay, colors)
         Spacer(GlanceModifier.height(6.dp))
 
         val today = schedule?.days?.firstOrNull { it.date == day.toString() }
@@ -76,19 +77,21 @@ private fun Header(
     day: LocalDate,
     offset: Int,
     fetchedAt: Long,
+    lastDay: Int,
     colors: Palette,
 ) {
     val context = LocalContext.current
     val openApp = actionStartActivity(
-        Intent(context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
     )
 
-    Column(modifier = GlanceModifier.fillMaxWidth()) {
-        Row(
-            modifier = GlanceModifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    // Название и дата — в одном столбце, стрелки сбоку. Иначе высокие кнопки
+    // растягивают первую строку и между группой и датой зияет пустота.
+    Row(
+        modifier = GlanceModifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
                 groupName,
                 maxLines = 1,
@@ -97,39 +100,33 @@ private fun Header(
                     fontWeight = FontWeight.Bold,
                     color = colors.text,
                 ),
-                // Нажатие на название группы открывает приложение — там
-                // расписание на неделю вперёд и настройки.
-                modifier = GlanceModifier.defaultWeight().clickable(openApp),
+                // Нажатие на шапку открывает приложение: там расписание на
+                // неделю вперёд и настройки.
+                modifier = GlanceModifier.fillMaxWidth().clickable(openApp),
             )
-            ArrowButton("‹", step = -1, enabled = offset > 0, colors = colors)
-            Spacer(GlanceModifier.width(4.dp))
-            ArrowButton("›", step = 1, enabled = offset < ScheduleWidget.MAX_OFFSET, colors = colors)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    formatDayTitle(day),
+                    maxLines = 1,
+                    style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                    modifier = GlanceModifier.clickable(openApp),
+                )
+                // Обновление стоит рядом со временем последней проверки: там
+                // оно понятнее всего и не отнимает ширину у названия группы.
+                Text(
+                    " · " + formatFetchedShort(fetchedAt) + " ⟳",
+                    maxLines = 1,
+                    style = TextStyle(
+                        fontSize = 11.sp,
+                        color = if (isStale(fetchedAt)) colors.error else colors.accent,
+                    ),
+                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+                )
+            }
         }
-
-        Row(
-            modifier = GlanceModifier.fillMaxWidth().padding(top = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                formatDayTitle(day),
-                maxLines = 1,
-                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                modifier = GlanceModifier.defaultWeight().clickable(openApp),
-            )
-            // Обновление стоит рядом с временем последнего обновления: там оно
-            // понятнее всего и не отнимает ширину у названия группы.
-            Text(
-                formatFetchedShort(fetchedAt) + " ⟳",
-                maxLines = 1,
-                style = TextStyle(
-                    fontSize = 11.sp,
-                    color = if (isStale(fetchedAt)) colors.accent else colors.textDim,
-                ),
-                modifier = GlanceModifier
-                    .clickable(actionRunCallback<RefreshAction>())
-                    .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
-            )
-        }
+        ArrowButton("‹", step = -1, enabled = offset > 0, colors = colors)
+        Spacer(GlanceModifier.width(4.dp))
+        ArrowButton("›", step = 1, enabled = offset < lastDay, colors = colors)
     }
 }
 

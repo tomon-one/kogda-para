@@ -13,7 +13,6 @@ import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.currentState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import java.time.LocalDate
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import ru.whensclass.AppContainer
 import ru.whensclass.data.ScheduleDto
@@ -32,19 +31,14 @@ class ScheduleWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val container = AppContainer.get(context)
-        val json = Json { ignoreUnknownKeys = true }
-
-        val raw = container.store.scheduleJson.first()
-        val schedule = raw?.let { runCatching { json.decodeFromString<ScheduleDto>(it) }.getOrNull() }
-        val fetchedAt = container.store.fetchedAt.first()
-        val groupName = container.store.groupName.first()
-        val colors = WidgetColors.resolve(context, ThemeChoice.from(container.store.currentTheme()))
+        val state = AppContainer.get(context).store.widgetState()
+        val schedule = parseCached(state.scheduleJson)
+        val colors = WidgetColors.resolve(context, ThemeChoice.from(state.theme))
 
         provideContent {
             // Палитра своя (см. WidgetColors), а не системная: оболочки на
             // телефонах слишком по-разному понимают динамические цвета.
-            Content(schedule, groupName, fetchedAt, colors, offset = currentOffset())
+            Content(schedule, state.groupName, state.fetchedAt, colors, offset = currentOffset())
         }
     }
 
@@ -84,7 +78,24 @@ class ScheduleWidget : GlanceAppWidget() {
     companion object {
         val KEY_DAY_OFFSET = intPreferencesKey("day_offset")
 
-        /** Сервер отдаёт три дня — дальше листать нечего. */
-        const val MAX_OFFSET = 2
+        /** Дальше недели листать нечего: ровно столько храним на телефоне. */
+        const val MAX_OFFSET = 6
+
+        private val json = Json { ignoreUnknownKeys = true }
+
+        // Разбор одного и того же ответа при каждом переключении дня — самая
+        // дорогая часть перерисовки. Пока текст не менялся, отдаём разобранное.
+        private var cachedJson: String? = null
+        private var cachedSchedule: ScheduleDto? = null
+
+        @Synchronized
+        private fun parseCached(body: String?): ScheduleDto? {
+            if (body == null) return null
+            if (body == cachedJson) return cachedSchedule
+            val parsed = runCatching { json.decodeFromString<ScheduleDto>(body) }.getOrNull()
+            cachedJson = body
+            cachedSchedule = parsed
+            return parsed
+        }
     }
 }
