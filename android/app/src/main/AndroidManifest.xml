@@ -3,6 +3,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Обновление приложения: файл скачивается с нашего сервера, а установку
+         всё равно подтверждает человек — молча поставить APK нельзя. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".WhensClassApp"
@@ -22,6 +25,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Отдаёт скачанный файл системному установщику: напрямую путь к
+             файлу другому приложению передавать нельзя. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- Копирование ссылки из виджета. С Android 10 писать в буфер обмена
              может только приложение на переднем плане, поэтому нажатие

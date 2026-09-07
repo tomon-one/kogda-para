@@ -11,6 +11,17 @@ import java.util.Locale
 
 private val RU = Locale("ru")
 private val DAY_FORMAT = DateTimeFormatter.ofPattern("d MMMM, EEEE", RU)
+private val SHORT_DAY = DateTimeFormatter.ofPattern("d MMMM", RU)
+
+/** Короткая подпись дня для виджета: «сегодня, 7 сентября», «пт, 11 сентября». */
+fun formatDayTitleShort(day: LocalDate): String {
+    val today = LocalDate.now()
+    return when (day) {
+        today -> "сегодня, " + day.format(SHORT_DAY)
+        today.plusDays(1) -> "завтра, " + day.format(SHORT_DAY)
+        else -> day.format(DateTimeFormatter.ofPattern("EEE, d MMMM", RU))
+    }
+}
 
 fun formatDayTitle(day: LocalDate): String {
     val today = LocalDate.now()

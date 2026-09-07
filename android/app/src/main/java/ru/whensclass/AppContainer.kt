@@ -1,6 +1,7 @@
 package ru.whensclass
 
 import android.content.Context
+import ru.whensclass.data.AppUpdate
 import ru.whensclass.data.ScheduleApi
 import ru.whensclass.data.ScheduleRepository
 import ru.whensclass.data.ScheduleStore
@@ -16,6 +17,7 @@ class AppContainer(context: Context) {
     val store = ScheduleStore(app)
     private val api = ScheduleApi(app.cacheDir)
     val repository = ScheduleRepository(app, api, store)
+    val updates = AppUpdate(app, api)
 
     companion object {
         @Volatile

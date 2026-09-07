@@ -85,40 +85,40 @@ private fun Header(
         Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
     )
 
-    // Название и дата — в одном столбце, стрелки сбоку. Иначе высокие кнопки
-    // растягивают первую строку и между группой и датой зияет пустота.
+    // Крупно — день, ради которого виджет и ставят. Группа своя, её и так
+    // знают наизусть, поэтому она уехала во вторую строку.
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
-                groupName,
+                formatDayTitleShort(day).replaceFirstChar { it.uppercase() },
                 maxLines = 1,
                 style = TextStyle(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.text,
                 ),
-                // Нажатие на шапку открывает приложение: там расписание на
-                // неделю вперёд и настройки.
+                // Нажатие на шапку открывает приложение: там неделя целиком
+                // и настройки.
                 modifier = GlanceModifier.fillMaxWidth().clickable(openApp),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    formatDayTitle(day),
+                    groupName,
                     maxLines = 1,
                     style = TextStyle(fontSize = 11.sp, color = colors.textDim),
                     modifier = GlanceModifier.clickable(openApp),
                 )
-                // Обновление стоит рядом со временем последней проверки: там
-                // оно понятнее всего и не отнимает ширину у названия группы.
+                // Время последней проверки — служебная мелочь, поэтому тем же
+                // приглушённым цветом; краснеет, только когда данные протухли.
                 Text(
                     " · " + formatFetchedShort(fetchedAt) + " ⟳",
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
-                        color = if (isStale(fetchedAt)) colors.error else colors.accent,
+                        color = if (isStale(fetchedAt)) colors.error else colors.textDim,
                     ),
                     modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )

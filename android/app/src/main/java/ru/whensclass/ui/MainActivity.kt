@@ -4,17 +4,22 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +32,7 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
 import ru.whensclass.data.GroupDto
+import ru.whensclass.data.ReleaseDto
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.ThemeChoice
 import ru.whensclass.work.SyncWorker
@@ -47,21 +53,30 @@ private enum class Screen { TODAY, GROUPS, SETTINGS }
 
 /** Красный колледжа — из его же логотипа. */
 private val BRAND = Color(0xFFD60403)
+private val BRAND_LIGHT = Color(0xFFFF6B70)
 
 /** Тёмная схема в тон виджету: чистый чёрный не светится на OLED. */
 private val DarkScheme = darkColorScheme(
     background = Color(0xFF000000),
+    onBackground = Color(0xFFF5F5F5),
     surface = Color(0xFF141414),
-    surfaceVariant = Color(0xFF1C1C1C),
-    primary = Color(0xFFFF6B70),
-    error = Color(0xFFFF6B70),
+    onSurface = Color(0xFFF5F5F5),
+    surfaceVariant = Color(0xFF1F1F1F),
+    onSurfaceVariant = Color(0xFF9AA0A6),
+    primary = BRAND_LIGHT,
+    onPrimary = Color(0xFF000000),
+    error = BRAND_LIGHT,
 )
 
 private val LightScheme = lightColorScheme(
     background = Color(0xFFFFFFFF),
-    surface = Color(0xFFF4F5F7),
-    surfaceVariant = Color(0xFFEDEEF0),
+    onBackground = Color(0xFF16181B),
+    surface = Color(0xFFF7F8FA),
+    onSurface = Color(0xFF16181B),
+    surfaceVariant = Color(0xFFECEEF1),
+    onSurfaceVariant = Color(0xFF5C6672),
     primary = BRAND,
+    onPrimary = Color(0xFFFFFFFF),
     error = BRAND,
 )
 
@@ -78,6 +93,12 @@ private fun App() {
     val theme = ThemeChoice.from(storedTheme)
 
     var screen by remember { mutableStateOf(Screen.TODAY) }
+    var update by remember { mutableStateOf<ReleaseDto?>(null) }
+
+    // Проверяем обновление один раз при запуске: чаще незачем, сборки выходят
+    // не по расписанию.
+    LaunchedEffect(Unit) { update = container.updates.check() }
+    val current = if (groupName == null) Screen.GROUPS else screen
 
     val dark = when (theme) {
         ThemeChoice.DARK -> true
@@ -86,44 +107,73 @@ private fun App() {
     }
 
     MaterialTheme(colorScheme = if (dark) DarkScheme else LightScheme) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Scaffold { padding ->
-                Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    when {
-                        groupName == null || screen == Screen.GROUPS -> GroupPickerScreen(
-                            loadGroups = { container.repository.groups() },
-                            onPick = { group: GroupDto ->
-                                scope.launch {
-                                    container.repository.selectGroup(group)
-                                    screen = Screen.TODAY
-                                }
-                            },
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            // Экраны сменяются со сдвигом: вглубь — справа налево, назад —
+            // наоборот. Резкая подмена читалась как подвисание.
+            AnimatedContent(
+                targetState = current,
+                transitionSpec = {
+                    val forward = targetState.ordinal > initialState.ordinal
+                    val shift = if (forward) 1 else -1
+                    (slideInHorizontally(tween(220)) { (it * shift) / 6 } + fadeIn(tween(180)))
+                        .togetherWith(
+                            slideOutHorizontally(tween(220)) { (-it * shift) / 6 } +
+                                fadeOut(tween(140))
                         )
+                },
+                label = "screen",
+            ) { target ->
+                when (target) {
+                    Screen.GROUPS -> GroupPickerScreen(
+                        loadGroups = { container.repository.groups() },
+                        canGoBack = groupName != null,
+                        onBack = { screen = Screen.SETTINGS },
+                        onPick = { group: GroupDto ->
+                            scope.launch {
+                                container.repository.selectGroup(group)
+                                screen = Screen.TODAY
+                            }
+                        },
+                    )
 
-                        screen == Screen.SETTINGS -> SettingsScreen(
-                            groupName = groupName,
-                            theme = theme,
-                            onTheme = { choice ->
-                                scope.launch {
-                                    container.store.setTheme(ThemeChoice.toStored(choice))
-                                    // Виджет обязан перекраситься сразу, а не
-                                    // через час при очередном обновлении.
-                                    ScheduleWidget().updateAll(context)
-                                }
-                            },
-                            onChangeGroup = { screen = Screen.GROUPS },
-                            onRefresh = { SyncWorker.now(context) },
-                            onBack = { screen = Screen.TODAY },
-                        )
+                    Screen.SETTINGS -> SettingsScreen(
+                        groupName = groupName,
+                        theme = theme,
+                        update = update,
+                        updateReady = update?.let { container.updates.downloaded(it) } != null,
+                        onUpdate = {
+                            val release = update ?: return@SettingsScreen
+                            val ready = container.updates.downloaded(release)
+                            if (ready != null) {
+                                container.updates.install(ready)
+                            } else {
+                                container.updates.download(release)
+                            }
+                        },
+                        onTheme = { choice ->
+                            scope.launch {
+                                container.store.setTheme(ThemeChoice.toStored(choice))
+                                // Виджет обязан перекраситься сразу, а не через
+                                // час при очередном обновлении.
+                                ScheduleWidget().updateAll(context)
+                            }
+                        },
+                        onChangeGroup = { screen = Screen.GROUPS },
+                        onRefresh = { SyncWorker.now(context) },
+                        onBack = { screen = Screen.TODAY },
+                    )
 
-                        else -> TodayScreen(
-                            groupName = groupName.orEmpty(),
-                            schedule = schedule,
-                            fetchedAt = fetchedAt,
-                            onSettings = { screen = Screen.SETTINGS },
-                            onRefresh = { SyncWorker.now(context) },
-                        )
-                    }
+                    Screen.TODAY -> TodayScreen(
+                        groupName = groupName.orEmpty(),
+                        schedule = schedule,
+                        fetchedAt = fetchedAt,
+                        hasUpdate = update != null,
+                        onSettings = { screen = Screen.SETTINGS },
+                        onRefresh = { SyncWorker.now(context) },
+                    )
                 }
             }
         }

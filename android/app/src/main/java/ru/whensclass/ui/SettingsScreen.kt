@@ -10,9 +10,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -22,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
+import ru.whensclass.data.ReleaseDto
 import ru.whensclass.widget.ThemeChoice
 
 /**
@@ -30,33 +39,72 @@ import ru.whensclass.widget.ThemeChoice
  * Тексты намеренно немногословны: это приложение для одногруппников, а не
  * пользовательское соглашение, которое всё равно никто не читает.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     groupName: String?,
     theme: ThemeChoice,
+    update: ReleaseDto?,
+    updateReady: Boolean,
     onTheme: (ThemeChoice) -> Unit,
     onChangeGroup: () -> Unit,
     onRefresh: () -> Unit,
+    onUpdate: () -> Unit,
     onBack: () -> Unit,
 ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        "Настройки",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+            )
+        },
+    ) { padding ->
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .padding(padding)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                "Настройки",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp),
-            )
-            TextButton(onClick = onBack) { Text("Готово") }
+        if (update != null) {
+            Section("Обновление приложения") {
+                Text(
+                    "Доступна версия ${update.versionName}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+                if (update.notes.isNotBlank()) {
+                    Text(
+                        update.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    if (updateReady) "Файл скачан — осталось подтвердить установку."
+                    else "Скачается с нашего сервера. Установку подтвердите вручную: " +
+                        "молча ставить приложения Android не даёт.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onUpdate) {
+                    Text(if (updateReady) "Установить" else "Скачать обновление")
+                }
+            }
         }
 
         Section("Группа") {
@@ -116,13 +164,15 @@ fun SettingsScreen(
             )
         }
     }
+    }
 }
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(

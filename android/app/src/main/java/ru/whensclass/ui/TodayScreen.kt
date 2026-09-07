@@ -2,30 +2,47 @@ package ru.whensclass.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Badge
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -40,74 +57,92 @@ import ru.whensclass.widget.formatFetchedAt
 import ru.whensclass.widget.lessonTime
 import ru.whensclass.widget.shortenName
 
-/**
- * Расписание на несколько дней вперёд.
- *
- * Здесь, в отличие от виджета, места не жалко: показываем всё, что прислал
- * сервер. Пары выстроены таблицей — колонка времени одной ширины на все
- * строки, иначе взгляд не находит, когда начинается следующая.
- */
-private val TIME_COLUMN = 88.dp
+/** Ширина колонки времени: «09:00–10:30» должно помещаться в одну строку. */
+private val TIME_COLUMN = 84.dp
 
+/**
+ * Расписание на неделю вперёд.
+ *
+ * Пары выстроены таблицей: колонка времени одной ширины на все строки, иначе
+ * взгляд не находит, когда начинается следующая. Строки разделены линиями во
+ * всю ширину карточки — так день читается как расписание, а не как набор
+ * отдельных плиток.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
     groupName: String,
     schedule: ScheduleDto?,
     fetchedAt: Long,
+    hasUpdate: Boolean,
     onSettings: () -> Unit,
     onRefresh: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+    val today = remember { LocalDate.now() }
+    val listState = rememberLazyListState()
+
+    // Открываемся на сегодняшнем дне: если колледж прислал и прошедшие дни,
+    // начинать с них незачем.
+    LaunchedEffect(schedule) {
+        val index = schedule?.days?.indexOfFirst { it.date >= today.toString() } ?: -1
+        if (index > 0) listState.scrollToItem(index)
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            groupName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            formatFetchedAt(fetchedAt),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onRefresh) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Обновить расписание")
+                    }
+                    IconButton(onClick = onSettings) {
+                        // Точка над шестерёнкой: вышла новая сборка приложения,
+                        // поставить её можно в настройках.
+                        BadgedBox(badge = { if (hasUpdate) Badge() }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+            )
+        },
+    ) { padding ->
+        if (schedule == null) {
+            Column(modifier = Modifier.padding(padding).padding(24.dp)) {
+                Text("Расписание ещё не загружено", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    groupName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    formatFetchedAt(fetchedAt),
+                    "Проверьте интернет и нажмите обновление вверху.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onSettings) { Text("Настройки") }
+            return@Scaffold
         }
 
-        if (schedule == null) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    "Расписание ещё не загружено.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                TextButton(onClick = onRefresh) { Text("Загрузить") }
-            }
-            return@Column
-        }
-
-        val today = remember { LocalDate.now() }
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 12.dp, end = 12.dp, bottom = 24.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(schedule.days, key = { it.date }) { day ->
                 DayCard(day, schedule.bells, today)
-            }
-            item(key = "refresh") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    TextButton(onClick = onRefresh) { Text("Обновить расписание") }
-                }
             }
         }
     }
@@ -119,67 +154,84 @@ private fun DayCard(day: DayDto, bells: Map<String, List<String>>, today: LocalD
     val isToday = date == today
     val current = if (isToday) currentLessonNumber(bells, today) else null
 
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                    else MaterialTheme.colorScheme.surfaceVariant
-                )
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-        ) {
-            Text(
-                date?.let(::formatDayTitle) ?: day.date,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isToday) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface,
-            )
-        }
+        Column {
+            DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday)
 
-        if (day.lessons.isEmpty()) {
-            Text(
-                "Пар нет",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-            )
-        } else {
-            day.lessons.forEachIndexed { index, lesson ->
-                if (index > 0) {
-                    HorizontalDivider(modifier = Modifier.padding(start = TIME_COLUMN + 14.dp))
+            if (day.lessons.isEmpty()) {
+                Text(
+                    "Пар нет",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                )
+            } else {
+                day.lessons.forEachIndexed { index, lesson ->
+                    // Линия во всю ширину карточки — расписание, а не плитки.
+                    if (index > 0) HorizontalDivider()
+                    LessonRow(lesson, bells, isNow = lesson.number == current)
                 }
-                LessonRow(lesson, bells, isNow = lesson.number == current)
             }
         }
     }
 }
 
 @Composable
-private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow: Boolean) {
-    val context = LocalContext.current
+private fun DayHeader(title: String, isToday: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                else MaterialTheme.colorScheme.surfaceVariant
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isToday) {
+            // Красная метка слева: сегодняшний день находится взглядом сразу.
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(40.dp)
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+        }
+        Text(
+            title.replaceFirstChar { it.uppercase() },
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isToday) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(
+                start = if (isToday) 12.dp else 16.dp,
+                end = 16.dp,
+                top = 12.dp,
+                bottom = 12.dp,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
                 else MaterialTheme.colorScheme.surface
             )
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // Колонка времени одинаковой ширины во всех строках — иначе таблица
-        // разъезжается, а «09:00–10:30» переносится и теряет последнюю цифру.
         Column(modifier = Modifier.width(TIME_COLUMN)) {
             Text(
                 "${lesson.number} пара",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
@@ -187,13 +239,15 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 Text(
                     it,
                     style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isNow) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isNow) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                 )
             }
             if (isNow) {
                 Text(
-                    "сейчас",
+                    "идёт сейчас",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -204,25 +258,26 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
             Text(
                 lesson.subject,
                 style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
             )
 
-            val details = remember(lesson) {
-                buildString {
-                    lesson.kind?.let { append(it) }
-                    lesson.room?.let {
-                        if (isNotEmpty()) append(" · ")
-                        append(it)
-                    }
-                    lesson.teachers.forEach {
-                        if (isNotEmpty()) append(" · ")
-                        append(shortenName(it))
-                    }
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                lesson.kind?.let { Kind(it) }
+                lesson.room?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
                 }
             }
-            if (details.isNotEmpty()) {
+
+            lesson.teachers.forEach {
                 Text(
-                    details,
+                    shortenName(it),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -237,25 +292,59 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 )
             }
 
-            lesson.url?.let { url ->
-                Text(
-                    "Занятие онлайн · копировать ссылку",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        // Область нажатия во всю строку и не ниже 48dp:
-                        // в мелкую надпись попасть пальцем трудно.
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .clickable {
-                            context.getSystemService(ClipboardManager::class.java)
-                                ?.setPrimaryClip(ClipData.newPlainText("Ссылка на занятие", url))
-                            Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT)
-                                .show()
-                        }
-                        .padding(vertical = 14.dp),
-                )
-            }
+            lesson.url?.let { CopyLink(it) }
         }
+    }
+}
+
+/** Тип занятия капсулой — короткая пометка, которую видно, но которая не шумит. */
+@Composable
+private fun Kind(kind: String) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+    ) {
+        Text(
+            kind,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun CopyLink(url: String) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable {
+                context.getSystemService(ClipboardManager::class.java)
+                    ?.setPrimaryClip(ClipData.newPlainText("Ссылка на занятие", url))
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                    Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
+        // Короткая подпись в одну строку: длинная переносилась и рвала строку.
+        Text(
+            "Онлайн — скопировать ссылку",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }

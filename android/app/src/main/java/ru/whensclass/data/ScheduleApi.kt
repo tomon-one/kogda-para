@@ -29,6 +29,8 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
 
     fun meta(): MetaDto = get("/v1/meta").let(json::decodeFromString)
 
+    fun release(): ReleaseDto = get("/v1/app").let(json::decodeFromString)
+
     fun groups(): GroupsDto = get("/v1/groups").let(json::decodeFromString)
 
     fun schedule(groupId: String, days: Int = 7): ScheduleDto =

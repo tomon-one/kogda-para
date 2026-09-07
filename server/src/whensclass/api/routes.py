@@ -14,6 +14,8 @@ from fastapi import APIRouter, Query, Request, Response
 
 from ..config import settings
 from ..service.bells import load_bells
+from ..service.refresher import state_dir
+from .releases import latest_release
 from .etag import etag_for, matches
 from .payloads import groups_payload, meta_payload, schedule_payload
 
@@ -47,6 +49,27 @@ def healthz(request: Request) -> Response:
         status_code=200 if ok else 503,
         media_type=JSON,
     )
+
+
+@router.get("/v1/app")
+def app_release(request: Request) -> Response:
+    """Последняя выложенная сборка приложения — чтобы оно знало об обновлении."""
+    release = latest_release(state_dir())
+    if release is None:
+        return Response(status_code=404, content='{"error":"сборка не выложена"}',
+                        media_type=JSON)
+
+    base = str(request.base_url).rstrip("/")
+    body = {
+        "v": 1,
+        "versionCode": release["versionCode"],
+        "versionName": release["versionName"],
+        "url": f"{base}/download/{release['file']}",
+    }
+    for key in ("size", "notes", "published"):
+        if release.get(key):
+            body[key] = release[key]
+    return _json_response(request, body, cache=False)
 
 
 @router.get("/v1/meta")
