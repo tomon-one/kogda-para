@@ -320,7 +320,10 @@ private fun App(startDay: String? = null) {
                                 NextLessonWidget().updateAll(context)
                             }
                         },
-                        onChangeGroup = { screen = Screen.GROUPS },
+                        onChangeGroup = {
+                            pickSecond = false
+                            screen = Screen.GROUPS
+                        },
                         secondGroupName = secondGroupName,
                         onPickSecondGroup = {
                             pickSecond = true
