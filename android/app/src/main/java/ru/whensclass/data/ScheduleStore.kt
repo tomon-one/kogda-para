@@ -71,6 +71,39 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
+    /**
+     * Кто пользуется приложением: студент или преподаватель.
+     *
+     * От этого зависит, чьё расписание качается и показывается везде — на
+     * экране, в виджетах и в напоминаниях. Преподавателю нужны его пары, а не
+     * пары какой-то группы.
+     */
+    val isTeacher: Flow<Boolean> = context.dataStore.data.map { it[KEY_ROLE] == "teacher" }
+
+    suspend fun teacherMode(): Boolean = isTeacher.first()
+
+    suspend fun setTeacherMode(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_ROLE] = if (enabled) "teacher" else "student"
+            // Расписание прежней роли показывать нельзя ни секунды.
+            prefs.remove(KEY_SCHEDULE)
+            prefs.remove(KEY_GENERATED_AT)
+        }
+    }
+
+    /** Выбранный преподаватель — для роли преподавателя. */
+    val teacherId: Flow<String?> = context.dataStore.data.map { it[KEY_TEACHER_ID] }
+    val teacherName: Flow<String?> = context.dataStore.data.map { it[KEY_TEACHER_NAME] }
+
+    suspend fun selectTeacher(id: String, name: String) {
+        context.dataStore.edit {
+            it[KEY_TEACHER_ID] = id
+            it[KEY_TEACHER_NAME] = name
+            it.remove(KEY_SCHEDULE)
+            it.remove(KEY_GENERATED_AT)
+        }
+    }
+
     /** Прочитано ли приветствие при первом запуске. */
     val welcomeSeen: Flow<Boolean> = context.dataStore.data.map { it[KEY_WELCOME] == "1" }
 
@@ -97,8 +130,10 @@ class ScheduleStore(private val context: Context) {
      */
     suspend fun widgetState(): WidgetState {
         val prefs = context.dataStore.data.first()
+        val teacher = prefs[KEY_ROLE] == "teacher"
         return WidgetState(
-            groupName = prefs[KEY_GROUP_NAME],
+            // Виджету всё равно, чьё расписание, — он рисует то, что лежит.
+            groupName = if (teacher) prefs[KEY_TEACHER_NAME] else prefs[KEY_GROUP_NAME],
             scheduleJson = prefs[KEY_SCHEDULE],
             fetchedAt = prefs[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L,
             theme = prefs[KEY_THEME] ?: "system",
@@ -159,5 +194,8 @@ class ScheduleStore(private val context: Context) {
         val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
         val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")
         val KEY_PINNED_TEACHERS = stringPreferencesKey("pinned_teachers")
+        val KEY_ROLE = stringPreferencesKey("role")
+        val KEY_TEACHER_ID = stringPreferencesKey("teacher_id")
+        val KEY_TEACHER_NAME = stringPreferencesKey("teacher_name")
     }
 }

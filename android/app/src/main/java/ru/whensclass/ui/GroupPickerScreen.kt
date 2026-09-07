@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -84,6 +85,7 @@ fun GroupPickerScreen(
     onPick: (GroupDto) -> Unit,
     canGoBack: Boolean = false,
     onBack: () -> Unit = {},
+    onTeacherMode: (() -> Unit)? = null,
 ) {
     var groups by remember { mutableStateOf<List<GroupDto>?>(null) }
     var query by remember { mutableStateOf("") }
@@ -123,6 +125,17 @@ fun GroupPickerScreen(
                         .height(40.dp)
                         .padding(start = 16.dp, bottom = 4.dp),
                 )
+            }
+
+            onTeacherMode?.let { switchRole ->
+                // Приложением пользуются и преподаватели: им нужна не группа,
+                // а собственное расписание.
+                TextButton(
+                    onClick = switchRole,
+                    modifier = Modifier.padding(start = 8.dp),
+                ) {
+                    Text("Я преподаватель")
+                }
             }
 
             OutlinedTextField(

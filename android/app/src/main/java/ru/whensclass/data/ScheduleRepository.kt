@@ -125,6 +125,17 @@ class ScheduleRepository(
         refresh(force = true)
     }
 
+    /** Преподаватель выбрал себя — дальше всё работает как у студента. */
+    suspend fun selectSelfAsTeacher(teacher: GroupDto) {
+        store.selectTeacher(teacher.id, teacher.name)
+        refresh(force = true)
+    }
+
+    suspend fun setTeacherMode(enabled: Boolean) {
+        store.setTeacherMode(enabled)
+        refresh(force = true)
+    }
+
     /**
      * Обновляет расписание.
      *
@@ -134,7 +145,9 @@ class ScheduleRepository(
      * ошибке вместо пар.
      */
     suspend fun refresh(force: Boolean = false): RefreshResult = withContext(Dispatchers.IO) {
-        val groupId = store.currentGroupId() ?: return@withContext RefreshResult.NoGroup
+        val teacherMode = store.teacherMode()
+        val subject = if (teacherMode) store.teacherId.first() else store.currentGroupId()
+        if (subject == null) return@withContext RefreshResult.NoGroup
         try {
             // Сохранённые дни начинаются с даты загрузки, поэтому со временем
             // сегодняшнего среди них может не оказаться — и виджет пустеет.
@@ -151,7 +164,11 @@ class ScheduleRepository(
                     return@withContext RefreshResult.AlreadyFresh
                 }
             }
-            val fresh = api.schedule(groupId, from = weekStart(), days = DAYS)
+            val fresh = if (teacherMode) {
+                api.teacher(subject, from = weekStart(), days = DAYS)
+            } else {
+                api.schedule(subject, from = weekStart(), days = DAYS)
+            }
             val previous = schedule.first()
             store.putSchedule(json.encodeToString(fresh), fresh.generatedAt)
             updateWidgets()

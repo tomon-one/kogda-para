@@ -107,6 +107,8 @@ private fun App(startDay: String? = null) {
     val notifyBefore by container.store.notifyBefore.collectAsState(initial = 0)
     val notifyChanges by container.store.notifyChanges.collectAsState(initial = true)
     val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
+    val teacherMode by container.store.isTeacher.collectAsState(initial = false)
+    val teacherName by container.store.teacherName.collectAsState(initial = null)
     val theme = ThemeChoice.from(storedTheme)
 
     var screen by remember { mutableStateOf(Screen.TODAY) }
@@ -142,10 +144,12 @@ private fun App(startDay: String? = null) {
     // данные на экране выглядят как поломка.
     LaunchedEffect(Unit) { container.repository.refresh() }
     var welcomeDone by remember { mutableStateOf(false) }
+    // Кого показываем — зависит от роли: группу или самого преподавателя.
+    val chosenName = if (teacherMode) teacherName else groupName
     val current = when {
         ALWAYS_SHOW_WELCOME && !welcomeDone -> Screen.WELCOME
         !welcomeSeen -> Screen.WELCOME
-        groupName == null -> Screen.GROUPS
+        chosenName == null -> Screen.GROUPS
         else -> screen
     }
 
@@ -183,20 +187,49 @@ private fun App(startDay: String? = null) {
                         },
                     )
 
-                    Screen.GROUPS -> GroupPickerScreen(
-                        loadGroups = { container.repository.groups() },
-                        canGoBack = groupName != null,
-                        onBack = { screen = Screen.SETTINGS },
-                        onPick = { group: GroupDto ->
-                            scope.launch {
-                                container.repository.selectGroup(group)
-                                screen = Screen.TODAY
-                            }
-                        },
-                    )
+                    Screen.GROUPS -> if (teacherMode) {
+                        // В роли преподавателя вместо списка групп — список
+                        // преподавателей: человек выбирает себя.
+                        SelfPickerScreen(
+                            teachers = teachers,
+                            canGoBack = chosenName != null,
+                            onBack = { screen = Screen.SETTINGS },
+                            onStudentMode = {
+                                scope.launch { container.repository.setTeacherMode(false) }
+                            },
+                            onPick = { teacher ->
+                                scope.launch {
+                                    container.repository.selectSelfAsTeacher(teacher)
+                                    screen = Screen.TODAY
+                                }
+                            },
+                        )
+                    } else {
+                        GroupPickerScreen(
+                            loadGroups = { container.repository.groups() },
+                            canGoBack = chosenName != null,
+                            onBack = { screen = Screen.SETTINGS },
+                            onTeacherMode = {
+                                scope.launch { container.repository.setTeacherMode(true) }
+                            },
+                            onPick = { group: GroupDto ->
+                                scope.launch {
+                                    container.repository.selectGroup(group)
+                                    screen = Screen.TODAY
+                                }
+                            },
+                        )
+                    }
 
                     Screen.SETTINGS -> SettingsScreen(
-                        groupName = groupName,
+                        groupName = chosenName,
+                        teacherMode = teacherMode,
+                        onTeacherMode = { on ->
+                            scope.launch {
+                                container.repository.setTeacherMode(on)
+                                screen = Screen.GROUPS
+                            }
+                        },
                         theme = theme,
                         update = update,
                         installing = installing,
@@ -248,7 +281,8 @@ private fun App(startDay: String? = null) {
 
                     Screen.TODAY -> TodayScreen(
                         startDay = startDay,
-                        groupName = groupName.orEmpty(),
+                        groupName = chosenName.orEmpty(),
+                        teacherMode = teacherMode,
                         teachers = teachers,
                         loadTeacherSchedule = { container.repository.teacherSchedule(it) },
                         pinnedTeachers = pinnedTeachers,

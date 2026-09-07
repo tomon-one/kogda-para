@@ -278,12 +278,11 @@ private fun Details(lesson: LessonDto, colors: Palette) {
         )
     }
 
-    lesson.teachers.firstOrNull()?.let {
-        Text(
-            shortenName(it),
-            maxLines = 1,
-            style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-        )
+    // В расписании преподавателя вместо его имени — группы, которым читается
+    // пара: сам он и так знает, кто ведёт.
+    val who = lesson.groups ?: lesson.teachers.firstOrNull()?.let(::shortenName)
+    who?.let {
+        Text(it, maxLines = 1, style = TextStyle(fontSize = 11.sp, color = colors.textDim))
     }
 
     if (lesson.isCancelled) {

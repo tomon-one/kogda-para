@@ -112,6 +112,7 @@ fun TodayScreen(
     fetchedAt: Long,
     hasUpdate: Boolean,
     refreshing: Boolean,
+    teacherMode: Boolean = false,
     reloadKey: Int = 0,
     onSettings: () -> Unit,
     onUpdateBadge: () -> Unit,
@@ -127,7 +128,10 @@ fun TodayScreen(
         if (index > 0) listState.scrollToItem(index)
     }
 
-    var tab by remember { mutableStateOf(Tab.STUDENTS) }
+    // Преподаватель открывает приложение на своём разделе.
+    var tab by remember(teacherMode) {
+        mutableStateOf(if (teacherMode) Tab.TEACHERS else Tab.STUDENTS)
+    }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -185,6 +189,7 @@ fun TodayScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             ScheduleTabs(
                 current = tab,
+                teacherMode = teacherMode,
                 onPick = { picked -> tab = picked },
             )
 
@@ -284,25 +289,35 @@ enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String =
     EXAMS("Экзамены", false, "Сейчас экзаменов нет"),
 }
 
+/**
+ * Порядок вкладок в верхнем ряду.
+ *
+ * Преподавателю первым нужен раздел преподавателей: он открывает приложение
+ * ради своих пар, а не чужих.
+ */
+private fun topTabs(teacherMode: Boolean): List<Tab> =
+    if (teacherMode) listOf(Tab.TEACHERS, Tab.STUDENTS) else listOf(Tab.STUDENTS, Tab.TEACHERS)
+
 @Composable
-private fun ScheduleTabs(current: Tab, onPick: (Tab) -> Unit) {
+private fun ScheduleTabs(current: Tab, teacherMode: Boolean, onPick: (Tab) -> Unit) {
+    val top = topTabs(teacherMode)
     Column {
         // Полоска рисуется только в том ряду, где выбранная вкладка: иначе
         // подчёркнутыми оказываются сразу две.
         TabRow(
-            selectedTabIndex = current.ordinal.coerceAtMost(1),
+            selectedTabIndex = top.indexOf(current).coerceAtLeast(0),
             containerColor = MaterialTheme.colorScheme.background,
             divider = {},
             indicator = { positions ->
-                if (current.ordinal < 2) {
+                val index = top.indexOf(current)
+                if (index >= 0) {
                     TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(positions[current.ordinal]),
+                        Modifier.tabIndicatorOffset(positions[index]),
                     )
                 }
             },
         ) {
-            TabButton(Tab.STUDENTS, current, onPick)
-            TabButton(Tab.TEACHERS, current, onPick)
+            top.forEach { TabButton(it, current, onPick) }
         }
         TabRow(
             selectedTabIndex = (current.ordinal - 2).coerceIn(0, 1),
