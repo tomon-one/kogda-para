@@ -5,7 +5,6 @@ import androidx.compose.runtime.Composable
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
@@ -42,9 +41,9 @@ class ScheduleWidget : GlanceAppWidget() {
         val groupName = container.store.groupName.first()
 
         provideContent {
-            GlanceTheme {
-                Content(schedule, groupName, fetchedAt, offset = currentOffset())
-            }
+            // Тема своя (см. WidgetColors), а не системная: виджет должен
+            // выглядеть одинаково на любой оболочке.
+            Content(schedule, groupName, fetchedAt, offset = currentOffset())
         }
     }
 

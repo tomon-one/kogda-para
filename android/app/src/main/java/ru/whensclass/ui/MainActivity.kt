@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -18,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
 import ru.whensclass.data.GroupDto
@@ -31,7 +33,7 @@ class MainActivity : ComponentActivity() {
         SyncWorker.now(this)
 
         setContent {
-            MaterialTheme {
+            MaterialTheme(colorScheme = DarkScheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     App()
                 }
@@ -39,6 +41,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** Тёмная схема в тон виджету: чистый чёрный не светится на OLED. */
+private val DarkScheme = darkColorScheme(
+    background = Color(0xFF000000),
+    surface = Color(0xFF121212),
+    primary = Color(0xFF5FD3A8),
+    error = Color(0xFFFF7A7A),
+)
 
 @Composable
 private fun App() {

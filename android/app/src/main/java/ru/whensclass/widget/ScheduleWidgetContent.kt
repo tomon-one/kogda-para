@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionRunCallback
@@ -48,7 +47,7 @@ fun ScheduleWidgetContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(GlanceTheme.colors.widgetBackground)
+            .background(WidgetColors.background)
             .cornerRadius(16.dp)
             .padding(12.dp),
     ) {
@@ -81,14 +80,14 @@ private fun Header(groupName: String, day: LocalDate, offset: Int) {
                 style = TextStyle(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = GlanceTheme.colors.onSurface,
+                    color = WidgetColors.text,
                 ),
             )
             Text(
                 formatDayTitle(day),
                 style = TextStyle(
                     fontSize = 12.sp,
-                    color = GlanceTheme.colors.onSurfaceVariant,
+                    color = WidgetColors.textDim,
                 ),
             )
         }
@@ -100,9 +99,9 @@ private fun Header(groupName: String, day: LocalDate, offset: Int) {
 
 @Composable
 private fun ArrowButton(label: String, step: Int, enabled: Boolean) {
-    val color = if (enabled) GlanceTheme.colors.onSurface else GlanceTheme.colors.onSurfaceVariant
+    val color = if (enabled) WidgetColors.text else WidgetColors.textDim
     var modifier = GlanceModifier
-        .background(GlanceTheme.colors.secondaryContainer)
+        .background(if (enabled) WidgetColors.button else WidgetColors.buttonDisabled)
         .cornerRadius(8.dp)
         .padding(horizontal = 10.dp, vertical = 4.dp)
     if (enabled) {
@@ -132,13 +131,14 @@ private fun Lessons(
 @Composable
 private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow: Boolean) {
     val background =
-        if (isNow) GlanceTheme.colors.primaryContainer else GlanceTheme.colors.widgetBackground
+        if (isNow) WidgetColors.nowSurface else WidgetColors.surface
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
+            .padding(bottom = 4.dp)
             .background(background)
             .cornerRadius(10.dp)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = GlanceModifier.width(56.dp)) {
@@ -146,7 +146,7 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 "${lesson.number} пара",
                 style = TextStyle(
                     fontSize = 11.sp,
-                    color = GlanceTheme.colors.onSurfaceVariant,
+                    color = WidgetColors.textDim,
                 ),
             )
             lessonTime(bells, lesson.number)?.let { time ->
@@ -154,7 +154,7 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                     time,
                     style = TextStyle(
                         fontSize = 10.sp,
-                        color = GlanceTheme.colors.onSurfaceVariant,
+                        color = WidgetColors.textDim,
                     ),
                 )
             }
@@ -166,7 +166,7 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 style = TextStyle(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = GlanceTheme.colors.onSurface,
+                    color = WidgetColors.text,
                     textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
                 ),
             )
@@ -195,7 +195,7 @@ private fun SecondLine(lesson: LessonDto) {
                 maxLines = 1,
                 style = TextStyle(
                     fontSize = 11.sp,
-                    color = GlanceTheme.colors.onSurfaceVariant,
+                    color = WidgetColors.textDim,
                 ),
             )
         }
@@ -205,7 +205,7 @@ private fun SecondLine(lesson: LessonDto) {
             // и она в буфере обмена.
             Text(
                 "копировать ссылку",
-                style = TextStyle(fontSize = 11.sp, color = GlanceTheme.colors.primary),
+                style = TextStyle(fontSize = 11.sp, color = WidgetColors.accent),
                 modifier = GlanceModifier.clickable(
                     actionRunCallback<CopyLinkAction>(
                         actionParametersOf(CopyLinkAction.KEY_URL to url),
@@ -217,7 +217,7 @@ private fun SecondLine(lesson: LessonDto) {
     if (lesson.isCancelled) {
         Text(
             lesson.note?.let { "отменена — $it" } ?: "отменена",
-            style = TextStyle(fontSize = 11.sp, color = GlanceTheme.colors.error),
+            style = TextStyle(fontSize = 11.sp, color = WidgetColors.error),
         )
     }
 }
@@ -226,7 +226,7 @@ private fun SecondLine(lesson: LessonDto) {
 private fun Hint(text: String) {
     Text(
         text,
-        style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurfaceVariant),
+        style = TextStyle(fontSize = 13.sp, color = WidgetColors.textDim),
         modifier = GlanceModifier.padding(vertical = 8.dp),
     )
 }
@@ -236,7 +236,7 @@ private fun Footer(fetchedAt: Long) {
     val text = formatFetchedAt(fetchedAt) + if (isStale(fetchedAt)) " · данные старые" else ""
     Text(
         text,
-        style = TextStyle(fontSize = 10.sp, color = GlanceTheme.colors.onSurfaceVariant),
+        style = TextStyle(fontSize = 10.sp, color = WidgetColors.textDim),
         modifier = GlanceModifier
             .fillMaxWidth()
             .clickable(actionRunCallback<RefreshAction>()),
