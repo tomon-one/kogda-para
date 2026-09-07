@@ -40,7 +40,7 @@ fun TodayScreen(
     groupName: String,
     schedule: ScheduleDto?,
     fetchedAt: Long,
-    onChangeGroup: () -> Unit,
+    onSettings: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -50,7 +50,7 @@ fun TodayScreen(
                 Text(formatFetchedAt(fetchedAt), style = MaterialTheme.typography.bodySmall)
             }
             TextButton(onClick = onRefresh) { Text("Обновить") }
-            TextButton(onClick = onChangeGroup) { Text("Группа") }
+            TextButton(onClick = onSettings) { Text("Настройки") }
         }
 
         Spacer(Modifier.width(8.dp))

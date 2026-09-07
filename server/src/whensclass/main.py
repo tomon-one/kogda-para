@@ -20,10 +20,30 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .api.routes import router
 from .config import settings
+from .service.bells import load_bells
 from .service.refresher import Refresher, state_dir
 from .storage.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
+
+
+def before_each_lesson(minutes: int) -> list[tuple[str, tuple[int, int]]]:
+    """Во сколько обновляться перед каждой парой: за `minutes` до звонка."""
+    out: list[tuple[str, tuple[int, int]]] = []
+    for number, times in sorted(load_bells().items()):
+        start = times[0] if times else None
+        if not start:
+            continue
+        try:
+            hour, minute = (int(x) for x in start.split(":", 1))
+        except ValueError:
+            log.warning("не понял время начала %r у пары %s", start, number)
+            continue
+        total = hour * 60 + minute - minutes
+        if total < 0:
+            continue
+        out.append((number, (total // 60, total % 60)))
+    return out
 
 
 @asynccontextmanager
@@ -60,6 +80,17 @@ async def lifespan(app: FastAPI):
         CronTrigger(hour=3, minute=30),
         id="reindex",
     )
+
+    # Отдельный заход перед каждой парой: расписание правят и за десять минут
+    # до звонка, а как раз в этот момент в него и смотрят.
+    for number, moment in before_each_lesson(settings.refresh_before_lesson_minutes):
+        scheduler.add_job(
+            refresher.refresh,
+            CronTrigger(hour=moment[0], minute=moment[1]),
+            id=f"before-lesson-{number}",
+            max_instances=1,
+            coalesce=True,
+        )
     scheduler.start()
 
     # Первый заход сразу, чтобы сервис не стоял пустым до ближайшего часа.

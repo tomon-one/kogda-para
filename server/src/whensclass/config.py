@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     timezone: str = "Asia/Novosibirsk"
 
     refresh_minutes: int = 20
+    # За сколько минут до звонка сходить за расписанием ещё раз: пары меняют
+    # и перед самым началом.
+    refresh_before_lesson_minutes: int = 8
     active_hours: tuple[int, int] = (6, 22)
     http_timeout: float = 60.0
     # Только ASCII: HTTP-заголовки кириллицу не переносят.

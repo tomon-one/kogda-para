@@ -39,11 +39,12 @@ class ScheduleWidget : GlanceAppWidget() {
         val schedule = raw?.let { runCatching { json.decodeFromString<ScheduleDto>(it) }.getOrNull() }
         val fetchedAt = container.store.fetchedAt.first()
         val groupName = container.store.groupName.first()
+        val colors = WidgetColors.resolve(context, ThemeChoice.from(container.store.currentTheme()))
 
         provideContent {
-            // Тема своя (см. WidgetColors), а не системная: виджет должен
-            // выглядеть одинаково на любой оболочке.
-            Content(schedule, groupName, fetchedAt, offset = currentOffset())
+            // Палитра своя (см. WidgetColors), а не системная: оболочки на
+            // телефонах слишком по-разному понимают динамические цвета.
+            Content(schedule, groupName, fetchedAt, colors, offset = currentOffset())
         }
     }
 
@@ -55,12 +56,14 @@ class ScheduleWidget : GlanceAppWidget() {
         schedule: ScheduleDto?,
         groupName: String?,
         fetchedAt: Long,
+        colors: Palette,
         offset: Int,
     ) {
         ScheduleWidgetContent(
             schedule = schedule,
             groupName = groupName,
             fetchedAt = fetchedAt,
+            colors = colors,
             day = LocalDate.now().plusDays(offset.toLong()),
             offset = offset,
             modifier = GlanceModifier,

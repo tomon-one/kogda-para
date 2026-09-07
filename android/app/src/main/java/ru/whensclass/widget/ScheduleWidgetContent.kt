@@ -40,6 +40,7 @@ fun ScheduleWidgetContent(
     schedule: ScheduleDto?,
     groupName: String?,
     fetchedAt: Long,
+    colors: Palette,
     day: LocalDate,
     offset: Int,
     modifier: GlanceModifier = GlanceModifier,
@@ -47,29 +48,29 @@ fun ScheduleWidgetContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(WidgetColors.background)
+            .background(colors.background)
             .cornerRadius(16.dp)
             .padding(12.dp),
     ) {
-        Header(groupName = groupName ?: "Расписание", day = day, offset = offset)
+        Header(groupName ?: "Расписание", day, offset, colors)
         Spacer(GlanceModifier.height(6.dp))
 
         val today = schedule?.days?.firstOrNull { it.date == day.toString() }
         when {
-            groupName == null -> Hint("Откройте приложение и выберите свою группу")
-            schedule == null -> Hint("Расписание ещё не загружено")
-            today == null -> Hint("На этот день расписание ещё не опубликовано")
-            today.lessons.isEmpty() -> Hint("Пар нет")
-            else -> Lessons(today.lessons, schedule.bells, day)
+            groupName == null -> Hint("Откройте приложение и выберите свою группу", colors)
+            schedule == null -> Hint("Расписание ещё не загружено", colors)
+            today == null -> Hint("На этот день расписание ещё не опубликовано", colors)
+            today.lessons.isEmpty() -> Hint("Пар нет", colors)
+            else -> Lessons(today.lessons, schedule.bells, day, colors)
         }
 
         Spacer(GlanceModifier.defaultWeight())
-        Footer(fetchedAt)
+        Footer(fetchedAt, colors)
     }
 }
 
 @Composable
-private fun Header(groupName: String, day: LocalDate, offset: Int) {
+private fun Header(groupName: String, day: LocalDate, offset: Int, colors: Palette) {
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -80,28 +81,28 @@ private fun Header(groupName: String, day: LocalDate, offset: Int) {
                 style = TextStyle(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = WidgetColors.text,
+                    color = colors.text,
                 ),
             )
             Text(
                 formatDayTitle(day),
                 style = TextStyle(
                     fontSize = 12.sp,
-                    color = WidgetColors.textDim,
+                    color = colors.textDim,
                 ),
             )
         }
-        ArrowButton(label = "‹", step = -1, enabled = offset > 0)
+        ArrowButton("‹", step = -1, enabled = offset > 0, colors = colors)
         Spacer(GlanceModifier.width(4.dp))
-        ArrowButton(label = "›", step = 1, enabled = offset < ScheduleWidget.MAX_OFFSET)
+        ArrowButton("›", step = 1, enabled = offset < ScheduleWidget.MAX_OFFSET, colors = colors)
     }
 }
 
 @Composable
-private fun ArrowButton(label: String, step: Int, enabled: Boolean) {
-    val color = if (enabled) WidgetColors.text else WidgetColors.textDim
+private fun ArrowButton(label: String, step: Int, enabled: Boolean, colors: Palette) {
+    val color = if (enabled) colors.text else colors.textDim
     var modifier = GlanceModifier
-        .background(if (enabled) WidgetColors.button else WidgetColors.buttonDisabled)
+        .background(if (enabled) colors.button else colors.buttonDisabled)
         .cornerRadius(8.dp)
         .padding(horizontal = 10.dp, vertical = 4.dp)
     if (enabled) {
@@ -119,19 +120,25 @@ private fun Lessons(
     lessons: List<LessonDto>,
     bells: Map<String, List<String>>,
     day: LocalDate,
+    colors: Palette,
 ) {
     val current = currentLessonNumber(bells, day)
     LazyColumn(modifier = GlanceModifier.fillMaxWidth()) {
         items(lessons, itemId = { it.number.toLong() }) { lesson ->
-            LessonRow(lesson, bells, isNow = lesson.number == current)
+            LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)
         }
     }
 }
 
 @Composable
-private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow: Boolean) {
+private fun LessonRow(
+    lesson: LessonDto,
+    bells: Map<String, List<String>>,
+    isNow: Boolean,
+    colors: Palette,
+) {
     val background =
-        if (isNow) WidgetColors.nowSurface else WidgetColors.surface
+        if (isNow) colors.nowSurface else colors.surface
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
@@ -146,7 +153,7 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 "${lesson.number} пара",
                 style = TextStyle(
                     fontSize = 11.sp,
-                    color = WidgetColors.textDim,
+                    color = colors.textDim,
                 ),
             )
             lessonTime(bells, lesson.number)?.let { time ->
@@ -154,7 +161,7 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                     time,
                     style = TextStyle(
                         fontSize = 10.sp,
-                        color = WidgetColors.textDim,
+                        color = colors.textDim,
                     ),
                 )
             }
@@ -166,17 +173,17 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 style = TextStyle(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = WidgetColors.text,
+                    color = colors.text,
                     textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
                 ),
             )
-            SecondLine(lesson)
+            SecondLine(lesson, colors)
         }
     }
 }
 
 @Composable
-private fun SecondLine(lesson: LessonDto) {
+private fun SecondLine(lesson: LessonDto, colors: Palette) {
     val place = buildString {
         lesson.kind?.let { append(it) }
         lesson.room?.let {
@@ -195,7 +202,7 @@ private fun SecondLine(lesson: LessonDto) {
                 maxLines = 1,
                 style = TextStyle(
                     fontSize = 11.sp,
-                    color = WidgetColors.textDim,
+                    color = colors.textDim,
                 ),
             )
         }
@@ -205,7 +212,7 @@ private fun SecondLine(lesson: LessonDto) {
             // и она в буфере обмена.
             Text(
                 "копировать ссылку",
-                style = TextStyle(fontSize = 11.sp, color = WidgetColors.accent),
+                style = TextStyle(fontSize = 11.sp, color = colors.accent),
                 modifier = GlanceModifier.clickable(
                     actionRunCallback<CopyLinkAction>(
                         actionParametersOf(CopyLinkAction.KEY_URL to url),
@@ -217,26 +224,26 @@ private fun SecondLine(lesson: LessonDto) {
     if (lesson.isCancelled) {
         Text(
             lesson.note?.let { "отменена — $it" } ?: "отменена",
-            style = TextStyle(fontSize = 11.sp, color = WidgetColors.error),
+            style = TextStyle(fontSize = 11.sp, color = colors.error),
         )
     }
 }
 
 @Composable
-private fun Hint(text: String) {
+private fun Hint(text: String, colors: Palette) {
     Text(
         text,
-        style = TextStyle(fontSize = 13.sp, color = WidgetColors.textDim),
+        style = TextStyle(fontSize = 13.sp, color = colors.textDim),
         modifier = GlanceModifier.padding(vertical = 8.dp),
     )
 }
 
 @Composable
-private fun Footer(fetchedAt: Long) {
+private fun Footer(fetchedAt: Long, colors: Palette) {
     val text = formatFetchedAt(fetchedAt) + if (isStale(fetchedAt)) " · данные старые" else ""
     Text(
         text,
-        style = TextStyle(fontSize = 10.sp, color = WidgetColors.textDim),
+        style = TextStyle(fontSize = 10.sp, color = colors.textDim),
         modifier = GlanceModifier
             .fillMaxWidth()
             .clickable(actionRunCallback<RefreshAction>()),

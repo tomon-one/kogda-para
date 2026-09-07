@@ -29,6 +29,15 @@ class ScheduleStore(private val context: Context) {
     val fetchedAt: Flow<Long> = context.dataStore.data.map { it[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L }
     val generatedAt: Flow<String?> = context.dataStore.data.map { it[KEY_GENERATED_AT] }
 
+    /** «system», «light» или «dark». По умолчанию — как в системе. */
+    val theme: Flow<String> = context.dataStore.data.map { it[KEY_THEME] ?: "system" }
+
+    suspend fun currentTheme(): String = theme.first()
+
+    suspend fun setTheme(value: String) {
+        context.dataStore.edit { it[KEY_THEME] = value }
+    }
+
     suspend fun currentGroupId(): String? = groupId.first()
 
     suspend fun selectGroup(id: String, name: String) {
@@ -60,5 +69,6 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUPS = stringPreferencesKey("groups_json")
         val KEY_FETCHED_AT = stringPreferencesKey("fetched_at")
         val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
+        val KEY_THEME = stringPreferencesKey("theme")
     }
 }

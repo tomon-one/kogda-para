@@ -21,14 +21,14 @@ android {
 
     buildTypes {
         debug {
-            // Пока сервис не выложен на VPS, приложение ходит на ноутбук в
-            // домашней сети. Адрес задаётся в local.properties: WHENSCLASS_BASE_URL.
+            // По умолчанию отладочная сборка ходит туда же, куда и рабочая.
+            // Чтобы отлаживать против сервера на своём компьютере, пропишите
+            // WHENSCLASS_BASE_URL в local.properties — тогда пригодится
+            // разрешение на http из src/debug/res/xml/network_security_config.xml.
             val local = gradleLocalProperties(rootDir)
-            buildConfigField(
-                "String",
-                "BASE_URL",
-                "\"${local.getProperty("WHENSCLASS_BASE_URL") ?: "http://10.0.2.2:8081"}\"",
-            )
+            val url = local.getProperty("WHENSCLASS_BASE_URL")
+                ?: "https://schedule.edelweiss-alpine-confederation.ru"
+            buildConfigField("String", "BASE_URL", "\"$url\"")
         }
         release {
             isMinifyEnabled = true
