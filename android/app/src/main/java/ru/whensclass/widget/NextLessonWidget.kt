@@ -56,9 +56,12 @@ class NextLessonWidget : GlanceAppWidget() {
                     .cornerRadius(16.dp)
                     .padding(horizontal = 10.dp, vertical = 7.dp)
                     .clickable(
+                        // Открываем приложение сразу на том дне, о котором
+                        // говорит виджет: иначе после нажатия ещё листать.
                         actionStartActivity(
                             Intent(LocalContext.current, MainActivity::class.java)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                .putExtra(MainActivity.EXTRA_DAY, next?.day?.toString()),
                         ),
                     ),
             ) {

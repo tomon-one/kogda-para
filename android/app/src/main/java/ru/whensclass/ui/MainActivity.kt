@@ -45,13 +45,19 @@ class MainActivity : ComponentActivity() {
         // Человек открыл приложение — самое время сходить за свежим расписанием.
         SyncWorker.now(this)
 
-        setContent { App() }
+        // Виджет мог попросить открыть конкретный день.
+        val day = intent?.getStringExtra(EXTRA_DAY)
+        setContent { App(startDay = day) }
+    }
+
+    companion object {
+        const val EXTRA_DAY = "day"
     }
 }
 
-// Пока обкатываем приветствие — показываем его при каждом запуске. Перед
-// раздачей одногруппникам вернуть false, чтобы читали его один раз.
-private const val ALWAYS_SHOW_WELCOME = true
+// Приветствие показывается один раз. Поставить true, чтобы обкатать его текст,
+// не переустанавливая приложение.
+private const val ALWAYS_SHOW_WELCOME = false
 
 /** Экраны приложения. Их четыре, поэтому обходимся без библиотеки навигации. */
 // Порядок важен: по нему считается, куда «едет» экран при переходе.
@@ -87,7 +93,7 @@ private val LightScheme = lightColorScheme(
 )
 
 @Composable
-private fun App() {
+private fun App(startDay: String? = null) {
     val context = LocalContext.current
     val container = remember { AppContainer.get(context) }
     val scope = rememberCoroutineScope()
@@ -104,6 +110,8 @@ private fun App() {
     var checkingUpdate by remember { mutableStateOf(false) }
     var updateChecked by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
+    var installing by remember { mutableStateOf(false) }
+    var focusUpdate by remember { mutableStateOf(false) }
 
     val refreshNow: () -> Unit = {
         scope.launch {
@@ -176,7 +184,8 @@ private fun App() {
                         groupName = groupName,
                         theme = theme,
                         update = update,
-                        updateReady = update?.let { container.updates.downloaded(it) } != null,
+                        installing = installing,
+                        focusUpdate = focusUpdate,
                         checkingUpdate = checkingUpdate,
                         updateChecked = updateChecked,
                         onCheckUpdate = {
@@ -188,12 +197,13 @@ private fun App() {
                             }
                         },
                         onUpdate = {
-                            val release = update ?: return@SettingsScreen
-                            val ready = container.updates.downloaded(release)
-                            if (ready != null) {
-                                container.updates.install(ready)
-                            } else {
-                                container.updates.download(release)
+                            val release = update
+                            if (release != null) {
+                                scope.launch {
+                                    installing = true
+                                    container.updates.downloadAndInstall(release)
+                                    installing = false
+                                }
                             }
                         },
                         onTheme = { choice ->
@@ -211,12 +221,20 @@ private fun App() {
                     )
 
                     Screen.TODAY -> TodayScreen(
+                        startDay = startDay,
                         groupName = groupName.orEmpty(),
                         schedule = schedule,
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,
                         refreshing = refreshing,
-                        onSettings = { screen = Screen.SETTINGS },
+                        onSettings = {
+                            focusUpdate = false
+                            screen = Screen.SETTINGS
+                        },
+                        onUpdateBadge = {
+                            focusUpdate = true
+                            screen = Screen.SETTINGS
+                        },
                         onRefresh = refreshNow,
                     )
                 }

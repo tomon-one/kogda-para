@@ -8,6 +8,7 @@ import android.os.Environment
 import androidx.core.content.FileProvider
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -33,14 +34,59 @@ data class ReleaseDto(
  */
 class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
+    private companion object {
+        const val POLL_MS = 400L
+        const val DOWNLOAD_TIMEOUT_MS = 120_000L
+    }
+
     /** Новая сборка, если она есть и она новее установленной. */
     suspend fun check(): ReleaseDto? = withContext(Dispatchers.IO) {
         val release = runCatching { api.release() }.getOrNull() ?: return@withContext null
         if (release.versionCode > BuildConfig.VERSION_CODE) release else null
     }
 
-    /** Скачивает файл и открывает установщик, когда загрузка закончится. */
-    fun download(release: ReleaseDto) {
+    /**
+     * Скачивает обновление и открывает установщик, когда файл готов.
+     *
+     * Раньше загрузка и установка были двумя нажатиями: первое ставило файл в
+     * очередь, второе — открывало установщик. Со стороны это выглядело как
+     * кнопка, срабатывающая через раз.
+     */
+    suspend fun downloadAndInstall(release: ReleaseDto): Boolean {
+        downloaded(release)?.let {
+            install(it)
+            return true
+        }
+
+        val id = download(release)
+        val manager = context.getSystemService(DownloadManager::class.java) ?: return false
+
+        // Ждём окончания загрузки, поглядывая на её состояние: файл небольшой,
+        // но на плохой связи это может занять с минуту.
+        withContext(Dispatchers.IO) {
+            var waited = 0L
+            while (waited < DOWNLOAD_TIMEOUT_MS) {
+                val status = manager.query(DownloadManager.Query().setFilterById(id)).use { row ->
+                    if (!row.moveToFirst()) DownloadManager.STATUS_FAILED
+                    else row.getInt(row.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                }
+                if (status == DownloadManager.STATUS_SUCCESSFUL ||
+                    status == DownloadManager.STATUS_FAILED
+                ) {
+                    return@withContext
+                }
+                delay(POLL_MS)
+                waited += POLL_MS
+            }
+        }
+
+        val file = downloaded(release) ?: return false
+        install(file)
+        return true
+    }
+
+    /** Ставит файл в очередь загрузки и возвращает её номер. */
+    private fun download(release: ReleaseDto): Long {
         val name = "kogda-para-${release.versionName}.apk"
         val saved = File(
             context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
@@ -57,11 +103,11 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             .setDestinationInExternalFilesDir(
                 context, Environment.DIRECTORY_DOWNLOADS, name,
             )
-        context.getSystemService(DownloadManager::class.java)?.enqueue(request)
+        return context.getSystemService(DownloadManager::class.java)?.enqueue(request) ?: -1
     }
 
     /** Открывает системный установщик для уже скачанного файла. */
-    fun install(file: File) {
+    private fun install(file: File) {
         val uri = FileProvider.getUriForFile(
             context, "${context.packageName}.files", file,
         )

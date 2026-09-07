@@ -78,21 +78,23 @@ private val TIME_COLUMN = 92.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
+    startDay: String? = null,
     groupName: String,
     schedule: ScheduleDto?,
     fetchedAt: Long,
     hasUpdate: Boolean,
     refreshing: Boolean,
     onSettings: () -> Unit,
+    onUpdateBadge: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     val today = remember { LocalDate.now() }
     val listState = rememberLazyListState()
 
-    // Открываемся на сегодняшнем дне: если колледж прислал и прошедшие дни,
-    // начинать с них незачем.
-    LaunchedEffect(schedule) {
-        val index = schedule?.days?.indexOfFirst { it.date >= today.toString() } ?: -1
+    // Открываемся на сегодняшнем дне — или на том, который попросил виджет.
+    LaunchedEffect(schedule, startDay) {
+        val target = startDay ?: today.toString()
+        val index = schedule?.days?.indexOfFirst { it.date >= target } ?: -1
         if (index > 0) listState.scrollToItem(index)
     }
 
@@ -129,10 +131,16 @@ fun TodayScreen(
                             )
                         }
                     }
-                    IconButton(onClick = onSettings) {
-                        // Точка над шестерёнкой: вышла новая сборка приложения,
-                        // поставить её можно в настройках.
-                        BadgedBox(badge = { if (hasUpdate) Badge() }) {
+                    IconButton(onClick = if (hasUpdate) onUpdateBadge else onSettings) {
+                        // Точка над шестерёнкой: вышла новая сборка. Нажатие
+                        // открывает настройки сразу на разделе обновления.
+                        BadgedBox(
+                            badge = {
+                                if (hasUpdate) {
+                                    Badge { Text("↓", style = MaterialTheme.typography.labelSmall) }
+                                }
+                            },
+                        ) {
                             Icon(Icons.Default.Settings, contentDescription = "Настройки")
                         }
                     }

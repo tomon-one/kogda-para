@@ -30,8 +30,15 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,7 +58,8 @@ fun SettingsScreen(
     groupName: String?,
     theme: ThemeChoice,
     update: ReleaseDto?,
-    updateReady: Boolean,
+    installing: Boolean,
+    focusUpdate: Boolean,
     checkingUpdate: Boolean,
     updateChecked: Boolean,
     onCheckUpdate: () -> Unit,
@@ -61,6 +69,15 @@ fun SettingsScreen(
     onUpdate: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val scroll = rememberScrollState()
+    var updateOffset by remember { mutableIntStateOf(0) }
+
+    // Пришли по значку обновления — сразу прокручиваем к нему: раздел стоит
+    // внизу, и искать его глазами не надо.
+    LaunchedEffect(focusUpdate, updateOffset) {
+        if (focusUpdate && updateOffset > 0) scroll.animateScrollTo(updateOffset)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -86,7 +103,7 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
         Section("Группа") {
@@ -134,7 +151,10 @@ fun SettingsScreen(
             )
         }
 
-        Section("Версия приложения") {
+        Section(
+            "Версия приложения",
+            modifier = Modifier.onGloballyPositioned { updateOffset = it.positionInParent().y.toInt() },
+        ) {
             Text(
                 "Установлена ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodyLarge,
@@ -153,15 +173,13 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (!updateReady) {
-                    Text(
-                        "Скачается с нашего сервера.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = onUpdate) {
-                    Text(if (updateReady) "Установить" else "Скачать обновление")
+                Text(
+                    "Скачается с нашего сервера.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onUpdate, enabled = !installing) {
+                    Text(if (installing) "Скачиваю…" else "Обновить приложение")
                 }
             } else {
                 // Раньше кнопка молчала, когда обновления не было, и выглядела
@@ -222,9 +240,13 @@ private fun Link(text: String, url: String) {
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
+private fun Section(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        modifier = modifier.fillMaxWidth().padding(top = 10.dp),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
     ) {
