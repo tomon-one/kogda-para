@@ -170,7 +170,7 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(8.dp))
             Link("Нашли ошибку — напишите в Telegram", "https://t.me/toomonn")
-            Link("Исходный код и другие проекты", "https://github.com/Tomonj1")
+            Link("GitHub автора", "https://github.com/Tomonj1")
         }
     }
     }
