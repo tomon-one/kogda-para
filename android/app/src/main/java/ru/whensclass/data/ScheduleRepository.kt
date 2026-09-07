@@ -1,0 +1,77 @@
+package ru.whensclass.data
+
+import android.content.Context
+import androidx.glance.appwidget.updateAll
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import ru.whensclass.widget.ScheduleWidget
+
+/** Что случилось при обновлении — приложению есть что показать, виджету нет. */
+sealed interface RefreshResult {
+    data object Updated : RefreshResult
+    data object AlreadyFresh : RefreshResult
+    data object NoGroup : RefreshResult
+    data class Failed(val error: Throwable) : RefreshResult
+}
+
+class ScheduleRepository(
+    private val context: Context,
+    private val api: ScheduleApi,
+    private val store: ScheduleStore,
+) {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    val schedule: Flow<ScheduleDto?> = store.scheduleJson.map { body ->
+        body?.let { runCatching { json.decodeFromString<ScheduleDto>(it) }.getOrNull() }
+    }
+
+    val fetchedAt: Flow<Long> = store.fetchedAt
+    val groupName: Flow<String?> = store.groupName
+
+    suspend fun groups(): List<GroupDto> = withContext(Dispatchers.IO) {
+        val cached = store.groupsJson.first()
+        val fromNetwork = runCatching { api.groups() }.getOrNull()
+        if (fromNetwork != null) {
+            store.putGroups(json.encodeToString(fromNetwork))
+            return@withContext fromNetwork.groups
+        }
+        // Список групп открывается и без сети: выбрать группу в метро тоже надо.
+        cached?.let { runCatching { json.decodeFromString<GroupsDto>(it).groups }.getOrNull() }
+            .orEmpty()
+    }
+
+    suspend fun selectGroup(group: GroupDto) {
+        store.selectGroup(group.id, group.name)
+        refresh(force = true)
+    }
+
+    /**
+     * Обновляет расписание.
+     *
+     * Сначала спрашиваем /v1/meta: если сервер не перечитывал таблицу с
+     * прошлого раза, качать расписание незачем. Ошибку наружу не выносим —
+     * пусть виджет молча показывает прежнее, это лучше, чем сообщение об
+     * ошибке вместо пар.
+     */
+    suspend fun refresh(force: Boolean = false): RefreshResult = withContext(Dispatchers.IO) {
+        val groupId = store.currentGroupId() ?: return@withContext RefreshResult.NoGroup
+        try {
+            if (!force) {
+                val meta = api.meta()
+                if (meta.generatedAt == store.generatedAt.first()) {
+                    return@withContext RefreshResult.AlreadyFresh
+                }
+            }
+            val fresh = api.schedule(groupId)
+            store.putSchedule(json.encodeToString(fresh), fresh.generatedAt)
+            ScheduleWidget().updateAll(context)
+            RefreshResult.Updated
+        } catch (error: Exception) {
+            RefreshResult.Failed(error)
+        }
+    }
+}
