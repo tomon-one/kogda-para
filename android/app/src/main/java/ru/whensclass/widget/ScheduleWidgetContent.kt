@@ -6,7 +6,9 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
+import androidx.glance.LocalContext
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
@@ -239,6 +241,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
         )
     }
     lesson.url?.let { url ->
+        val context = LocalContext.current
         // Отдельной строкой, а не рядом с преподавателем: рядом они не
         // помещаются и наезжают друг на друга. Саму ссылку не печатаем — она
         // длинная и нечитаемая, нажатие кладёт её в буфер обмена.
@@ -248,11 +251,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
             style = TextStyle(fontSize = 11.sp, color = colors.accent),
             modifier = GlanceModifier
                 .fillMaxWidth()
-                .clickable(
-                    actionRunCallback<CopyLinkAction>(
-                        actionParametersOf(CopyLinkAction.KEY_URL to url),
-                    ),
-                ),
+                .clickable(actionStartActivity(CopyLinkActivity.intent(context, url))),
         )
     }
 }

@@ -23,6 +23,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Копирование ссылки из виджета. С Android 10 писать в буфер обмена
+             может только приложение на переднем плане, поэтому нажатие
+             открывает это окно: оно копирует и мгновенно закрывается. -->
+        <activity
+            android:name=".widget.CopyLinkActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.WhensClass.Invisible" />
+
         <receiver
             android:name=".widget.ScheduleWidgetReceiver"
             android:exported="true">

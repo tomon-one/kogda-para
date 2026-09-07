@@ -3,4 +3,11 @@
     <style name="Theme.WhensClass" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- Окно копирования ссылки: его не должно быть видно. -->
+    <style name="Theme.WhensClass.Invisible" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 </resources>
