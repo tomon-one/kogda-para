@@ -86,6 +86,10 @@ fun currentLessonNumber(bells: Map<String, List<String>>, day: LocalDate): Int? 
     }
 }
 
+/** Только начало пары: «09:00». Для виджета, где на диапазон нет ширины. */
+fun lessonStart(bells: Map<String, List<String>>, number: Int): String? =
+    bells[number.toString()]?.getOrNull(0)
+
 fun lessonTime(bells: Map<String, List<String>>, number: Int): String? {
     val range = bells[number.toString()] ?: return null
     val start = range.getOrNull(0) ?: return null

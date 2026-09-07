@@ -54,7 +54,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     .fillMaxSize()
                     .background(colors.background)
                     .cornerRadius(16.dp)
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .padding(horizontal = 10.dp, vertical = 7.dp)
                     .clickable(
                         actionStartActivity(
                             Intent(LocalContext.current, MainActivity::class.java)
@@ -78,7 +78,7 @@ class NextLessonWidget : GlanceAppWidget() {
 
                 val bells = schedule?.bells.orEmpty()
                 val now = next.day == today && currentLessonNumber(bells, today) == lesson.number
-                val time = lessonTime(bells, lesson.number) ?: "${lesson.number} пара"
+                val time = lessonStart(bells, lesson.number) ?: "${lesson.number} пара"
                 // Про завтрашнюю пару тоже говорим: «пар больше нет» слишком
                 // легко прочесть как «пар нет вообще» и расслабиться.
                 val when_ = when {
@@ -97,7 +97,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 )
                 Text(
                     lesson.subject,
-                    maxLines = 2,
+                    maxLines = 1,
                     style = TextStyle(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,

@@ -89,6 +89,51 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
+        Section("Группа") {
+            Text(groupName ?: "не выбрана", style = MaterialTheme.typography.bodyLarge)
+            TextButton(onClick = onChangeGroup) { Text("Выбрать другую") }
+        }
+
+        Section("Оформление") {
+            ThemeOption("Как в системе", ThemeChoice.SYSTEM, theme, onTheme)
+            ThemeOption("Тёмная", ThemeChoice.DARK, theme, onTheme)
+            ThemeOption("Светлая", ThemeChoice.LIGHT, theme, onTheme)
+        }
+
+        Section("Расписание") {
+            Text(
+                "Приложение забирает расписание каждый час и при каждом открытии. " +
+                    "Сервер перечитывает таблицу колледжа каждые 20 минут и ещё раз " +
+                    "перед каждой парой.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = onRefresh) { Text("Обновить расписание") }
+        }
+
+        Section("Данные") {
+            Text(
+                "На сервер уходит только название вашей группы. Больше ничего: " +
+                    "ни имени, ни номера, ни местоположения. Учётной записи нет, " +
+                    "аналитики и рекламы нет. Всё для вашего удобства ;)",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        Section("Ответственность") {
+            Text(
+                "Расписание берётся из общей таблицы колледжа. Что написано там, " +
+                    "то и покажет приложение: за ошибки, замены и опоздавшие " +
+                    "обновления мы не отвечаем.\n\n" +
+                    "Если однажды что-то сломается, я постараюсь починить, но сроков " +
+                    "не обещаю. Пропущенная пара остаётся на вашей совести, даже " +
+                    "если приложение в этот момент показывало ерунду. Сверяйтесь " +
+                    "с таблицей, когда это важно.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         Section("Версия приложения") {
             Text(
                 "Установлена ${BuildConfig.VERSION_NAME}",
@@ -138,51 +183,6 @@ fun SettingsScreen(
                     )
                 }
             }
-        }
-
-        Section("Группа") {
-            Text(groupName ?: "не выбрана", style = MaterialTheme.typography.bodyLarge)
-            TextButton(onClick = onChangeGroup) { Text("Выбрать другую") }
-        }
-
-        Section("Оформление") {
-            ThemeOption("Как в системе", ThemeChoice.SYSTEM, theme, onTheme)
-            ThemeOption("Тёмная", ThemeChoice.DARK, theme, onTheme)
-            ThemeOption("Светлая", ThemeChoice.LIGHT, theme, onTheme)
-        }
-
-        Section("Расписание") {
-            Text(
-                "Приложение забирает расписание каждый час и при каждом открытии. " +
-                    "Сервер перечитывает таблицу колледжа каждые 20 минут и ещё раз " +
-                    "перед каждой парой.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = onRefresh) { Text("Обновить расписание") }
-        }
-
-        Section("Данные") {
-            Text(
-                "На сервер уходит только название вашей группы. Больше ничего: " +
-                    "ни имени, ни номера, ни местоположения. Учётной записи нет, " +
-                    "аналитики и рекламы нет. Всё для вашего удобства ;)",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
-        Section("Ответственность") {
-            Text(
-                "Расписание берётся из общей таблицы колледжа. Что написано там, " +
-                    "то и покажет приложение: за ошибки, замены и опоздавшие " +
-                    "обновления мы не отвечаем.\n\n" +
-                    "Если однажды что-то сломается, я постараюсь починить, но сроков " +
-                    "не обещаю. Пропущенная пара остаётся на вашей совести, даже " +
-                    "если приложение в этот момент показывало ерунду. Сверяйтесь " +
-                    "с таблицей, когда это важно.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
 
         Section("О приложении") {
