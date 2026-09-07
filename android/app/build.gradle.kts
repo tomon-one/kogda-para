@@ -27,10 +27,12 @@ android {
 
     signingConfigs {
         create("release") {
-            // Ключ и пароли лежат вне репозитория: C:/dev/whensclass-keys.
+            // Ключ и пароли лежат вне репозитория: C:/WhensClass-keys.
+            // Потеря ключа означает, что обновить приложение у одногруппников
+            // уже нельзя, — папку не удалять и держать в копии.
             // Потерять его нельзя — с другим ключом обновление не встанет
             // поверх уже установленного приложения.
-            val props = gradleLocalProperties(File("C:/dev/whensclass-keys"), "keystore.properties")
+            val props = gradleLocalProperties(File("C:/WhensClass-keys"), "keystore.properties")
             val store = props.getProperty("storeFile")
             if (store != null) {
                 storeFile = File(store)
