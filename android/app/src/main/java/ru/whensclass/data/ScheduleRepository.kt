@@ -120,20 +120,23 @@ class ScheduleRepository(
         runCatching { api.teacher(teacherId, from = weekStart(), days = DAYS) }.getOrNull()
     }
 
+    /** Студент выбрал группу — заодно это и означает, что он студент. */
     suspend fun selectGroup(group: GroupDto) {
+        store.setTeacherMode(false)
         store.selectGroup(group.id, group.name)
         refresh(force = true)
     }
 
     /** Преподаватель выбрал себя — дальше всё работает как у студента. */
     suspend fun selectSelfAsTeacher(teacher: GroupDto) {
+        store.setTeacherMode(true)
         store.selectTeacher(teacher.id, teacher.name)
         refresh(force = true)
     }
 
-    suspend fun setTeacherMode(enabled: Boolean) {
-        store.setTeacherMode(enabled)
-        refresh(force = true)
+    /** Расписание группы — для просмотра чужого, без смены роли. */
+    suspend fun groupSchedule(groupId: String): ScheduleDto? = withContext(Dispatchers.IO) {
+        runCatching { api.schedule(groupId, from = weekStart(), days = DAYS) }.getOrNull()
     }
 
     /**

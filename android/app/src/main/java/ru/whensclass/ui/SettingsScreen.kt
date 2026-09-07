@@ -34,7 +34,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -65,7 +64,7 @@ import ru.whensclass.widget.ThemeChoice
 fun SettingsScreen(
     groupName: String?,
     teacherMode: Boolean,
-    onTeacherMode: (Boolean) -> Unit,
+    onSwitchRole: () -> Unit,
     theme: ThemeChoice,
     update: ReleaseDto?,
     installing: Boolean,
@@ -136,20 +135,6 @@ fun SettingsScreen(
             Text(groupName ?: "не выбрано", style = MaterialTheme.typography.bodyLarge)
             TextButton(onClick = onChangeGroup) { Text("Выбрать другое") }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Я преподаватель", style = MaterialTheme.typography.bodyLarge)
-                Switch(checked = teacherMode, onCheckedChange = onTeacherMode)
-            }
-            Text(
-                "Тогда приложение показывает ваше расписание, а не группы: " +
-                    "и на экране, и в виджетах, и в напоминаниях.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
 
         Section("Оформление") {
@@ -307,6 +292,16 @@ fun SettingsScreen(
 
             Link("Нашли ошибку? Напишите мне в Telegram", "https://t.me/toomonn")
             Link("GitHub автора", "https://github.com/tomon-one")
+            Text(
+                if (teacherMode) "Я студент" else "Я преподаватель",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSwitchRole)
+                    .padding(top = 14.dp, bottom = 4.dp),
+            )
             Text(
                 "Создано Tomon",
                 style = MaterialTheme.typography.bodySmall,

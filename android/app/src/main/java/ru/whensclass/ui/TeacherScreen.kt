@@ -49,6 +49,10 @@ fun TeacherScreen(
     onTogglePin: (String) -> Unit = {},
     reloadKey: Int = 0,
     ownSchedule: ScheduleDto? = null,
+    searchLabel: String = "Поиск по фамилии",
+    showGroups: Boolean = true,
+    selfId: String? = null,
+    ownScheduleTitle: String = "Посмотреть других преподавателей",
 ) {
     // В роли преподавателя его собственное расписание уже лежит на телефоне:
     // показываем сразу, без похода в сеть. Список остальных — по кнопке.
@@ -58,14 +62,14 @@ fun TeacherScreen(
             ScheduleDays(
                 schedule = ownSchedule,
                 today = remember { LocalDate.now() },
-                showGroups = true,
+                showGroups = showGroups,
                 modifier = Modifier.weight(1f),
             )
             TextButton(
                 onClick = { browsing = true },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             ) {
-                Text("Посмотреть других преподавателей")
+                Text(ownScheduleTitle)
             }
         }
         return
@@ -109,7 +113,7 @@ fun TeacherScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Поиск по фамилии") },
+            label = { Text(searchLabel) },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -143,10 +147,15 @@ fun TeacherScreen(
                 ) {
                     if (favourites.isNotEmpty()) {
                         item(key = "pinned") { SectionTitle("Закреплённые") }
-                        items(favourites, key = { "p-${it.id}" }, contentType = { "teacher" }) { teacher ->
+                        items(
+                            favourites,
+                            key = { "p-${it.id}" },
+                            contentType = { "teacher" },
+                        ) { teacher ->
                             TeacherRow(
                                 teacher = teacher,
                                 pinned = true,
+                                isSelf = teacher.id == selfId,
                                 onOpen = { picked = teacher },
                                 onTogglePin = { onTogglePin(teacher.id) },
                             )
@@ -159,6 +168,7 @@ fun TeacherScreen(
                         TeacherRow(
                             teacher = teacher,
                             pinned = false,
+                            isSelf = teacher.id == selfId,
                             onOpen = { picked = teacher },
                             onTogglePin = { onTogglePin(teacher.id) },
                         )
@@ -220,6 +230,7 @@ private fun TeacherRow(
     pinned: Boolean,
     onOpen: () -> Unit,
     onTogglePin: () -> Unit,
+    isSelf: Boolean = false,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -228,15 +239,23 @@ private fun TeacherRow(
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface),
     ) {
-            Text(
-                teacher.name,
-                style = MaterialTheme.typography.bodyLarge,
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 48.dp)
                     .clickable(onClick = onOpen)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-            )
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Text(teacher.name, style = MaterialTheme.typography.bodyLarge)
+                // Себя человек ищет в списке первым делом — отмечаем.
+                if (isSelf) {
+                    Text(
+                        "это вы",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             Text(
                 if (pinned) "★" else "☆",
                 style = MaterialTheme.typography.titleMedium,

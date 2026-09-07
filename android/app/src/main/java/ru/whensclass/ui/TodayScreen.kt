@@ -114,6 +114,11 @@ fun TodayScreen(
     refreshing: Boolean,
     teacherMode: Boolean = false,
     reloadKey: Int = 0,
+    groups: List<GroupDto>? = null,
+    loadGroupSchedule: suspend (String) -> ScheduleDto? = { null },
+    pinnedGroups: List<String> = emptyList(),
+    onTogglePinnedGroup: (String) -> Unit = {},
+    selfTeacherId: String? = null,
     onSettings: () -> Unit,
     onUpdateBadge: () -> Unit,
     onRefresh: () -> Unit,
@@ -196,6 +201,21 @@ fun TodayScreen(
             Spacer(Modifier.height(8.dp))
 
             when (tab) {
+                Tab.STUDENTS -> if (teacherMode) {
+                    // У преподавателя своей группы нет: раздел студентов —
+                    // это список групп, чьё расписание можно посмотреть.
+                    TeacherScreen(
+                        teachers = groups,
+                        loadSchedule = loadGroupSchedule,
+                        pinned = pinnedGroups,
+                        onTogglePin = onTogglePinnedGroup,
+                        reloadKey = reloadKey,
+                        searchLabel = "Поиск по названию группы",
+                        showGroups = false,
+                    )
+                    return@Column
+                }
+
                 Tab.TEACHERS -> {
                     TeacherScreen(
                         teachers = teachers,
@@ -205,6 +225,7 @@ fun TodayScreen(
                         reloadKey = reloadKey,
                         // В роли преподавателя своё расписание уже загружено.
                         ownSchedule = if (teacherMode) schedule else null,
+                        selfId = selfTeacherId,
                     )
                     return@Column
                 }

@@ -62,6 +62,20 @@ class ScheduleStore(private val context: Context) {
         it[KEY_PINNED_TEACHERS]?.split("\n")?.filter(String::isNotBlank).orEmpty()
     }
 
+    /** Закреплённые группы — для тех, кто смотрит чужие расписания. */
+    val pinnedGroups: Flow<List<String>> = context.dataStore.data.map {
+        it[KEY_PINNED_GROUPS]?.split("\n")?.filter(String::isNotBlank).orEmpty()
+    }
+
+    suspend fun togglePinnedGroup(id: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_PINNED_GROUPS]?.split("\n")?.filter(String::isNotBlank)
+                .orEmpty()
+            val next = if (id in current) current - id else current + id
+            prefs[KEY_PINNED_GROUPS] = next.joinToString("\n")
+        }
+    }
+
     suspend fun togglePinnedTeacher(id: String) {
         context.dataStore.edit { prefs ->
             val current = prefs[KEY_PINNED_TEACHERS]?.split("\n")?.filter(String::isNotBlank)
@@ -85,9 +99,6 @@ class ScheduleStore(private val context: Context) {
     suspend fun setTeacherMode(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[KEY_ROLE] = if (enabled) "teacher" else "student"
-            // Расписание прежней роли показывать нельзя ни секунды.
-            prefs.remove(KEY_SCHEDULE)
-            prefs.remove(KEY_GENERATED_AT)
         }
     }
 
@@ -194,6 +205,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
         val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")
         val KEY_PINNED_TEACHERS = stringPreferencesKey("pinned_teachers")
+        val KEY_PINNED_GROUPS = stringPreferencesKey("pinned_groups")
         val KEY_ROLE = stringPreferencesKey("role")
         val KEY_TEACHER_ID = stringPreferencesKey("teacher_id")
         val KEY_TEACHER_NAME = stringPreferencesKey("teacher_name")

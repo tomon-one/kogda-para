@@ -109,6 +109,10 @@ private fun App(startDay: String? = null) {
     val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
     val teacherMode by container.store.isTeacher.collectAsState(initial = false)
     val teacherName by container.store.teacherName.collectAsState(initial = null)
+    val teacherId by container.store.teacherId.collectAsState(initial = null)
+    val pinnedGroups by container.store.pinnedGroups.collectAsState(initial = emptyList())
+    var groups by remember { mutableStateOf<List<GroupDto>?>(null) }
+    LaunchedEffect(Unit) { groups = container.repository.groups() }
     val theme = ThemeChoice.from(storedTheme)
 
     var screen by remember { mutableStateOf(Screen.TODAY) }
@@ -124,6 +128,8 @@ private fun App(startDay: String? = null) {
     LaunchedEffect(Unit) { teachers = container.repository.teachers() }
 
     var reloadKey by remember { mutableStateOf(0) }
+    // Какой список показывать на экране выбора: null — по текущей роли.
+    var pickTeacher by remember { mutableStateOf<Boolean?>(null) }
 
     val refreshNow: () -> Unit = {
         scope.launch {
@@ -187,19 +193,22 @@ private fun App(startDay: String? = null) {
                         },
                     )
 
-                    Screen.GROUPS -> if (teacherMode) {
-                        // В роли преподавателя вместо списка групп — список
-                        // преподавателей: человек выбирает себя.
+                    Screen.GROUPS -> if (pickTeacher ?: teacherMode) {
+                        // Список преподавателей: человек выбирает себя. Роль
+                        // меняется вместе с выбором, а не до него — иначе на
+                        // мгновение показывается чужое расписание.
                         SelfPickerScreen(
                             teachers = teachers,
                             canGoBack = chosenName != null,
-                            onBack = { screen = Screen.SETTINGS },
-                            onStudentMode = {
-                                scope.launch { container.repository.setTeacherMode(false) }
+                            onBack = {
+                                pickTeacher = null
+                                screen = Screen.SETTINGS
                             },
+                            onStudentMode = { pickTeacher = false },
                             onPick = { teacher ->
                                 scope.launch {
                                     container.repository.selectSelfAsTeacher(teacher)
+                                    pickTeacher = null
                                     screen = Screen.TODAY
                                 }
                             },
@@ -208,13 +217,15 @@ private fun App(startDay: String? = null) {
                         GroupPickerScreen(
                             loadGroups = { container.repository.groups() },
                             canGoBack = chosenName != null,
-                            onBack = { screen = Screen.SETTINGS },
-                            onTeacherMode = {
-                                scope.launch { container.repository.setTeacherMode(true) }
+                            onBack = {
+                                pickTeacher = null
+                                screen = Screen.SETTINGS
                             },
+                            onTeacherMode = { pickTeacher = true },
                             onPick = { group: GroupDto ->
                                 scope.launch {
                                     container.repository.selectGroup(group)
+                                    pickTeacher = null
                                     screen = Screen.TODAY
                                 }
                             },
@@ -224,11 +235,9 @@ private fun App(startDay: String? = null) {
                     Screen.SETTINGS -> SettingsScreen(
                         groupName = chosenName,
                         teacherMode = teacherMode,
-                        onTeacherMode = { on ->
-                            scope.launch {
-                                container.repository.setTeacherMode(on)
-                                screen = Screen.GROUPS
-                            }
+                        onSwitchRole = {
+                            pickTeacher = !teacherMode
+                            screen = Screen.GROUPS
                         },
                         theme = theme,
                         update = update,
@@ -285,6 +294,13 @@ private fun App(startDay: String? = null) {
                         teacherMode = teacherMode,
                         teachers = teachers,
                         loadTeacherSchedule = { container.repository.teacherSchedule(it) },
+                        loadGroupSchedule = { container.repository.groupSchedule(it) },
+                        groups = groups,
+                        pinnedGroups = pinnedGroups,
+                        onTogglePinnedGroup = { id ->
+                            scope.launch { container.store.togglePinnedGroup(id) }
+                        },
+                        selfTeacherId = teacherId,
                         pinnedTeachers = pinnedTeachers,
                         onTogglePinnedTeacher = { id ->
                             scope.launch { container.store.togglePinnedTeacher(id) }
