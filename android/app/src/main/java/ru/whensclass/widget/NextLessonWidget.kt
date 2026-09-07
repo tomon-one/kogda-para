@@ -91,7 +91,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     else -> formatDayTitleShort(next.day)
                 }
                 Text(
-                    "$when_ · $time",
+                    lesson.groups?.let { "$when_ · $time · $it" } ?: "$when_ · $time",
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,

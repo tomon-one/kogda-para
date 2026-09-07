@@ -6,6 +6,10 @@ package ru.whensclass.data
  * Ради этого люди и перепроверяют таблицу: сама по себе пара, стоящая на своём
  * месте, новостью не является, а вот отменённая или внезапно появившаяся —
  * очень даже.
+ *
+ * Пары сопоставляются внутри номера по названию, а не по одному лишь номеру:
+ * со второй подгруппой на один номер приходится две пары, и по номеру они
+ * затирали друг друга — обычное обновление выглядело как «убрали пару».
  */
 object ScheduleDiff {
 
@@ -22,45 +26,60 @@ object ScheduleDiff {
 
         for (day in fresh.days) {
             val before = oldDays[day.date] ?: continue
-            val beforeByNumber = before.lessons.associateBy { it.number }
-            val afterByNumber = day.lessons.associateBy { it.number }
-
-            for ((number, lesson) in afterByNumber) {
-                val was = beforeByNumber[number]
-                when {
-                    was == null ->
-                        changes.add(Change(day.date, "добавилась $number пара: ${lesson.subject}"))
-
-                    !was.isCancelled && lesson.isCancelled ->
-                        changes.add(Change(day.date, "отменили $number пару: ${lesson.subject}"))
-
-                    was.isCancelled && !lesson.isCancelled ->
-                        changes.add(Change(day.date, "вернули $number пару: ${lesson.subject}"))
-
-                    was.subject != lesson.subject ->
-                        changes.add(
-                            Change(day.date, "$number пара теперь ${lesson.subject}"),
-                        )
-
-                    was.room != lesson.room && lesson.room != null ->
-                        changes.add(
-                            Change(day.date, "$number пара переехала в ${lesson.room}"),
-                        )
-
-                    was.url == null && lesson.url != null ->
-                        changes.add(Change(day.date, "$number пара стала онлайн"))
-
-                    was.url != null && lesson.url == null ->
-                        changes.add(Change(day.date, "$number пара снова очная"))
-                }
+            val numbers = sortedSetOf<Int>().apply {
+                before.lessons.forEach { add(it.number) }
+                day.lessons.forEach { add(it.number) }
             }
-
-            for ((number, lesson) in beforeByNumber) {
-                if (!afterByNumber.containsKey(number)) {
-                    changes.add(Change(day.date, "убрали $number пару: ${lesson.subject}"))
-                }
+            for (number in numbers) {
+                compareNumber(
+                    day = day.date,
+                    number = number,
+                    was = before.lessons.filter { it.number == number },
+                    now = day.lessons.filter { it.number == number },
+                    changes = changes,
+                )
             }
         }
         return changes
+    }
+
+    private fun compareNumber(
+        day: String,
+        number: Int,
+        was: List<LessonDto>,
+        now: List<LessonDto>,
+        changes: MutableList<Change>,
+    ) {
+        // Что от прежнего набора ещё не нашло себе пару в новом.
+        val unmatched = was.toMutableList()
+
+        for (lesson in now) {
+            val index = unmatched.indexOfFirst { it.subject == lesson.subject }
+            if (index < 0) {
+                changes.add(Change(day, "добавилась $number пара: ${lesson.subject}"))
+                continue
+            }
+            val previous = unmatched.removeAt(index)
+            when {
+                !previous.isCancelled && lesson.isCancelled ->
+                    changes.add(Change(day, "отменили $number пару: ${lesson.subject}"))
+
+                previous.isCancelled && !lesson.isCancelled ->
+                    changes.add(Change(day, "вернули $number пару: ${lesson.subject}"))
+
+                previous.url == null && lesson.url != null ->
+                    changes.add(Change(day, "$number пара стала онлайн"))
+
+                previous.url != null && lesson.url == null ->
+                    changes.add(Change(day, "$number пара снова очная"))
+
+                previous.room != lesson.room && lesson.room != null ->
+                    changes.add(Change(day, "$number пара переехала в ${lesson.room}"))
+            }
+        }
+
+        unmatched.forEach {
+            changes.add(Change(day, "убрали $number пару: ${it.subject}"))
+        }
     }
 }

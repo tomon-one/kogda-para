@@ -2,6 +2,7 @@ package ru.whensclass.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -218,6 +219,7 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit {
             it[KEY_GROUP2_ID] = id
             it[KEY_GROUP2_NAME] = name
+            dropSchedule(it)
         }
     }
 
@@ -225,7 +227,20 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit {
             it.remove(KEY_GROUP2_ID)
             it.remove(KEY_GROUP2_NAME)
+            dropSchedule(it)
         }
+    }
+
+    /**
+     * Забыть сохранённое расписание.
+     *
+     * Состав пар поменялся не в колледже, а у нас: показывать прежнее нельзя,
+     * и сообщать «убрали пару» — тем более. Сравнивать будет не с чем, и
+     * уведомление об изменениях промолчит.
+     */
+    private fun dropSchedule(prefs: MutablePreferences) {
+        prefs.remove(KEY_SCHEDULE)
+        prefs.remove(KEY_GENERATED_AT)
     }
 
     suspend fun putSchedule(body: String, generatedAt: String) {

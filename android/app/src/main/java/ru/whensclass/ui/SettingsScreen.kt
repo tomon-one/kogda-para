@@ -148,13 +148,6 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-                Text(
-                    "Общая пара нередко записана только в колонке соседней " +
-                        "подгруппы. Добавьте её — такие пары появятся в вашем дне " +
-                        "с подписью, чьи они, и напоминания будут и о них.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 Row {
                     TextButton(onClick = onPickSecondGroup) {
                         Text(if (secondGroupName == null) "Добавить" else "Заменить")
