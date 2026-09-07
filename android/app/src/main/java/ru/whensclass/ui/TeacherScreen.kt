@@ -53,6 +53,7 @@ fun TeacherScreen(
     showGroups: Boolean = true,
     selfId: String? = null,
     ownScheduleTitle: String = "Посмотреть других преподавателей",
+    othersTitle: String = "Другие преподаватели",
 ) {
     // В роли преподавателя его собственное расписание уже лежит на телефоне:
     // показываем сразу, без похода в сеть. Список остальных — по кнопке.
@@ -138,13 +139,32 @@ fun TeacherScreen(
                 // Закреплённые — отдельной группой сверху, а не просто первыми
                 // строками: так видно, что это именно закреплённые, и они не
                 // перелетают через весь список, когда их снимают.
-                val favourites = remember(found, pinned) { found.filter { it.id in pinned } }
-                val others = remember(found, pinned) { found.filter { it.id !in pinned } }
+                // Сам человек — отдельной строкой над всеми: за своим
+                // расписанием заходят чаще, чем за чужим.
+                val self = remember(found, selfId) { found.firstOrNull { it.id == selfId } }
+                val favourites = remember(found, pinned, selfId) {
+                    found.filter { it.id in pinned && it.id != selfId }
+                }
+                val others = remember(found, pinned, selfId) {
+                    found.filter { it.id !in pinned && it.id != selfId }
+                }
 
                 LazyColumn(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    self?.let { own ->
+                        item(key = "self-title") { SectionTitle("Ваше расписание") }
+                        item(key = "self") {
+                            TeacherRow(
+                                teacher = own,
+                                pinned = own.id in pinned,
+                                isSelf = true,
+                                onOpen = { picked = own },
+                                onTogglePin = { onTogglePin(own.id) },
+                            )
+                        }
+                    }
                     if (favourites.isNotEmpty()) {
                         item(key = "pinned") { SectionTitle("Закреплённые") }
                         items(
@@ -160,9 +180,9 @@ fun TeacherScreen(
                                 onTogglePin = { onTogglePin(teacher.id) },
                             )
                         }
-                        if (others.isNotEmpty()) {
-                            item(key = "others") { SectionTitle("Остальные") }
-                        }
+                    }
+                    if (others.isNotEmpty() && (self != null || favourites.isNotEmpty())) {
+                        item(key = "others") { SectionTitle(othersTitle) }
                     }
                     items(others, key = { it.id }, contentType = { "teacher" }) { teacher ->
                         TeacherRow(

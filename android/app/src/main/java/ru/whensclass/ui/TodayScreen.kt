@@ -212,6 +212,7 @@ fun TodayScreen(
                         reloadKey = reloadKey,
                         searchLabel = "Поиск по названию группы",
                         showGroups = false,
+                        othersTitle = "Другие группы",
                     )
                     return@Column
                 }
@@ -225,7 +226,9 @@ fun TodayScreen(
                         reloadKey = reloadKey,
                         // В роли преподавателя своё расписание уже загружено.
                         ownSchedule = if (teacherMode) schedule else null,
-                        selfId = selfTeacherId,
+                        // Себя отмечаем, только когда человек и правда
+                        // преподаватель: у студента это просто чужая фамилия.
+                        selfId = if (teacherMode) selfTeacherId else null,
                     )
                     return@Column
                 }

@@ -112,7 +112,8 @@ private fun Header(
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    groupName,
+                    // ФИО целиком не влезает рядом со временем проверки.
+                    if (groupName.count { it == ' ' } >= 2) shortenName(groupName) else groupName,
                     maxLines = 1,
                     style = TextStyle(fontSize = 11.sp, color = colors.textDim),
                     modifier = GlanceModifier.clickable(openApp),

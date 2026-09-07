@@ -133,7 +133,9 @@ fun SettingsScreen(
     ) {
         Section(if (teacherMode) "Преподаватель" else "Группа") {
             Text(groupName ?: "не выбрано", style = MaterialTheme.typography.bodyLarge)
-            TextButton(onClick = onChangeGroup) { Text("Выбрать другое") }
+            TextButton(onClick = onChangeGroup) {
+                Text(if (teacherMode) "Сменить преподавателя" else "Сменить группу")
+            }
 
         }
 
