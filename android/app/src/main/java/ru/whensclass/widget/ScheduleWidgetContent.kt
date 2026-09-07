@@ -66,7 +66,13 @@ fun ScheduleWidgetContent(
             schedule == null -> Hint("Расписание ещё не загружено", colors)
             today == null -> Hint("Расписание на этот день ещё не опубликовано", colors)
             today.lessons.isEmpty() -> Hint("Пар нет", colors)
-            else -> Lessons(today.lessons, schedule.bells, day, colors)
+            else -> Lessons(
+                today.lessons,
+                schedule.bells,
+                day,
+                colors,
+                modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+            )
         }
     }
 }
@@ -168,9 +174,18 @@ private fun Lessons(
     bells: Map<String, List<String>>,
     day: LocalDate,
     colors: Palette,
+    modifier: GlanceModifier = GlanceModifier.fillMaxWidth(),
 ) {
+    if (lessons.isEmpty()) {
+        // Подстраховка: список без строк оставлял виджет пустым, и человек
+        // видел только шапку на чёрном фоне.
+        Hint("Пар нет", colors)
+        return
+    }
     val current = currentLessonNumber(bells, day)
-    LazyColumn(modifier = GlanceModifier.fillMaxWidth()) {
+    // Высоту список получает от вызывающего: без явной доли он в некоторых
+    // оболочках схлопывается в ноль, и пары просто не рисуются.
+    LazyColumn(modifier = modifier) {
         items(lessons, itemId = { it.number.toLong() }) { lesson ->
             Column(modifier = GlanceModifier.fillMaxWidth()) {
                 LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)

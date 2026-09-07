@@ -31,14 +31,24 @@ class ScheduleWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val state = AppContainer.get(context).store.widgetState()
-        val schedule = parse(state.scheduleJson)
-        val colors = WidgetColors.resolve(context, ThemeChoice.from(state.theme))
+        // Если хранилище не открылось (бывает при обновлении приложения),
+        // виджет должен сказать об этом, а не остаться пустым.
+        val state = runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()
+        val schedule = parse(state?.scheduleJson)
+        val colors = WidgetColors.resolve(
+            context, ThemeChoice.from(state?.theme),
+        )
 
         provideContent {
             // Палитра своя (см. WidgetColors), а не системная: оболочки на
             // телефонах слишком по-разному понимают динамические цвета.
-            Content(schedule, state.groupName, state.fetchedAt, colors, offset = currentOffset())
+            Content(
+                schedule,
+                state?.groupName,
+                state?.fetchedAt ?: 0L,
+                colors,
+                offset = currentOffset(),
+            )
         }
     }
 

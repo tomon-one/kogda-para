@@ -85,8 +85,8 @@ class NextLessonWidget : GlanceAppWidget() {
                 // Про завтрашнюю пару тоже говорим: «пар больше нет» слишком
                 // легко прочесть как «пар нет вообще» и расслабиться.
                 val when_ = when {
-                    now -> "сейчас"
-                    next.day == today -> "далее"
+                    now -> "идёт сейчас"
+                    next.day == today -> "сегодня"
                     next.day == today.plusDays(1) -> "завтра"
                     else -> formatDayTitleShort(next.day)
                 }

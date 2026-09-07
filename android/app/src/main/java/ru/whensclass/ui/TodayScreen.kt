@@ -41,6 +41,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
@@ -186,12 +188,12 @@ fun TodayScreen(
                     } else {
                         // Листы с пересдачами и экзаменами колледж публикует
                         // в свой срок; вкладки стоят, чтобы их ждали здесь.
-                        scope.launch {
-                            snackbar.showSnackbar("${picked.title}: скоро")
-                        }
+                        scope.launch { snackbar.showSnackbar(picked.emptyMessage) }
                     }
                 },
             )
+
+            Spacer(Modifier.height(8.dp))
 
             when (tab) {
                 Tab.TEACHERS -> {
@@ -273,40 +275,61 @@ private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
 }
 
 /** Разделы расписания. Пересдачи и экзамены колледж публикует отдельными листами. */
-enum class Tab(val title: String, val ready: Boolean) {
+enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String = "") {
     STUDENTS("Студентам", true),
     TEACHERS("Преподавателям", true),
-    RETAKES("Пересдачи", false),
-    EXAMS("Экзамены", false),
+    RETAKES("Пересдачи", false, "Сейчас пересдач нет"),
+    EXAMS("Экзамены", false, "Сейчас экзаменов нет"),
 }
 
 @Composable
 private fun ScheduleTabs(current: Tab, onPick: (Tab) -> Unit) {
-    TabRow(
-        selectedTabIndex = current.ordinal,
-        containerColor = MaterialTheme.colorScheme.background,
-        divider = {},
-    ) {
-        Tab.entries.forEach { tab ->
-            Tab(
-                selected = tab == current,
-                onClick = { onPick(tab) },
-                text = {
-                    Text(
-                        tab.title,
-                        // «Преподавателям» — длинное слово, а вкладок четыре:
-                        // шрифт мельче, перенос запрещён.
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        softWrap = false,
-                        // Неготовые разделы видно, но они приглушены.
-                        color = if (tab.ready) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+    Column {
+        TabRow(
+            selectedTabIndex = current.ordinal.coerceAtMost(1),
+            containerColor = MaterialTheme.colorScheme.background,
+            divider = {},
+        ) {
+            TabButton(Tab.STUDENTS, current, onPick)
+            TabButton(Tab.TEACHERS, current, onPick)
+        }
+        TabRow(
+            selectedTabIndex = (current.ordinal - 2).coerceIn(0, 1),
+            containerColor = MaterialTheme.colorScheme.background,
+            divider = {},
+            indicator = { positions ->
+                // Полоску под нижним рядом рисуем, только когда там и правда
+                // выбран раздел: иначе она подчёркивает пустое место.
+                if (current.ordinal >= 2) {
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(positions[current.ordinal - 2]),
                     )
-                },
-            )
+                }
+            },
+        ) {
+            TabButton(Tab.RETAKES, current, onPick)
+            TabButton(Tab.EXAMS, current, onPick)
         }
     }
+}
+
+@Composable
+private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit) {
+    Tab(
+        selected = tab == current,
+        onClick = { onPick(tab) },
+        text = {
+            Text(
+                tab.title,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+                // Неготовые разделы видно, но они приглушены.
+                color = if (tab.ready) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+    )
 }
 
 /**
