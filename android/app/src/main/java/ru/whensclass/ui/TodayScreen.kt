@@ -203,6 +203,8 @@ fun TodayScreen(
                         pinned = pinnedTeachers,
                         onTogglePin = onTogglePinnedTeacher,
                         reloadKey = reloadKey,
+                        // В роли преподавателя своё расписание уже загружено.
+                        ownSchedule = if (teacherMode) schedule else null,
                     )
                     return@Column
                 }

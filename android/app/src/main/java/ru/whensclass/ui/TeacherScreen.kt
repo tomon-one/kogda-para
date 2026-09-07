@@ -1,5 +1,6 @@
 package ru.whensclass.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
@@ -46,7 +48,29 @@ fun TeacherScreen(
     pinned: List<String> = emptyList(),
     onTogglePin: (String) -> Unit = {},
     reloadKey: Int = 0,
+    ownSchedule: ScheduleDto? = null,
 ) {
+    // В роли преподавателя его собственное расписание уже лежит на телефоне:
+    // показываем сразу, без похода в сеть. Список остальных — по кнопке.
+    var browsing by remember { mutableStateOf(false) }
+    if (ownSchedule != null && !browsing) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            ScheduleDays(
+                schedule = ownSchedule,
+                today = remember { LocalDate.now() },
+                showGroups = true,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = { browsing = true },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            ) {
+                Text("Посмотреть других преподавателей")
+            }
+        }
+        return
+    }
+
     var picked by remember { mutableStateOf<GroupDto?>(null) }
     var schedule by remember { mutableStateOf<ScheduleDto?>(null) }
     var loading by remember { mutableStateOf(false) }
@@ -73,6 +97,12 @@ fun TeacherScreen(
             },
         )
         return
+    }
+
+    if (ownSchedule != null) {
+        TextButton(onClick = { browsing = false }, modifier = Modifier.padding(start = 8.dp)) {
+            Text("Вернуться к своему расписанию")
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -113,7 +143,7 @@ fun TeacherScreen(
                 ) {
                     if (favourites.isNotEmpty()) {
                         item(key = "pinned") { SectionTitle("Закреплённые") }
-                        items(favourites, key = { "p-${it.id}" }) { teacher ->
+                        items(favourites, key = { "p-${it.id}" }, contentType = { "teacher" }) { teacher ->
                             TeacherRow(
                                 teacher = teacher,
                                 pinned = true,
@@ -125,7 +155,7 @@ fun TeacherScreen(
                             item(key = "others") { SectionTitle("Остальные") }
                         }
                     }
-                    items(others, key = { it.id }) { teacher ->
+                    items(others, key = { it.id }, contentType = { "teacher" }) { teacher ->
                         TeacherRow(
                             teacher = teacher,
                             pinned = false,
@@ -191,12 +221,13 @@ private fun TeacherRow(
     onOpen: () -> Unit,
     onTogglePin: () -> Unit,
 ) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth(),
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 teacher.name,
                 style = MaterialTheme.typography.bodyLarge,
@@ -216,7 +247,6 @@ private fun TeacherRow(
                     .clickable(onClick = onTogglePin)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
             )
-        }
     }
 }
 
