@@ -46,8 +46,8 @@ class NextLessonWidget : GlanceAppWidget() {
 
         provideContent {
             val today = LocalDate.now()
-            val day = schedule?.days?.firstOrNull { it.date == today.toString() }
-            val lesson = nextLesson(day?.lessons.orEmpty(), schedule)
+            val next = nextLesson(schedule, today)
+            val lesson = next?.lesson
 
             Column(
                 modifier = GlanceModifier
@@ -62,9 +62,10 @@ class NextLessonWidget : GlanceAppWidget() {
                         ),
                     ),
             ) {
-                if (lesson == null) {
+                if (lesson == null || next == null) {
                     Text(
-                        if (schedule == null) "Расписание не загружено" else "Пар больше нет",
+                        if (schedule == null) "Расписание не загружено"
+                        else "Дальше пар не найдено",
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
                     Text(
@@ -76,10 +77,18 @@ class NextLessonWidget : GlanceAppWidget() {
                 }
 
                 val bells = schedule?.bells.orEmpty()
-                val now = currentLessonNumber(bells, today) == lesson.number
+                val now = next.day == today && currentLessonNumber(bells, today) == lesson.number
+                val time = lessonTime(bells, lesson.number) ?: "${lesson.number} пара"
+                // Про завтрашнюю пару тоже говорим: «пар больше нет» слишком
+                // легко прочесть как «пар нет вообще» и расслабиться.
+                val when_ = when {
+                    now -> "сейчас"
+                    next.day == today -> "далее"
+                    next.day == today.plusDays(1) -> "завтра"
+                    else -> formatDayTitleShort(next.day)
+                }
                 Text(
-                    (if (now) "сейчас · " else "далее · ") +
-                        (lessonTime(bells, lesson.number) ?: "${lesson.number} пара"),
+                    "$when_ · $time",
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
@@ -117,19 +126,35 @@ class NextLessonWidget : GlanceAppWidget() {
     }
 }
 
-/** Идущая сейчас пара, а если её нет — ближайшая из оставшихся на сегодня. */
-private fun nextLesson(lessons: List<LessonDto>, schedule: ScheduleDto?): LessonDto? {
-    if (lessons.isEmpty()) return null
-    val bells = schedule?.bells.orEmpty()
-    val current = currentLessonNumber(bells, LocalDate.now())
-    if (current != null) {
-        lessons.firstOrNull { it.number == current }?.let { return it }
-    }
+/** Пара и день, на который она приходится. */
+data class NextLesson(val day: LocalDate, val lesson: LessonDto)
+
+/**
+ * Идущая сейчас пара; если её нет — ближайшая из оставшихся сегодня; если и
+ * таких нет — первая пара следующего учебного дня.
+ */
+fun nextLesson(schedule: ScheduleDto?, today: LocalDate): NextLesson? {
+    if (schedule == null) return null
+    val bells = schedule.bells
+    val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }?.lessons.orEmpty()
+
+    currentLessonNumber(bells, today)
+        ?.let { number -> todayLessons.firstOrNull { it.number == number } }
+        ?.let { return NextLesson(today, it) }
+
     val now = java.time.LocalTime.now()
-    return lessons.firstOrNull { lesson ->
+    todayLessons.firstOrNull { lesson ->
         val start = parseTime(bells[lesson.number.toString()]?.getOrNull(0))
         start == null || start > now
+    }?.let { return NextLesson(today, it) }
+
+    // Сегодня всё — ищем ближайший день, где пары есть.
+    for (day in schedule.days) {
+        val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
+        if (date <= today) continue
+        day.lessons.firstOrNull()?.let { return NextLesson(date, it) }
     }
+    return null
 }
 
 private fun place(lesson: LessonDto): String = buildString {

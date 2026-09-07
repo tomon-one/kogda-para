@@ -97,6 +97,7 @@ private fun App() {
 
     var screen by remember { mutableStateOf(Screen.TODAY) }
     var update by remember { mutableStateOf<ReleaseDto?>(null) }
+    var checkingUpdate by remember { mutableStateOf(false) }
 
     // Проверяем обновление один раз при запуске: чаще незачем, сборки выходят
     // не по расписанию.
@@ -155,6 +156,14 @@ private fun App() {
                         theme = theme,
                         update = update,
                         updateReady = update?.let { container.updates.downloaded(it) } != null,
+                        checkingUpdate = checkingUpdate,
+                        onCheckUpdate = {
+                            scope.launch {
+                                checkingUpdate = true
+                                update = container.updates.check()
+                                checkingUpdate = false
+                            }
+                        },
                         onUpdate = {
                             val release = update ?: return@SettingsScreen
                             val ready = container.updates.downloaded(release)

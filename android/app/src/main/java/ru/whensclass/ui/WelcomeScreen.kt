@@ -92,10 +92,11 @@ fun WelcomeScreen(onContinue: () -> Unit) {
 @Composable
 private fun Point(title: String, text: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
+        // Точка выравнивается по первой строке заголовка, а не по верху блока.
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(8.dp).padding(top = 0.dp),
+            modifier = Modifier.padding(top = 7.dp).size(8.dp),
         ) {}
         Column(modifier = Modifier.padding(start = 12.dp)) {
             Text(

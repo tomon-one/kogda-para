@@ -52,6 +52,8 @@ fun SettingsScreen(
     theme: ThemeChoice,
     update: ReleaseDto?,
     updateReady: Boolean,
+    checkingUpdate: Boolean,
+    onCheckUpdate: () -> Unit,
     onTheme: (ThemeChoice) -> Unit,
     onChangeGroup: () -> Unit,
     onRefresh: () -> Unit,
@@ -86,12 +88,17 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
-        if (update != null) {
-            Section("Обновление приложения") {
+        Section("Версия приложения") {
+            Text(
+                "Установлена ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            if (update != null) {
                 Text(
-                    "Доступна версия ${update.versionName}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
+                    "Вышла ${update.versionName}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
                 )
                 if (update.notes.isNotBlank()) {
                     Text(
@@ -101,14 +108,18 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    if (updateReady) "Файл скачан — осталось подтвердить установку."
-                    else "Скачается с нашего сервера. Установку подтвердите вручную: " +
-                        "молча ставить приложения Android не даёт.",
+                    if (updateReady) "Файл скачан, осталось подтвердить установку."
+                    else "Скачается с нашего сервера. Установку Android попросит " +
+                        "подтвердить — сам он приложения не ставит.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 TextButton(onClick = onUpdate) {
                     Text(if (updateReady) "Установить" else "Скачать обновление")
+                }
+            } else {
+                TextButton(onClick = onCheckUpdate, enabled = !checkingUpdate) {
+                    Text(if (checkingUpdate) "Проверяю…" else "Проверить обновления")
                 }
             }
         }
@@ -160,15 +171,10 @@ fun SettingsScreen(
 
         Section("О приложении") {
             Text(
-                "Версия ${BuildConfig.VERSION_NAME} (сборка ${BuildConfig.VERSION_CODE})",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "Расписание НГОК для своих. Приложение неофициальное.",
+                "Неофициальное приложение для студентов НГОК.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(8.dp))
             Link("Нашли ошибку — напишите в Telegram", "https://t.me/toomonn")
             Link("GitHub автора", "https://github.com/Tomonj1")
         }
@@ -187,7 +193,6 @@ private fun Link(text: String, url: String) {
         fontWeight = FontWeight.Medium,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
             .clickable {
                 runCatching {
                     context.startActivity(
@@ -196,7 +201,7 @@ private fun Link(text: String, url: String) {
                     )
                 }
             }
-            .padding(vertical = 12.dp),
+            .padding(top = 10.dp, bottom = 2.dp),
     )
 }
 

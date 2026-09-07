@@ -63,7 +63,7 @@ import ru.whensclass.widget.lessonTime
 import ru.whensclass.widget.shortenName
 
 /** Ширина колонки времени: «09:00–10:30» должно помещаться в одну строку. */
-private val TIME_COLUMN = 84.dp
+private val TIME_COLUMN = 92.dp
 
 /**
  * Расписание на неделю вперёд.
@@ -234,7 +234,7 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Column(modifier = Modifier.width(TIME_COLUMN - 12.dp)) {
+        Column(modifier = Modifier.width(TIME_COLUMN)) {
             Text(
                 "${lesson.number} пара",
                 style = MaterialTheme.typography.labelSmall,
@@ -260,7 +260,9 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
             }
         }
 
-        VerticalDivider(modifier = Modifier.fillMaxHeight().padding(end = 12.dp))
+        VerticalDivider(
+            modifier = Modifier.fillMaxHeight().padding(start = 12.dp, end = 12.dp),
+        )
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -275,9 +277,10 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
             // поэтому они идут сразу под названием и заметно, а не подписью
             // мелким шрифтом.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                when {
-                    lesson.url != null -> Place("Онлайн")
-                    else -> roomLabel(lesson.room)?.let { Place(it) }
+                if (lesson.url != null) {
+                    OnlineLink(lesson.url)
+                } else {
+                    roomLabel(lesson.room)?.let { Place(it) }
                 }
                 kindName(lesson.kind)?.let {
                     Text(
@@ -305,7 +308,6 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 )
             }
 
-            lesson.url?.let { CopyLink(it) }
         }
     }
 }
@@ -328,14 +330,20 @@ private fun Place(text: String) {
     )
 }
 
+
+/**
+ * Онлайн-занятие: сама пометка и есть кнопка копирования ссылки.
+ *
+ * Раньше под строкой шла ещё одна, «Онлайн — скопировать», и слово «онлайн»
+ * стояло в карточке дважды.
+ */
 @Composable
-private fun CopyLink(url: String) {
+private fun OnlineLink(url: String) {
     val context = LocalContext.current
     Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 6.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .clickable {
                 context.getSystemService(ClipboardManager::class.java)
                     ?.setPrimaryClip(ClipData.newPlainText("Ссылка на занятие", url))
@@ -343,22 +351,18 @@ private fun CopyLink(url: String) {
                     Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
                 }
             }
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(end = 8.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(MaterialTheme.colorScheme.primary)
-        )
-        // Короткая подпись в одну строку: длинная переносилась и рвала строку.
         Text(
-            "Онлайн — скопировать ссылку",
-            style = MaterialTheme.typography.labelLarge,
+            "Онлайн",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            modifier = Modifier.padding(start = 8.dp),
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            " ⧉",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }
