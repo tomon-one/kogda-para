@@ -72,7 +72,15 @@ class WeekWidget : GlanceAppWidget() {
 
                     schedule == null -> Hint("Расписание ещё не загружено", colors)
                     days.isEmpty() -> Hint("На эту неделю расписания нет", colors)
-                    else -> Week(days, schedule.bells, colors)
+                    // Долю высоты список получает здесь, из Column:
+                    // без неё он в некоторых оболочках схлопывается в
+                    // ноль, и под шапкой остаётся пустота.
+                    else -> Week(
+                        days,
+                        schedule.bells,
+                        colors,
+                        GlanceModifier.fillMaxWidth().defaultWeight(),
+                    )
                 }
             }
         }
@@ -129,9 +137,14 @@ private fun Header(groupName: String?, fetchedAt: Long, colors: Palette) {
  * помещаются.
  */
 @Composable
-private fun Week(days: List<DayDto>, bells: Map<String, List<String>>, colors: Palette) {
+private fun Week(
+    days: List<DayDto>,
+    bells: Map<String, List<String>>,
+    colors: Palette,
+    modifier: GlanceModifier,
+) {
     val rows = remember(days) { rowsOf(days) }
-    LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
+    LazyColumn(modifier = modifier) {
         items(rows, itemId = { it.id }) { row ->
             when (row) {
                 is WeekRow.Title -> DayTitle(row, colors)
