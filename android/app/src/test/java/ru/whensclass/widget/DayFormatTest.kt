@@ -14,7 +14,10 @@ class DayFormatTest {
         val today = LocalDate.now()
         assertTrue(formatDayTitle(today).startsWith("сегодня"))
         assertTrue(formatDayTitle(today.plusDays(1)).startsWith("завтра"))
-        assertTrue(formatDayTitle(today.plusDays(2)).startsWith("послезавтра"))
+        // Прошедшие дни остаются в списке, поэтому вчерашний назван словом.
+        assertTrue(formatDayTitle(today.minusDays(1)).startsWith("вчера"))
+        // А послезавтра человек посчитает и сам — там только дата.
+        assertTrue(!formatDayTitle(today.plusDays(2)).startsWith("послезавтра"))
     }
 
     @Test
