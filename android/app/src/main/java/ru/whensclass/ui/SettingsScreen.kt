@@ -287,14 +287,15 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                "Создано Tomon",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+
             Link("Нашли ошибку? Напишите мне в Telegram", "https://t.me/toomonn")
             Link("GitHub автора", "https://github.com/tomon-one")
+            Text(
+                "Создано Tomon",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp),
+            )
         }
     }
     }

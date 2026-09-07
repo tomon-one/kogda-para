@@ -235,10 +235,17 @@ fun TodayScreen(
 private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
     val angle = remember { Animatable(0f) }
     var done by remember { mutableStateOf(false) }
+    var spinning by remember { mutableStateOf(false) }
     val busy by rememberUpdatedState(refreshing)
 
     LaunchedEffect(refreshing) {
-        if (!refreshing) return@LaunchedEffect
+        if (refreshing) spinning = true
+    }
+
+    // Ключ — «крутимся», а не «идёт запрос»: иначе окончание запроса отменяло
+    // бы эту же корутину, и значок замирал бы, едва тронувшись.
+    LaunchedEffect(spinning) {
+        if (!spinning) return@LaunchedEffect
         done = false
         do {
             angle.animateTo(angle.value + 360f, tween(700, easing = LinearEasing))
@@ -247,6 +254,7 @@ private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
         done = true
         delay(1200)
         done = false
+        spinning = false
     }
 
     IconButton(onClick = onRefresh, enabled = !refreshing) {

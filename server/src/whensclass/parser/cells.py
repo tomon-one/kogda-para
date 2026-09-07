@@ -89,6 +89,23 @@ def _split_kind(subject: str) -> tuple[str, str | None]:
     return subject[: m.start()].strip(), kind
 
 
+def split_teachers(text: str) -> tuple[str, ...]:
+    """Разбирает ячейку с преподавателями.
+
+    Их бывает несколько: обычно каждый со своей строки, но встречается и запись
+    через косую черту — «Старостина Екатерина Александровна/ Пикулина Лидия
+    Егоровна». Одним именем это выглядит как человек с двойной фамилией.
+    """
+    names: list[str] = []
+    for line in text.splitlines():
+        for name in line.split("/"):
+            # Точку не трогаем: она часть инициалов — «Иванов И. И.».
+            cleaned = " ".join(name.split()).strip(" ,;")
+            if cleaned:
+                names.append(cleaned)
+    return tuple(names)
+
+
 def parse_lesson(
     number: int,
     subject_raw: str | None,
@@ -114,7 +131,7 @@ def parse_lesson(
         else:
             room = room_text.replace("\n", " ").strip()
 
-    teachers = tuple(t for t in teacher_text.split("\n") if t)
+    teachers = split_teachers(teacher_text)
 
     return Lesson(
         number=number,

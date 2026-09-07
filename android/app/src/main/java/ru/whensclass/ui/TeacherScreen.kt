@@ -62,35 +62,15 @@ fun TeacherScreen(
 
     val chosen = picked
     if (chosen != null) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    chosen.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { picked = null; schedule = null }) { Text("Другой") }
-            }
-
-            when {
-                loading -> Centered { CircularProgressIndicator() }
-                schedule == null -> Centered {
-                    Text(
-                        "Расписание не загрузилось",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                else -> ScheduleDays(
-                    schedule = schedule!!,
-                    today = remember { LocalDate.now() },
-                    showGroups = true,
-                )
-            }
-        }
+        ChosenTeacher(
+            teacher = chosen,
+            schedule = schedule,
+            loading = loading,
+            onBack = {
+                picked = null
+                schedule = null
+            },
+        )
         return
     }
 
@@ -116,51 +96,125 @@ fun TeacherScreen(
             }
 
             else -> {
-                val filtered = remember(list, query, pinned) {
-                    val found = if (query.isBlank()) list
+                val found = remember(list, query) {
+                    if (query.isBlank()) list
                     else list.filter { it.name.contains(query.trim(), ignoreCase = true) }
-                    // Закреплённые — наверх: за ними и заходят.
-                    found.sortedBy { if (it.id in pinned) 0 else 1 }
                 }
+                // Закреплённые — отдельной группой сверху, а не просто первыми
+                // строками: так видно, что это именно закреплённые, и они не
+                // перелетают через весь список, когда их снимают.
+                val favourites = remember(found, pinned) { found.filter { it.id in pinned } }
+                val others = remember(found, pinned) { found.filter { it.id !in pinned } }
+
                 LazyColumn(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(filtered, key = { it.id }) { teacher ->
-                        val isPinned = teacher.id in pinned
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isPinned) MaterialTheme.colorScheme.surfaceVariant
-                            else MaterialTheme.colorScheme.surface,
-                            // Переезд на новое место — плавный: закреплённый
-                            // уезжает вверх, остальные сдвигаются на строку.
-                            modifier = Modifier.fillMaxWidth().animateItem(),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    teacher.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 48.dp)
-                                        .clickable { picked = teacher }
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                )
-                                Text(
-                                    if (isPinned) "★" else "☆",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = if (isPinned) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .heightIn(min = 48.dp)
-                                        .clickable { onTogglePin(teacher.id) }
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                )
-                            }
+                    if (favourites.isNotEmpty()) {
+                        item(key = "pinned") { SectionTitle("Закреплённые") }
+                        items(favourites, key = { "p-${it.id}" }) { teacher ->
+                            TeacherRow(
+                                teacher = teacher,
+                                pinned = true,
+                                onOpen = { picked = teacher },
+                                onTogglePin = { onTogglePin(teacher.id) },
+                            )
                         }
+                        if (others.isNotEmpty()) {
+                            item(key = "others") { SectionTitle("Остальные") }
+                        }
+                    }
+                    items(others, key = { it.id }) { teacher ->
+                        TeacherRow(
+                            teacher = teacher,
+                            pinned = false,
+                            onOpen = { picked = teacher },
+                            onTogglePin = { onTogglePin(teacher.id) },
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ChosenTeacher(
+    teacher: GroupDto,
+    schedule: ScheduleDto?,
+    loading: Boolean,
+    onBack: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                teacher.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onBack) { Text("Другой") }
+        }
+
+        when {
+            loading -> Centered { CircularProgressIndicator() }
+            schedule == null -> Centered {
+                Text("Расписание не загрузилось", style = MaterialTheme.typography.bodyMedium)
+            }
+            else -> ScheduleDays(
+                schedule = schedule,
+                today = remember { LocalDate.now() },
+                showGroups = true,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 2.dp),
+    )
+}
+
+@Composable
+private fun TeacherRow(
+    teacher: GroupDto,
+    pinned: Boolean,
+    onOpen: () -> Unit,
+    onTogglePin: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                teacher.name,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .clickable(onClick = onOpen)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            )
+            Text(
+                if (pinned) "★" else "☆",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (pinned) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(onClick = onTogglePin)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            )
         }
     }
 }

@@ -38,6 +38,13 @@ class ScheduleRepository(
     val fetchedAt: Flow<Long> = store.fetchedAt
     val groupName: Flow<String?> = store.groupName
 
+    /** Есть ли сегодняшний день в том, что лежит на телефоне. */
+    private fun coversToday(saved: ScheduleDto?): Boolean {
+        if (saved == null) return false
+        val today = java.time.LocalDate.now().toString()
+        return saved.days.any { it.date == today }
+    }
+
     /**
      * Рассказать об изменениях, если человек этого хотел.
      *
@@ -115,7 +122,12 @@ class ScheduleRepository(
     suspend fun refresh(force: Boolean = false): RefreshResult = withContext(Dispatchers.IO) {
         val groupId = store.currentGroupId() ?: return@withContext RefreshResult.NoGroup
         try {
-            if (!force) {
+            // Сохранённые дни начинаются с даты загрузки, поэтому со временем
+            // сегодняшнего среди них может не оказаться — и виджет пустеет.
+            // В этом случае перезапрашиваем, даже если сервер говорит, что у
+            // него ничего не изменилось.
+            val stale = !coversToday(schedule.first())
+            if (!force && !stale) {
                 val meta = api.meta()
                 if (meta.generatedAt == store.generatedAt.first()) {
                     // Данные те же, но проверку показать надо: иначе кажется,
