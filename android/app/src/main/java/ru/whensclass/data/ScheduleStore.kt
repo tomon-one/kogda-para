@@ -132,6 +132,13 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_GROUPS] = body }
     }
 
+    /** Список преподавателей: полторы сотни имён, качать их каждый раз незачем. */
+    val teachersJson: Flow<String?> = context.dataStore.data.map { it[KEY_TEACHERS] }
+
+    suspend fun putTeachers(body: String) {
+        context.dataStore.edit { it[KEY_TEACHERS] = body }
+    }
+
     data class WidgetState(
         val groupName: String?,
         val scheduleJson: String?,
@@ -144,6 +151,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")
         val KEY_SCHEDULE = stringPreferencesKey("schedule_json")
         val KEY_GROUPS = stringPreferencesKey("groups_json")
+        val KEY_TEACHERS = stringPreferencesKey("teachers_json")
         val KEY_FETCHED_AT = stringPreferencesKey("fetched_at")
         val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
         val KEY_THEME = stringPreferencesKey("theme")

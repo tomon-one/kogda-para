@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.BadgedBox
@@ -38,7 +39,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
@@ -46,7 +47,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,12 +62,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.GroupDto
@@ -136,21 +144,7 @@ fun TodayScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onRefresh, enabled = !refreshing) {
-                        // Пока идёт обновление — крутилка: иначе непонятно,
-                        // услышало ли приложение нажатие.
-                        if (refreshing) {
-                            CircularProgressIndicator(
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = "Обновить расписание",
-                            )
-                        }
-                    }
+                    RefreshButton(refreshing = refreshing, onRefresh = onRefresh)
                     IconButton(onClick = if (hasUpdate) onUpdateBadge else onSettings) {
                         // Точка над шестерёнкой: вышла новая сборка. Нажатие
                         // открывает настройки сразу на разделе обновления.
@@ -217,6 +211,47 @@ fun TodayScreen(
     }
 }
 
+/**
+ * Кнопка обновления.
+ *
+ * Крутится, пока идёт запрос, и обязательно доводит оборот до конца: значок,
+ * замерший на половине поворота, выглядит как зависший. Закончив, показывает
+ * галочку — короткое «готово», которого иначе не видно, когда расписание не
+ * изменилось.
+ */
+@Composable
+private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
+    val angle = remember { Animatable(0f) }
+    var done by remember { mutableStateOf(false) }
+    val busy by rememberUpdatedState(refreshing)
+
+    LaunchedEffect(refreshing) {
+        if (!refreshing) return@LaunchedEffect
+        done = false
+        do {
+            angle.animateTo(angle.value + 360f, tween(700, easing = LinearEasing))
+        } while (busy)
+        angle.snapTo(0f)
+        done = true
+        delay(1200)
+        done = false
+    }
+
+    IconButton(onClick = onRefresh, enabled = !refreshing) {
+        Crossfade(targetState = done, label = "refresh") { showDone ->
+            if (showDone) {
+                Icon(Icons.Default.Check, contentDescription = "Расписание обновлено")
+            } else {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "Обновить расписание",
+                    modifier = Modifier.rotate(angle.value),
+                )
+            }
+        }
+    }
+}
+
 /** Разделы расписания. Пересдачи и экзамены колледж публикует отдельными листами. */
 enum class Tab(val title: String, val ready: Boolean) {
     STUDENTS("Студентам", true),
@@ -227,9 +262,8 @@ enum class Tab(val title: String, val ready: Boolean) {
 
 @Composable
 private fun ScheduleTabs(current: Tab, onPick: (Tab) -> Unit) {
-    ScrollableTabRow(
+    TabRow(
         selectedTabIndex = current.ordinal,
-        edgePadding = 12.dp,
         containerColor = MaterialTheme.colorScheme.background,
         divider = {},
     ) {
@@ -240,7 +274,11 @@ private fun ScheduleTabs(current: Tab, onPick: (Tab) -> Unit) {
                 text = {
                     Text(
                         tab.title,
-                        style = MaterialTheme.typography.labelLarge,
+                        // «Преподавателям» — длинное слово, а вкладок четыре:
+                        // шрифт мельче, перенос запрещён.
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        softWrap = false,
                         // Неготовые разделы видно, но они приглушены.
                         color = if (tab.ready) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.onSurfaceVariant,

@@ -76,9 +76,22 @@ class ScheduleRepository(
             .orEmpty()
     }
 
-    /** Список преподавателей. Кэшируется так же, как список групп. */
+    /**
+     * Список преподавателей.
+     *
+     * Сначала отдаём сохранённый — экран открывается сразу и без сети, а
+     * свежий подтягиваем следом. Раньше он ехал по сети при каждом заходе на
+     * вкладку, и та заметно подтормаживала.
+     */
     suspend fun teachers(): List<GroupDto> = withContext(Dispatchers.IO) {
-        runCatching { api.teachers().teachers }.getOrElse { emptyList() }
+        val cached = store.teachersJson.first()
+            ?.let { runCatching { json.decodeFromString<TeachersDto>(it).teachers }.getOrNull() }
+        val fresh = runCatching { api.teachers() }.getOrNull()
+        if (fresh != null) {
+            store.putTeachers(json.encodeToString(fresh))
+            return@withContext fresh.teachers
+        }
+        cached.orEmpty()
     }
 
     /** Расписание преподавателя — берём по запросу, на телефоне не храним. */

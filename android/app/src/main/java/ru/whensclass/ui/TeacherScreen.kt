@@ -132,7 +132,9 @@ fun TeacherScreen(
                             shape = RoundedCornerShape(12.dp),
                             color = if (isPinned) MaterialTheme.colorScheme.surfaceVariant
                             else MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.fillMaxWidth(),
+                            // Переезд на новое место — плавный: закреплённый
+                            // уезжает вверх, остальные сдвигаются на строку.
+                            modifier = Modifier.fillMaxWidth().animateItem(),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
