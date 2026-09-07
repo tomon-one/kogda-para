@@ -11,6 +11,8 @@ import androidx.glance.LocalContext
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
@@ -20,12 +22,14 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import java.time.LocalDate
+import ru.whensclass.R
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.ui.MainActivity
@@ -95,6 +99,15 @@ private fun Header(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Логотип колледжа: у него нет своего фона, только красные контуры,
+        // поэтому он одинаково ложится и на чёрный, и на белый виджет.
+        Image(
+            provider = ImageProvider(R.drawable.logo_ngok),
+            contentDescription = null,
+            modifier = GlanceModifier.size(width = 26.dp, height = 14.dp),
+        )
+        Spacer(GlanceModifier.width(6.dp))
+
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
                 formatDayTitleShort(day).replaceFirstChar { it.uppercase() },
