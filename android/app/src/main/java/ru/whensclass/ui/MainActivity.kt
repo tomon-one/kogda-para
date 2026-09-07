@@ -104,6 +104,7 @@ private fun App(startDay: String? = null) {
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
+    val loaded by container.store.loaded.collectAsState(initial = false)
     val notifyBefore by container.store.notifyBefore.collectAsState(initial = 0)
     val notifyChanges by container.store.notifyChanges.collectAsState(initial = true)
     val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
@@ -170,6 +171,10 @@ private fun App(startDay: String? = null) {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
         ) {
+            // Пустой фон, пока настройки читаются с диска: это доли секунды,
+            // но без него успевает мелькнуть чужой экран.
+            if (!loaded) return@Surface
+
             // Экраны сменяются со сдвигом: вглубь — справа налево, назад —
             // наоборот. Резкая подмена читалась как подвисание.
             AnimatedContent(

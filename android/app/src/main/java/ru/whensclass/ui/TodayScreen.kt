@@ -188,7 +188,14 @@ fun TodayScreen(
             ScheduleTabs(
                 current = tab,
                 teacherMode = teacherMode,
-                onPick = { picked -> tab = picked },
+                onPick = { picked ->
+                    if (picked.ready) {
+                        tab = picked
+                    } else {
+                        // Раздел откроется, когда колледж опубликует эти листы.
+                        scope.launch { snackbar.showSnackbar(picked.emptyMessage) }
+                    }
+                },
             )
 
             Spacer(Modifier.height(8.dp))
@@ -226,24 +233,16 @@ fun TodayScreen(
                     return@Column
                 }
 
-                Tab.RETAKES, Tab.EXAMS -> {
-                    ComingSoon(tab)
-                    return@Column
-                }
-
                 else -> Unit
             }
 
         if (schedule == null) {
-            Column(modifier = Modifier.padding(padding).padding(24.dp)) {
-                Text("Расписание ещё не загружено", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Проверьте интернет или напишите @toomonn",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            return@Scaffold
+            Explanation(
+                title = "Расписание ещё не загружено",
+                text = "Проверьте интернет и нажмите обновление вверху. " +
+                    "Если не помогает, напишите @toomonn.",
+            )
+            return@Column
         }
 
         ScheduleDays(
@@ -364,25 +363,25 @@ private fun ScheduleTabs(current: Tab, teacherMode: Boolean, onPick: (Tab) -> Un
 }
 
 /**
- * Раздел, который колледж пока не опубликовал.
+ * Объяснение вместо пустого экрана.
  *
- * Вкладка стоит на месте нарочно: пересдачи и экзамены появляются в свой срок,
- * и человек должен знать, где их искать, когда появятся.
+ * Пустой раздел без единого слова читается как поломка, поэтому везде, где
+ * показывать нечего, приложение говорит почему.
  */
 @Composable
-private fun ComingSoon(tab: Tab) {
+private fun Explanation(title: String, text: String) {
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            tab.emptyMessage,
+            title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
         )
         Text(
-            "Колледж публикует такие листы отдельно и заранее. Как только они " +
-                "появятся в общей таблице, расписание будет здесь.",
+            text,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

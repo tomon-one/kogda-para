@@ -19,8 +19,10 @@ android {
         applicationId = "ru.whensclass"
         minSdk = 26
         targetSdk = 37
-        versionCode = 26
-        versionName = "0.26"
+        // Правила имени — в docs/versions.md. versionCode просто растёт:
+        // по нему приложение узнаёт о новой сборке на сервере.
+        versionCode = 27
+        versionName = "b-Выдра.0.3.0"
     }
 
     signingConfigs {

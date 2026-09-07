@@ -22,6 +22,14 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("w
  */
 class ScheduleStore(private val context: Context) {
 
+    /**
+     * Прочитаны ли настройки с диска.
+     *
+     * Пока не прочитаны, показывать нечего: иначе приложение на первых кадрах
+     * рисует экран выбора группы поверх уже выбранной, и окна «скачут».
+     */
+    val loaded: Flow<Boolean> = context.dataStore.data.map { true }
+
     val groupId: Flow<String?> = context.dataStore.data.map { it[KEY_GROUP_ID] }
     val groupName: Flow<String?> = context.dataStore.data.map { it[KEY_GROUP_NAME] }
     val scheduleJson: Flow<String?> = context.dataStore.data.map { it[KEY_SCHEDULE] }
