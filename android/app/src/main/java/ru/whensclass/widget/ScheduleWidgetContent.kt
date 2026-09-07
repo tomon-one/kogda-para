@@ -8,10 +8,11 @@ import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import android.content.Intent
 import androidx.glance.LocalContext
-import androidx.glance.LocalSize
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
 import androidx.glance.ColorFilter
 import androidx.glance.Image
 import androidx.glance.ImageProvider
@@ -238,73 +239,16 @@ private fun Lessons(
         return
     }
     val current = currentLessonNumber(bells, day)
-    val fit = fittingRows(lessons)
-    // Обычный столбец, а не ленивый список.
-    //
-    // Ленивый список в виджете рисуется через системный адаптер, которому
-    // нужен живой процесс приложения: стоит выгрузить приложение из памяти —
-    // и виджет остаётся с одной шапкой на чёрном фоне. Пар в дне не больше
-    // шести, ленивость тут ничего не экономит.
-    Column(modifier = modifier) {
-        lessons.take(fit).forEach { lesson ->
-            LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)
-            Spacer(GlanceModifier.height(6.dp))
+    // Ленивый список — единственное, что в виджете прокручивается пальцем:
+    // в высокую пару дней шесть занятий не влезают, а листать их надо.
+    LazyColumn(modifier = modifier) {
+        items(lessons, itemId = { it.number.toLong() }) { lesson ->
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)
+                Spacer(GlanceModifier.height(6.dp))
+            }
         }
-        if (lessons.size > fit) MoreRow(lessons.size - fit, day, colors)
     }
-}
-
-/**
- * Сколько строк помещается в виджет.
- *
- * Прокрутки у виджета нет: обычный столбец ничего не листает, а ленивый список
- * гаснет, стоит выгрузить приложение из памяти. Поэтому считаем по высоте,
- * сколько пар влезет, и об остальных пишем строкой ниже — молча обрезать
- * расписание нельзя.
- */
-@Composable
-private fun fittingRows(lessons: List<LessonDto>): Int {
-    var free = LocalSize.current.height.value - HEADER_HEIGHT
-    var fit = 0
-    for (lesson in lessons) {
-        val height = rowHeight(lesson)
-        if (free < height) break
-        free -= height
-        fit++
-    }
-    // Если что-то не поместилось, последней строкой идёт «ещё N пар», и место
-    // нужно и под неё.
-    if (fit < lessons.size && free < MORE_HEIGHT) fit--
-    return fit.coerceAtLeast(1)
-}
-
-/**
- * Во сколько точек обойдётся строка пары.
- *
- * Точную высоту в виджете не спросишь: он рисуется системой в чужом процессе.
- * Считаем по строкам текста — длинное название занимает две.
- */
-private fun rowHeight(lesson: LessonDto): Float = if (lesson.subject.length > 26) 80f else 64f
-
-/** Хвост списка: сколько пар не поместилось и куда нажать, чтобы увидеть. */
-@Composable
-private fun MoreRow(count: Int, day: LocalDate, colors: Palette) {
-    val context = LocalContext.current
-    Text(
-        "ещё $count " + lessonsWord(count) + " — открыть",
-        maxLines = 1,
-        style = TextStyle(fontSize = 11.sp, color = colors.accent),
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .clickable(actionStartActivity(openDay(context, day)))
-            .padding(top = 2.dp),
-    )
-}
-
-private fun lessonsWord(count: Int): String = when {
-    count % 10 == 1 && count % 100 != 11 -> "пара"
-    count % 10 in 2..4 && count % 100 !in 12..14 -> "пары"
-    else -> "пар"
 }
 
 /** Приложение открывается на том же дне, что показывает виджет. */
@@ -312,10 +256,6 @@ private fun openDay(context: android.content.Context, day: LocalDate): Intent =
     Intent(context, MainActivity::class.java)
         .putExtra(MainActivity.EXTRA_DAY, day.toString())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-
-/** Шапка и отступы виджета — всё, что не достаётся строкам с парами. */
-private const val HEADER_HEIGHT = 56f
-private const val MORE_HEIGHT = 18f
 
 @Composable
 private fun LessonRow(
