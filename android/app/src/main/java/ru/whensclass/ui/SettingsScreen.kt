@@ -81,7 +81,6 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onTheme: (ThemeChoice) -> Unit,
     onChangeGroup: () -> Unit,
-    onRefresh: () -> Unit,
     onUpdate: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -207,7 +206,6 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            TextButton(onClick = onRefresh) { Text("Обновить расписание") }
         }
 
         Section("Данные") {

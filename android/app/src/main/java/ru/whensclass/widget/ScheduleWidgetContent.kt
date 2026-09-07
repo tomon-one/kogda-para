@@ -316,10 +316,8 @@ private fun Details(lesson: LessonDto, colors: Palette) {
             if (isNotEmpty()) append(" · ")
             append("онлайн")
         } else {
-            roomLabel(lesson.room)?.let {
-                if (isNotEmpty()) append(" · ")
-                append(it)
-            }
+            if (isNotEmpty()) append(" · ")
+            append(roomLabel(lesson.room) ?: "места нет")
         }
     }
 

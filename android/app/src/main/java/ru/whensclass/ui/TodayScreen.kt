@@ -592,7 +592,10 @@ private fun LessonRow(
                 if (lesson.url != null) {
                     Place("Онлайн")
                 } else {
-                    roomLabel(lesson.room)?.let { Place(it) }
+                    // Ни кабинета, ни ссылки — так и говорим: пустая строка
+                    // читается как «не загрузилось», хотя в таблице там пусто.
+                    val room = roomLabel(lesson.room)
+                    Place(room ?: "Места нет", muted = room == null)
                 }
                 kindName(lesson.kind)?.let {
                     Text(
@@ -645,11 +648,13 @@ private fun LessonRow(
  * выбивались из спокойного вида остальных строк.
  */
 @Composable
-private fun Place(text: String) {
+private fun Place(text: String, muted: Boolean = false) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.primary,
+        // Отсутствие места — не то, что нужно подсвечивать цветом.
+        color = if (muted) MaterialTheme.colorScheme.onSurfaceVariant
+        else MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,
         modifier = Modifier.padding(end = 8.dp),

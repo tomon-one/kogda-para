@@ -299,7 +299,6 @@ private fun App(startDay: String? = null) {
                             }
                         },
                         onChangeGroup = { screen = Screen.GROUPS },
-                        onRefresh = refreshNow,
                         onBack = { screen = Screen.TODAY },
                     )
 
