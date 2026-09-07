@@ -6,7 +6,7 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
-import ru.whensclass.work.SyncWorker
+import ru.whensclass.AppContainer
 
 /**
  * Переключение дня в виджете.
@@ -34,12 +34,18 @@ class ShiftDayAction : ActionCallback {
     }
 }
 
+/**
+ * Обновление по нажатию на виджете.
+ *
+ * Идём за расписанием сами, а не через WorkManager: тот вправе отложить
+ * задачу на минуты, и нажатие выглядит как не сработавшее.
+ */
 class RefreshAction : ActionCallback {
     override suspend fun onAction(
         context: Context,
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
-        SyncWorker.now(context)
+        AppContainer.get(context).repository.refresh(force = true)
     }
 }

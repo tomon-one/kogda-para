@@ -98,6 +98,18 @@ private fun App() {
     var screen by remember { mutableStateOf(Screen.TODAY) }
     var update by remember { mutableStateOf<ReleaseDto?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
+    var updateChecked by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
+
+    val refreshNow: () -> Unit = {
+        scope.launch {
+            refreshing = true
+            // Напрямую, без WorkManager: он вправе отложить задачу на минуты,
+            // а человек только что нажал кнопку и ждёт ответа сейчас.
+            container.repository.refresh(force = true)
+            refreshing = false
+        }
+    }
 
     // Проверяем обновление один раз при запуске: чаще незачем, сборки выходят
     // не по расписанию.
@@ -157,11 +169,13 @@ private fun App() {
                         update = update,
                         updateReady = update?.let { container.updates.downloaded(it) } != null,
                         checkingUpdate = checkingUpdate,
+                        updateChecked = updateChecked,
                         onCheckUpdate = {
                             scope.launch {
                                 checkingUpdate = true
                                 update = container.updates.check()
                                 checkingUpdate = false
+                                updateChecked = true
                             }
                         },
                         onUpdate = {
@@ -183,7 +197,7 @@ private fun App() {
                             }
                         },
                         onChangeGroup = { screen = Screen.GROUPS },
-                        onRefresh = { SyncWorker.now(context) },
+                        onRefresh = refreshNow,
                         onBack = { screen = Screen.TODAY },
                     )
 
@@ -192,8 +206,9 @@ private fun App() {
                         schedule = schedule,
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,
+                        refreshing = refreshing,
                         onSettings = { screen = Screen.SETTINGS },
-                        onRefresh = { SyncWorker.now(context) },
+                        onRefresh = refreshNow,
                     )
                 }
             }

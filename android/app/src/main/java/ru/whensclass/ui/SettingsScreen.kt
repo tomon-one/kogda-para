@@ -53,6 +53,7 @@ fun SettingsScreen(
     update: ReleaseDto?,
     updateReady: Boolean,
     checkingUpdate: Boolean,
+    updateChecked: Boolean,
     onCheckUpdate: () -> Unit,
     onTheme: (ThemeChoice) -> Unit,
     onChangeGroup: () -> Unit,
@@ -118,8 +119,23 @@ fun SettingsScreen(
                     Text(if (updateReady) "Установить" else "Скачать обновление")
                 }
             } else {
+                // Раньше кнопка молчала, когда обновления не было, и выглядела
+                // сломанной. Теперь всегда отвечает.
+                if (updateChecked && !checkingUpdate) {
+                    Text(
+                        "Установлена последняя версия",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 TextButton(onClick = onCheckUpdate, enabled = !checkingUpdate) {
-                    Text(if (checkingUpdate) "Проверяю…" else "Проверить обновления")
+                    Text(
+                        when {
+                            checkingUpdate -> "Проверяю…"
+                            updateChecked -> "Проверить ещё раз"
+                            else -> "Проверить обновления"
+                        }
+                    )
                 }
             }
         }

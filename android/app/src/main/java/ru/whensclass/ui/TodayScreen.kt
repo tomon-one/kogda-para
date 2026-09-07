@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Badge
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import ru.whensclass.data.DayDto
@@ -80,6 +82,7 @@ fun TodayScreen(
     schedule: ScheduleDto?,
     fetchedAt: Long,
     hasUpdate: Boolean,
+    refreshing: Boolean,
     onSettings: () -> Unit,
     onRefresh: () -> Unit,
 ) {
@@ -111,8 +114,20 @@ fun TodayScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onRefresh) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Обновить расписание")
+                    IconButton(onClick = onRefresh, enabled = !refreshing) {
+                        // Пока идёт обновление — крутилка: иначе непонятно,
+                        // услышало ли приложение нажатие.
+                        if (refreshing) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Обновить расписание",
+                            )
+                        }
                     }
                     IconButton(onClick = onSettings) {
                         // Точка над шестерёнкой: вышла новая сборка приложения,
@@ -278,7 +293,7 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
             // мелким шрифтом.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (lesson.url != null) {
-                    OnlineLink(lesson.url)
+                    Place("Онлайн")
                 } else {
                     roomLabel(lesson.room)?.let { Place(it) }
                 }
@@ -290,6 +305,8 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                     )
                 }
             }
+
+            lesson.url?.let { OnlineLink(it) }
 
             lesson.teachers.forEach {
                 Text(
@@ -332,17 +349,22 @@ private fun Place(text: String) {
 
 
 /**
- * Онлайн-занятие: сама пометка и есть кнопка копирования ссылки.
+ * Ссылка на онлайн-занятие под названием предмета.
  *
- * Раньше под строкой шла ещё одна, «Онлайн — скопировать», и слово «онлайн»
- * стояло в карточке дважды.
+ * Показываем её целиком: так видно, куда она ведёт, и понятно, что именно
+ * скопируется. Нажатие кладёт ссылку в буфер обмена.
  */
 @Composable
 private fun OnlineLink(url: String) {
     val context = LocalContext.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Text(
+        url,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.primary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
+            .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .clickable {
                 context.getSystemService(ClipboardManager::class.java)
@@ -351,18 +373,6 @@ private fun OnlineLink(url: String) {
                     Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
                 }
             }
-            .padding(end = 8.dp),
-    ) {
-        Text(
-            "Онлайн",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Text(
-            " ⧉",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
+            .padding(vertical = 3.dp),
+    )
 }
