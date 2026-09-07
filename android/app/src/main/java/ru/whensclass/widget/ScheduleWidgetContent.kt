@@ -11,6 +11,7 @@ import androidx.glance.LocalContext
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.ColorFilter
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.background
@@ -29,6 +30,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import ru.whensclass.R
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
@@ -49,6 +51,7 @@ fun ScheduleWidgetContent(
     colors: Palette,
     day: LocalDate,
     offset: Int,
+    busy: Boolean = false,
     modifier: GlanceModifier = GlanceModifier,
 ) {
     Column(
@@ -58,8 +61,8 @@ fun ScheduleWidgetContent(
             .cornerRadius(16.dp)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
-        val lastDay = schedule?.days?.size?.minus(1)?.coerceIn(0, ScheduleWidget.MAX_OFFSET) ?: 0
-        Header(groupName ?: "Расписание", day, offset, fetchedAt, lastDay, colors)
+        val lastDay = lastOffset(schedule)
+        Header(groupName ?: "Расписание", day, offset, fetchedAt, lastDay, busy, colors)
         Spacer(GlanceModifier.height(6.dp))
 
         val today = schedule?.days?.firstOrNull { it.date == day.toString() }
@@ -79,6 +82,21 @@ fun ScheduleWidgetContent(
     }
 }
 
+/**
+ * До какого дня вперёд есть данные — в тех же шагах, что и листание.
+ *
+ * Расписание приходит с понедельника, вместе с прожитыми днями, поэтому
+ * считать по длине списка нельзя: выходило, что вперёд листать некуда.
+ */
+private fun lastOffset(schedule: ScheduleDto?): Int {
+    val today = LocalDate.now()
+    val ahead = schedule?.days
+        ?.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+        ?.maxOfOrNull { ChronoUnit.DAYS.between(today, it).toInt() }
+        ?: 0
+    return ahead.coerceIn(0, ScheduleWidget.MAX_OFFSET)
+}
+
 @Composable
 private fun Header(
     groupName: String,
@@ -86,6 +104,7 @@ private fun Header(
     offset: Int,
     fetchedAt: Long,
     lastDay: Int,
+    busy: Boolean,
     colors: Palette,
 ) {
     val context = LocalContext.current
@@ -99,11 +118,12 @@ private fun Header(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Логотип колледжа: у него нет своего фона, только красные контуры,
-        // поэтому он одинаково ложится и на чёрный, и на белый виджет.
+        // Логотип колледжа — одни контуры, без своего фона. Красим его
+        // цветом темы: фирменный красный на чёрном сливается с фоном.
         Image(
             provider = ImageProvider(R.drawable.logo_ngok),
             contentDescription = null,
+            colorFilter = ColorFilter.tint(colors.logo),
             modifier = GlanceModifier.size(width = 26.dp, height = 14.dp),
         )
         Spacer(GlanceModifier.width(6.dp))
@@ -132,11 +152,15 @@ private fun Header(
                 // Время последней проверки — служебная мелочь, поэтому тем же
                 // приглушённым цветом; краснеет, только когда данные протухли.
                 Text(
-                    " · " + formatFetchedShort(fetchedAt) + " ⟳",
+                    if (busy) " · обновляю…" else " · " + formatFetchedShort(fetchedAt) + " ⟳",
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
-                        color = if (isStale(fetchedAt)) colors.error else colors.textDim,
+                        color = when {
+                            busy -> colors.accent
+                            isStale(fetchedAt) -> colors.error
+                            else -> colors.textDim
+                        },
                     ),
                     modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )

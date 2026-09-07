@@ -3,6 +3,7 @@ package ru.whensclass.widget
 import android.content.Context
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
@@ -46,6 +47,23 @@ class RefreshAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
+        setBusy(context, glanceId, true)
         AppContainer.get(context).repository.refresh(force = true)
+        setBusy(context, glanceId, false)
+    }
+
+    /** Отметка «обновляю» и сразу перерисовка: запрос идёт заметные секунды. */
+    private suspend fun setBusy(context: Context, glanceId: GlanceId, busy: Boolean) {
+        updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
+            prefs.toMutablePreferences().apply { this[ScheduleWidget.KEY_BUSY] = busy }
+        }
+        // Кнопка есть на обоих виджетах, а перерисовать нужно тот, на котором
+        // нажали: чужая разметка сюда не встанет.
+        val ids = GlanceAppWidgetManager(context).getGlanceIds(ScheduleWidget::class.java)
+        if (glanceId in ids) {
+            ScheduleWidget().update(context, glanceId)
+        } else {
+            NextLessonWidget().update(context, glanceId)
+        }
     }
 }

@@ -2,6 +2,7 @@ package ru.whensclass.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -48,6 +49,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 state?.fetchedAt ?: 0L,
                 colors,
                 offset = currentOffset(),
+                busy = currentState(KEY_BUSY) == true,
             )
         }
     }
@@ -62,11 +64,13 @@ class ScheduleWidget : GlanceAppWidget() {
         fetchedAt: Long,
         colors: Palette,
         offset: Int,
+        busy: Boolean,
     ) {
         ScheduleWidgetContent(
             schedule = schedule,
             groupName = groupName,
             fetchedAt = fetchedAt,
+            busy = busy,
             colors = colors,
             day = LocalDate.now().plusDays(offset.toLong()),
             offset = offset,
@@ -87,6 +91,9 @@ class ScheduleWidget : GlanceAppWidget() {
 
     companion object {
         val KEY_DAY_OFFSET = intPreferencesKey("day_offset")
+
+        /** Идёт ли сейчас обновление: нажатие должно отзываться сразу. */
+        val KEY_BUSY = booleanPreferencesKey("busy")
 
         /** Дальше недели листать нечего: ровно столько храним на телефоне. */
         const val MAX_OFFSET = 6

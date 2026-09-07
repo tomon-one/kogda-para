@@ -38,6 +38,8 @@ data class Palette(
     val text: ColorProvider,
     val textDim: ColorProvider,
     val accent: ColorProvider,
+    /** Логотип: на светлом — фирменный красный, на чёрном — белый. */
+    val logo: ColorProvider,
     val error: ColorProvider,
     val button: ColorProvider,
     val buttonDisabled: ColorProvider,
@@ -59,6 +61,9 @@ object WidgetColors {
         text = ColorProvider(Color(0xFFF5F5F5)),
         textDim = ColorProvider(Color(0xFF9AA0A6)),
         accent = ColorProvider(Color(0xFFFF6B70)),
+        // Красный логотип на чёрном сливается с фоном: на тёмной теме он белый,
+        // как вторая половина цветов колледжа.
+        logo = ColorProvider(Color(0xFFF5F5F5)),
         error = ColorProvider(BRAND),
         button = ColorProvider(Color(0xFF1E1E1E)),
         buttonDisabled = ColorProvider(Color(0xFF141414)),
@@ -72,6 +77,7 @@ object WidgetColors {
         text = ColorProvider(Color(0xFF16181B)),
         textDim = ColorProvider(Color(0xFF5C6672)),
         accent = ColorProvider(BRAND_DEEP),
+        logo = ColorProvider(BRAND),
         error = ColorProvider(BRAND_DEEP),
         button = ColorProvider(Color(0xFFEDEEF0)),
         buttonDisabled = ColorProvider(Color(0xFFF6F7F8)),
