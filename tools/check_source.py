@@ -24,6 +24,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server" / "src"))
 
 from whensclass.domain.models import SourceFormatChanged  # noqa: E402
+from whensclass.service import alerts  # noqa: E402
 from whensclass.parser.csv_schedule import parse_csv  # noqa: E402
 from whensclass.sources import gsheets, sheet_index  # noqa: E402
 
@@ -49,9 +50,11 @@ def main() -> int:
     except SourceFormatChanged as exc:
         print(f"БЕДА: формат таблицы изменился — {exc}")
         print("Сверьтесь с docs/source-format.md: там записано, как было.")
+        alerts.notify("canary-format", f"Когда пара?: формат таблицы изменился — {exc}")
         return 2
     except Exception as exc:
         print(f"БЕДА: лист {title!r} не прочитался: {exc}")
+        alerts.notify("canary-fetch", f"Когда пара?: лист {title!r} не прочитался — {exc}")
         return 2
 
     coverage = snapshot.coverage
@@ -64,6 +67,11 @@ def main() -> int:
     if coverage and not (coverage[0] <= today <= coverage[1]):
         print(f"ВНИМАНИЕ: сегодняшний день {today} вне листа {coverage[0]}—{coverage[1]}.")
         print("Похоже, пора появиться новому листу, а его ещё нет.")
+        alerts.notify(
+            "canary-coverage",
+            f"Когда пара?: лист покрывает {coverage[0]}—{coverage[1]}, "
+            f"а сегодня уже {today}. Похоже, новый лист ещё не опубликовали.",
+        )
         return 1
 
     if not args.quiet:

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,13 +38,21 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,7 +62,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 import ru.whensclass.data.DayDto
+import ru.whensclass.data.GroupDto
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.widget.currentLessonNumber
@@ -80,6 +91,8 @@ private val TIME_COLUMN = 92.dp
 fun TodayScreen(
     startDay: String? = null,
     groupName: String,
+    loadTeachers: suspend () -> List<GroupDto>,
+    loadTeacherSchedule: suspend (String) -> ScheduleDto?,
     schedule: ScheduleDto?,
     fetchedAt: Long,
     hasUpdate: Boolean,
@@ -98,7 +111,12 @@ fun TodayScreen(
         if (index > 0) listState.scrollToItem(index)
     }
 
+    var tab by remember { mutableStateOf(Tab.STUDENTS) }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {
@@ -151,6 +169,30 @@ fun TodayScreen(
             )
         },
     ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            ScheduleTabs(
+                current = tab,
+                onPick = { picked ->
+                    if (picked.ready) {
+                        tab = picked
+                    } else {
+                        // Листы с пересдачами и экзаменами колледж публикует
+                        // в свой срок; вкладки стоят, чтобы их ждали здесь.
+                        scope.launch {
+                            snackbar.showSnackbar("${picked.title}: скоро")
+                        }
+                    }
+                },
+            )
+
+            when (tab) {
+                Tab.TEACHERS -> {
+                    TeacherScreen(loadTeachers = loadTeachers, loadSchedule = loadTeacherSchedule)
+                    return@Column
+                }
+                else -> Unit
+            }
+
         if (schedule == null) {
             Column(modifier = Modifier.padding(padding).padding(24.dp)) {
                 Text("Расписание ещё не загружено", style = MaterialTheme.typography.bodyLarge)
@@ -163,21 +205,76 @@ fun TodayScreen(
             return@Scaffold
         }
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(schedule.days, key = { it.date }) { day ->
-                DayCard(day, schedule.bells, today)
-            }
+        ScheduleDays(schedule = schedule, today = today, listState = listState)
+        }
+    }
+}
+
+/** Разделы расписания. Пересдачи и экзамены колледж публикует отдельными листами. */
+enum class Tab(val title: String, val ready: Boolean) {
+    STUDENTS("Студентам", true),
+    TEACHERS("Преподавателям", true),
+    RETAKES("Пересдачи", false),
+    EXAMS("Экзамены", false),
+}
+
+@Composable
+private fun ScheduleTabs(current: Tab, onPick: (Tab) -> Unit) {
+    ScrollableTabRow(
+        selectedTabIndex = current.ordinal,
+        edgePadding = 12.dp,
+        containerColor = MaterialTheme.colorScheme.background,
+        divider = {},
+    ) {
+        Tab.entries.forEach { tab ->
+            Tab(
+                selected = tab == current,
+                onClick = { onPick(tab) },
+                text = {
+                    Text(
+                        tab.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        // Неготовые разделы видно, но они приглушены.
+                        color = if (tab.ready) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Дни расписания списком. Общий для вкладок «Студентам» и «Преподавателям»:
+ * различие лишь в том, что у преподавателя вместо его имени стоит группа.
+ */
+@Composable
+fun ScheduleDays(
+    schedule: ScheduleDto,
+    today: LocalDate,
+    modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState(),
+    showGroups: Boolean = false,
+) {
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items(schedule.days, key = { it.date }) { day ->
+            DayCard(day, schedule.bells, today, showGroups)
         }
     }
 }
 
 @Composable
-private fun DayCard(day: DayDto, bells: Map<String, List<String>>, today: LocalDate) {
+private fun DayCard(
+    day: DayDto,
+    bells: Map<String, List<String>>,
+    today: LocalDate,
+    showGroups: Boolean = false,
+) {
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
     val isToday = date == today
     val current = if (isToday) currentLessonNumber(bells, today) else null
@@ -201,7 +298,7 @@ private fun DayCard(day: DayDto, bells: Map<String, List<String>>, today: LocalD
                 day.lessons.forEachIndexed { index, lesson ->
                     // Линия во всю ширину карточки — расписание, а не плитки.
                     if (index > 0) HorizontalDivider()
-                    LessonRow(lesson, bells, isNow = lesson.number == current)
+                    LessonRow(lesson, bells, isNow = lesson.number == current, showGroups)
                 }
             }
         }
@@ -245,7 +342,12 @@ private fun DayHeader(title: String, isToday: Boolean) {
 }
 
 @Composable
-private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow: Boolean) {
+private fun LessonRow(
+    lesson: LessonDto,
+    bells: Map<String, List<String>>,
+    isNow: Boolean,
+    showGroups: Boolean = false,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -316,12 +418,24 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
 
             lesson.url?.let { OnlineLink(it) }
 
-            lesson.teachers.forEach {
-                Text(
-                    shortenName(it),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            // В расписании преподавателя его имя очевидно, зато важно, каким
+            // группам читается пара.
+            if (showGroups) {
+                lesson.groups?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                lesson.teachers.forEach {
+                    Text(
+                        shortenName(it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             if (lesson.isCancelled) {

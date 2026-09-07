@@ -17,7 +17,13 @@ from ..service.bells import load_bells
 from ..service.refresher import state_dir
 from .releases import latest_release
 from .etag import etag_for, matches
-from .payloads import groups_payload, meta_payload, schedule_payload
+from .payloads import (
+    groups_payload,
+    meta_payload,
+    schedule_payload,
+    teacher_payload,
+    teachers_payload,
+)
 
 router = APIRouter()
 
@@ -90,6 +96,43 @@ def groups(request: Request) -> Response:
         return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
                         media_type=JSON)
     return _json_response(request, groups_payload(store.snapshot, store.generated))
+
+
+@router.get("/v1/teachers")
+def teachers(request: Request) -> Response:
+    """Список преподавателей — собирается из расписания групп."""
+    store, _ = _state(request)
+    if store.snapshot is None or store.teachers is None:
+        return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
+                        media_type=JSON)
+    return _json_response(request, teachers_payload(store.teachers, store.generated))
+
+
+@router.get("/v1/teacher/{teacher_id}")
+def teacher(
+    request: Request,
+    teacher_id: str,
+    start: dt.date | None = Query(None, alias="from"),
+    days: int = Query(settings.default_days, ge=1, le=14),
+) -> Response:
+    store, _ = _state(request)
+    if store.snapshot is None or store.teachers is None:
+        return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
+                        media_type=JSON)
+
+    body = teacher_payload(
+        store.snapshot,
+        store.teachers,
+        teacher_id,
+        start or dt.date.today(),
+        days,
+        store.generated,
+        bells=load_bells() or None,
+    )
+    if body is None:
+        return Response(status_code=404, content='{"error":"преподаватель не найден"}',
+                        media_type=JSON)
+    return _json_response(request, body)
 
 
 @router.get("/v1/schedule/{group_id}")

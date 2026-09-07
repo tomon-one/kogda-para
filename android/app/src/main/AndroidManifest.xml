@@ -6,6 +6,9 @@
     <!-- Обновление приложения: файл скачивается с нашего сервера, а установку
          всё равно подтверждает человек — молча поставить APK нельзя. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Напоминания о парах и сообщения об изменениях. Оба вида можно
+         выключить в настройках приложения. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".WhensClassApp"
@@ -72,6 +75,10 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/next_lesson_widget_info" />
         </receiver>
+
+        <receiver
+            android:name=".notify.LessonAlarmReceiver"
+            android:exported="false" />
 
         <!-- Смена суток, перезагрузка, перевод часов и обновление приложения:
              после каждого из этих событий виджет обязан перерисоваться. -->

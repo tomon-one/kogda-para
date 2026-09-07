@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.ReleaseDto
+import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.ThemeChoice
@@ -103,6 +104,8 @@ private fun App(startDay: String? = null) {
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
+    val notifyBefore by container.store.notifyBefore.collectAsState(initial = 0)
+    val notifyChanges by container.store.notifyChanges.collectAsState(initial = true)
     val theme = ThemeChoice.from(storedTheme)
 
     var screen by remember { mutableStateOf(Screen.TODAY) }
@@ -185,6 +188,17 @@ private fun App(startDay: String? = null) {
                         theme = theme,
                         update = update,
                         installing = installing,
+                        notifyBefore = notifyBefore,
+                        notifyChanges = notifyChanges,
+                        onNotifyBefore = { minutes ->
+                            scope.launch {
+                                container.store.setNotifyBefore(minutes)
+                                LessonAlarms.reschedule(context)
+                            }
+                        },
+                        onNotifyChanges = { on ->
+                            scope.launch { container.store.setNotifyChanges(on) }
+                        },
                         focusUpdate = focusUpdate,
                         checkingUpdate = checkingUpdate,
                         updateChecked = updateChecked,
@@ -223,6 +237,8 @@ private fun App(startDay: String? = null) {
                     Screen.TODAY -> TodayScreen(
                         startDay = startDay,
                         groupName = groupName.orEmpty(),
+                        loadTeachers = { container.repository.teachers() },
+                        loadTeacherSchedule = { container.repository.teacherSchedule(it) },
                         schedule = schedule,
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,

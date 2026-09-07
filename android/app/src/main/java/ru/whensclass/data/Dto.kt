@@ -35,6 +35,7 @@ data class LessonDto(
     @SerialName("u") val url: String? = null,
     @SerialName("x") val cancelled: Int = 0,
     @SerialName("c") val note: String? = null,
+    @SerialName("gr") val groups: String? = null,
 ) {
     val isCancelled: Boolean get() = cancelled != 0
 }
@@ -49,6 +50,12 @@ data class GroupsDto(
 data class GroupDto(
     @SerialName("id") val id: String,
     @SerialName("name") val name: String,
+)
+
+@Serializable
+data class TeachersDto(
+    @SerialName("gen") val generatedAt: String,
+    @SerialName("teachers") val teachers: List<GroupDto> = emptyList(),
 )
 
 @Serializable

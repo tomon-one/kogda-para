@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # gid и неурезанными именами; без него читаем тот же список из xlsx.
     sheets_api_key: str | None = None
 
+    # Оповещения владельцу о поломках. Без них служба работает как прежде,
+    # просто молча.
+    telegram_token: str | None = None
+    telegram_chat: str | None = None
+
     state_dir: str = "var"
     timezone: str = "Asia/Novosibirsk"
 

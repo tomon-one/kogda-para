@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,7 +28,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +62,10 @@ fun SettingsScreen(
     theme: ThemeChoice,
     update: ReleaseDto?,
     installing: Boolean,
+    notifyBefore: Int,
+    notifyChanges: Boolean,
+    onNotifyBefore: (Int) -> Unit,
+    onNotifyChanges: (Boolean) -> Unit,
     focusUpdate: Boolean,
     checkingUpdate: Boolean,
     updateChecked: Boolean,
@@ -115,6 +122,52 @@ fun SettingsScreen(
             ThemeOption("Как в системе", ThemeChoice.SYSTEM, theme, onTheme)
             ThemeOption("Тёмная", ThemeChoice.DARK, theme, onTheme)
             ThemeOption("Светлая", ThemeChoice.LIGHT, theme, onTheme)
+        }
+
+        Section("Уведомления") {
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Напоминать о паре", style = MaterialTheme.typography.bodyLarge)
+                Switch(
+                    checked = notifyBefore > 0,
+                    onCheckedChange = { onNotifyBefore(if (it) DEFAULT_NOTIFY_BEFORE else 0) },
+                )
+            }
+            if (notifyBefore > 0) {
+                Text(
+                    "За сколько предупредить",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // Разброс большой: кому-то хватит десяти минут, а кому-то ехать
+                // через весь город.
+                FlowRow(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                    NOTIFY_OPTIONS.forEach { minutes ->
+                        MinutesChip(
+                            minutes = minutes,
+                            selected = minutes == notifyBefore,
+                            onPick = { onNotifyBefore(minutes) },
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Сообщать об изменениях", style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = notifyChanges, onCheckedChange = onNotifyChanges)
+            }
+            Text(
+                "Отмены и замены на сегодня и завтра.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         Section("Расписание") {
@@ -237,6 +290,34 @@ private fun Link(text: String, url: String) {
             }
             .padding(top = 10.dp, bottom = 2.dp),
     )
+}
+
+/** Насколько заранее можно попросить напоминание. */
+private val NOTIFY_OPTIONS = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180, 240)
+private const val DEFAULT_NOTIFY_BEFORE = 20
+
+private fun minutesLabel(minutes: Int): String = when {
+    minutes < 60 -> "$minutes мин"
+    minutes % 60 == 0 -> "${minutes / 60} ч"
+    else -> "${minutes / 60} ч ${minutes % 60} мин"
+}
+
+@Composable
+private fun MinutesChip(minutes: Int, selected: Boolean, onPick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.padding(end = 6.dp, bottom = 6.dp).clickable(onClick = onPick),
+    ) {
+        Text(
+            minutesLabel(minutes),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
 }
 
 @Composable

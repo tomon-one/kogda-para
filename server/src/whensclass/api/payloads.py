@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 from ..domain.models import Lesson, Snapshot
+from ..domain.teachers import TeacherIndex
 
 API_VERSION = 1
 
@@ -29,6 +30,66 @@ def _lesson(lesson: Lesson) -> dict:
     if lesson.note:
         out["c"] = lesson.note
     return out
+
+
+def teachers_payload(index: TeacherIndex, generated: datetime) -> dict:
+    return {
+        "v": API_VERSION,
+        "gen": _iso(generated),
+        "teachers": [
+            {"id": tid, "name": name}
+            for tid, name in sorted(index.names.items(), key=lambda x: x[1])
+        ],
+    }
+
+
+def teacher_payload(
+    snapshot: Snapshot,
+    index: TeacherIndex,
+    teacher_id: str,
+    start: date,
+    days: int,
+    generated: datetime,
+    bells: dict[str, list[str]] | None = None,
+) -> dict | None:
+    """Расписание преподавателя. None, если такого в таблице нет."""
+    name = index.names.get(teacher_id)
+    if name is None:
+        return None
+
+    by_date = index.days(teacher_id)
+    covered = set(snapshot.dates)
+
+    out_days = []
+    for offset in range(days):
+        day = start + timedelta(days=offset)
+        if day not in covered:
+            continue
+        lessons = []
+        for entry in by_date.get(day, []):
+            item = _lesson(entry.lesson)
+            # Кому именно читается пара — то, чего нет в расписании группы.
+            item["gr"] = entry.group_name
+            # Преподаватель тут очевиден, его имя только занимает место.
+            item.pop("t", None)
+            lessons.append(item)
+        out_days.append({"d": day.isoformat(), "l": lessons})
+
+    payload = {
+        "v": API_VERSION,
+        "g": teacher_id,
+        "gn": name,
+        "kind": "teacher",
+        "gen": _iso(generated),
+        "src": snapshot.sheet_title,
+        "days": out_days,
+    }
+    coverage = snapshot.coverage
+    if coverage:
+        payload["cov"] = [coverage[0].isoformat(), coverage[1].isoformat()]
+    if bells:
+        payload["bells"] = bells
+    return payload
 
 
 def groups_payload(snapshot: Snapshot, generated: datetime) -> dict:

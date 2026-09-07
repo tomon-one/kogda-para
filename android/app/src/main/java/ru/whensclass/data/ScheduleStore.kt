@@ -29,6 +29,28 @@ class ScheduleStore(private val context: Context) {
     val fetchedAt: Flow<Long> = context.dataStore.data.map { it[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L }
     val generatedAt: Flow<String?> = context.dataStore.data.map { it[KEY_GENERATED_AT] }
 
+    /** За сколько минут напоминать о паре. 0 — не напоминать вовсе. */
+    val notifyBefore: Flow<Int> = context.dataStore.data.map {
+        it[KEY_NOTIFY_BEFORE]?.toIntOrNull() ?: 0
+    }
+
+    suspend fun notifyBeforeMinutes(): Int = notifyBefore.first()
+
+    suspend fun setNotifyBefore(minutes: Int) {
+        context.dataStore.edit { it[KEY_NOTIFY_BEFORE] = minutes.toString() }
+    }
+
+    /** Сообщать ли об изменениях в расписании. */
+    val notifyChanges: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_NOTIFY_CHANGES] != "0"
+    }
+
+    suspend fun notifyChangesEnabled(): Boolean = notifyChanges.first()
+
+    suspend fun setNotifyChanges(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFY_CHANGES] = if (enabled) "1" else "0" }
+    }
+
     /** Прочитано ли приветствие при первом запуске. */
     val welcomeSeen: Flow<Boolean> = context.dataStore.data.map { it[KEY_WELCOME] == "1" }
 
@@ -106,5 +128,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
         val KEY_THEME = stringPreferencesKey("theme")
         val KEY_WELCOME = stringPreferencesKey("welcome_seen")
+        val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
+        val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")
     }
 }

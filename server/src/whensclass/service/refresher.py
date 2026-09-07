@@ -16,6 +16,7 @@ from ..config import settings
 from ..domain.models import SourceFormatChanged
 from ..parser.csv_schedule import parse_csv
 from ..sources import gsheets, sheet_index
+from . import alerts
 from ..storage.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
@@ -63,13 +64,13 @@ class Refresher:
                 return False
         except SourceFormatChanged as exc:
             # Самый опасный случай: таблицу переделали. Держим прежнее.
-            self._fail(f"формат таблицы изменился: {exc}")
+            self._fail(f"формат таблицы изменился: {exc}", kind="format")
             return False
         except LookupError as exc:
-            self._fail(f"не нашёл лист на {today}: {exc}")
+            self._fail(f"не нашёл лист на {today}: {exc}", kind="sheet")
             return False
         except Exception as exc:
-            self._fail(f"таблица не прочиталась: {exc}")
+            self._fail(f"таблица не прочиталась: {exc}", kind="fetch")
             return False
 
         coverage = snapshot.coverage
@@ -92,11 +93,21 @@ class Refresher:
         )
         return True
 
-    def _fail(self, message: str) -> None:
+    def _fail(self, message: str, kind: str = "error") -> None:
         self.last_error = message
         self.status = "stale" if self.store.snapshot else "empty"
         self._sheets = None
         log.error("%s (состояние: %s)", message, self.status)
+        alerts.notify(
+            kind,
+            f"Когда пара?: {message}. "
+            f"Состояние службы: {self.status}. "
+            + (
+                "Отдаётся прежнее расписание."
+                if self.status == "stale"
+                else "Расписание отдавать нечего."
+            ),
+        )
 
 
 def state_dir() -> pathlib.Path:

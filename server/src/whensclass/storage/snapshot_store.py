@@ -14,6 +14,7 @@ import pathlib
 import threading
 
 from ..domain.models import GroupRef, Lesson, Snapshot
+from ..domain.teachers import TeacherIndex, build_index
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class SnapshotStore:
         self._lock = threading.Lock()
         self._snapshot: Snapshot | None = None
         self._generated: dt.datetime | None = None
+        self._teachers: TeacherIndex | None = None
 
     @property
     def snapshot(self) -> Snapshot | None:
@@ -34,10 +36,20 @@ class SnapshotStore:
     def generated(self) -> dt.datetime | None:
         return self._generated
 
+    @property
+    def teachers(self) -> TeacherIndex | None:
+        """Расписание преподавателей — перевёрнутый снимок, считается один раз."""
+        if self._snapshot is None:
+            return None
+        if self._teachers is None:
+            self._teachers = build_index(self._snapshot)
+        return self._teachers
+
     def put(self, snapshot: Snapshot, generated: dt.datetime) -> None:
         with self._lock:
             self._snapshot = snapshot
             self._generated = generated
+            self._teachers = None
             self._write(snapshot, generated)
 
     def load(self) -> bool:
@@ -50,6 +62,7 @@ class SnapshotStore:
         try:
             self._snapshot = _from_dict(data["snapshot"])
             self._generated = dt.datetime.fromisoformat(data["generated"])
+            self._teachers = None
         except (KeyError, ValueError, TypeError) as exc:
             log.warning("снимок на диске испорчен: %s", exc)
             return False

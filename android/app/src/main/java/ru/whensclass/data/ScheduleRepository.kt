@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import ru.whensclass.notify.LessonAlarms
+import ru.whensclass.notify.Notifications
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 
@@ -36,6 +38,26 @@ class ScheduleRepository(
     val fetchedAt: Flow<Long> = store.fetchedAt
     val groupName: Flow<String?> = store.groupName
 
+    /**
+     * Рассказать об изменениях, если человек этого хотел.
+     *
+     * Молчим, когда меняется что-то далёкое: про послезавтрашнюю замену
+     * сообщать посреди пары — только раздражать.
+     */
+    private suspend fun announceChanges(old: ScheduleDto?, fresh: ScheduleDto) {
+        if (!store.notifyChangesEnabled()) return
+        val today = java.time.LocalDate.now()
+        val soon = setOf(today.toString(), today.plusDays(1).toString())
+        val changes = ScheduleDiff.compare(old, fresh).filter { it.day in soon }
+        if (changes.isEmpty()) return
+
+        val text = changes.joinToString("\n") { change ->
+            val when_ = if (change.day == today.toString()) "Сегодня" else "Завтра"
+            "$when_: ${change.text}"
+        }
+        Notifications.changes(context, "Расписание изменилось", text)
+    }
+
     /** Перерисовать оба виджета: и большой, и тот, что на одну пару. */
     private suspend fun updateWidgets() {
         ScheduleWidget().updateAll(context)
@@ -52,6 +74,16 @@ class ScheduleRepository(
         // Список групп открывается и без сети: выбрать группу в метро тоже надо.
         cached?.let { runCatching { json.decodeFromString<GroupsDto>(it).groups }.getOrNull() }
             .orEmpty()
+    }
+
+    /** Список преподавателей. Кэшируется так же, как список групп. */
+    suspend fun teachers(): List<GroupDto> = withContext(Dispatchers.IO) {
+        runCatching { api.teachers().teachers }.getOrElse { emptyList() }
+    }
+
+    /** Расписание преподавателя — берём по запросу, на телефоне не храним. */
+    suspend fun teacherSchedule(teacherId: String): ScheduleDto? = withContext(Dispatchers.IO) {
+        runCatching { api.teacher(teacherId, days = DAYS) }.getOrNull()
     }
 
     suspend fun selectGroup(group: GroupDto) {
@@ -81,8 +113,11 @@ class ScheduleRepository(
                 }
             }
             val fresh = api.schedule(groupId, days = DAYS)
+            val previous = schedule.first()
             store.putSchedule(json.encodeToString(fresh), fresh.generatedAt)
             updateWidgets()
+            announceChanges(previous, fresh)
+            LessonAlarms.reschedule(context)
             RefreshResult.Updated
         } catch (error: Exception) {
             RefreshResult.Failed(error)
