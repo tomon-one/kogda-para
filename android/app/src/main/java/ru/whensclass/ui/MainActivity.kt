@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
+import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.notify.LessonAlarms
@@ -105,7 +106,9 @@ private fun App(startDay: String? = null) {
     val storedTheme by container.store.theme.collectAsState(initial = "system")
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
     val loaded by container.store.loaded.collectAsState(initial = false)
-    val notifyBefore by container.store.notifyBefore.collectAsState(initial = 0)
+    val notifyBefore by container.store.notifyBefore
+        .collectAsState(initial = DEFAULT_NOTIFY_BEFORE)
+    val notifyEnabled by container.store.notifyEnabled.collectAsState(initial = false)
     val notifyChanges by container.store.notifyChanges.collectAsState(initial = true)
     val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
     val teacherMode by container.store.isTeacher.collectAsState(initial = false)
@@ -248,10 +251,17 @@ private fun App(startDay: String? = null) {
                         update = update,
                         installing = installing,
                         notifyBefore = notifyBefore,
+                        notifyEnabled = notifyEnabled,
                         notifyChanges = notifyChanges,
                         onNotifyBefore = { minutes ->
                             scope.launch {
                                 container.store.setNotifyBefore(minutes)
+                                LessonAlarms.reschedule(context)
+                            }
+                        },
+                        onNotifyEnabled = { on ->
+                            scope.launch {
+                                container.store.setNotifyEnabled(on)
                                 LessonAlarms.reschedule(context)
                             }
                         },

@@ -24,7 +24,9 @@ class ShiftDayAction : ActionCallback {
         val step = parameters[KEY_STEP] ?: return
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
             val current = prefs[ScheduleWidget.KEY_DAY_OFFSET] ?: 0
-            val next = (current + step).coerceIn(0, ScheduleWidget.MAX_OFFSET)
+            // Назад — в прожитые дни недели: они уже лежат на телефоне.
+            val next = (current + step)
+                .coerceIn(-ScheduleWidget.MAX_OFFSET, ScheduleWidget.MAX_OFFSET)
             prefs.toMutablePreferences().apply { this[ScheduleWidget.KEY_DAY_OFFSET] = next }
         }
         ScheduleWidget().update(context, glanceId)

@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
+import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.widget.ThemeChoice
 
@@ -69,8 +70,10 @@ fun SettingsScreen(
     update: ReleaseDto?,
     installing: Boolean,
     notifyBefore: Int,
+    notifyEnabled: Boolean,
     notifyChanges: Boolean,
     onNotifyBefore: (Int) -> Unit,
+    onNotifyEnabled: (Boolean) -> Unit,
     onNotifyChanges: (Boolean) -> Unit,
     focusUpdate: Boolean,
     checkingUpdate: Boolean,
@@ -152,12 +155,9 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Напоминать о паре", style = MaterialTheme.typography.bodyLarge)
-                Switch(
-                    checked = notifyBefore > 0,
-                    onCheckedChange = { onNotifyBefore(if (it) DEFAULT_NOTIFY_BEFORE else 0) },
-                )
+                Switch(checked = notifyEnabled, onCheckedChange = onNotifyEnabled)
             }
-            if (notifyBefore > 0) {
+            if (notifyEnabled) {
                 Text(
                     "За сколько предупредить",
                     style = MaterialTheme.typography.bodySmall,
@@ -348,7 +348,6 @@ private fun Link(text: String, url: String) {
 
 /** Насколько заранее можно попросить напоминание. */
 private val NOTIFY_OPTIONS = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180, 240)
-private const val DEFAULT_NOTIFY_BEFORE = 20
 private const val MIN_NOTIFY = 10
 private const val MAX_NOTIFY = 240
 
@@ -383,7 +382,9 @@ private fun OwnTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> 
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
                 Text(
-                    "От $MIN_NOTIFY минут до ${MAX_NOTIFY / 60} часов",
+                    // Поле принимает минуты, ими и говорим: «до четырёх часов»
+                    // заставляло считать в уме.
+                    "От $MIN_NOTIFY до $MAX_NOTIFY минут (${MAX_NOTIFY / 60} часа)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),

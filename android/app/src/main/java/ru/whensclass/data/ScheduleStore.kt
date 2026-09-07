@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("whensclass")
 
+/** За сколько минут напоминать о паре, пока человек не выбрал своё время. */
+const val DEFAULT_NOTIFY_BEFORE = 20
+
 /**
  * Всё, что приложение помнит между запусками: выбранная группа и последний
  * ответ сервера.
@@ -37,16 +40,42 @@ class ScheduleStore(private val context: Context) {
     val fetchedAt: Flow<Long> = context.dataStore.data.map { it[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L }
     val generatedAt: Flow<String?> = context.dataStore.data.map { it[KEY_GENERATED_AT] }
 
-    /** За сколько минут напоминать о паре. 0 — не напоминать вовсе. */
-    val notifyBefore: Flow<Int> = context.dataStore.data.map {
-        it[KEY_NOTIFY_BEFORE]?.toIntOrNull() ?: 0
-    }
+    /**
+     * За сколько минут напоминать о паре.
+     *
+     * Выбранное время и выключатель — разные вещи. Раньше выключение писало
+     * ноль в то же поле, и время приходилось выбирать заново при каждом
+     * включении; роль тут ни при чём, настройка общая для студента и
+     * преподавателя.
+     */
+    val notifyBefore: Flow<Int> = context.dataStore.data.map(::rememberedMinutes)
 
-    suspend fun notifyBeforeMinutes(): Int = notifyBefore.first()
+    /** Включены ли напоминания. */
+    val notifyEnabled: Flow<Boolean> = context.dataStore.data.map(::notifyOn)
+
+    suspend fun notifyBeforeMinutes(): Int = context.dataStore.data.first().let {
+        if (notifyOn(it)) rememberedMinutes(it) else 0
+    }
 
     suspend fun setNotifyBefore(minutes: Int) {
-        context.dataStore.edit { it[KEY_NOTIFY_BEFORE] = minutes.toString() }
+        context.dataStore.edit {
+            it[KEY_NOTIFY_BEFORE] = minutes.toString()
+            it[KEY_NOTIFY_ON] = "1"
+        }
     }
+
+    suspend fun setNotifyEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFY_ON] = if (enabled) "1" else "0" }
+    }
+
+    private fun rememberedMinutes(prefs: Preferences): Int =
+        prefs[KEY_NOTIFY_BEFORE]?.toIntOrNull()?.takeIf { it > 0 } ?: DEFAULT_NOTIFY_BEFORE
+
+    // У тех, кто обновился с прежней сборки, выключателя в хранилище нет:
+    // тогда о нём судим по старому полю, где ноль означал «выключено».
+    private fun notifyOn(prefs: Preferences): Boolean =
+        prefs[KEY_NOTIFY_ON]?.let { it == "1" }
+            ?: ((prefs[KEY_NOTIFY_BEFORE]?.toIntOrNull() ?: 0) > 0)
 
     /** Сообщать ли об изменениях в расписании. */
     val notifyChanges: Flow<Boolean> = context.dataStore.data.map {
@@ -211,6 +240,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_THEME = stringPreferencesKey("theme")
         val KEY_WELCOME = stringPreferencesKey("welcome_seen")
         val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
+        val KEY_NOTIFY_ON = stringPreferencesKey("notify_on")
         val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")
         val KEY_PINNED_TEACHERS = stringPreferencesKey("pinned_teachers")
         val KEY_PINNED_GROUPS = stringPreferencesKey("pinned_groups")

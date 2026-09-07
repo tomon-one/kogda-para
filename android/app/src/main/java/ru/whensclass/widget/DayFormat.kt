@@ -19,6 +19,8 @@ fun formatDayTitleShort(day: LocalDate): String {
     return when (day) {
         today -> "сегодня, " + day.format(SHORT_DAY)
         today.plusDays(1) -> "завтра, " + day.format(SHORT_DAY)
+        // Виджет листается и назад, к прожитым дням недели.
+        today.minusDays(1) -> "вчера, " + day.format(SHORT_DAY)
         else -> day.format(DateTimeFormatter.ofPattern("EEE, d MMMM", RU))
     }
 }
