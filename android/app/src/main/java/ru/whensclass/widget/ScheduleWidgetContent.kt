@@ -8,6 +8,7 @@ import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import android.content.Intent
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
@@ -56,12 +57,18 @@ fun ScheduleWidgetContent(
     busy: Boolean = false,
     modifier: GlanceModifier = GlanceModifier,
 ) {
+    val size = LocalSize.current
+    // Оболочки вроде Nova дают сжать виджет ниже объявленного минимума. Ругаться
+    // на это некому — просто убираем то, без чего можно, начиная с логотипа.
+    val fit = Fit(narrow = size.width < 220.dp, dense = size.height < 120.dp)
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
             .cornerRadius(16.dp)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = if (fit.narrow) 6.dp else 10.dp)
+            .padding(vertical = if (fit.dense) 4.dp else 8.dp),
     ) {
         Header(
             groupName ?: "Расписание",
@@ -71,9 +78,10 @@ fun ScheduleWidgetContent(
             firstOffset(schedule),
             lastOffset(schedule),
             busy,
+            fit,
             colors,
         )
-        Spacer(GlanceModifier.height(6.dp))
+        Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 6.dp))
 
         val today = schedule?.days?.firstOrNull { it.date == day.toString() }
         when {
@@ -85,6 +93,7 @@ fun ScheduleWidgetContent(
                 today.lessons,
                 schedule.bells,
                 day,
+                fit,
                 colors,
                 modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
             )
@@ -127,6 +136,7 @@ private fun Header(
     firstDay: Int,
     lastDay: Int,
     busy: Boolean,
+    fit: Fit,
     colors: Palette,
 ) {
     val context = LocalContext.current
@@ -139,14 +149,17 @@ private fun Header(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Логотип колледжа — одни контуры, без своего фона. Красим его
-        // цветом темы: фирменный красный на чёрном сливается с фоном.
-        Image(
-            provider = ImageProvider(R.drawable.logo_ngok),
-            contentDescription = null,
-            colorFilter = ColorFilter.tint(colors.logo),
-            modifier = GlanceModifier.size(width = 26.dp, height = 14.dp),
-        )
-        Spacer(GlanceModifier.width(6.dp))
+        // цветом темы: фирменный красный на чёрном сливается с фоном. На узком
+        // виджете он уходит первым: место нужнее дню и стрелкам.
+        if (!fit.narrow) {
+            Image(
+                provider = ImageProvider(R.drawable.logo_ngok),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(colors.logo),
+                modifier = GlanceModifier.size(width = 26.dp, height = 14.dp),
+            )
+            Spacer(GlanceModifier.width(6.dp))
+        }
 
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
@@ -229,6 +242,7 @@ private fun Lessons(
     lessons: List<LessonDto>,
     bells: Map<String, List<String>>,
     day: LocalDate,
+    fit: Fit,
     colors: Palette,
     modifier: GlanceModifier = GlanceModifier.fillMaxWidth(),
 ) {
@@ -244,15 +258,18 @@ private fun Lessons(
     LazyColumn(modifier = modifier) {
         items(lessons, itemId = { it.number.toLong() }) { lesson ->
             Column(modifier = GlanceModifier.fillMaxWidth()) {
-                LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)
-                Spacer(GlanceModifier.height(6.dp))
+                LessonRow(lesson, bells, isNow = lesson.number == current, fit, colors)
+                Spacer(GlanceModifier.height(if (fit.dense) 4.dp else 6.dp))
             }
         }
     }
 }
 
+/** Насколько тесно виджету — от этого зависит, что показывать. */
+private data class Fit(val narrow: Boolean, val dense: Boolean)
+
 /** Приложение открывается на том же дне, что показывает виджет. */
-private fun openDay(context: android.content.Context, day: LocalDate): Intent =
+internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
     Intent(context, MainActivity::class.java)
         .putExtra(MainActivity.EXTRA_DAY, day.toString())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -262,6 +279,7 @@ private fun LessonRow(
     lesson: LessonDto,
     bells: Map<String, List<String>>,
     isNow: Boolean,
+    fit: Fit,
     colors: Palette,
 ) {
     Row(
@@ -269,18 +287,24 @@ private fun LessonRow(
             .fillMaxWidth()
             .background(if (isNow) colors.nowSurface else colors.surface)
             .cornerRadius(10.dp)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = if (fit.dense) 4.dp else 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
         // Ширины хватает на «09:00–10:30» одной строкой: время, переносимое
-        // пополам, читается как опечатка.
-        Column(modifier = GlanceModifier.width(78.dp)) {
+        // пополам, читается как опечатка. На узком виджете диапазон не влезает —
+        // тогда показываем только начало пары.
+        Column(modifier = GlanceModifier.width(if (fit.narrow) 52.dp else 78.dp)) {
             Text(
                 "${lesson.number} пара",
                 maxLines = 1,
                 style = TextStyle(fontSize = 11.sp, color = colors.textDim),
             )
-            lessonTime(bells, lesson.number)?.let { time ->
+            val time = if (fit.narrow) {
+                lessonStart(bells, lesson.number)
+            } else {
+                lessonTime(bells, lesson.number)
+            }
+            time?.let { time ->
                 Text(
                     time,
                     maxLines = 1,

@@ -2,6 +2,8 @@ package ru.whensclass.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -49,6 +51,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.animation.Crossfade
@@ -429,7 +432,6 @@ fun ScheduleDays(
     today: LocalDate,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
-    showGroups: Boolean = false,
     startDay: String? = null,
 ) {
     // Открываемся на сегодняшнем дне: неделя показывается с понедельника,
@@ -447,7 +449,7 @@ fun ScheduleDays(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(schedule.days, key = { it.date }) { day ->
-            DayCard(day, schedule.bells, today, showGroups)
+            DayCard(day, schedule.bells, today)
         }
     }
 }
@@ -457,7 +459,6 @@ private fun DayCard(
     day: DayDto,
     bells: Map<String, List<String>>,
     today: LocalDate,
-    showGroups: Boolean = false,
 ) {
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
     val isToday = date == today
@@ -485,7 +486,7 @@ private fun DayCard(
                 day.lessons.forEachIndexed { index, lesson ->
                     // Линия во всю ширину карточки — расписание, а не плитки.
                     if (index > 0) HorizontalDivider()
-                    LessonRow(lesson, bells, isNow = lesson.number == current, showGroups)
+                    LessonRow(lesson, bells, isNow = lesson.number == current)
                 }
             }
         }
@@ -533,7 +534,6 @@ private fun LessonRow(
     lesson: LessonDto,
     bells: Map<String, List<String>>,
     isNow: Boolean,
-    showGroups: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -608,16 +608,16 @@ private fun LessonRow(
 
             lesson.url?.let { OnlineLink(it) }
 
-            // В расписании преподавателя его имя очевидно, зато важно, каким
-            // группам читается пара.
-            if (showGroups) {
-                lesson.groups?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+            // Подпись группы стоит вместо преподавателя: у преподавателя в
+            // своём расписании важно, кому читается пара, а у пары из второй
+            // подгруппы — чья она. В остальных случаях там преподаватель.
+            val group = lesson.groups
+            if (group != null) {
+                Text(
+                    group,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else {
                 lesson.teachers.forEach {
                     Text(
@@ -665,28 +665,57 @@ private fun Place(text: String, muted: Boolean = false) {
 /**
  * Ссылка на онлайн-занятие под названием предмета.
  *
- * Показываем её целиком: так видно, куда она ведёт, и понятно, что именно
- * скопируется. Нажатие кладёт ссылку в буфер обмена.
+ * Показываем её целиком: так видно, куда она ведёт. Открыть нужно чаще, чем
+ * скопировать, — поэтому «Открыть» стоит первой, но обе кнопки на виду:
+ * ссылку иногда надо переслать, а не открыть.
  */
 @Composable
 private fun OnlineLink(url: String) {
     val context = LocalContext.current
-    Text(
-        url,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.primary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .clickable {
-                context.getSystemService(ClipboardManager::class.java)
-                    ?.setPrimaryClip(ClipData.newPlainText("Ссылка на занятие", url))
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                    Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .padding(vertical = 3.dp),
-    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            url,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .clickable { openLink(context, url) }
+                .padding(vertical = 3.dp),
+        )
+        Row {
+            LinkButton("Открыть") { openLink(context, url) }
+            LinkButton("Копировать") { copyLink(context, url) }
+        }
+    }
+}
+
+@Composable
+private fun LinkButton(label: String, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        // Кнопки идут парой под ссылкой, поэтому поля у них поменьше обычных.
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+private fun openLink(context: android.content.Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }.onFailure {
+        Toast.makeText(context, "Нечем открыть ссылку", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun copyLink(context: android.content.Context, url: String) {
+    context.getSystemService(ClipboardManager::class.java)
+        ?.setPrimaryClip(ClipData.newPlainText("Ссылка на занятие", url))
+    // С Android 13 система показывает это сама.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+    }
 }

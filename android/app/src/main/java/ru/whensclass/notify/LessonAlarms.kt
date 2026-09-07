@@ -40,9 +40,12 @@ object LessonAlarms {
             if (minutes <= 0) return@launch
 
             val schedule = ScheduleWidget.parse(store.widgetState().scheduleJson) ?: return@launch
-            plan(schedule, minutes).take(MAX_ALARMS).forEachIndexed { index, alarm ->
-                schedule(app, index, alarm)
-            }
+            plan(schedule, minutes)
+                // Своя и соседняя подгруппы дают две пары в одно время —
+                // напоминание об этом должно быть одно.
+                .distinctBy { it.at }
+                .take(MAX_ALARMS)
+                .forEachIndexed { index, alarm -> schedule(app, index, alarm) }
         }
     }
 

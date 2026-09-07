@@ -195,6 +195,36 @@ class ScheduleStore(private val context: Context) {
             // Расписание прошлой группы показывать нельзя ни секунды.
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
+            // Соседняя подгруппа была парой к прежней группе, к новой она
+            // отношения не имеет.
+            it.remove(KEY_GROUP2_ID)
+            it.remove(KEY_GROUP2_NAME)
+        }
+    }
+
+    /**
+     * Вторая подгруппа.
+     *
+     * В таблице колледжа подгруппы стоят разными колонками, и общая пара
+     * нередко записана только в одной из них. Кто смотрит только свою
+     * колонку, такую пару пропускает — поэтому соседнюю можно добавить.
+     */
+    val secondGroupId: Flow<String?> = context.dataStore.data.map { it[KEY_GROUP2_ID] }
+    val secondGroupName: Flow<String?> = context.dataStore.data.map { it[KEY_GROUP2_NAME] }
+
+    suspend fun currentSecondGroupId(): String? = secondGroupId.first()
+
+    suspend fun selectSecondGroup(id: String, name: String) {
+        context.dataStore.edit {
+            it[KEY_GROUP2_ID] = id
+            it[KEY_GROUP2_NAME] = name
+        }
+    }
+
+    suspend fun clearSecondGroup() {
+        context.dataStore.edit {
+            it.remove(KEY_GROUP2_ID)
+            it.remove(KEY_GROUP2_NAME)
         }
     }
 
@@ -239,6 +269,8 @@ class ScheduleStore(private val context: Context) {
         val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
         val KEY_THEME = stringPreferencesKey("theme")
         val KEY_WELCOME = stringPreferencesKey("welcome_seen")
+        val KEY_GROUP2_ID = stringPreferencesKey("group2_id")
+        val KEY_GROUP2_NAME = stringPreferencesKey("group2_name")
         val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
         val KEY_NOTIFY_ON = stringPreferencesKey("notify_on")
         val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")

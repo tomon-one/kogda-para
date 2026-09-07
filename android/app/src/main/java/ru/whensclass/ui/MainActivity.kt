@@ -37,6 +37,7 @@ import ru.whensclass.data.ReleaseDto
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
+import ru.whensclass.widget.WeekWidget
 import ru.whensclass.widget.ThemeChoice
 import ru.whensclass.work.SyncWorker
 
@@ -101,6 +102,7 @@ private fun App(startDay: String? = null) {
     val scope = rememberCoroutineScope()
 
     val groupName by container.store.groupName.collectAsState(initial = null)
+    val secondGroupName by container.store.secondGroupName.collectAsState(initial = null)
     val schedule by container.repository.schedule.collectAsState(initial = null)
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
@@ -134,6 +136,8 @@ private fun App(startDay: String? = null) {
     var reloadKey by remember { mutableStateOf(0) }
     // Какой список показывать на экране выбора: null — по текущей роли.
     var pickTeacher by remember { mutableStateOf<Boolean?>(null) }
+    // Тот же экран, но выбирают не свою группу, а соседнюю подгруппу.
+    var pickSecond by remember { mutableStateOf(false) }
 
     val refreshNow: () -> Unit = {
         scope.launch {
@@ -201,7 +205,24 @@ private fun App(startDay: String? = null) {
                         },
                     )
 
-                    Screen.GROUPS -> if (pickTeacher ?: teacherMode) {
+                    Screen.GROUPS -> if (pickSecond) {
+                        GroupPickerScreen(
+                            loadGroups = { container.repository.groups() },
+                            canGoBack = true,
+                            onBack = {
+                                pickSecond = false
+                                screen = Screen.SETTINGS
+                            },
+                            onPick = { group: GroupDto ->
+                                scope.launch {
+                                    container.store.selectSecondGroup(group.id, group.name)
+                                    container.repository.refresh(force = true)
+                                    pickSecond = false
+                                    screen = Screen.SETTINGS
+                                }
+                            },
+                        )
+                    } else if (pickTeacher ?: teacherMode) {
                         // Список преподавателей: человек выбирает себя. Роль
                         // меняется вместе с выбором, а не до него — иначе на
                         // мгновение показывается чужое расписание.
@@ -295,10 +316,22 @@ private fun App(startDay: String? = null) {
                                 // Виджет обязан перекраситься сразу, а не через
                                 // час при очередном обновлении.
                                 ScheduleWidget().updateAll(context)
+                                WeekWidget().updateAll(context)
                                 NextLessonWidget().updateAll(context)
                             }
                         },
                         onChangeGroup = { screen = Screen.GROUPS },
+                        secondGroupName = secondGroupName,
+                        onPickSecondGroup = {
+                            pickSecond = true
+                            screen = Screen.GROUPS
+                        },
+                        onClearSecondGroup = {
+                            scope.launch {
+                                container.store.clearSecondGroup()
+                                container.repository.refresh(force = true)
+                            }
+                        },
                         onBack = { screen = Screen.TODAY },
                     )
 

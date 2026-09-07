@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Неделя целиком: четыре клетки на четыре. Нижняя граница 250×200 — ширина
+  под время, название и кабинет в одну строку, высота хотя бы под два дня;
+  меньше остаётся заголовок дня без пар под ним.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_week_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="250dp"
+    android:minHeight="200dp"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="200dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0" />

@@ -64,6 +64,7 @@ import ru.whensclass.widget.ThemeChoice
 @Composable
 fun SettingsScreen(
     groupName: String?,
+    secondGroupName: String?,
     teacherMode: Boolean,
     onSwitchRole: () -> Unit,
     theme: ThemeChoice,
@@ -81,6 +82,8 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onTheme: (ThemeChoice) -> Unit,
     onChangeGroup: () -> Unit,
+    onPickSecondGroup: () -> Unit,
+    onClearSecondGroup: () -> Unit,
     onUpdate: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -139,6 +142,28 @@ fun SettingsScreen(
                 Text(if (teacherMode) "Сменить преподавателя" else "Сменить группу")
             }
 
+            if (!teacherMode) {
+                Text(
+                    "Вторая подгруппа: " + (secondGroupName ?: "нет"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
+                    "Общая пара нередко записана только в колонке соседней " +
+                        "подгруппы. Добавьте её — такие пары появятся в вашем дне " +
+                        "с подписью, чьи они, и напоминания будут и о них.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row {
+                    TextButton(onClick = onPickSecondGroup) {
+                        Text(if (secondGroupName == null) "Добавить" else "Заменить")
+                    }
+                    if (secondGroupName != null) {
+                        TextButton(onClick = onClearSecondGroup) { Text("Убрать") }
+                    }
+                }
+            }
         }
 
         Section("Оформление") {
@@ -221,7 +246,10 @@ fun SettingsScreen(
                         "ни имени, ни номера, ни местоположения. Учётной записи нет, " +
                         "аналитики и рекламы нет. Всё для вашего удобства ;)"
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                // Тем же приглушённым, что и остальные пояснения: белый текст
+                // в одном блоке из шести читался как что-то важнее прочего.
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 

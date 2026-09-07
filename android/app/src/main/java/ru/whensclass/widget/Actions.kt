@@ -61,11 +61,15 @@ class RefreshAction : ActionCallback {
         }
         // Кнопка есть на обоих виджетах, а перерисовать нужно тот, на котором
         // нажали: чужая разметка сюда не встанет.
-        val ids = GlanceAppWidgetManager(context).getGlanceIds(ScheduleWidget::class.java)
-        if (glanceId in ids) {
-            ScheduleWidget().update(context, glanceId)
-        } else {
-            NextLessonWidget().update(context, glanceId)
+        val manager = GlanceAppWidgetManager(context)
+        when (glanceId) {
+            in manager.getGlanceIds(ScheduleWidget::class.java) ->
+                ScheduleWidget().update(context, glanceId)
+
+            in manager.getGlanceIds(WeekWidget::class.java) ->
+                WeekWidget().update(context, glanceId)
+
+            else -> NextLessonWidget().update(context, glanceId)
         }
     }
 }

@@ -25,6 +25,10 @@ fun formatDayTitleShort(day: LocalDate): String {
     }
 }
 
+/** Подпись дня в недельном виджете: «пн, 8 сент.». */
+fun formatWeekDay(day: LocalDate): String =
+    day.format(DateTimeFormatter.ofPattern("EEE, d MMM", RU))
+
 fun formatDayTitle(day: LocalDate): String {
     val today = LocalDate.now()
     // «Послезавтра» человек и так посчитает по дате, а вот «вчера» помогает:

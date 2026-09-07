@@ -12,6 +12,7 @@ import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.notify.Notifications
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
+import ru.whensclass.widget.WeekWidget
 
 /** Что случилось при обновлении — приложению есть что показать, виджету нет. */
 /** Сколько дней держим на телефоне: неделя целиком. */
@@ -79,10 +80,25 @@ class ScheduleRepository(
         Notifications.changes(context, "Расписание изменилось", text)
     }
 
-    /** Перерисовать оба виджета: и большой, и тот, что на одну пару. */
+    /** Перерисовать все виджеты: день, неделю и ближайшую пару. */
     private suspend fun updateWidgets() {
         ScheduleWidget().updateAll(context)
+        WeekWidget().updateAll(context)
         NextLessonWidget().updateAll(context)
+    }
+
+    /**
+     * Добавить пары соседней подгруппы, если она выбрана.
+     *
+     * Не достучались до неё — показываем своё расписание как есть: без пары
+     * соседей человек всё же обойдётся, а без своих пар — нет.
+     */
+    private suspend fun withSecondGroup(mine: ScheduleDto): ScheduleDto {
+        val second = store.currentSecondGroupId() ?: return mine
+        val extra = runCatching {
+            api.schedule(second, from = weekStart(), days = DAYS)
+        }.getOrNull() ?: return mine
+        return mergeSecondGroup(mine, extra)
     }
 
     suspend fun groups(): List<GroupDto> = withContext(Dispatchers.IO) {
@@ -172,10 +188,11 @@ class ScheduleRepository(
             } else {
                 api.schedule(subject, from = weekStart(), days = DAYS)
             }
+            val full = if (teacherMode) fresh else withSecondGroup(fresh)
             val previous = schedule.first()
-            store.putSchedule(json.encodeToString(fresh), fresh.generatedAt)
+            store.putSchedule(json.encodeToString(full), full.generatedAt)
             updateWidgets()
-            announceChanges(previous, fresh)
+            announceChanges(previous, full)
             LessonAlarms.reschedule(context)
             RefreshResult.Updated
         } catch (error: Exception) {

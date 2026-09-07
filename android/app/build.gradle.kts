@@ -21,8 +21,8 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт:
         // по нему приложение узнаёт о новой сборке на сервере.
-        versionCode = 32
-        versionName = "b-Тень.0.3.5"
+        versionCode = 33
+        versionName = "b-Эхо.0.4.0"
     }
 
     signingConfigs {

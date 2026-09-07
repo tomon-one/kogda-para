@@ -63,7 +63,6 @@ fun TeacherScreen(
             ScheduleDays(
                 schedule = ownSchedule,
                 today = remember { LocalDate.now() },
-                showGroups = showGroups,
                 modifier = Modifier.weight(1f),
             )
             TextButton(
@@ -228,7 +227,6 @@ private fun ChosenTeacher(
             else -> ScheduleDays(
                 schedule = schedule,
                 today = remember { LocalDate.now() },
-                showGroups = true,
             )
         }
     }

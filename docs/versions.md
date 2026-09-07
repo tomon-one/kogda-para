@@ -53,6 +53,6 @@ b-Тень.0.3.0
 `android/app/build.gradle.kts`:
 
 ```kotlin
-versionCode = 28              // просто следующее число
-versionName = "b-Тень.0.3.1"  // по правилам выше
+versionCode = 33              // просто следующее число
+versionName = "b-Эхо.0.4.0"   // по правилам выше
 ```
