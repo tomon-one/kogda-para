@@ -1,15 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Собран из assets/logo-ngok.svg скриптом tools/logo_to_vector.py. -->
+<!--
+  Иконка приложения: свой знак — циферблат на девяти часах — и логотип
+  колледжа подписью под ним. Собрано скриптом tools/logo_to_vector.py.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <path
+        android:fillColor="#D60403"
+        android:fillType="evenOdd"
+        android:pathData="M33.0,38.0 a21.0,21.0 0 1,0 42.0,0 a21.0,21.0 0 1,0 -42.0,0 Z M37.5,38.0 a16.5,16.5 0 1,0 33.0,0 a16.5,16.5 0 1,0 -33.0,0 Z" />
+    <path
+        android:fillColor="#D60403"
+        android:pathData="M52.2,24.5 h3.6 v15.5 h-3.6 Z" />
+    <path
+        android:fillColor="#D60403"
+        android:pathData="M40.0,36.4 h16.5 v3.2 h-16.5 Z" />
     <group
-        android:translateX="18.00"
-        android:translateY="34.55"
-        android:scaleX="0.15686"
-        android:scaleY="0.15686">
+        android:translateX="31.00"
+        android:translateY="67.00"
+        android:scaleX="0.10022"
+        android:scaleY="0.10022">
         <group
             android:translateY="248.0"
             android:scaleX="0.1"
