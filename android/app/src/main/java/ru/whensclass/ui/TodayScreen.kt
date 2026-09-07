@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,11 +27,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -148,14 +149,25 @@ fun TodayScreen(
                     IconButton(onClick = if (hasUpdate) onUpdateBadge else onSettings) {
                         // Точка над шестерёнкой: вышла новая сборка. Нажатие
                         // открывает настройки сразу на разделе обновления.
-                        BadgedBox(
-                            badge = {
-                                if (hasUpdate) {
-                                    Badge { Text("↓", style = MaterialTheme.typography.labelSmall) }
-                                }
-                            },
-                        ) {
+                        Box(contentAlignment = Alignment.TopEnd) {
                             Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                            if (hasUpdate) {
+                                // Кружок со стрелкой вниз: обычная точка не
+                                // говорит, что именно случилось, а буква «↓»
+                                // в бейдже выглядела кривовато.
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp).offset(x = 5.dp, y = (-4).dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Есть обновление",
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 },
