@@ -249,7 +249,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
     if (place.isNotEmpty()) {
         val row = GlanceModifier.fillMaxWidth()
         Text(
-            if (lesson.url != null) "$place · копировать ссылку" else place,
+            if (lesson.url != null) "$place  ⧉" else place,
             maxLines = 1,
             style = TextStyle(
                 fontSize = 12.sp,

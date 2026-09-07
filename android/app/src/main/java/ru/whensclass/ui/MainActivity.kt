@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.ReleaseDto
+import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.ThemeChoice
 import ru.whensclass.work.SyncWorker
@@ -49,7 +50,8 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Экраны приложения. Их три, поэтому обходимся без библиотеки навигации. */
-private enum class Screen { TODAY, GROUPS, SETTINGS }
+// Порядок важен: по нему считается, куда «едет» экран при переходе.
+private enum class Screen { WELCOME, GROUPS, TODAY, SETTINGS }
 
 /** Красный колледжа — из его же логотипа. */
 private val BRAND = Color(0xFFD60403)
@@ -90,6 +92,7 @@ private fun App() {
     val schedule by container.repository.schedule.collectAsState(initial = null)
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
+    val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
     val theme = ThemeChoice.from(storedTheme)
 
     var screen by remember { mutableStateOf(Screen.TODAY) }
@@ -98,7 +101,11 @@ private fun App() {
     // Проверяем обновление один раз при запуске: чаще незачем, сборки выходят
     // не по расписанию.
     LaunchedEffect(Unit) { update = container.updates.check() }
-    val current = if (groupName == null) Screen.GROUPS else screen
+    val current = when {
+        !welcomeSeen -> Screen.WELCOME
+        groupName == null -> Screen.GROUPS
+        else -> screen
+    }
 
     val dark = when (theme) {
         ThemeChoice.DARK -> true
@@ -127,6 +134,10 @@ private fun App() {
                 label = "screen",
             ) { target ->
                 when (target) {
+                    Screen.WELCOME -> WelcomeScreen(
+                        onContinue = { scope.launch { container.store.markWelcomeSeen() } },
+                    )
+
                     Screen.GROUPS -> GroupPickerScreen(
                         loadGroups = { container.repository.groups() },
                         canGoBack = groupName != null,
@@ -159,6 +170,7 @@ private fun App() {
                                 // Виджет обязан перекраситься сразу, а не через
                                 // час при очередном обновлении.
                                 ScheduleWidget().updateAll(context)
+                                NextLessonWidget().updateAll(context)
                             }
                         },
                         onChangeGroup = { screen = Screen.GROUPS },

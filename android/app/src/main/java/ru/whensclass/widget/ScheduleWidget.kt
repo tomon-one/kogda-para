@@ -32,7 +32,7 @@ class ScheduleWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val state = AppContainer.get(context).store.widgetState()
-        val schedule = parseCached(state.scheduleJson)
+        val schedule = parse(state.scheduleJson)
         val colors = WidgetColors.resolve(context, ThemeChoice.from(state.theme))
 
         provideContent {
@@ -88,8 +88,9 @@ class ScheduleWidget : GlanceAppWidget() {
         private var cachedJson: String? = null
         private var cachedSchedule: ScheduleDto? = null
 
+        /** Разбор ответа, общий для всех виджетов. */
         @Synchronized
-        private fun parseCached(body: String?): ScheduleDto? {
+        fun parse(body: String?): ScheduleDto? {
             if (body == null) return null
             if (body == cachedJson) return cachedSchedule
             val parsed = runCatching { json.decodeFromString<ScheduleDto>(body) }.getOrNull()

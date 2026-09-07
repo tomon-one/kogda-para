@@ -29,6 +29,13 @@ class ScheduleStore(private val context: Context) {
     val fetchedAt: Flow<Long> = context.dataStore.data.map { it[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L }
     val generatedAt: Flow<String?> = context.dataStore.data.map { it[KEY_GENERATED_AT] }
 
+    /** Прочитано ли приветствие при первом запуске. */
+    val welcomeSeen: Flow<Boolean> = context.dataStore.data.map { it[KEY_WELCOME] == "1" }
+
+    suspend fun markWelcomeSeen() {
+        context.dataStore.edit { it[KEY_WELCOME] = "1" }
+    }
+
     /** «system», «light» или «dark». По умолчанию — как в системе. */
     val theme: Flow<String> = context.dataStore.data.map { it[KEY_THEME] ?: "system" }
 
@@ -98,5 +105,6 @@ class ScheduleStore(private val context: Context) {
         val KEY_FETCHED_AT = stringPreferencesKey("fetched_at")
         val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
         val KEY_THEME = stringPreferencesKey("theme")
+        val KEY_WELCOME = stringPreferencesKey("welcome_seen")
     }
 }

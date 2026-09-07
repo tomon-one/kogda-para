@@ -11,6 +11,8 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.glance.appwidget.updateAll
+import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 
 /**
@@ -53,6 +55,7 @@ class MidnightReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.Default).launch {
             try {
                 ScheduleWidget().resetDayOffset(app)
+                NextLessonWidget().updateAll(app)
                 MidnightUpdater.schedule(app)
                 SyncWorker.now(app)
             } finally {

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 
 /** Что случилось при обновлении — приложению есть что показать, виджету нет. */
@@ -34,6 +35,12 @@ class ScheduleRepository(
 
     val fetchedAt: Flow<Long> = store.fetchedAt
     val groupName: Flow<String?> = store.groupName
+
+    /** Перерисовать оба виджета: и большой, и тот, что на одну пару. */
+    private suspend fun updateWidgets() {
+        ScheduleWidget().updateAll(context)
+        NextLessonWidget().updateAll(context)
+    }
 
     suspend fun groups(): List<GroupDto> = withContext(Dispatchers.IO) {
         val cached = store.groupsJson.first()
@@ -69,13 +76,13 @@ class ScheduleRepository(
                     // Данные те же, но проверку показать надо: иначе кажется,
                     // что кнопка обновления не работает.
                     store.touchChecked()
-                    ScheduleWidget().updateAll(context)
+                    updateWidgets()
                     return@withContext RefreshResult.AlreadyFresh
                 }
             }
             val fresh = api.schedule(groupId, days = DAYS)
             store.putSchedule(json.encodeToString(fresh), fresh.generatedAt)
-            ScheduleWidget().updateAll(context)
+            updateWidgets()
             RefreshResult.Updated
         } catch (error: Exception) {
             RefreshResult.Failed(error)

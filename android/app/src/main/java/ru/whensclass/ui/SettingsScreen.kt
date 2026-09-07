@@ -1,10 +1,15 @@
 package ru.whensclass.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -27,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
@@ -158,13 +164,40 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "Расписание НГОК для своих.",
+                "Расписание НГОК для своих. Приложение неофициальное.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(8.dp))
+            Link("Нашли ошибку — напишите в Telegram", "https://t.me/toomonn")
+            Link("Исходный код и другие проекты", "https://github.com/Tomonj1")
         }
     }
     }
+}
+
+/** Строка-ссылка: открывает адрес в браузере или в приложении Telegram. */
+@Composable
+private fun Link(text: String, url: String) {
+    val context = LocalContext.current
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable {
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            }
+            .padding(vertical = 12.dp),
+    )
 }
 
 @Composable

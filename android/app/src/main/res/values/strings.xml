@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">Когда пара?</string>
     <string name="widget_description">Пары вашей группы на сегодня</string>
+    <string name="widget_small_description">Одна пара: та, что идёт, или ближайшая</string>
 </resources>

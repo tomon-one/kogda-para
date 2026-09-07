@@ -60,6 +60,19 @@
                 android:resource="@xml/schedule_widget_info" />
         </receiver>
 
+        <!-- Тот же виджет, но на одну пару: менять размер умеет не всякая
+             оболочка, а места на домашнем экране обычно нет. -->
+        <receiver
+            android:name=".widget.NextLessonWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/next_lesson_widget_info" />
+        </receiver>
+
         <!-- Смена суток, перезагрузка, перевод часов и обновление приложения:
              после каждого из этих событий виджет обязан перерисоваться. -->
         <receiver

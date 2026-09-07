@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,6 +32,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -227,10 +230,11 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
                 if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
                 else MaterialTheme.colorScheme.surface
             )
+            .height(IntrinsicSize.Min)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Column(modifier = Modifier.width(TIME_COLUMN)) {
+        Column(modifier = Modifier.width(TIME_COLUMN - 12.dp)) {
             Text(
                 "${lesson.number} пара",
                 style = MaterialTheme.typography.labelSmall,
@@ -256,6 +260,8 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
             }
         }
 
+        VerticalDivider(modifier = Modifier.fillMaxHeight().padding(end = 12.dp))
+
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 lesson.subject,
@@ -269,10 +275,16 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
             // поэтому они идут сразу под названием и заметно, а не подписью
             // мелким шрифтом.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                kindName(lesson.kind)?.let { Chip(it, filled = false) }
                 when {
-                    lesson.url != null -> Chip("Онлайн", filled = true)
-                    else -> roomLabel(lesson.room)?.let { Chip(it, filled = true) }
+                    lesson.url != null -> Place("Онлайн")
+                    else -> roomLabel(lesson.room)?.let { Place(it) }
+                }
+                kindName(lesson.kind)?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
@@ -299,27 +311,21 @@ private fun LessonRow(lesson: LessonDto, bells: Map<String, List<String>>, isNow
 }
 
 /**
- * Капсула-пометка. Залитая — для того, что ищут глазами (аудитория, «Онлайн»),
- * контурная — для того, что просто уточняет (тип занятия).
+ * Место занятия — единственная выделенная пометка в строке.
+ *
+ * Раньше рядом стояла вторая такая же, для типа занятия, и две капсулы подряд
+ * выбивались из спокойного вида остальных строк.
  */
 @Composable
-private fun Chip(text: String, filled: Boolean) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = if (filled) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-        else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.padding(end = 6.dp),
-    ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (filled) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (filled) FontWeight.SemiBold else FontWeight.Medium,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-        )
-    }
+private fun Place(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        modifier = Modifier.padding(end = 8.dp),
+    )
 }
 
 @Composable

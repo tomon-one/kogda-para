@@ -20,6 +20,9 @@ class AppContainer(context: Context) {
     val updates = AppUpdate(app, api)
 
     companion object {
+        /** Короткий путь к хранилищу для виджетов. */
+        fun store(context: Context): ScheduleStore = get(context).store
+
         @Volatile
         private var instance: AppContainer? = null
 
