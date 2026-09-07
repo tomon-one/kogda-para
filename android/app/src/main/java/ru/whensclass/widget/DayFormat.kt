@@ -35,6 +35,21 @@ fun formatFetchedAt(millis: Long): String {
     }
 }
 
+/**
+ * То же время, но коротко — для шапки виджета, где на счету каждый пиксель.
+ * «19:12», «вчера 21:40», «5 сен».
+ */
+fun formatFetchedShort(millis: Long): String {
+    if (millis <= 0) return "—"
+    val moment = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
+    val time = moment.format(DateTimeFormatter.ofPattern("HH:mm", RU))
+    return when (moment.toLocalDate()) {
+        LocalDate.now() -> time
+        LocalDate.now().minusDays(1) -> "вчера $time"
+        else -> moment.format(DateTimeFormatter.ofPattern("d MMM", RU))
+    }
+}
+
 /** Данные считаем несвежими через полсуток — тогда виджет об этом говорит. */
 fun isStale(millis: Long): Boolean =
     millis > 0 && System.currentTimeMillis() - millis > Duration.ofHours(12).toMillis()

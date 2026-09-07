@@ -69,6 +69,15 @@ class DayFormatTest {
     }
 
     @Test
+    fun `короткое время для шапки виджета`() {
+        assertEquals("—", formatFetchedShort(0))
+        val now = formatFetchedShort(System.currentTimeMillis())
+        assertTrue("ожидал ЧЧ:ММ, получил $now", now.matches(Regex("""\d{2}:\d{2}""")))
+        val yesterday = formatFetchedShort(System.currentTimeMillis() - 24 * 60 * 60 * 1000L)
+        assertTrue(yesterday.startsWith("вчера"))
+    }
+
+    @Test
     fun `время обновления показывается по-человечески`() {
         assertEquals("ещё не обновлялось", formatFetchedAt(0))
         assertTrue(formatFetchedAt(System.currentTimeMillis()).startsWith("обновлено в"))

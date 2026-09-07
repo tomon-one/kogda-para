@@ -6,6 +6,7 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
+import android.content.Intent
 import androidx.glance.LocalContext
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
@@ -29,6 +30,7 @@ import androidx.glance.text.TextStyle
 import java.time.LocalDate
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.ui.MainActivity
 
 /**
  * Содержимое виджета.
@@ -76,11 +78,17 @@ private fun Header(
     fetchedAt: Long,
     colors: Palette,
 ) {
-    Row(
-        modifier = GlanceModifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = GlanceModifier.defaultWeight()) {
+    val context = LocalContext.current
+    val openApp = actionStartActivity(
+        Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
+
+    Column(modifier = GlanceModifier.fillMaxWidth()) {
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
                 groupName,
                 maxLines = 1,
@@ -89,29 +97,39 @@ private fun Header(
                     fontWeight = FontWeight.Bold,
                     color = colors.text,
                 ),
+                // Нажатие на название группы открывает приложение — там
+                // расписание на неделю вперёд и настройки.
+                modifier = GlanceModifier.defaultWeight().clickable(openApp),
             )
-            // Про устаревшие данные говорим прямо в подзаголовке: отдельная
-            // строка внизу съедала место, которого в виджете и так нет.
-            val subtitle = if (isStale(fetchedAt)) {
-                formatDayTitle(day) + " · " + formatFetchedAt(fetchedAt)
-            } else {
-                formatDayTitle(day)
-            }
+            ArrowButton("‹", step = -1, enabled = offset > 0, colors = colors)
+            Spacer(GlanceModifier.width(4.dp))
+            ArrowButton("›", step = 1, enabled = offset < ScheduleWidget.MAX_OFFSET, colors = colors)
+        }
+
+        Row(
+            modifier = GlanceModifier.fillMaxWidth().padding(top = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                subtitle,
+                formatDayTitle(day),
                 maxLines = 1,
                 style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                modifier = GlanceModifier.defaultWeight().clickable(openApp),
+            )
+            // Обновление стоит рядом с временем последнего обновления: там оно
+            // понятнее всего и не отнимает ширину у названия группы.
+            Text(
+                formatFetchedShort(fetchedAt) + " ⟳",
+                maxLines = 1,
+                style = TextStyle(
+                    fontSize = 11.sp,
+                    color = if (isStale(fetchedAt)) colors.accent else colors.textDim,
+                ),
+                modifier = GlanceModifier
+                    .clickable(actionRunCallback<RefreshAction>())
+                    .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
             )
         }
-        TapButton(
-            label = "⟳",
-            colors = colors,
-            action = actionRunCallback<RefreshAction>(),
-        )
-        Spacer(GlanceModifier.width(4.dp))
-        ArrowButton("‹", step = -1, enabled = offset > 0, colors = colors)
-        Spacer(GlanceModifier.width(4.dp))
-        ArrowButton("›", step = 1, enabled = offset < ScheduleWidget.MAX_OFFSET, colors = colors)
     }
 }
 
