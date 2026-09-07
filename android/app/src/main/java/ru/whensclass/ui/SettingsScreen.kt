@@ -105,7 +105,10 @@ fun SettingsScreen(
         }
 
         Section("О приложении") {
-            Text("Версия ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Версия ${BuildConfig.VERSION_NAME} (сборка ${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.bodySmall,
+            )
             Text(
                 "Расписание НГОК для своих.",
                 style = MaterialTheme.typography.bodySmall,

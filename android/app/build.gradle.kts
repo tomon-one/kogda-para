@@ -7,6 +7,10 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+base {
+    archivesName = "kogda-para"
+}
+
 android {
     namespace = "ru.whensclass"
     compileSdk = 37
@@ -15,8 +19,8 @@ android {
         applicationId = "ru.whensclass"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
     }
 
     signingConfigs {
