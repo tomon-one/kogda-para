@@ -20,6 +20,11 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
 
     private val client = OkHttpClient.Builder()
         .cache(Cache(cacheDir.resolve("http"), CACHE_BYTES))
+        // Без явных сроков запрос в плохой сети висит минутами, а виджет всё
+        // это время ждёт обновления, которого не будет.
+        .connectTimeout(java.time.Duration.ofSeconds(10))
+        .readTimeout(java.time.Duration.ofSeconds(20))
+        .callTimeout(java.time.Duration.ofSeconds(30))
         .build()
 
     fun meta(): MetaDto = get("/v1/meta").let(json::decodeFromString)

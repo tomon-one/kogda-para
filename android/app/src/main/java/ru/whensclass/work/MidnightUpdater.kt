@@ -8,7 +8,9 @@ import android.content.Intent
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import ru.whensclass.widget.ScheduleWidget
 
 /**
@@ -44,8 +46,18 @@ object MidnightUpdater {
  */
 class MidnightReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        runBlocking { ScheduleWidget().resetDayOffset(context) }
-        MidnightUpdater.schedule(context)
-        SyncWorker.now(context)
+        // Перерисовка виджета — работа с диском, в onReceive её держать нельзя:
+        // система даёт обработчику несколько секунд и снимает процесс.
+        val finish = goAsync()
+        val app = context.applicationContext
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                ScheduleWidget().resetDayOffset(app)
+                MidnightUpdater.schedule(app)
+                SyncWorker.now(app)
+            } finally {
+                finish.finish()
+            }
+        }
     }
 }

@@ -78,12 +78,7 @@ private fun Header(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            // Заголовок кликабелен целиком: это же и кнопка «обновить».
-            modifier = GlanceModifier
-                .defaultWeight()
-                .clickable(actionRunCallback<RefreshAction>()),
-        ) {
+        Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
                 groupName,
                 maxLines = 1,
@@ -106,6 +101,12 @@ private fun Header(
                 style = TextStyle(fontSize = 11.sp, color = colors.textDim),
             )
         }
+        TapButton(
+            label = "⟳",
+            colors = colors,
+            action = actionRunCallback<RefreshAction>(),
+        )
+        Spacer(GlanceModifier.width(4.dp))
         ArrowButton("‹", step = -1, enabled = offset > 0, colors = colors)
         Spacer(GlanceModifier.width(4.dp))
         ArrowButton("›", step = 1, enabled = offset < ScheduleWidget.MAX_OFFSET, colors = colors)
@@ -114,19 +115,34 @@ private fun Header(
 
 @Composable
 private fun ArrowButton(label: String, step: Int, enabled: Boolean, colors: Palette) {
+    TapButton(
+        label = label,
+        colors = colors,
+        enabled = enabled,
+        action = actionRunCallback<ShiftDayAction>(
+            actionParametersOf(ShiftDayAction.KEY_STEP to step),
+        ),
+    )
+}
+
+@Composable
+private fun TapButton(
+    label: String,
+    colors: Palette,
+    action: androidx.glance.action.Action,
+    enabled: Boolean = true,
+) {
     val color = if (enabled) colors.text else colors.textDim
     var modifier = GlanceModifier
         .background(if (enabled) colors.button else colors.buttonDisabled)
         .cornerRadius(8.dp)
-        .padding(horizontal = 10.dp, vertical = 4.dp)
-    if (enabled) {
-        modifier = modifier.clickable(
-            actionRunCallback<ShiftDayAction>(
-                actionParametersOf(ShiftDayAction.KEY_STEP to step),
-            ),
-        )
-    }
-    Text(label, style = TextStyle(fontSize = 16.sp, color = color), modifier = modifier)
+    if (enabled) modifier = modifier.clickable(action)
+    Text(
+        label,
+        style = TextStyle(fontSize = 15.sp, color = color),
+        // Отступы внутри кликабельной области, иначе нажатие ловит только текст.
+        modifier = modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }
 
 @Composable
@@ -139,7 +155,10 @@ private fun Lessons(
     val current = currentLessonNumber(bells, day)
     LazyColumn(modifier = GlanceModifier.fillMaxWidth()) {
         items(lessons, itemId = { it.number.toLong() }) { lesson ->
-            LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                LessonRow(lesson, bells, isNow = lesson.number == current, colors = colors)
+                Spacer(GlanceModifier.height(6.dp))
+            }
         }
     }
 }
@@ -154,7 +173,6 @@ private fun LessonRow(
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(bottom = 4.dp)
             .background(if (isNow) colors.nowSurface else colors.surface)
             .cornerRadius(10.dp)
             .padding(horizontal = 8.dp, vertical = 6.dp),
