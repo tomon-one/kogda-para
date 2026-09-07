@@ -45,19 +45,24 @@ class MainActivity : ComponentActivity() {
 /** Экраны приложения. Их три, поэтому обходимся без библиотеки навигации. */
 private enum class Screen { TODAY, GROUPS, SETTINGS }
 
+/** Красный колледжа — из его же логотипа. */
+private val BRAND = Color(0xFFD60403)
+
 /** Тёмная схема в тон виджету: чистый чёрный не светится на OLED. */
 private val DarkScheme = darkColorScheme(
     background = Color(0xFF000000),
-    surface = Color(0xFF121212),
-    primary = Color(0xFF5FD3A8),
-    error = Color(0xFFFF7A7A),
+    surface = Color(0xFF141414),
+    surfaceVariant = Color(0xFF1C1C1C),
+    primary = Color(0xFFFF6B70),
+    error = Color(0xFFFF6B70),
 )
 
 private val LightScheme = lightColorScheme(
-    background = Color(0xFFFBFBFB),
-    surface = Color(0xFFF0F1F3),
-    primary = Color(0xFF10795C),
-    error = Color(0xFFB3261E),
+    background = Color(0xFFFFFFFF),
+    surface = Color(0xFFF4F5F7),
+    surfaceVariant = Color(0xFFEDEEF0),
+    primary = BRAND,
+    error = BRAND,
 )
 
 @Composable

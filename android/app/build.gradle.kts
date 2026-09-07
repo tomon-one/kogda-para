@@ -19,6 +19,22 @@ android {
         versionName = "0.1"
     }
 
+    signingConfigs {
+        create("release") {
+            // Ключ и пароли лежат вне репозитория: C:/dev/whensclass-keys.
+            // Потерять его нельзя — с другим ключом обновление не встанет
+            // поверх уже установленного приложения.
+            val props = gradleLocalProperties(File("C:/dev/whensclass-keys"), "keystore.properties")
+            val store = props.getProperty("storeFile")
+            if (store != null) {
+                storeFile = File(store)
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // По умолчанию отладочная сборка ходит туда же, куда и рабочая.
@@ -31,7 +47,9 @@ android {
             buildConfigField("String", "BASE_URL", "\"$url\"")
         }
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -63,10 +81,10 @@ kotlin {
     jvmToolchain(21)
 }
 
-/** Читает local.properties: адрес сервера на время отладки в домашней сети. */
-fun gradleLocalProperties(root: File): Properties {
+/** Читает файл настроек рядом с проектом: адрес сервера, ключ подписи. */
+fun gradleLocalProperties(root: File, name: String = "local.properties"): Properties {
     val props = Properties()
-    val file = File(root, "local.properties")
+    val file = File(root, name)
     if (file.exists()) file.inputStream().use { props.load(it) }
     return props
 }

@@ -50,9 +50,9 @@ fun ScheduleWidgetContent(
             .fillMaxSize()
             .background(colors.background)
             .cornerRadius(16.dp)
-            .padding(12.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
-        Header(groupName ?: "Расписание", day, offset, colors)
+        Header(groupName ?: "Расписание", day, offset, fetchedAt, colors)
         Spacer(GlanceModifier.height(6.dp))
 
         val today = schedule?.days?.firstOrNull { it.date == day.toString() }
@@ -63,33 +63,47 @@ fun ScheduleWidgetContent(
             today.lessons.isEmpty() -> Hint("Пар нет", colors)
             else -> Lessons(today.lessons, schedule.bells, day, colors)
         }
-
-        Spacer(GlanceModifier.defaultWeight())
-        Footer(fetchedAt, colors)
     }
 }
 
 @Composable
-private fun Header(groupName: String, day: LocalDate, offset: Int, colors: Palette) {
+private fun Header(
+    groupName: String,
+    day: LocalDate,
+    offset: Int,
+    fetchedAt: Long,
+    colors: Palette,
+) {
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = GlanceModifier.defaultWeight()) {
+        Column(
+            // Заголовок кликабелен целиком: это же и кнопка «обновить».
+            modifier = GlanceModifier
+                .defaultWeight()
+                .clickable(actionRunCallback<RefreshAction>()),
+        ) {
             Text(
                 groupName,
+                maxLines = 1,
                 style = TextStyle(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.text,
                 ),
             )
+            // Про устаревшие данные говорим прямо в подзаголовке: отдельная
+            // строка внизу съедала место, которого в виджете и так нет.
+            val subtitle = if (isStale(fetchedAt)) {
+                formatDayTitle(day) + " · " + formatFetchedAt(fetchedAt)
+            } else {
+                formatDayTitle(day)
+            }
             Text(
-                formatDayTitle(day),
-                style = TextStyle(
-                    fontSize = 12.sp,
-                    color = colors.textDim,
-                ),
+                subtitle,
+                maxLines = 1,
+                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
             )
         }
         ArrowButton("‹", step = -1, enabled = offset > 0, colors = colors)
@@ -137,35 +151,32 @@ private fun LessonRow(
     isNow: Boolean,
     colors: Palette,
 ) {
-    val background =
-        if (isNow) colors.nowSurface else colors.surface
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
             .padding(bottom = 4.dp)
-            .background(background)
+            .background(if (isNow) colors.nowSurface else colors.surface)
             .cornerRadius(10.dp)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Column(modifier = GlanceModifier.width(56.dp)) {
+        // Ширины хватает на «09:00–10:30» одной строкой: время, переносимое
+        // пополам, читается как опечатка.
+        Column(modifier = GlanceModifier.width(78.dp)) {
             Text(
                 "${lesson.number} пара",
-                style = TextStyle(
-                    fontSize = 11.sp,
-                    color = colors.textDim,
-                ),
+                maxLines = 1,
+                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
             )
             lessonTime(bells, lesson.number)?.let { time ->
                 Text(
                     time,
-                    style = TextStyle(
-                        fontSize = 10.sp,
-                        color = colors.textDim,
-                    ),
+                    maxLines = 1,
+                    style = TextStyle(fontSize = 11.sp, color = colors.text),
                 )
             }
         }
+        Spacer(GlanceModifier.width(6.dp))
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
                 lesson.subject,
@@ -177,13 +188,13 @@ private fun LessonRow(
                     textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
                 ),
             )
-            SecondLine(lesson, colors)
+            Details(lesson, colors)
         }
     }
 }
 
 @Composable
-private fun SecondLine(lesson: LessonDto, colors: Palette) {
+private fun Details(lesson: LessonDto, colors: Palette) {
     val place = buildString {
         lesson.kind?.let { append(it) }
         lesson.room?.let {
@@ -195,57 +206,54 @@ private fun SecondLine(lesson: LessonDto, colors: Palette) {
             append(shortenName(it))
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (place.isNotEmpty()) {
-            Text(
-                place,
-                maxLines = 1,
-                style = TextStyle(
-                    fontSize = 11.sp,
-                    color = colors.textDim,
-                ),
-            )
-        }
-        lesson.url?.let { url ->
-            Spacer(GlanceModifier.width(6.dp))
-            // Саму ссылку не печатаем: она длинная и нечитаемая. Одно нажатие —
-            // и она в буфере обмена.
-            Text(
-                "копировать ссылку",
-                style = TextStyle(fontSize = 11.sp, color = colors.accent),
-                modifier = GlanceModifier.clickable(
-                    actionRunCallback<CopyLinkAction>(
-                        actionParametersOf(CopyLinkAction.KEY_URL to url),
-                    ),
-                ),
-            )
-        }
+    if (place.isNotEmpty()) {
+        Text(
+            place,
+            maxLines = 1,
+            style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+        )
     }
     if (lesson.isCancelled) {
         Text(
             lesson.note?.let { "отменена — $it" } ?: "отменена",
+            maxLines = 1,
             style = TextStyle(fontSize = 11.sp, color = colors.error),
+        )
+    }
+    lesson.url?.let { url ->
+        // Отдельной строкой, а не рядом с преподавателем: рядом они не
+        // помещаются и наезжают друг на друга. Саму ссылку не печатаем — она
+        // длинная и нечитаемая, нажатие кладёт её в буфер обмена.
+        Text(
+            "онлайн · копировать ссылку",
+            maxLines = 1,
+            style = TextStyle(fontSize = 11.sp, color = colors.accent),
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .clickable(
+                    actionRunCallback<CopyLinkAction>(
+                        actionParametersOf(CopyLinkAction.KEY_URL to url),
+                    ),
+                ),
         )
     }
 }
 
 @Composable
 private fun Hint(text: String, colors: Palette) {
-    Text(
-        text,
-        style = TextStyle(fontSize = 13.sp, color = colors.textDim),
-        modifier = GlanceModifier.padding(vertical = 8.dp),
-    )
-}
-
-@Composable
-private fun Footer(fetchedAt: Long, colors: Palette) {
-    val text = formatFetchedAt(fetchedAt) + if (isStale(fetchedAt)) " · данные старые" else ""
-    Text(
-        text,
-        style = TextStyle(fontSize = 10.sp, color = colors.textDim),
+    Column(
         modifier = GlanceModifier
             .fillMaxWidth()
             .clickable(actionRunCallback<RefreshAction>()),
-    )
+    ) {
+        Text(
+            text,
+            style = TextStyle(fontSize = 13.sp, color = colors.textDim),
+            modifier = GlanceModifier.padding(vertical = 8.dp),
+        )
+        Text(
+            "нажмите, чтобы обновить",
+            style = TextStyle(fontSize = 11.sp, color = colors.accent),
+        )
+    }
 }

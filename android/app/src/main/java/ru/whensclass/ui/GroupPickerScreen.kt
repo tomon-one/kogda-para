@@ -1,14 +1,15 @@
 package ru.whensclass.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -19,7 +20,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import ru.whensclass.R
 import ru.whensclass.data.GroupDto
 
 /**
@@ -39,7 +42,16 @@ fun GroupPickerScreen(
     LaunchedEffect(Unit) { groups = loadGroups() }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Выберите свою группу", style = MaterialTheme.typography.headlineSmall)
+        Image(
+            painter = painterResource(R.drawable.logo_ngok),
+            contentDescription = null,
+            modifier = Modifier.height(48.dp),
+        )
+        Text(
+            "Выберите свою группу",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(top = 8.dp),
+        )
 
         OutlinedTextField(
             value = query,
@@ -54,12 +66,22 @@ fun GroupPickerScreen(
             list == null -> CircularProgressIndicator()
 
             list.isEmpty() -> Text(
-                "Список групп не загрузился. Проверьте, доступен ли сервер.",
+                "Список групп не загрузился. Проверьте, есть ли интернет.",
                 style = MaterialTheme.typography.bodyMedium,
             )
 
             else -> {
-                val filtered = list.filter { it.name.contains(query, ignoreCase = true) }
+                // Отбор считаем только когда меняется запрос или сам список.
+                // Иначе он пересчитывался на каждую перерисовку — а перерисовка
+                // случается на каждую букву, и список из 187 строк заметно
+                // подтормаживал при наборе.
+                val filtered = remember(list, query) {
+                    if (query.isBlank()) list
+                    else list.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                }
+                if (filtered.isEmpty()) {
+                    Text("Ничего не нашлось", style = MaterialTheme.typography.bodyMedium)
+                }
                 LazyColumn {
                     items(filtered, key = { it.id }) { group ->
                         Text(
@@ -70,7 +92,6 @@ fun GroupPickerScreen(
                                 .clickable { onPick(group) }
                                 .padding(vertical = 14.dp),
                         )
-                        HorizontalDivider()
                     }
                 }
             }

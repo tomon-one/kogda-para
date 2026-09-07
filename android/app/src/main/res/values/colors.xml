@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Подложка иконки: глубокий сине-зелёный, на нём читается и светлый,
-         и тёмный домашний экран. -->
-    <color name="ic_launcher_background">#0E2A24</color>
+    <!-- Логотип колледжа красный, поэтому подложка иконки белая. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>

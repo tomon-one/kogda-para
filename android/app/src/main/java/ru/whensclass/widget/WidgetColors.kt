@@ -27,9 +27,9 @@ enum class ThemeChoice {
 /**
  * Палитра виджета.
  *
- * Цвета заданы явно, а не взяты из системной темы: оболочки на телефонах
- * слишком по-разному понимают «динамические» цвета, а виджет должен выглядеть
- * одинаково у всех одногруппников.
+ * Красный с белым — цвета колледжа. Цвета заданы явно, а не взяты из системной
+ * темы: оболочки на телефонах слишком по-разному понимают «динамические»
+ * цвета, а виджет должен выглядеть одинаково у всех одногруппников.
  */
 data class Palette(
     val background: ColorProvider,
@@ -45,30 +45,36 @@ data class Palette(
 
 object WidgetColors {
 
+    /** Фирменный красный колледжа. */
+    val BRAND = Color(0xFFE4353A)
+    private val BRAND_DEEP = Color(0xFFB3151B)
+
     /** Тёмная — чистый чёрный: на OLED такие пиксели просто выключены. */
     val dark = Palette(
         background = ColorProvider(Color(0xFF000000)),
-        surface = ColorProvider(Color(0xFF121212)),
-        nowSurface = ColorProvider(Color(0xFF10312A)),
-        text = ColorProvider(Color(0xFFF2F2F2)),
+        surface = ColorProvider(Color(0xFF141414)),
+        // Идущая сейчас пара — приглушённый красный, чтобы бросалась в глаза,
+        // но не выжигала экран.
+        nowSurface = ColorProvider(Color(0xFF3A1113)),
+        text = ColorProvider(Color(0xFFF5F5F5)),
         textDim = ColorProvider(Color(0xFF9AA0A6)),
-        accent = ColorProvider(Color(0xFF5FD3A8)),
-        error = ColorProvider(Color(0xFFFF7A7A)),
+        accent = ColorProvider(Color(0xFFFF6B70)),
+        error = ColorProvider(BRAND),
         button = ColorProvider(Color(0xFF1E1E1E)),
         buttonDisabled = ColorProvider(Color(0xFF141414)),
     )
 
-    /** Светлая — мягкий белый, чтобы не слепить на светлых обоях. */
+    /** Светлая — белая с красным, как печатное расписание колледжа. */
     val light = Palette(
-        background = ColorProvider(Color(0xFFFBFBFB)),
-        surface = ColorProvider(Color(0xFFF0F1F3)),
-        nowSurface = ColorProvider(Color(0xFFD3F0E4)),
-        text = ColorProvider(Color(0xFF14181C)),
+        background = ColorProvider(Color(0xFFFFFFFF)),
+        surface = ColorProvider(Color(0xFFF4F5F7)),
+        nowSurface = ColorProvider(Color(0xFFFFE1E2)),
+        text = ColorProvider(Color(0xFF16181B)),
         textDim = ColorProvider(Color(0xFF5C6672)),
-        accent = ColorProvider(Color(0xFF10795C)),
-        error = ColorProvider(Color(0xFFB3261E)),
-        button = ColorProvider(Color(0xFFE3E5E8)),
-        buttonDisabled = ColorProvider(Color(0xFFEDEEF0)),
+        accent = ColorProvider(BRAND_DEEP),
+        error = ColorProvider(BRAND_DEEP),
+        button = ColorProvider(Color(0xFFEDEEF0)),
+        buttonDisabled = ColorProvider(Color(0xFFF6F7F8)),
     )
 
     /** Выбранная тема, а при выборе «как в системе» — системная. */

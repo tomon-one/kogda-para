@@ -27,3 +27,8 @@ server/var/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Ключ подписи и пароли лежат вне репозитория (C:/dev/whensclass-keys),
+# но на случай, если их положат сюда:
+keystore.properties
+*.jks
