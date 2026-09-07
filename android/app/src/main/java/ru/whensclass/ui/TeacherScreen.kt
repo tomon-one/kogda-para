@@ -45,13 +45,16 @@ fun TeacherScreen(
     loadSchedule: suspend (String) -> ScheduleDto?,
     pinned: List<String> = emptyList(),
     onTogglePin: (String) -> Unit = {},
+    reloadKey: Int = 0,
 ) {
     var picked by remember { mutableStateOf<GroupDto?>(null) }
     var schedule by remember { mutableStateOf<ScheduleDto?>(null) }
     var loading by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
 
-    LaunchedEffect(picked) {
+    // reloadKey меняется по нажатию на обновление: перечитываем расписание
+    // того преподавателя, который сейчас открыт.
+    LaunchedEffect(picked, reloadKey) {
         val teacher = picked ?: return@LaunchedEffect
         loading = true
         schedule = loadSchedule(teacher.id)

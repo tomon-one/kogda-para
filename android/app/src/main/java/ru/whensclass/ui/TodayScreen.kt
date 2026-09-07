@@ -112,6 +112,7 @@ fun TodayScreen(
     fetchedAt: Long,
     hasUpdate: Boolean,
     refreshing: Boolean,
+    reloadKey: Int = 0,
     onSettings: () -> Unit,
     onUpdateBadge: () -> Unit,
     onRefresh: () -> Unit,
@@ -196,6 +197,7 @@ fun TodayScreen(
                         loadSchedule = loadTeacherSchedule,
                         pinned = pinnedTeachers,
                         onTogglePin = onTogglePinnedTeacher,
+                        reloadKey = reloadKey,
                     )
                     return@Column
                 }
@@ -250,11 +252,11 @@ private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
         if (!spinning) return@LaunchedEffect
         done = false
         do {
-            angle.animateTo(angle.value + 360f, tween(700, easing = LinearEasing))
+            angle.animateTo(angle.value + 360f, tween(450, easing = LinearEasing))
         } while (busy)
         angle.snapTo(0f)
         done = true
-        delay(1200)
+        delay(900)
         done = false
         spinning = false
     }
@@ -285,10 +287,19 @@ enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String =
 @Composable
 private fun ScheduleTabs(current: Tab, onPick: (Tab) -> Unit) {
     Column {
+        // Полоска рисуется только в том ряду, где выбранная вкладка: иначе
+        // подчёркнутыми оказываются сразу две.
         TabRow(
             selectedTabIndex = current.ordinal.coerceAtMost(1),
             containerColor = MaterialTheme.colorScheme.background,
             divider = {},
+            indicator = { positions ->
+                if (current.ordinal < 2) {
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(positions[current.ordinal]),
+                    )
+                }
+            },
         ) {
             TabButton(Tab.STUDENTS, current, onPick)
             TabButton(Tab.TEACHERS, current, onPick)

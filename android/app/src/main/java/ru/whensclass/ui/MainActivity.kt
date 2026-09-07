@@ -121,9 +121,12 @@ private fun App(startDay: String? = null) {
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
     LaunchedEffect(Unit) { teachers = container.repository.teachers() }
 
+    var reloadKey by remember { mutableStateOf(0) }
+
     val refreshNow: () -> Unit = {
         scope.launch {
             refreshing = true
+            reloadKey++
             // Напрямую, без WorkManager: он вправе отложить задачу на минуты,
             // а человек только что нажал кнопку и ждёт ответа сейчас.
             container.repository.refresh(force = true)
@@ -134,6 +137,10 @@ private fun App(startDay: String? = null) {
     // Проверяем обновление один раз при запуске: чаще незачем, сборки выходят
     // не по расписанию.
     LaunchedEffect(Unit) { update = container.updates.check() }
+
+    // И сразу забираем свежее расписание: после установки новой версии старые
+    // данные на экране выглядят как поломка.
+    LaunchedEffect(Unit) { container.repository.refresh() }
     var welcomeDone by remember { mutableStateOf(false) }
     val current = when {
         ALWAYS_SHOW_WELCOME && !welcomeDone -> Screen.WELCOME
@@ -252,6 +259,7 @@ private fun App(startDay: String? = null) {
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,
                         refreshing = refreshing,
+                        reloadKey = reloadKey,
                         onSettings = {
                             focusUpdate = false
                             screen = Screen.SETTINGS
