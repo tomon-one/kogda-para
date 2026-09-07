@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Android
+android/.gradle/
+android/build/
+android/**/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
+*.keystore
+*.jks
+keystore.properties
+
+# Локальные секреты и состояние
+.env
+server/var/
+
+# Мусор ОС и редакторов
+.DS_Store
+Thumbs.db
+*.swp

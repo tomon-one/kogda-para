@@ -1,0 +1,32 @@
+[project]
+name = "whensclass"
+version = "0.1.0"
+description = "Разбор расписания НГОК из Google Sheets и компактный JSON для виджета"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "httpx>=0.27",
+    "pydantic-settings>=2.5",
+    "apscheduler>=3.10",
+    "orjson>=3.10",
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "ruff>=0.7"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["slow: работает по полному листу в 820 КБ"]
+
+[tool.ruff]
+line-length = 95
