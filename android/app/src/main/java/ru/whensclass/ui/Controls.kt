@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -133,6 +135,27 @@ fun MinimalCheck(selected: Boolean, modifier: Modifier = Modifier) {
                     )
                 }
             },
+    )
+}
+
+/**
+ * Дно длинного списка.
+ *
+ * Видит только тот, кто долистал до конца вместо того, чтобы искать
+ * поиском. Ничего не делает — говорит, что дальше ничего нет, и сколько
+ * было. Показывать её под отфильтрованным списком нельзя: это будет уже
+ * не дно, а середина.
+ */
+@Composable
+fun ListEnd(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 18.dp, bottom = 8.dp),
     )
 }
 

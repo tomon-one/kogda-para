@@ -256,6 +256,11 @@ fun TodayScreen(
                         searchLabel = "Поиск по названию группы",
                         showGroups = false,
                         othersTitle = "Другие группы",
+                        endNote = { n ->
+                            "Всё. " +
+                                plural(n, "группа", "группы", "групп") +
+                                ", и ни одной лишней."
+                        },
                     )
                     return@Column
                 }

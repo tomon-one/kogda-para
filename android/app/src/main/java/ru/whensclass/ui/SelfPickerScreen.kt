@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.data.GroupDto
+import ru.whensclass.widget.plural
 
 /**
  * Преподаватель выбирает себя.
@@ -127,6 +128,21 @@ fun SelfPickerScreen(
                                         .heightIn(min = 48.dp)
                                         .clickable { onPick(teacher) }
                                         .padding(horizontal = 16.dp, vertical = 14.dp),
+                                )
+                            }
+                        }
+                        // Дно списка — для тех, кто листает, а не ищет.
+                        if (query.isBlank()) {
+                            item(key = "конец") {
+                                ListEnd(
+                                    "Всё. " +
+                                        plural(
+                                            teachers.size,
+                                            "преподаватель",
+                                            "преподавателя",
+                                            "преподавателей",
+                                        ) +
+                                        ", и вы среди них.",
                                 )
                             }
                         }

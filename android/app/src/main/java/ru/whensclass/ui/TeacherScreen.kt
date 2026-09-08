@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.widget.plural
 
 /**
  * Расписание преподавателя.
@@ -55,6 +56,13 @@ fun TeacherScreen(
     startDay: String? = null,
     ownScheduleTitle: String = "Посмотреть других преподавателей",
     othersTitle: String = "Другие преподаватели",
+    // Дно списка. Для преподавателей говорим то, чего про них не знают:
+    // своего листа в таблице колледжа у них нет вовсе.
+    endNote: (Int) -> String = { n ->
+        "Всё. " +
+            plural(n, "преподаватель", "преподавателя", "преподавателей") +
+            ". Своего листа в таблице колледжа у них нет — этот список собран из колонок групп."
+    },
 ) {
     // В роли преподавателя его собственное расписание уже лежит на телефоне:
     // показываем сразу, без похода в сеть. Список остальных — по кнопке.
@@ -193,6 +201,9 @@ fun TeacherScreen(
                             onOpen = { picked = teacher },
                             onTogglePin = { onTogglePin(teacher.id) },
                         )
+                    }
+                    if (query.isBlank()) {
+                        item(key = "конец") { ListEnd(endNote(list.size)) }
                     }
                 }
             }
