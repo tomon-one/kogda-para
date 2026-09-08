@@ -1,10 +1,9 @@
 package ru.whensclass.ui
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -19,9 +18,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /**
  * Свои переключатели и кнопки.
@@ -31,10 +38,20 @@ import androidx.compose.ui.unit.dp
  * Здесь всё прямоугольное со скруглением — в тон карточкам настроек и
  * виджетам, где углы такие же.
  *
- * Анимации короткие (140 мс) и только по цвету и сдвигу: тумблер в списке
- * настроек не должен заставлять себя ждать.
+ * Анимация считается в фазах разметки и отрисовки, а не пересобирает дерево
+ * на каждый кадр: в списке настроек это заметно.
  */
-private const val SHIFT_MS = 140
+
+/**
+ * Движение бегунка.
+ *
+ * Пружина, а не отсчёт по времени: сдвиг за ровные 140 мс читался как рывок.
+ * Без подпрыгивания — тумблер не игрушка.
+ */
+private val MOTION = spring<Float>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+)
 
 /** Тумблер: прямоугольный трек, квадратный бегунок. */
 @Composable
@@ -43,42 +60,42 @@ fun MinimalSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shift by animateDpAsState(
-        targetValue = if (checked) 18.dp else 0.dp,
-        animationSpec = tween(SHIFT_MS),
-        label = "thumb",
+    // Одна доля пути на всё: и сдвиг, и цвет считаются из неё в фазах разметки
+    // и отрисовки. Раньше каждый кадр анимации пересобирал разметку целиком —
+    // отсюда и дёрганье.
+    val progress by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = MOTION,
+        label = "switch",
     )
-    val track by animateColorAsState(
-        targetValue = if (checked) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        },
-        animationSpec = tween(SHIFT_MS),
-        label = "track",
-    )
+    val trackOn = MaterialTheme.colorScheme.primary
+    val trackOff = MaterialTheme.colorScheme.surfaceVariant
+    val thumbOn = MaterialTheme.colorScheme.onPrimary
+    val thumbOff = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = modifier
             .size(width = 42.dp, height = 24.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(track)
+            .drawBehind {
+                drawRoundRect(
+                    color = lerp(trackOff, trackOn, progress),
+                    cornerRadius = CornerRadius(8.dp.toPx()),
+                )
+            }
             .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch)
             .padding(3.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(
             modifier = Modifier
-                .offset(x = shift)
+                .offset { IntOffset((18.dp.toPx() * progress).roundToInt(), 0) }
                 .size(18.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(
-                    if (checked) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                ),
+                .drawBehind {
+                    drawRoundRect(
+                        color = lerp(thumbOff, thumbOn, progress),
+                        cornerRadius = CornerRadius(6.dp.toPx()),
+                    )
+                },
         )
     }
 }
@@ -86,32 +103,35 @@ fun MinimalSwitch(
 /** Выбор одного из нескольких — вместо круглой точки Material. */
 @Composable
 fun MinimalCheck(selected: Boolean, modifier: Modifier = Modifier) {
-    val color by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = tween(SHIFT_MS),
+    val progress by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = MOTION,
         label = "check",
     )
+    val on = MaterialTheme.colorScheme.primary
+    val off = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = modifier
             .size(20.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .border(1.5.dp, color, RoundedCornerShape(6.dp)),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(color),
-            )
-        }
-    }
+            .drawBehind {
+                val color = lerp(off, on, progress)
+                drawRoundRect(
+                    color = color,
+                    cornerRadius = CornerRadius(6.dp.toPx()),
+                    style = Stroke(width = 1.5.dp.toPx()),
+                )
+                if (progress > 0f) {
+                    val side = 10.dp.toPx() * progress
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset((size.width - side) / 2, (size.height - side) / 2),
+                        size = Size(side, side),
+                        cornerRadius = CornerRadius(3.dp.toPx()),
+                    )
+                }
+            },
+    )
 }
 
 /**

@@ -279,21 +279,16 @@ fun SettingsScreen(
         }
 
         Section(
-            "Версия приложения",
+            // Установленная версия — сам заголовок блока: строкой ниже она
+            // повторяла то, что и так написано сверху.
+            "Версия ${BuildConfig.VERSION_NAME}",
             modifier = Modifier.onGloballyPositioned { updateOffset = it.positionInParent().y.toInt() },
         ) {
-            Text(
-                "Установлена ${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-            )
             if (update != null) {
                 Text(
                     "Вышла ${update.versionName}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (update.notes.isNotBlank()) {
                     Text(
