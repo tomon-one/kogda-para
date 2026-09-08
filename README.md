@@ -45,10 +45,8 @@
 
 Нужен Android 8.0 или новее. Файл весит около 2,5 МБ.
 
-1. **Скачайте** APK:
-   [kogda-para-37.apk](https://schedule.edelweiss-alpine-confederation.ru/download/kogda-para-37.apk).
-   Ссылка на самую свежую сборку всегда лежит в поле `url` по адресу
-   [/v1/app](https://schedule.edelweiss-alpine-confederation.ru/v1/app).
+1. **Скачайте** приложение — ссылка постоянная и всегда ведёт на последнюю
+   сборку: [скачать «Когда пара?»](https://schedule.edelweiss-alpine-confederation.ru/download/latest.apk)
 2. **Откройте** скачанный файл — из уведомления о загрузке или из «Загрузок».
 3. **Разрешите установку**, когда телефон спросит: об этом ниже.
 4. **Выберите группу** при первом запуске и добавьте виджет — долгое нажатие по
