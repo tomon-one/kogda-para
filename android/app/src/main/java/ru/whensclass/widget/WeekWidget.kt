@@ -229,7 +229,7 @@ private fun weekTitle(days: List<DayDto>): String {
 }
 
 /** Шапка с логотипом и группой плюс отступы — то, что списку не достаётся. */
-private val HEADER_SPACE = 70.dp
+private val HEADER_SPACE = 62.dp
 
 /**
  * Высота строки.
@@ -240,9 +240,9 @@ private val HEADER_SPACE = 70.dp
  * срежет нижним краем. Обе ошибки видны, поэтому и калибровали по снимку.
  */
 private fun rowHeight(row: WeekRow): Dp = when (row) {
-    is WeekRow.Title -> 20.dp
-    is WeekRow.Lesson -> 17.dp
-    is WeekRow.Empty -> 16.dp
+    is WeekRow.Title -> 21.dp
+    is WeekRow.Lesson -> 19.dp
+    is WeekRow.Empty -> 17.dp
 }
 
 /** Строка «ещё N пар» под списком. */
