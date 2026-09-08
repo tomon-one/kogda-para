@@ -194,6 +194,16 @@ class ScheduleRepository(
                 api.schedule(subject, from = weekStart(), days = DAYS)
             }
             val full = if (teacherMode) fresh else withSecondGroup(fresh)
+
+            // Пока шёл запрос, человек мог сменить группу, роль или подгруппу.
+            // Тогда пришедшее расписание — чужое, и записывать его нельзя: оно
+            // молча возвращало на экран прежние пары поверх только что выбранных.
+            val nowTeacher = store.teacherMode()
+            val nowSubject = if (nowTeacher) store.teacherId.first() else store.currentGroupId()
+            if (nowTeacher != teacherMode || nowSubject != subject) {
+                return@withContext RefreshResult.AlreadyFresh
+            }
+
             val previous = schedule.first()
             store.putSchedule(json.encodeToString(full), full.generatedAt)
             updateWidgets()

@@ -194,7 +194,7 @@ private fun Header(
                     when {
                         busy -> " · обновляю…"
                         done -> " · обновлено"
-                        else -> " · " + formatFetchedShort(fetchedAt) + " ⟳"
+                        else -> " · " + formatFetchedShort(fetchedAt)
                     },
                     maxLines = 1,
                     style = TextStyle(
@@ -207,6 +207,16 @@ private fun Header(
                     ),
                     modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )
+                // Отдельной строкой, а не хвостом времени: внутри одного текста
+                // значок вставал по базовой линии букв и висел выше цифр.
+                if (!busy && !done) {
+                    Text(
+                        " ↻",
+                        maxLines = 1,
+                        style = TextStyle(fontSize = 12.sp, color = colors.textDim),
+                        modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+                    )
+                }
             }
         }
         ArrowButton("‹", step = -1, enabled = offset > firstDay, colors = colors)

@@ -151,7 +151,7 @@ private fun Header(
             when {
                 busy -> "обновляю…"
                 done -> "обновлено"
-                else -> formatFetchedShort(fetchedAt) + " ⟳"
+                else -> formatFetchedShort(fetchedAt)
             },
             maxLines = 1,
             style = TextStyle(
@@ -164,6 +164,14 @@ private fun Header(
             ),
             modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
         )
+        if (!busy && !done) {
+            Text(
+                " ↻",
+                maxLines = 1,
+                style = TextStyle(fontSize = 12.sp, color = colors.textDim),
+                modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+            )
+        }
     }
 }
 
@@ -354,9 +362,10 @@ private fun LessonLine(
     Row(
         // Подложка у идущей пары — как в дневном виджете. Отступ снаружи неё,
         // иначе подсветка съезжает вниз и задевает соседнюю строку.
+        // Подложка идущей пары кладётся первой, поэтому накрывает строку
+        // целиком вместе с отступом под ней, а не только высоту букв.
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(bottom = 2.dp)
             .then(
                 if (isNow) {
                     GlanceModifier.background(colors.nowSurface).cornerRadius(6.dp)
@@ -364,6 +373,8 @@ private fun LessonLine(
                     GlanceModifier
                 }
             )
+            .padding(horizontal = 4.dp)
+            .padding(bottom = 2.dp)
             .clickable(actionStartActivity(openDay(context, date))),
         verticalAlignment = Alignment.Top,
     ) {

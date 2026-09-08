@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import androidx.glance.appwidget.updateAll
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
+import ru.whensclass.widget.WeekWidget
 
 /**
  * Перерисовка виджета при смене суток.
@@ -55,6 +56,10 @@ class MidnightReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.Default).launch {
             try {
                 ScheduleWidget().resetDayOffset(app)
+                // Недельный виджет тоже живёт сегодняшним днём: он выделяет
+                // текущую пару, прячет прожитые дни и пишет даты в заголовке.
+                // Без этого до утреннего обновления он считал бы вчера сегодня.
+                WeekWidget().updateAll(app)
                 NextLessonWidget().updateAll(app)
                 MidnightUpdater.schedule(app)
                 SyncWorker.now(app)
