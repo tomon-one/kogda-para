@@ -704,11 +704,27 @@ private fun Place(text: String, muted: Boolean = false) {
 @Composable
 private fun OnlineLink(url: String) {
     val context = LocalContext.current
-    Row(modifier = Modifier.fillMaxWidth()) {
-        LinkButton("Открыть") { openLink(context, url) }
-        LinkButton("Копировать") { copyLink(context, url) }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Куда ведёт кнопка. Полный адрес занимал строку и всё равно обрывался
+        // после домена, но совсем без него проверить ссылку нечем: она приходит
+        // из таблицы, которую заполняют руками.
+        Text(
+            host(url),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row {
+            LinkButton("Открыть") { openLink(context, url) }
+            LinkButton("Копировать") { copyLink(context, url) }
+        }
     }
 }
+
+/** «https://my.mts-link.ru/j/144...» -> «my.mts-link.ru». */
+private fun host(url: String): String =
+    runCatching { Uri.parse(url).host }.getOrNull()?.removePrefix("www.") ?: url
 
 @Composable
 private fun LinkButton(label: String, onClick: () -> Unit) {

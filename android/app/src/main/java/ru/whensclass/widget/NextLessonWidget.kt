@@ -40,9 +40,11 @@ class NextLessonWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val state = AppContainer.store(context).widgetState()
-        val schedule = ScheduleWidget.parse(state.scheduleJson)
-        val colors = WidgetColors.resolve(context, ThemeChoice.from(state.theme))
+        // Как и у двух других виджетов: чтение хранилища может не удаться, и
+        // ронять из-за этого перерисовку незачем — лучше показать подсказку.
+        val state = runCatching { AppContainer.store(context).widgetState() }.getOrNull()
+        val schedule = ScheduleWidget.parse(state?.scheduleJson)
+        val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
 
         provideContent {
             val today = LocalDate.now()
@@ -72,7 +74,7 @@ class NextLessonWidget : GlanceAppWidget() {
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
                     Text(
-                        formatFetchedShort(state.fetchedAt) + " ⟳",
+                        formatFetchedShort(state?.fetchedAt ?: 0L) + " ⟳",
                         style = TextStyle(fontSize = 11.sp, color = colors.textDim),
                         modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                     )
