@@ -126,6 +126,8 @@ fun TodayScreen(
     onSettings: () -> Unit,
     onUpdateBadge: () -> Unit,
     onRefresh: () -> Unit,
+    refreshError: String? = null,
+    onErrorShown: () -> Unit = {},
 ) {
     val today = remember { LocalDate.now() }
     val listState = rememberLazyListState()
@@ -135,6 +137,14 @@ fun TodayScreen(
         mutableStateOf(if (teacherMode) Tab.TEACHERS else Tab.STUDENTS)
     }
     val snackbar = remember { SnackbarHostState() }
+    // Неудачу показываем плашкой: галочка «Расписание обновлено» загоралась и
+    // тогда, когда связи не было, и человек уходил уверенным в свежих данных.
+    LaunchedEffect(refreshError) {
+        refreshError?.let {
+            snackbar.showSnackbar(it)
+            onErrorShown()
+        }
+    }
     val scope = rememberCoroutineScope()
 
     Scaffold(

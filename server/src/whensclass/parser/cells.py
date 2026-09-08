@@ -85,8 +85,12 @@ def _extract_cancellation(text: str, tail: str) -> tuple[str, bool, str | None]:
             # причину: «отмена, преподаватель заболел». Номер оставляем местом,
             # остальное уводим в примечание — иначе приложение показывало
             # «Где: преподаватель заболел».
+            # Хвост после слова «отмена» это причина — но только если перед
+            # словом что-то было. «Отмена крепостного права» иначе оставляла
+            # пару вовсе без названия: голова пустая, всё остальное в причине.
             room_like = tail == "keep" and bool(_ROOM_RE.match(rest))
-            (kept if room_like else note_parts).append(rest)
+            subject_like = tail == "note" and not head
+            (kept if room_like or subject_like else note_parts).append(rest)
 
     note = " ".join(note_parts).strip() or None
     return "\n".join(kept).strip(), cancelled, note

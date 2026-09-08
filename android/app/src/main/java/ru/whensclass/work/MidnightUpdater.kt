@@ -105,6 +105,10 @@ class MidnightReceiver : BroadcastReceiver() {
                 WeekWidget().updateAll(app)
                 NextLessonWidget().updateAll(app)
                 MidnightUpdater.schedule(app)
+                // Напоминания о парах живут в абсолютном времени, поэтому после
+                // перевода часов или смены пояса приходят не тогда. Приёмник и
+                // так подписан на TIME_SET и TIMEZONE_CHANGED — переставляем.
+                LessonAlarms.reschedule(app)
                 // За расписанием ходим только ночью: на звонке достаточно
                 // перерисовать то, что уже лежит на телефоне.
                 if (night) SyncWorker.now(app)

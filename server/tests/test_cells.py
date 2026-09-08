@@ -157,3 +157,32 @@ def test_audit_cases(cells, expected):
     assert lesson is not None
     for field, value in expected.items():
         assert getattr(lesson, field) == value, field
+
+
+def test_cancellation_at_the_start_keeps_the_subject():
+    """«Отмена» в начале ячейки не должна съедать название пары.
+
+    Хвост после слова считается причиной только если перед словом что-то было.
+    Иначе «Отмена крепостного права» оставляла пару вовсе без названия: голова
+    пустая, всё остальное уходило в причину.
+
+    Пометка при этом остаётся: слово вырезается, пара считается отменённой, и
+    название выходит покалеченным. Это осознанный выбор в пользу безопасной
+    ошибки. Принять настоящую отмену за обычную пару — значит отправить
+    человека на занятие, которого нет; обратная ошибка стоит непонятной
+    строки в расписании. В нынешнем листе таких ячеек нет ни одной.
+    """
+    lesson = parse_lesson(1, "Отмена крепостного права (Лек)", "", "")
+    assert lesson is not None
+    assert lesson.subject == "крепостного права"
+    assert lesson.kind == "Лек"
+    assert lesson.cancelled is True
+    assert lesson.note is None
+
+
+def test_reason_after_the_subject_is_still_a_reason():
+    """А привычный порядок «предмет, отмена, причина» не тронут."""
+    lesson = parse_lesson(1, "Иностранный язык (Пр) Отмена Преподаватель заболел", "", "")
+    assert lesson is not None
+    assert lesson.subject == "Иностранный язык"
+    assert lesson.note == "Преподаватель заболел"

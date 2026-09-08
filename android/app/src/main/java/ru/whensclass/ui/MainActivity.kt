@@ -41,6 +41,7 @@ import ru.whensclass.AppContainer
 import ru.whensclass.data.AppUpdate
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
+import ru.whensclass.data.RefreshResult
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.notify.Notifications
@@ -213,6 +214,9 @@ private fun App(
     var checkingUpdate by remember { mutableStateOf(false) }
     var updateChecked by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
+    // Почему обновление не вышло. Раньше кнопка ставила галочку «Расписание
+    // обновлено» в любом случае, даже когда связи не было и данные прежние.
+    var refreshError by remember { mutableStateOf<String?>(null) }
     var installing by remember { mutableStateOf(false) }
     var focusUpdate by remember { mutableStateOf(openUpdate) }
     // Список преподавателей грузим один раз за запуск и держим здесь: если
@@ -490,6 +494,8 @@ private fun App(
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,
                         refreshing = refreshing,
+                        refreshError = refreshError,
+                        onErrorShown = { refreshError = null },
                         reloadKey = reloadKey,
                         onSettings = {
                             focusUpdate = false
