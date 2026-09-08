@@ -163,18 +163,26 @@ private fun Week(
     colors: Palette,
     modifier: GlanceModifier,
 ) {
-    val rows = remember(days) { rowsOf(days) }
+    val week = remember(days) { rowsOf(days) }
+    // Каждый день — свой контейнер. Плоским списком дни рисоваться не могут:
+    // разметка виджета собрана заранее и вмещает не больше десяти детей, всё
+    // сверх десятого молча пропадает. Так неделя обрывалась на середине
+    // четверга, и ни обновление, ни пересоздание виджета не помогали.
     Column(modifier = modifier) {
-        rows.forEach { row ->
-            when (row) {
-                is WeekRow.Title -> DayTitle(row, colors)
-                is WeekRow.Lesson -> LessonLine(row, bells, colors)
-                is WeekRow.Empty -> Text(
-                    "пар нет",
-                    maxLines = 1,
-                    style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                    modifier = GlanceModifier.padding(start = 4.dp, bottom = 4.dp),
-                )
+        week.forEach { day ->
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                day.forEach { row ->
+                    when (row) {
+                        is WeekRow.Title -> DayTitle(row, colors)
+                        is WeekRow.Lesson -> LessonLine(row, bells, colors)
+                        is WeekRow.Empty -> Text(
+                            "пар нет",
+                            maxLines = 1,
+                            style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                            modifier = GlanceModifier.padding(start = 4.dp, bottom = 4.dp),
+                        )
+                    }
+                }
             }
         }
     }
@@ -282,29 +290,29 @@ private sealed interface WeekRow {
     data class Empty(override val id: Long) : WeekRow
 }
 
-private fun rowsOf(days: List<DayDto>): List<WeekRow> {
+private fun rowsOf(days: List<DayDto>): List<List<WeekRow>> {
     val today = LocalDate.now()
-    val out = mutableListOf<WeekRow>()
+    val out = mutableListOf<List<WeekRow>>()
+    var id = 0L
     for (day in days) {
         val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
         // Прожитые дни в недельном виджете не показываем: места мало, а к
         // пятнице понедельник занимает верх экрана и вытесняет нужное.
         if (date.isBefore(today)) continue
-        val past = false
-        out += WeekRow.Title(
-            id = out.size.toLong(),
+        val rows = mutableListOf<WeekRow>()
+        rows += WeekRow.Title(
+            id = id++,
             date = date,
             title = formatWeekDay(date),
             isToday = date == today,
-            isPast = past,
+            isPast = false,
         )
         if (day.lessons.isEmpty()) {
-            out += WeekRow.Empty(out.size.toLong())
+            rows += WeekRow.Empty(id++)
         } else {
-            day.lessons.forEach { lesson ->
-                out += WeekRow.Lesson(out.size.toLong(), date, lesson, past)
-            }
+            day.lessons.forEach { lesson -> rows += WeekRow.Lesson(id++, date, lesson, false) }
         }
+        out += rows
     }
     return out
 }

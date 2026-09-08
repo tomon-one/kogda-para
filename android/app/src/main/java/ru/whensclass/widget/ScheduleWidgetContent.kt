@@ -274,8 +274,13 @@ private fun Lessons(
 
     Column(modifier = modifier) {
         shown.forEach { lesson ->
-            LessonRow(lesson, bells, isNow = lesson.number == current, fit, colors)
-            Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 4.dp))
+            // Пара и отступ под ней — одним контейнером: разметка виджета
+            // вмещает не больше десяти детей, и по два на пару их не хватало бы
+            // на длинный день.
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
+                LessonRow(lesson, bells, isNow = lesson.number == current, fit, colors)
+                Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 4.dp))
+            }
         }
         if (rest > 0) {
             val context = LocalContext.current

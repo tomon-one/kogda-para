@@ -70,7 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -310,7 +310,10 @@ private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
                 Icon(
                     Icons.Default.Refresh,
                     contentDescription = "Обновить расписание",
-                    modifier = Modifier.rotate(angle.value),
+                    // Поворот в фазе отрисовки. Через Modifier.rotate(angle.value)
+                    // значение читалось при сборке дерева, и каждый кадр
+                    // пересобирал экран целиком — отсюда рывки.
+                    modifier = Modifier.graphicsLayer { rotationZ = angle.value },
                 )
             }
         }
