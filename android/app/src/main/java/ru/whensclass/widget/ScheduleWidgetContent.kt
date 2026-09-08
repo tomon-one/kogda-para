@@ -158,7 +158,11 @@ private fun Header(
                 provider = ImageProvider(R.drawable.logo_ngok),
                 contentDescription = null,
                 colorFilter = ColorFilter.tint(colors.logo),
-                modifier = GlanceModifier.size(width = 26.dp, height = 14.dp),
+                // По логотипу тоже открывается приложение: он выглядит как
+                // кнопка, и нажимали на него именно с этим ожиданием.
+                modifier = GlanceModifier
+                    .size(width = 26.dp, height = 14.dp)
+                    .clickable(openApp),
             )
             Spacer(GlanceModifier.width(6.dp))
         }

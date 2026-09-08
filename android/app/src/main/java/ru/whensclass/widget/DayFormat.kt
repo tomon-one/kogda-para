@@ -29,6 +29,22 @@ fun formatDayTitleShort(day: LocalDate): String {
 fun formatWeekDay(day: LocalDate): String =
     day.format(DateTimeFormatter.ofPattern("EEE, d MMM", RU))
 
+/**
+ * Заголовок недельного виджета: «Неделя 7–12 сент.».
+ *
+ * Одного слова «Неделя» мало: на экране видны не все её дни, и какая именно это
+ * неделя — по ним не всегда понятно. Месяц пишем один раз, если неделя его не
+ * пересекает.
+ */
+fun formatWeekRange(from: LocalDate, to: LocalDate): String {
+    val month = DateTimeFormatter.ofPattern("MMM", RU)
+    return if (from.month == to.month) {
+        "Неделя ${from.dayOfMonth}–${to.dayOfMonth} ${to.format(month)}"
+    } else {
+        "Неделя ${from.dayOfMonth} ${from.format(month)} – ${to.dayOfMonth} ${to.format(month)}"
+    }
+}
+
 fun formatDayTitle(day: LocalDate): String {
     val today = LocalDate.now()
     // «Послезавтра» человек и так посчитает по дате, а вот «вчера» помогает:

@@ -4,10 +4,15 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.ImageProvider
+import androidx.glance.Image
+import androidx.glance.ColorFilter
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.currentState
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -25,6 +30,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
@@ -33,6 +39,7 @@ import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import java.time.LocalDate
 import ru.whensclass.AppContainer
+import ru.whensclass.R
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.LessonDto
 
@@ -61,7 +68,9 @@ class WeekWidget : GlanceAppWidget() {
                     .cornerRadius(16.dp)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
+                val days = schedule?.days.orEmpty()
                 Header(
+                    days,
                     state?.groupName,
                     state?.fetchedAt ?: 0L,
                     currentState(ScheduleWidget.KEY_BUSY) == true,
@@ -70,7 +79,6 @@ class WeekWidget : GlanceAppWidget() {
                 )
                 Spacer(GlanceModifier.height(6.dp))
 
-                val days = schedule?.days.orEmpty()
                 when {
                     state?.groupName == null ->
                         Hint("Откройте приложение и выберите свою группу", colors)
@@ -94,6 +102,7 @@ class WeekWidget : GlanceAppWidget() {
 
 @Composable
 private fun Header(
+    days: List<DayDto>,
     groupName: String?,
     fetchedAt: Long,
     busy: Boolean,
@@ -107,9 +116,19 @@ private fun Header(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Image(
+            provider = ImageProvider(R.drawable.logo_ngok),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(colors.logo),
+            modifier = GlanceModifier
+                .size(width = 26.dp, height = 14.dp)
+                .clickable(actionStartActivity(openDay(context, today))),
+        )
+        Spacer(GlanceModifier.width(6.dp))
+
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
-                "Неделя",
+                weekTitle(days),
                 maxLines = 1,
                 style = TextStyle(
                     fontSize = 15.sp,
@@ -164,12 +183,14 @@ private fun Week(
     modifier: GlanceModifier,
 ) {
     val week = remember(days) { rowsOf(days) }
+    val height = LocalSize.current.height
+    val fitted = remember(week, height) { fitWeek(week, height - HEADER_SPACE) }
+
     // Каждый день — свой контейнер. Плоским списком дни рисоваться не могут:
     // разметка виджета собрана заранее и вмещает не больше десяти детей, всё
-    // сверх десятого молча пропадает. Так неделя обрывалась на середине
-    // четверга, и ни обновление, ни пересоздание виджета не помогали.
+    // сверх десятого молча пропадает.
     Column(modifier = modifier) {
-        week.forEach { day ->
+        fitted.days.forEach { day ->
             Column(modifier = GlanceModifier.fillMaxWidth()) {
                 day.forEach { row ->
                     when (row) {
@@ -185,7 +206,77 @@ private fun Week(
                 }
             }
         }
+        if (fitted.hidden > 0) {
+            Text(
+                morePairs(fitted.hidden),
+                maxLines = 1,
+                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp)
+                    .clickable(actionStartActivity(openDay(LocalContext.current, LocalDate.now()))),
+            )
+        }
     }
+}
+
+/** «Неделя 7–12 сент.» по крайним дням расписания; без дат — просто «Неделя». */
+private fun weekTitle(days: List<DayDto>): String {
+    val dates = days.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+    val from = dates.minOrNull()
+    val to = dates.maxOrNull()
+    return if (from == null || to == null) "Неделя" else formatWeekRange(from, to)
+}
+
+/** Шапка с логотипом и группой плюс отступы — то, что списку не достаётся. */
+private val HEADER_SPACE = 70.dp
+
+/**
+ * Высота строки.
+ *
+ * Числа сняты с живого экрана, а не выведены из размеров шрифта: у виджета своя
+ * разметка, и посчитать её заранее нельзя. Если промахнуться вверх — список
+ * оборвётся раньше времени и оставит под собой пустоту; вниз — последнюю строку
+ * срежет нижним краем. Обе ошибки видны, поэтому и калибровали по снимку.
+ */
+private fun rowHeight(row: WeekRow): Dp = when (row) {
+    is WeekRow.Title -> 27.dp
+    is WeekRow.Lesson -> 22.dp
+    is WeekRow.Empty -> 20.dp
+}
+
+private class Fitted(val days: List<List<WeekRow>>, val hidden: Int)
+
+/**
+ * Что поместится, а что уйдёт в «ещё N пар».
+ *
+ * Заголовок дня, под которым не осталось ни одной строки, отбрасывается: день
+ * без содержимого выглядит обрывом, а не днём.
+ */
+private fun fitWeek(week: List<List<WeekRow>>, free: Dp): Fitted {
+    var used = 18.dp
+    var full = false
+    var hidden = 0
+    val out = mutableListOf<List<WeekRow>>()
+    for (day in week) {
+        val taken = mutableListOf<WeekRow>()
+        for (row in day) {
+            if (full) {
+                if (row is WeekRow.Lesson) hidden++
+                continue
+            }
+            val next = used + rowHeight(row)
+            if (next > free) {
+                full = true
+                if (row is WeekRow.Lesson) hidden++
+            } else {
+                used = next
+                taken += row
+            }
+        }
+        if (taken.size > 1) out += taken else taken.forEach { used -= rowHeight(it) }
+    }
+    return Fitted(out, hidden)
 }
 
 @Composable
