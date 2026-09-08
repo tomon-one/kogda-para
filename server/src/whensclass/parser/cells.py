@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 
 # Тип занятия таблица пишет в хвосте названия: «Информатика (Лек)».
 _KIND_RE = re.compile(r"\s*\(\s*([^()]{1,12}?)\s*\)\s*$")
+_KIND_ANY_RE = re.compile(r"\(\s*([^()]{1,12}?)\s*\)")
 
 # Заполняют руками, поэтому один и тот же тип встречается в разном регистре
 # («Лек», «лек», «ПР»). Приводим к одному написанию, чтобы виджет не показывал
@@ -30,6 +31,16 @@ _KNOWN_KINDS = {
 # в колонке аудитории («ОТМЕНА 279») и с причиной следом («Отмена
 # преподаватель заболел»). Ищем слово где угодно, но целиком.
 _CANCEL_RE = re.compile(r"\bотмена\b", re.IGNORECASE)
+
+# Ссылка на вебинар попадается и слитно с подписью: «онлайнhttps://...».
+_URL_RE = re.compile(r"https?://\S+")
+
+# Аудитория — это номер, иногда с буквой корпуса. Всё остальное после слова
+# «отмена» в той же колонке — причина, а не место.
+_ROOM_RE = re.compile(r"^\d{1,4}[а-яА-Я]?$")
+
+# Служебная заглушка колледжа вместо имени: не человек, в списке ей не место.
+_VACANCY_RE = re.compile(r"^вакансия\b", re.IGNORECASE)
 
 
 def normalize(raw: str | None) -> str:
@@ -70,13 +81,27 @@ def _extract_cancellation(text: str, tail: str) -> tuple[str, bool, str | None]:
         if head:
             kept.append(head)
         if rest:
-            (kept if tail == "keep" else note_parts).append(rest)
+            # В колонке аудитории хвост это обычно сам номер, но пишут туда и
+            # причину: «отмена, преподаватель заболел». Номер оставляем местом,
+            # остальное уводим в примечание — иначе приложение показывало
+            # «Где: преподаватель заболел».
+            room_like = tail == "keep" and bool(_ROOM_RE.match(rest))
+            (kept if room_like else note_parts).append(rest)
 
     note = " ".join(note_parts).strip() or None
     return "\n".join(kept).strip(), cancelled, note
 
 
 def _split_kind(subject: str) -> tuple[str, str | None]:
+    # Сначала ищем знакомый тип где угодно: в ячейках с припиской «Замена ...»
+    # он оказывается в середине, и хвостовой поиск его не находил — тип
+    # оставался сырым текстом внутри названия.
+    for m in _KIND_ANY_RE.finditer(subject):
+        kind = _KNOWN_KINDS.get(m.group(1).strip().casefold())
+        if kind:
+            rest = (subject[: m.start()] + " " + subject[m.end():]).strip()
+            return " ".join(rest.split()), kind
+
     m = _KIND_RE.search(subject)
     if not m:
         return subject.strip(), None
@@ -98,10 +123,13 @@ def split_teachers(text: str) -> tuple[str, ...]:
     """
     names: list[str] = []
     for line in text.splitlines():
-        for name in line.split("/"):
+        # Запятая наравне с косой чертой: «Быкова А. С., Фролова Д. А.» это
+        # два человека. Склеенные, они превращались в несуществующего
+        # преподавателя, а у настоящих пара пропадала из их расписания.
+        for name in re.split(r"[/,]", line):
             # Точку не трогаем: она часть инициалов — «Иванов И. И.».
             cleaned = " ".join(name.split()).strip(" ,;")
-            if cleaned:
+            if cleaned and not _VACANCY_RE.match(cleaned):
                 names.append(cleaned)
     return tuple(names)
 
@@ -114,7 +142,8 @@ def parse_lesson(
 ) -> Lesson | None:
     """Собирает пару из трёх ячеек. None, если пары нет."""
     subject, cancel_a, note = _extract_cancellation(normalize(subject_raw), tail="note")
-    room_text, cancel_b, _ = _extract_cancellation(normalize(room_raw), tail="keep")
+    room_text, cancel_b, room_note = _extract_cancellation(normalize(room_raw), tail="keep")
+    note = note or room_note
     teacher_text = normalize(teacher_raw)
 
     if not subject and not room_text and not teacher_text:
@@ -125,11 +154,25 @@ def parse_lesson(
     url = None
     room: str | None = None
     if room_text:
-        first = room_text.split("\n")[0].strip()
-        if first.lower().startswith(("http://", "https://")):
-            url = first
+        # Ссылку ищем где угодно в ячейке, а не только в начале: пишут и
+        # «онлайнhttps://...» слитно, и тогда весь адрес уезжал в аудиторию.
+        found = _URL_RE.search(room_text)
+        if found:
+            url = found.group(0)
         else:
             room = room_text.replace("\n", " ").strip()
+
+    if url is None:
+        # Иногда ссылку кладут в колонку предмета, и пара называлась адресом.
+        found = _URL_RE.search(subject)
+        if found:
+            url = found.group(0)
+            subject = " ".join(subject.replace(found.group(0), " ").split())
+
+    if not subject and url:
+        # В ячейке не было ничего, кроме ссылки. Пустое название выглядит
+        # поломкой, а выдумывать предмет нельзя — говорим то, что знаем точно.
+        subject = "Занятие онлайн"
 
     teachers = split_teachers(teacher_text)
 

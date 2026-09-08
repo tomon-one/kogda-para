@@ -5,7 +5,13 @@ import datetime as dt
 import pytest
 
 from whensclass.domain.models import SourceFormatChanged
-from whensclass.parser.csv_schedule import FIXTURE, parse_csv, read_csv
+from whensclass.parser.csv_schedule import (
+    FIXTURE,
+    _parse_date,
+    parse_csv,
+    parse_sheet,
+    read_csv,
+)
 from whensclass.parser.groups import build_column_map, find_header_rows, split_group_names
 
 
@@ -146,3 +152,64 @@ def test_merge_prefers_the_current_sheet(fixture_csv):
     merged = current.merged_with(other)
 
     assert merged.schedule[group.id][day] == current.schedule[group.id][day]
+
+
+# --- Находки аудита 8 сентября: два молчаливых искажения -------------------
+
+
+def test_broken_date_stops_the_parse(fixture_csv):
+    """Сломанная дата раньше приклеивала новый день к предыдущему.
+
+    Ячейка не узнавалась, текущий день не менялся, и пары нового дня уезжали
+    во вчера — с повторяющимися номерами и без единой жалобы.
+    """
+    rows = read_csv(fixture_csv)
+    for row in rows:
+        if row and row[0].strip().startswith("03.09.2026"):
+            row[0] = "32.13.2026 вторник"
+            break
+    else:
+        pytest.fail("в фикстуре не нашлось строки с датой 03.09.2026")
+
+    with pytest.raises(SourceFormatChanged, match="не разобралась"):
+        parse_sheet(rows, "фикстура", FIXTURE)
+
+
+@pytest.mark.parametrize("written", [
+    "02.09.2026 среда",
+    "2.09.2026 среда",
+    "02.09.2026, среда",
+    "02.09.2026",
+])
+def test_date_written_by_hand_is_still_understood(written):
+    """Дату пишут руками: запятая, пропущенный ноль, забытый день недели."""
+    assert _parse_date(written) == dt.date(2026, 9, 2)
+
+
+def test_repeated_header_with_shifted_columns_stops_the_parse(fixture_csv):
+    """Сдвиг колонок после повторного заголовка — худшее, что может случиться.
+
+    Раньше три строки такого заголовка пропускались вслепую, и группа молча
+    получала расписание соседа: ошибки нет, статус «ok», заметить нельзя.
+    """
+    rows = read_csv(fixture_csv)
+    groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
+    by_column = {g.column: g.name for g in groups}
+
+    for i, row in enumerate(rows):
+        columns = [c for c, v in enumerate(row) if (v or "").strip() == "Дисциплина"]
+        below = rows[i + 1] if i + 1 < len(rows) else []
+        names_row = rows[i + 2] if i + 2 < len(rows) else []
+        if not columns or not any(
+            (below[c] or "").strip() == "Преподаватель" for c in columns if c < len(below)
+        ):
+            continue
+        # Ставим в колонку имя чужой группы — ровно то, что делает сдвиг блока.
+        target = next(c for c in columns if c in by_column and c < len(names_row))
+        names_row[target] = "ЧУЖАЯ-999"
+        break
+    else:
+        pytest.skip("в фикстуре нет повторного заголовка «столбиком»")
+
+    with pytest.raises(SourceFormatChanged, match="повторный заголовок"):
+        parse_sheet(rows, "фикстура", FIXTURE)

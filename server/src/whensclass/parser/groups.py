@@ -116,6 +116,44 @@ def find_header_rows(
             if c < len(below)
         ):
             # Заголовок «столбиком»: Дисциплина / Преподаватель / имя группы.
+            _check_columnar(i, cells, rows[i + 2] if i + 2 < len(rows) else [], groups)
             skip.update({i, i + 1, i + 2})
 
     return skip
+
+
+def _check_columnar(
+    row_index: int, cells: set[int], names_row: list[str], groups: list[GroupRef]
+) -> None:
+    """Сверяет колонки повторного заголовка с главным.
+
+    Раньше три строки такого заголовка пропускались вслепую. Если ниже него
+    добавить хоть одну группу, весь хвост листа съезжает на блок — и разбор
+    проходит без единой ошибки, просто каждая группа получает расписание
+    соседа. Это худшее, что может случиться: приложение уверенно показывает
+    чужие пары, статус остаётся «ok», и заметить это можно только глазами.
+
+    Поэтому имена групп из третьей строки заголовка сверяются с картой колонок.
+    Разошлись — считаем формат изменившимся: упасть и остаться на прежнем
+    снимке лучше, чем отправить человека не в ту аудиторию.
+    """
+    by_column: dict[int, set[str]] = {}
+    for group in groups:
+        by_column.setdefault(group.column, set()).add(group.id)
+
+    for col in sorted(cells):
+        declared = split_group_names((names_row[col] if col < len(names_row) else "") or "")
+        if not declared:
+            # Имя не написали — сверять нечего, это не повод падать.
+            continue
+        known = by_column.get(col)
+        if known is None:
+            raise SourceFormatChanged(
+                f"повторный заголовок в строке {row_index} объявляет группу "
+                f"{declared} в колонке {col}, которой нет в главном заголовке"
+            )
+        if {group_id(name) for name in declared} != known:
+            raise SourceFormatChanged(
+                f"повторный заголовок в строке {row_index}: в колонке {col} "
+                f"стоит {declared}, а по главному заголовку там {sorted(known)}"
+            )

@@ -21,7 +21,13 @@ from .groups import build_column_map, find_header_rows
 
 log = logging.getLogger(__name__)
 
-_DATE_RE = re.compile(r"^(\d{2})\.(\d{2})\.(\d{4})\s+(\S+)")
+# Дату пишут руками, поэтому берём и «2.09.2026 среда», и «02.09.2026, среда»,
+# и запись без дня недели. День недели всё равно только сверяем, доверяя числу.
+_DATE_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*,?\s*(\S+)?")
+
+# Ячейка, которая начинается с чисел через точку, но датой не разобралась,
+# — это не «нет даты», а сломанная дата. Молчать про такое нельзя.
+_LOOKS_LIKE_DATE = re.compile(r"^\s*\d{1,2}\.\d{1,2}\.")
 _LESSON_NO_RE = re.compile(r"^([1-9])$")
 
 _WEEKDAYS = (
@@ -54,7 +60,19 @@ def _parse_date(cell: str) -> date | None:
     if not m:
         return None
     day, month, year, weekday = m.groups()
-    value = date(int(year), int(month), int(day))
+    number = int(year)
+    if number < 100:
+        # «02.09.26» тоже встречается: век дописываем сами.
+        number += 2000
+    try:
+        value = date(number, int(month), int(day))
+    except ValueError:
+        # Числа есть, а даты не выходит — «32.13.2026». Не наше дело гадать,
+        # что имелось в виду: пусть обход решает, что формат поехал.
+        return None
+    if weekday is None:
+        # День недели пишут не всегда. Он всё равно только сверка.
+        return value
     expected = _WEEKDAYS[value.weekday()]
     if weekday.lower() != expected:
         log.warning(
@@ -81,13 +99,25 @@ def parse_sheet(
 
     current: date | None = None
     seen_dates: list[date] = []
+    # Порядок дат, как они встретились, без дедупликации: она и прятала
+    # нарушение порядка. Дата, встреченная второй раз, в seen_dates не
+    # попадала, и проверка «даты идут по возрастанию» её не видела.
+    date_order: list[date] = []
 
     for i, row in enumerate(rows):
         if i in skip:
             continue
 
-        found = _parse_date(_cell(row, 0))
+        cell = _cell(row, 0)
+        found = _parse_date(cell)
+        if found is None and _LOOKS_LIKE_DATE.match(cell):
+            # Раньше такая ячейка просто не узнавалась: current оставался на
+            # прошлом дне, и весь новый день дописывался к предыдущему — с
+            # повторяющимися номерами пар и без единой жалобы.
+            raise SourceFormatChanged(f"дата в строке {i} не разобралась: {cell!r}")
         if found is not None:
+            if found != current:
+                date_order.append(found)
             current = found
             if current not in seen_dates:
                 seen_dates.append(current)
@@ -123,7 +153,7 @@ def parse_sheet(
             lessons.sort(key=lambda x: x.number)
 
     snapshot.dates = sorted(seen_dates)
-    _validate(snapshot, seen_dates, limits)
+    _validate(snapshot, date_order, limits)
     return snapshot
 
 
@@ -133,7 +163,7 @@ def _validate(snapshot: Snapshot, seen_order: list[date], limits: Limits) -> Non
         raise SourceFormatChanged(
             f"нашёл всего {len(snapshot.dates)} дней, ожидал не меньше {limits.min_dates}"
         )
-    if seen_order != sorted(seen_order):
+    if any(b <= a for a, b in zip(seen_order, seen_order[1:])):
         raise SourceFormatChanged(f"даты в листе идут не по возрастанию: {seen_order}")
     total = snapshot.total_lessons()
     if total < limits.min_lessons:
