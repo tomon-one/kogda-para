@@ -54,7 +54,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -303,19 +302,20 @@ private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
     }
 
     IconButton(onClick = onRefresh, enabled = !refreshing) {
-        Crossfade(targetState = done, label = "refresh") { showDone ->
-            if (showDone) {
-                Icon(Icons.Default.Check, contentDescription = "Расписание обновлено")
-            } else {
-                Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "Обновить расписание",
-                    // Поворот в фазе отрисовки. Через Modifier.rotate(angle.value)
-                    // значение читалось при сборке дерева, и каждый кадр
-                    // пересобирал экран целиком — отсюда рывки.
-                    modifier = Modifier.graphicsLayer { rotationZ = angle.value },
-                )
-            }
+        // Без Crossfade: он держит в дереве оба значка и заводит вторую анимацию
+        // поверх первой. На первых запусках, пока код ещё не прогрет, это и
+        // давало рывки у самой заметной анимации приложения.
+        if (done) {
+            Icon(Icons.Default.Check, contentDescription = "Расписание обновлено")
+        } else {
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = "Обновить расписание",
+                // Поворот в фазе отрисовки. Через Modifier.rotate(angle.value)
+                // значение читалось при сборке дерева, и каждый кадр пересобирал
+                // экран целиком.
+                modifier = Modifier.graphicsLayer { rotationZ = angle.value },
+            )
         }
     }
 }

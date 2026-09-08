@@ -200,7 +200,7 @@ private fun Week(
                             "пар нет",
                             maxLines = 1,
                             style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                            modifier = GlanceModifier.padding(start = 4.dp, bottom = 4.dp),
+                            modifier = GlanceModifier.padding(start = 4.dp, bottom = 2.dp),
                         )
                     }
                 }
@@ -240,10 +240,13 @@ private val HEADER_SPACE = 70.dp
  * срежет нижним краем. Обе ошибки видны, поэтому и калибровали по снимку.
  */
 private fun rowHeight(row: WeekRow): Dp = when (row) {
-    is WeekRow.Title -> 27.dp
-    is WeekRow.Lesson -> 22.dp
-    is WeekRow.Empty -> 20.dp
+    is WeekRow.Title -> 20.dp
+    is WeekRow.Lesson -> 17.dp
+    is WeekRow.Empty -> 16.dp
 }
+
+/** Строка «ещё N пар» под списком. */
+private val MORE_ROW = 16.dp
 
 private class Fitted(val days: List<List<WeekRow>>, val hidden: Int)
 
@@ -254,7 +257,14 @@ private class Fitted(val days: List<List<WeekRow>>, val hidden: Int)
  * без содержимого выглядит обрывом, а не днём.
  */
 private fun fitWeek(week: List<List<WeekRow>>, free: Dp): Fitted {
-    var used = 18.dp
+    // Сначала пробуем без места под «ещё N»: если неделя влезает целиком, эта
+    // строка не нужна, и незачем ради неё выбрасывать последнюю пару.
+    val whole = pack(week, free, reserve = 0.dp)
+    return if (whole.hidden == 0) whole else pack(week, free, reserve = MORE_ROW)
+}
+
+private fun pack(week: List<List<WeekRow>>, free: Dp, reserve: Dp): Fitted {
+    var used = reserve
     var full = false
     var hidden = 0
     val out = mutableListOf<List<WeekRow>>()
@@ -274,6 +284,7 @@ private fun fitWeek(week: List<List<WeekRow>>, free: Dp): Fitted {
                 taken += row
             }
         }
+        // Заголовок дня, под которым не осталось ни одной строки, — обрыв, а не день.
         if (taken.size > 1) out += taken else taken.forEach { used -= rowHeight(it) }
     }
     return Fitted(out, hidden)
@@ -298,7 +309,7 @@ private fun DayTitle(row: WeekRow.Title, colors: Palette) {
         ),
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 2.dp)
+            .padding(top = 3.dp, bottom = 1.dp)
             .clickable(actionStartActivity(openDay(context, row.date))),
     )
 }
@@ -312,7 +323,7 @@ private fun LessonLine(row: WeekRow.Lesson, bells: Map<String, List<String>>, co
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(bottom = 3.dp)
+            .padding(bottom = 2.dp)
             .clickable(actionStartActivity(openDay(context, row.date))),
         verticalAlignment = Alignment.Top,
     ) {
@@ -329,7 +340,7 @@ private fun LessonLine(row: WeekRow.Lesson, bells: Map<String, List<String>>, co
             lesson.subject,
             maxLines = 1,
             style = TextStyle(
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = if (dim) colors.textDim else colors.text,
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
             ),
