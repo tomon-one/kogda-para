@@ -202,5 +202,8 @@ private fun plural(n: Int, one: String, few: String, many: String): String {
     return "$n $word"
 }
 
+/** «6 пар», «2 пары», «1 пара» — счёт занятий по-русски. */
+fun pairsCount(count: Int): String = plural(count, "пара", "пары", "пар")
+
 /** «ещё 2 пары» — строка вместо тех занятий, что не поместились в виджет. */
 fun morePairs(count: Int): String = "ещё " + plural(count, "пара", "пары", "пар")

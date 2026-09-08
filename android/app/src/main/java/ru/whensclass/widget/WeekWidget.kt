@@ -182,40 +182,26 @@ private fun Week(
     colors: Palette,
     modifier: GlanceModifier,
 ) {
-    val week = remember(days) { rowsOf(days) }
+    val week = remember(days) { weekDays(days) }
     val height = LocalSize.current.height
-    val fitted = remember(week, height) { fitWeek(week, height - HEADER_SPACE) }
+    val open = remember(week, height) { openCount(week, height - HEADER_SPACE) }
 
     // Каждый день — свой контейнер. Плоским списком дни рисоваться не могут:
-    // разметка виджета собрана заранее и вмещает не больше десяти детей, всё
-    // сверх десятого молча пропадает.
+    // разметка виджета собрана заранее и вмещает не больше десяти детей.
     Column(modifier = modifier) {
-        fitted.days.forEach { day ->
-            Column(modifier = GlanceModifier.fillMaxWidth()) {
-                day.forEach { row ->
-                    when (row) {
-                        is WeekRow.Title -> DayTitle(row, colors)
-                        is WeekRow.Lesson -> LessonLine(row, bells, colors)
-                        is WeekRow.Empty -> Text(
-                            "пар нет",
-                            maxLines = 1,
-                            style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                            modifier = GlanceModifier.padding(start = 4.dp, bottom = 2.dp),
-                        )
+        week.forEachIndexed { index, day ->
+            if (index < open) {
+                Column(modifier = GlanceModifier.fillMaxWidth()) {
+                    DayTitle(day, colors)
+                    if (day.lessons.isEmpty()) {
+                        EmptyLine(colors)
+                    } else {
+                        day.lessons.forEach { LessonLine(day.date, it, bells, colors) }
                     }
                 }
+            } else {
+                DaySummary(day, bells, colors)
             }
-        }
-        if (fitted.hidden > 0) {
-            Text(
-                morePairs(fitted.hidden),
-                maxLines = 1,
-                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp)
-                    .clickable(actionStartActivity(openDay(LocalContext.current, LocalDate.now()))),
-            )
         }
     }
 }
@@ -232,99 +218,129 @@ private fun weekTitle(days: List<DayDto>): String {
 private val HEADER_SPACE = 62.dp
 
 /**
- * Высота строки.
+ * Высоты строк.
  *
- * Числа сняты с живого экрана, а не выведены из размеров шрифта: у виджета своя
- * разметка, и посчитать её заранее нельзя. Если промахнуться вверх — список
- * оборвётся раньше времени и оставит под собой пустоту; вниз — последнюю строку
- * срежет нижним краем. Обе ошибки видны, поэтому и калибровали по снимку.
+ * Сняты с живого экрана: разметку виджет собирает сам и о размерах не сообщает.
  */
-private fun rowHeight(row: WeekRow): Dp = when (row) {
-    is WeekRow.Title -> 21.dp
-    is WeekRow.Lesson -> 19.dp
-    is WeekRow.Empty -> 17.dp
-}
-
-/** Строка «ещё N пар» под списком. */
-private val MORE_ROW = 16.dp
-
-private class Fitted(val days: List<List<WeekRow>>, val hidden: Int)
+private val TITLE_ROW = 21.dp
+private val LESSON_ROW = 19.dp
+private val EMPTY_ROW = 17.dp
+private val SUMMARY_ROW = 21.dp
 
 /**
- * Что поместится, а что уйдёт в «ещё N пар».
+ * Сколько ближайших дней показать парами.
  *
- * Заголовок дня, под которым не осталось ни одной строки, отбрасывается: день
- * без содержимого выглядит обрывом, а не днём.
+ * Раньше дни рисовались подряд, пока не кончится высота, а остаток уходил в
+ * «ещё N пар». Для лёгкой недели это работало, для тяжёлой — нет: у самого
+ * загруженного преподавателя 31 пара за шесть дней, и он видел бы два дня из
+ * шести, не подозревая об остальных.
+ *
+ * Поэтому день не пропадает никогда: не хватило места на пары — остаётся строка
+ * со сводкой. Разворачиваются ближайшие дни: дальние всё равно уточняют в
+ * приложении.
  */
-private fun fitWeek(week: List<List<WeekRow>>, free: Dp): Fitted {
-    // Сначала пробуем без места под «ещё N»: если неделя влезает целиком, эта
-    // строка не нужна, и незачем ради неё выбрасывать последнюю пару.
-    val whole = pack(week, free, reserve = 0.dp)
-    return if (whole.hidden == 0) whole else pack(week, free, reserve = MORE_ROW)
+private fun openCount(week: List<WeekDay>, free: Dp): Int {
+    var used = SUMMARY_ROW * week.size
+    var count = 0
+    for (day in week) {
+        val grown = dayHeight(day) - SUMMARY_ROW
+        if (used + grown > free) break
+        used += grown
+        count++
+    }
+    return count
 }
 
-private fun pack(week: List<List<WeekRow>>, free: Dp, reserve: Dp): Fitted {
-    var used = reserve
-    var full = false
-    var hidden = 0
-    val out = mutableListOf<List<WeekRow>>()
-    for (day in week) {
-        val taken = mutableListOf<WeekRow>()
-        for (row in day) {
-            if (full) {
-                if (row is WeekRow.Lesson) hidden++
-                continue
-            }
-            val next = used + rowHeight(row)
-            if (next > free) {
-                full = true
-                if (row is WeekRow.Lesson) hidden++
-            } else {
-                used = next
-                taken += row
-            }
-        }
-        // Заголовок дня, под которым не осталось ни одной строки, — обрыв, а не день.
-        if (taken.size > 1) out += taken else taken.forEach { used -= rowHeight(it) }
-    }
-    return Fitted(out, hidden)
-}
+private fun dayHeight(day: WeekDay): Dp =
+    TITLE_ROW + if (day.lessons.isEmpty()) EMPTY_ROW else LESSON_ROW * day.lessons.size
 
 @Composable
-private fun DayTitle(row: WeekRow.Title, colors: Palette) {
+private fun DayTitle(day: WeekDay, colors: Palette) {
     val context = LocalContext.current
     Text(
-        row.title,
+        day.title,
         maxLines = 1,
         style = TextStyle(
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            // Сегодняшний день выделен цветом, прожитые — приглушены: неделя
-            // читается с одного взгляда, без поиска даты глазами.
-            color = when {
-                row.isToday -> colors.accent
-                row.isPast -> colors.textDim
-                else -> colors.text
-            },
+            // Сегодняшний день выделен цветом: неделя читается с одного взгляда,
+            // без поиска даты глазами.
+            color = if (day.isToday) colors.accent else colors.text,
         ),
         modifier = GlanceModifier
             .fillMaxWidth()
             .padding(top = 3.dp, bottom = 1.dp)
-            .clickable(actionStartActivity(openDay(context, row.date))),
+            .clickable(actionStartActivity(openDay(context, day.date))),
+    )
+}
+
+/** День, на пары которого не хватило высоты: сколько их и с какого по какое. */
+@Composable
+private fun DaySummary(day: WeekDay, bells: Map<String, List<String>>, colors: Palette) {
+    val context = LocalContext.current
+    Row(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .padding(top = 3.dp, bottom = 1.dp)
+            .clickable(actionStartActivity(openDay(context, day.date))),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            day.title,
+            maxLines = 1,
+            style = TextStyle(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (day.isToday) colors.accent else colors.text,
+            ),
+        )
+        Text(
+            if (day.lessons.isEmpty()) {
+                "  пар нет"
+            } else {
+                "  " + pairsCount(day.lessons.size) + (span(day, bells)?.let { " · $it" } ?: "")
+            },
+            maxLines = 1,
+            style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+            modifier = GlanceModifier.defaultWeight(),
+        )
+    }
+}
+
+/** «12:30–19:10»: от начала первой пары до конца последней. */
+private fun span(day: WeekDay, bells: Map<String, List<String>>): String? {
+    val first = day.lessons.minByOrNull { it.number } ?: return null
+    val last = day.lessons.maxByOrNull { it.number } ?: return null
+    val from = lessonStart(bells, first.number) ?: return null
+    val to = bells[last.number.toString()]?.getOrNull(1) ?: return null
+    return "$from–$to"
+}
+
+@Composable
+private fun EmptyLine(colors: Palette) {
+    Text(
+        "пар нет",
+        maxLines = 1,
+        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+        modifier = GlanceModifier.padding(start = 4.dp, bottom = 2.dp),
     )
 }
 
 @Composable
-private fun LessonLine(row: WeekRow.Lesson, bells: Map<String, List<String>>, colors: Palette) {
+private fun LessonLine(
+    date: LocalDate,
+    lesson: LessonDto,
+    bells: Map<String, List<String>>,
+    colors: Palette,
+) {
     val context = LocalContext.current
-    val lesson = row.lesson
-    val dim = row.isPast || lesson.isCancelled
+    val dim = lesson.isCancelled
 
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
             .padding(bottom = 2.dp)
-            .clickable(actionStartActivity(openDay(context, row.date))),
+            .clickable(actionStartActivity(openDay(context, date))),
         verticalAlignment = Alignment.Top,
     ) {
         Text(
@@ -371,50 +387,21 @@ private fun Hint(text: String, colors: Palette) {
 }
 
 /** Строка списка: заголовок дня, пара или отметка о пустом дне. */
-private sealed interface WeekRow {
-    val id: Long
+/** День недели в виджете: заголовок и пары, если они есть. */
+private class WeekDay(
+    val date: LocalDate,
+    val title: String,
+    val isToday: Boolean,
+    val lessons: List<LessonDto>,
+)
 
-    data class Title(
-        override val id: Long,
-        val date: LocalDate,
-        val title: String,
-        val isToday: Boolean,
-        val isPast: Boolean,
-    ) : WeekRow
-
-    data class Lesson(
-        override val id: Long,
-        val date: LocalDate,
-        val lesson: LessonDto,
-        val isPast: Boolean,
-    ) : WeekRow
-
-    data class Empty(override val id: Long) : WeekRow
-}
-
-private fun rowsOf(days: List<DayDto>): List<List<WeekRow>> {
+private fun weekDays(days: List<DayDto>): List<WeekDay> {
     val today = LocalDate.now()
-    val out = mutableListOf<List<WeekRow>>()
-    var id = 0L
-    for (day in days) {
-        val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
+    return days.mapNotNull { day ->
+        val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: return@mapNotNull null
         // Прожитые дни в недельном виджете не показываем: места мало, а к
         // пятнице понедельник занимает верх экрана и вытесняет нужное.
-        if (date.isBefore(today)) continue
-        val rows = mutableListOf<WeekRow>()
-        rows += WeekRow.Title(
-            id = id++,
-            date = date,
-            title = formatWeekDay(date),
-            isToday = date == today,
-            isPast = false,
-        )
-        if (day.lessons.isEmpty()) {
-            rows += WeekRow.Empty(id++)
-        } else {
-            day.lessons.forEach { lesson -> rows += WeekRow.Lesson(id++, date, lesson, false) }
-        }
-        out += rows
+        if (date.isBefore(today)) return@mapNotNull null
+        WeekDay(date, formatWeekDay(date), date == today, day.lessons)
     }
-    return out
 }
