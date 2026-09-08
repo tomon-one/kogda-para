@@ -21,8 +21,8 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт:
         // по нему приложение узнаёт о новой сборке на сервере.
-        versionCode = 50
-        versionName = "b-Небыль.0.6.5"
+        versionCode = 51
+        versionName = "b-Небыль.0.6.6"
     }
 
     signingConfigs {

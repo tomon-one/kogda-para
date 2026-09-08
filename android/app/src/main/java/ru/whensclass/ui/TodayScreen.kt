@@ -666,32 +666,21 @@ private fun Place(text: String, muted: Boolean = false) {
 
 
 /**
- * Ссылка на онлайн-занятие под названием предмета.
+ * Ссылка на онлайн-занятие: две кнопки и ничего больше.
  *
- * Показываем её целиком: так видно, куда она ведёт. Открыть нужно чаще, чем
- * скопировать, — поэтому «Открыть» стоит первой, но обе кнопки на виду:
- * ссылку иногда надо переслать, а не открыть.
+ * Сама ссылка строкой не показывается. Она всё равно не влезала и обрывалась
+ * после домена, а строка и ряд кнопок под ней делали идущую пару выше соседних
+ * почти в полтора раза. Что занятие онлайн, сказано строкой выше.
+ *
+ * Открыть нужно чаще, чем скопировать, поэтому «Открыть» стоит первой. Но обе
+ * на виду: ссылку иногда надо переслать, а не открыть.
  */
 @Composable
 private fun OnlineLink(url: String) {
     val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            url,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .clickable { openLink(context, url) }
-                .padding(vertical = 3.dp),
-        )
-        Row {
-            LinkButton("Открыть") { openLink(context, url) }
-            LinkButton("Копировать") { copyLink(context, url) }
-        }
+    Row(modifier = Modifier.fillMaxWidth()) {
+        LinkButton("Открыть") { openLink(context, url) }
+        LinkButton("Копировать") { copyLink(context, url) }
     }
 }
 
@@ -699,8 +688,10 @@ private fun OnlineLink(url: String) {
 private fun LinkButton(label: String, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
-        // Кнопки идут парой под ссылкой, поэтому поля у них поменьше обычных.
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+        // Кнопки идут парой внутри карточки, поэтому и поля, и высота у них
+        // меньше обычных: иначе пара с вебинаром распухает.
+        modifier = Modifier.height(34.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall)
     }
