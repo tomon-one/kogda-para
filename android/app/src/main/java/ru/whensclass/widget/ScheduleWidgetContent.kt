@@ -184,7 +184,7 @@ private fun Header(
                 // Время последней проверки — служебная мелочь, поэтому тем же
                 // приглушённым цветом; краснеет, только когда данные протухли.
                 Text(
-                    if (busy) " · обновляю…" else " · " + formatFetchedShort(fetchedAt) + " ⟳",
+                    if (busy) " · обновляю…" else " · " + formatFetchedShort(fetchedAt),
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
@@ -194,10 +194,11 @@ private fun Header(
                             else -> colors.textDim
                         },
                     ),
-                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )
             }
         }
+        RefreshButton(busy, colors)
+        Spacer(GlanceModifier.width(4.dp))
         ArrowButton("‹", step = -1, enabled = offset > firstDay, colors = colors)
         Spacer(GlanceModifier.width(4.dp))
         ArrowButton("›", step = 1, enabled = offset < lastDay, colors = colors)
@@ -255,19 +256,20 @@ private fun Lessons(
     // Обычный список, не ленивый. Ленивый прокручивался пальцем, но жил только
     // пока жив процесс приложения: система выгружала его — и виджет чернел
     // насовсем, не оживая ни обновлением, ни запуском приложения.
-    val rowHeight = if (fit.dense) 42.dp else 48.dp
-    val free = LocalSize.current.height - if (fit.dense) 56.dp else 70.dp
-    val fits = (free / rowHeight).toInt().coerceIn(1, lessons.size)
+    val rowHeight = if (fit.dense) 50.dp else 58.dp
+    // Шапка с группой и стрелками плюс строка «ещё N»: их место списку не
+    // достаётся. Раньше «ещё» отнимало строку у пары, и вместо двух занятий
+    // виджет показывал одно — хуже, чем не показать остаток вовсе.
+    val free = LocalSize.current.height - (if (fit.dense) 48.dp else 58.dp) - 16.dp
+    val fits = (free / rowHeight).toInt().coerceAtLeast(2).coerceAtMost(lessons.size)
     val start = windowStart(lessons, bells, day, fits)
-    // Последняя строка уходит под «ещё N», если всё не поместилось.
-    val room = if (lessons.size - start > fits && fits >= 2) fits - 1 else fits
-    val shown = lessons.subList(start, minOf(lessons.size, start + room))
+    val shown = lessons.subList(start, minOf(lessons.size, start + fits))
     val rest = lessons.size - start - shown.size
 
     Column(modifier = modifier) {
         shown.forEach { lesson ->
             LessonRow(lesson, bells, isNow = lesson.number == current, fit, colors)
-            Spacer(GlanceModifier.height(if (fit.dense) 4.dp else 6.dp))
+            Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 4.dp))
         }
         if (rest > 0) {
             val context = LocalContext.current
@@ -331,17 +333,17 @@ private fun LessonRow(
             .fillMaxWidth()
             .background(if (isNow) colors.nowSurface else colors.surface)
             .cornerRadius(10.dp)
-            .padding(horizontal = 8.dp, vertical = if (fit.dense) 4.dp else 6.dp),
+            .padding(horizontal = 8.dp, vertical = if (fit.dense) 3.dp else 4.dp),
         verticalAlignment = Alignment.Top,
     ) {
         // Ширины хватает на «09:00–10:30» одной строкой: время, переносимое
         // пополам, читается как опечатка. На узком виджете диапазон не влезает —
         // тогда показываем только начало пары.
-        Column(modifier = GlanceModifier.width(if (fit.narrow) 52.dp else 78.dp)) {
+        Column(modifier = GlanceModifier.width(if (fit.narrow) 48.dp else 72.dp)) {
             Text(
                 "${lesson.number} пара",
                 maxLines = 1,
-                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                style = TextStyle(fontSize = 10.sp, color = colors.textDim),
             )
             val time = if (fit.narrow) {
                 lessonStart(bells, lesson.number)
@@ -375,51 +377,61 @@ private fun LessonRow(
 
 @Composable
 private fun Details(lesson: LessonDto, colors: Palette) {
-    // Отдельной строкой и цветом основного текста: тип занятия и аудитория —
-    // то, ради чего в виджет и смотрят. Преподаватель уходит строкой ниже и
-    // приглушённым: его имя обычно и так известно.
-    val place = buildString {
-        kindName(lesson.kind)?.let { append(it) }
-        if (lesson.url != null) {
-            if (isNotEmpty()) append(" · ")
-            append("онлайн")
-        } else {
-            if (isNotEmpty()) append(" · ")
-            append(roomLabel(lesson.room) ?: "места нет")
-        }
+    // Одной строкой, а не тремя. Раньше тип, место и преподаватель занимали по
+    // строке каждый, пара выходила в четыре строки высотой, и в виджет помещалась
+    // одна — при том что смотрят в него ради двух ближайших.
+    val parts = buildList {
+        if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
+        kindName(lesson.kind)?.let { add(it) }
+        add(if (lesson.url != null) "онлайн" else roomLabel(lesson.room) ?: "места нет")
+        // В расписании преподавателя вместо его имени — группы, которым читается
+        // пара: сам он и так знает, кто ведёт.
+        (lesson.groups ?: lesson.teachers.firstOrNull()?.let(::shortenName))?.let { add(it) }
     }
+    if (parts.isEmpty()) return
 
-    if (place.isNotEmpty()) {
-        val row = GlanceModifier.fillMaxWidth()
-        Text(
-            if (lesson.url != null) "$place  ⧉" else place,
-            maxLines = 1,
-            style = TextStyle(
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (lesson.url != null) colors.accent else colors.text,
-            ),
-            modifier = lesson.url?.let { url ->
-                val context = LocalContext.current
-                row.clickable(actionStartActivity(CopyLinkActivity.intent(context, url)))
-            } ?: row,
-        )
-    }
+    val line = GlanceModifier.fillMaxWidth()
+    Text(
+        if (lesson.url != null) parts.joinToString(" · ") + "  ⧉" else parts.joinToString(" · "),
+        maxLines = 1,
+        style = TextStyle(
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = when {
+                lesson.isCancelled -> colors.error
+                lesson.url != null -> colors.accent
+                else -> colors.text
+            },
+        ),
+        modifier = lesson.url?.let { url ->
+            val context = LocalContext.current
+            line.clickable(actionStartActivity(CopyLinkActivity.intent(context, url)))
+        } ?: line,
+    )
+}
 
-    // В расписании преподавателя вместо его имени — группы, которым читается
-    // пара: сам он и так знает, кто ведёт.
-    val who = lesson.groups ?: lesson.teachers.firstOrNull()?.let(::shortenName)
-    who?.let {
-        Text(it, maxLines = 1, style = TextStyle(fontSize = 11.sp, color = colors.textDim))
-    }
-
-    if (lesson.isCancelled) {
-        Text(
-            lesson.note?.let { "отменена — $it" } ?: "отменена",
-            maxLines = 1,
-            style = TextStyle(fontSize = 11.sp, color = colors.error),
-        )
-    }
+/**
+ * Кнопка обновления.
+ *
+ * Была значком ⟳ внутри служебной строки — её не находили глазами. Теперь это
+ * такая же площадка, как стрелки листания, и пока идёт запрос она показывает
+ * многоточие: анимации виджет не умеет, а обратная связь нужна.
+ */
+@Composable
+internal fun RefreshButton(busy: Boolean, colors: Palette) {
+    Text(
+        if (busy) "•••" else "⟳",
+        maxLines = 1,
+        style = TextStyle(
+            fontSize = 15.sp,
+            color = if (busy) colors.accent else colors.text,
+        ),
+        modifier = GlanceModifier
+            .background(colors.button)
+            .cornerRadius(8.dp)
+            .clickable(actionRunCallback<RefreshAction>())
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }
 
 @Composable

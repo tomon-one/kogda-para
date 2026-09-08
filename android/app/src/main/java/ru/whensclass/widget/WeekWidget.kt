@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
+import androidx.glance.currentState
 import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -62,7 +63,12 @@ class WeekWidget : GlanceAppWidget() {
                     .cornerRadius(16.dp)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
-                Header(state?.groupName, state?.fetchedAt ?: 0L, colors)
+                Header(
+                    state?.groupName,
+                    state?.fetchedAt ?: 0L,
+                    currentState(ScheduleWidget.KEY_BUSY) == true,
+                    colors,
+                )
                 Spacer(GlanceModifier.height(6.dp))
 
                 val days = schedule?.days.orEmpty()
@@ -88,7 +94,7 @@ class WeekWidget : GlanceAppWidget() {
 }
 
 @Composable
-private fun Header(groupName: String?, fetchedAt: Long, colors: Palette) {
+private fun Header(groupName: String?, fetchedAt: Long, busy: Boolean, colors: Palette) {
     val context = LocalContext.current
     val today = LocalDate.now()
 
@@ -118,14 +124,19 @@ private fun Header(groupName: String?, fetchedAt: Long, colors: Palette) {
             }
         }
         Text(
-            formatFetchedShort(fetchedAt) + " ⟳",
+            if (busy) "обновляю…" else formatFetchedShort(fetchedAt),
             maxLines = 1,
             style = TextStyle(
                 fontSize = 11.sp,
-                color = if (isStale(fetchedAt)) colors.error else colors.textDim,
+                color = when {
+                    busy -> colors.accent
+                    isStale(fetchedAt) -> colors.error
+                    else -> colors.textDim
+                },
             ),
-            modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
         )
+        Spacer(GlanceModifier.width(6.dp))
+        RefreshButton(busy, colors)
     }
 }
 
@@ -178,13 +189,19 @@ private fun Week(
 }
 
 /** Шапка со строкой группы и отступы — то, что списку не достаётся. */
-private val HEADER_SPACE = 66.dp
+private val HEADER_SPACE = 46.dp
 
-/** Высота строки на глаз: точной разметки виджет не сообщает. */
+/**
+ * Высота строки на глаз: точной разметки виджет не сообщает.
+ *
+ * Числа занижены намеренно. Ошибка вверх обрывает список раньше времени и
+ * оставляет под ним пустоту — это видно и злит; ошибка вниз лишь прижимает
+ * последнюю строку к краю.
+ */
 private fun rowHeight(row: WeekRow): Dp = when (row) {
-    is WeekRow.Title -> 24.dp
-    is WeekRow.Lesson -> 21.dp
-    is WeekRow.Empty -> 19.dp
+    is WeekRow.Title -> 20.dp
+    is WeekRow.Lesson -> 18.dp
+    is WeekRow.Empty -> 16.dp
 }
 
 /**
@@ -195,7 +212,7 @@ private fun rowHeight(row: WeekRow): Dp = when (row) {
  * одной пары, отбрасывается: день без содержимого выглядит обрывом.
  */
 private fun fitRows(rows: List<WeekRow>, free: Dp): List<WeekRow> {
-    var used = 20.dp
+    var used = 14.dp
     var count = 0
     for (row in rows) {
         val next = used + rowHeight(row)

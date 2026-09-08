@@ -24,10 +24,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
@@ -102,13 +105,20 @@ private val DarkScheme = darkColorScheme(
     error = BRAND_LIGHT,
 )
 
+/**
+ * Светлая схема: серый лист, белые карточки.
+ *
+ * Было наоборот — белый фон и сероватые карточки, да ещё с синевой в сером.
+ * Карточка почти сливалась с фоном, а холодный серый читался как грязь.
+ * Здесь серые нейтральные, без примеси, и карточка отделена от листа.
+ */
 private val LightScheme = lightColorScheme(
-    background = Color(0xFFFFFFFF),
-    onBackground = Color(0xFF16181B),
-    surface = Color(0xFFF7F8FA),
-    onSurface = Color(0xFF16181B),
-    surfaceVariant = Color(0xFFECEEF1),
-    onSurfaceVariant = Color(0xFF5C6672),
+    background = Color(0xFFF1F2F4),
+    onBackground = Color(0xFF15171A),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF15171A),
+    surfaceVariant = Color(0xFFE7E8EA),
+    onSurfaceVariant = Color(0xFF5E6266),
     primary = BRAND,
     onPrimary = Color(0xFFFFFFFF),
     error = BRAND,
@@ -195,6 +205,18 @@ private fun App(
         ThemeChoice.DARK -> true
         ThemeChoice.LIGHT -> false
         ThemeChoice.SYSTEM -> isSystemInDarkTheme()
+    }
+
+    // Тема выбирается внутри приложения, а значки системной полосы — снаружи.
+    // Без этой связки светлая тема при тёмной системе оставляла белые часы и
+    // заряд на белом фоне: полоса выглядела пустой.
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as android.app.Activity).window
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
     }
 
     MaterialTheme(colorScheme = if (dark) DarkScheme else LightScheme) {
