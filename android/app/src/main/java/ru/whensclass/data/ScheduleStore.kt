@@ -229,6 +229,7 @@ class ScheduleStore(private val context: Context) {
             groupName = if (teacher) prefs[KEY_TEACHER_NAME] else prefs[KEY_GROUP_NAME],
             scheduleJson = prefs[KEY_SCHEDULE],
             serverBroken = (prefs[KEY_SERVER_STATUS] ?: "ok") != "ok",
+            sourceUrl = prefs[KEY_SOURCE_URL],
             fetchedAt = prefs[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L,
             theme = prefs[KEY_THEME] ?: "system",
         )
@@ -357,6 +358,8 @@ class ScheduleStore(private val context: Context) {
         val scheduleJson: String?,
         /** Сервер сам признал, что расписание у него не обновилось. */
         val serverBroken: Boolean = false,
+        /** Адрес таблицы колледжа: куда уйти, когда дня у нас нет. */
+        val sourceUrl: String? = null,
         val fetchedAt: Long,
         val theme: String,
     )

@@ -7,6 +7,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import android.content.Intent
+import android.net.Uri
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.appwidget.action.actionRunCallback
@@ -57,6 +58,7 @@ fun ScheduleWidgetContent(
     done: Boolean = false,
     failed: Boolean = false,
     serverBroken: Boolean = false,
+    sourceUrl: String? = null,
     modifier: GlanceModifier = GlanceModifier,
 ) {
     val size = LocalSize.current
@@ -91,8 +93,10 @@ fun ScheduleWidgetContent(
         when {
             groupName == null -> Hint("Откройте приложение и выберите свою группу", colors)
             schedule == null -> Hint("Расписание ещё не загружено", colors)
-            today == null ->
-                Hint(missingDay(schedule, day, fetchedAt, serverBroken), colors)
+            today == null -> {
+                val missing = missingDay(schedule, day, fetchedAt, serverBroken)
+                Hint(missing.text, colors, if (missing.toSource) sourceUrl else null)
+            }
             today.lessons.isEmpty() -> Hint("Пар нет", colors)
             else -> Lessons(
                 today.lessons,
@@ -332,24 +336,28 @@ private fun Lessons(
  * Воскресенье внутри опубликованного листа объявлялось неопубликованным, а
  * недельной давности данные — тоже.
  */
+private data class Missing(val text: String, val toSource: Boolean = false)
+
 private fun missingDay(
     schedule: ScheduleDto,
     day: LocalDate,
     fetchedAt: Long,
     serverBroken: Boolean,
-): String {
+): Missing {
     val covered = schedule.coverage.size == 2 && runCatching {
         !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
             !day.isAfter(LocalDate.parse(schedule.coverage[1]))
     }.getOrDefault(false)
     return when {
-        covered -> "Выходной: пар в этот день нет"
-        isStale(fetchedAt) -> "Данные устарели. Нажмите на время в шапке"
+        covered -> Missing("Выходной: пар в этот день нет")
+        isStale(fetchedAt) -> Missing("Данные устарели. Нажмите на время в шапке")
         // Пустой день и наша поломка выглядели одинаково, и человек
         // спокойно ждал расписания, которого мы уже не принесём.
-        serverBroken -> "Сбой у нас: расписание не обновляется. " +
-            "Смотрите таблицу колледжа"
-        else -> "Расписание на этот день ещё не опубликовано"
+        serverBroken -> Missing("Сбой у нас: расписание не обновляется", toSource = true)
+        // Единственное объяснение, которое приложение проверить не может:
+        // ровно так же выглядит наш собственный промах с поиском листа.
+        // Поэтому спорить о виновнике незачем — надо дать выход к таблице.
+        else -> Missing("Расписание на этот день ещё не опубликовано", toSource = true)
     }
 }
 
@@ -493,7 +501,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
 }
 
 @Composable
-private fun Hint(text: String, colors: Palette) {
+private fun Hint(text: String, colors: Palette, sourceUrl: String? = null) {
     Column(
         modifier = GlanceModifier
             .fillMaxWidth()
@@ -504,9 +512,26 @@ private fun Hint(text: String, colors: Palette) {
             style = TextStyle(fontSize = 13.sp, color = colors.textDim),
             modifier = GlanceModifier.padding(vertical = 8.dp),
         )
-        Text(
-            "нажмите, чтобы обновить",
-            style = TextStyle(fontSize = 11.sp, color = colors.accent),
-        )
+        if (sourceUrl == null) {
+            Text(
+                "нажмите, чтобы обновить",
+                style = TextStyle(fontSize = 11.sp, color = colors.accent),
+            )
+        } else {
+            // Второй строкой ровно одна подсказка, а не две: обновление
+            // здесь уже ничего не изменит — сервер сказал всё, что знает.
+            // На узком виджете третья строка к тому же не поместилась бы.
+            Text(
+                "открыть таблицу колледжа",
+                style = TextStyle(fontSize = 11.sp, color = colors.accent),
+                modifier = GlanceModifier
+                    .clickable(actionStartActivity(openSource(sourceUrl))),
+            )
+        }
     }
 }
+
+/** Таблица колледжа в браузере: первоисточник, когда дня у нас нет. */
+private fun openSource(url: String): Intent =
+    Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

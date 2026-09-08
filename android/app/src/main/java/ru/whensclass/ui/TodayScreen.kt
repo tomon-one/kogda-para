@@ -306,7 +306,9 @@ fun TodayScreen(
             Explanation(
                 title = "На эти дни расписания нет",
                 text = "Колледж выкладывает его на неделю-полторы вперёд. " +
-                    "Загляните позже или проверьте обновление вверху.",
+                    "Но если пары сегодня идут, значит расписание застряло " +
+                    "у нас — тогда смотрите первоисточник.",
+                sourceUrl = sourceUrl,
             )
             return@Column
         }
@@ -439,7 +441,8 @@ private fun ScheduleTabs(current: Tab, teacherMode: Boolean, onPick: (Tab) -> Un
  * показывать нечего, приложение говорит почему.
  */
 @Composable
-private fun Explanation(title: String, text: String) {
+private fun Explanation(title: String, text: String, sourceUrl: String? = null) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -457,6 +460,14 @@ private fun Explanation(title: String, text: String) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp),
         )
+        // Кто виноват — колледж не выложил или мы не нашли лист — отсюда
+        // не видно. Зато видно, где лежит ответ.
+        sourceUrl?.let { url ->
+            ActionButton(
+                label = "Открыть таблицу колледжа",
+                onClick = { openLink(context, url) },
+            )
+        }
     }
 }
 
