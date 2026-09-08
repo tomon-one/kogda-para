@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import pathlib
+import zoneinfo
 
 from ..config import settings
 from ..domain.models import SourceFormatChanged
@@ -20,6 +21,16 @@ from . import alerts
 from ..storage.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
+
+
+def _today() -> dt.date:
+    """Сегодня по часовому поясу колледжа, а не по поясу машины.
+
+    WHENSCLASS_TIMEZONE управлял только планировщиком, а вся арифметика дат шла
+    через date.today(). На сервере в UTC ночная переиндексация в 03:30 по
+    Новосибирску считала вчерашнюю дату и искала лист на вчера.
+    """
+    return dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone)).date()
 
 
 class Refresher:
@@ -34,7 +45,7 @@ class Refresher:
 
     def refresh(self, today: dt.date | None = None, force: bool = False) -> bool:
         """Перечитывает таблицу. True, если снимок обновился."""
-        today = today or dt.date.today()
+        today = today or _today()
         self.checked_at = dt.datetime.now(dt.timezone.utc)
         try:
             if self._sheets is None or force:
@@ -51,9 +62,15 @@ class Refresher:
                     etag=None if force else self._source_etags.get(title),
                 )
                 if text is None:
-                    # Google ответил 304: этот лист не менялся.
+                    # Google ответил 304: этот лист не менялся. Но снимок
+                    # собирается из всех листов окна, и без прежнего содержимого
+                    # он получился бы только из изменившегося: покрытие
+                    # схлопнулось бы на одну неделю, а сегодняшний день пропал.
+                    # Поэтому перечитываем его без условного запроса.
+                    text, etag = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
                     unchanged += 1
-                    continue
+                    if text is None:
+                        continue
                 self._source_etags[title] = etag
                 current = parse_csv(text, title or f"gid {gid}")
                 snapshot = current if snapshot is None else snapshot.merged_with(current)

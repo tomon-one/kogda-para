@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import zoneinfo
 import json
 
 from fastapi import APIRouter, Query, Request, Response
@@ -26,6 +27,11 @@ from .payloads import (
 )
 
 router = APIRouter()
+
+
+def _today() -> dt.date:
+    """Сегодня по часовому поясу колледжа: сервер может жить в UTC."""
+    return dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone)).date()
 
 JSON = "application/json; charset=utf-8"
 CACHE = "public, max-age=300, stale-while-revalidate=3600"
@@ -130,7 +136,7 @@ def teacher(
         store.snapshot,
         store.teachers,
         teacher_id,
-        start or dt.date.today(),
+        start or _today(),
         days,
         store.generated,
         bells=load_bells() or None,
@@ -156,7 +162,7 @@ def schedule(
     body = schedule_payload(
         store.snapshot,
         group_id,
-        start or dt.date.today(),
+        start or _today(),
         days,
         store.generated,
         bells=load_bells() or None,

@@ -98,14 +98,44 @@ class SheetIndex:
         return None
 
 
+def _hide_key(error: object) -> str:
+    """Прячет ключ API в тексте ошибки.
+
+    httpx кладёт в исключение полный адрес запроса вместе с ?key=..., а ключ
+    держат в файле с правами 600 именно для того, чтобы он не разошёлся по
+    машине. В журнал он попадал открытым текстом при первой же ошибке Google.
+    """
+    return re.sub(r"key=[^&\s]+", "key=***", str(error))
+
+
+# Выгрузка всей книги весит около двадцати мегабайт и занимает секунд двадцать.
+# Пока лист на сегодня не находится, resolve_for зовётся при каждом заходе
+# планировщика, то есть каждые двадцать минут: это гигабайт в сутки к Google с
+# одного адреса и полсотни длинных блокировок потока. Комментарии рядом обещали
+# «раз в сутки» — теперь это правда и для случая, когда лист не нашёлся.
+_XLSX_COOLDOWN = dt.timedelta(hours=6)
+_last_xlsx: dt.datetime | None = None
+_cached_sheets: list[SheetInfo] = []
+
+
 def list_sheets() -> list[SheetInfo]:
     """Список листов: через API, если есть ключ, иначе через выгрузку xlsx."""
+    global _last_xlsx, _cached_sheets
+
     if settings.sheets_api_key:
         try:
             return gsheets.list_sheets_via_api(settings.sheets_api_key)
         except Exception as exc:  # ключ протух, квота, сеть
-            log.warning("Sheets API не ответил (%s), иду через xlsx", exc)
-    return gsheets.list_sheets_via_xlsx()
+            log.warning("Sheets API не ответил (%s), иду через xlsx", _hide_key(exc))
+
+    now = dt.datetime.now(dt.timezone.utc)
+    if _cached_sheets and _last_xlsx and now - _last_xlsx < _XLSX_COOLDOWN:
+        log.info("список листов беру из памяти: книгу выгружали %s", _last_xlsx)
+        return _cached_sheets
+
+    sheets = gsheets.list_sheets_via_xlsx()
+    _last_xlsx, _cached_sheets = now, sheets
+    return sheets
 
 
 def candidates(sheets: list[SheetInfo], day: dt.date) -> list[SheetInfo]:
@@ -192,6 +222,12 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
         return remembered
 
     for sheet in candidates(list_sheets(), day):
+        if sheet.gid is None and sheet.title_may_be_truncated:
+            # Имя ровно в 31 символ — признак того, что xlsx его обрезал. По
+            # обрезанному имени gviz отдаёт не наш лист, а первую вкладку книги,
+            # причём с кодом 200: отличить успех от промаха нельзя.
+            log.info("имя листа %r обрезано, пропускаю: gviz по нему врёт", sheet.title)
+            continue
         try:
             text, _ = gsheets.fetch_sheet_csv(gid=sheet.gid, title=sheet.title)
             if text is None:
