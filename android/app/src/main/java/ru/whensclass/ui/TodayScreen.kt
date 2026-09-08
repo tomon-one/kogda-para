@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.offset
@@ -692,6 +693,9 @@ private fun LinkButton(label: String, onClick: () -> Unit) {
         // меньше обычных: иначе пара с вебинаром распухает.
         modifier = Modifier.height(34.dp),
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+        // Тонкая рамка: без неё текст кнопки неотличим от подписи рядом, и
+        // непонятно, куда именно нажимать.
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall)
     }
