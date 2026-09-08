@@ -1,8 +1,12 @@
 package ru.whensclass.ui
 
 import android.os.Bundle
+import android.os.Build
+import android.Manifest
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -38,6 +42,7 @@ import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.notify.LessonAlarms
+import ru.whensclass.notify.Notifications
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.WeekWidget
@@ -51,8 +56,13 @@ class MainActivity : ComponentActivity() {
     // переключатель остаётся выключенным сразу после того, как его включили.
     private val exactAlarms = mutableStateOf(false)
 
+    // Разрешение на сами уведомления. Его тоже могут выдать и отобрать в
+    // настройках телефона, поэтому перечитываем при каждом возвращении.
+    private val notifications = mutableStateOf(true)
+
     override fun onResume() {
         super.onResume()
+        notifications.value = Notifications.allowed(this)
         val allowed = LessonAlarms.exactAllowed(this)
         if (allowed != exactAlarms.value) {
             exactAlarms.value = allowed
@@ -71,7 +81,14 @@ class MainActivity : ComponentActivity() {
         // новой версии — сразу настройки с кнопкой установки.
         val day = intent?.getStringExtra(EXTRA_DAY)
         val update = intent?.getBooleanExtra(EXTRA_UPDATE, false) == true
-        setContent { App(startDay = day, openUpdate = update, exactAlarms = exactAlarms.value) }
+        setContent {
+            App(
+                startDay = day,
+                openUpdate = update,
+                exactAlarms = exactAlarms.value,
+                notifications = notifications.value,
+            )
+        }
     }
 
     companion object {
@@ -129,10 +146,25 @@ private fun App(
     startDay: String? = null,
     openUpdate: Boolean = false,
     exactAlarms: Boolean = false,
+    notifications: Boolean = true,
 ) {
     val context = LocalContext.current
     val container = remember { AppContainer.get(context) }
     val scope = rememberCoroutineScope()
+
+    // Разрешение на уведомления спрашиваем сами. С Android 13 оно не выдаётся
+    // по умолчанию, а targetSdk 37 означает, что система и не спросит: раньше
+    // спрашивать было некому, и на свежем телефоне молчали разом напоминания о
+    // паре, сообщения об отменах и о новых версиях. Отказ ничего не ломает —
+    // в настройках останется подсказка, как выдать разрешение позже.
+    val askNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifications) {
+            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val groupName by container.store.groupName.collectAsState(initial = null)
     val secondGroupName by container.store.secondGroupName.collectAsState(initial = null)
@@ -326,6 +358,7 @@ private fun App(
                         notifyChanges = notifyChanges,
                         notifyUpdates = notifyUpdates,
                         exactAlarms = exactAlarms,
+                        notifications = notifications,
                         onNotifyBefore = { minutes ->
                             scope.launch {
                                 container.store.setNotifyBefore(minutes)

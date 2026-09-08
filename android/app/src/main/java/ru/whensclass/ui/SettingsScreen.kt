@@ -77,6 +77,7 @@ fun SettingsScreen(
     notifyChanges: Boolean,
     notifyUpdates: Boolean,
     exactAlarms: Boolean,
+    notifications: Boolean,
     onNotifyBefore: (Int) -> Unit,
     onNotifyEnabled: (Boolean) -> Unit,
     onNotifyChanges: (Boolean) -> Unit,
@@ -173,6 +174,7 @@ fun SettingsScreen(
         }
 
         Section("Уведомления") {
+            NotificationsDenied(notifications)
             Row(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -542,4 +544,40 @@ private fun ExactAlarms(allowed: Boolean) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/**
+ * Подсказка, когда уведомления запрещены системой.
+ *
+ * Без разрешения не приходит ни одно уведомление, а переключатели ниже при этом
+ * выглядят рабочими: человек включает напоминание о паре и не понимает, почему
+ * его нет. Спрашиваем разрешение при первом запуске, но отказ надо пережить —
+ * значит нужен путь назад.
+ */
+@Composable
+private fun NotificationsDenied(allowed: Boolean) {
+    if (allowed) return
+    val context = LocalContext.current
+    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+        Text(
+            "Уведомления запрещены",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.error,
+        )
+        Text(
+            "Пока разрешение не выдано, не придёт ни одно из уведомлений ниже.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ActionButton(
+            label = "Разрешить",
+            onClick = {
+                context.startActivity(
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            },
+        )
+    }
 }

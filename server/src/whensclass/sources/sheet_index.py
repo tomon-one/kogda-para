@@ -58,6 +58,34 @@ class SheetIndex:
         }
         self.save()
 
+    def nearest(self, day: dt.date) -> tuple[str, str | None] | None:
+        """Ближайший по датам лист, когда день не покрыт ни одним.
+
+        Воскресений в листах колледжа нет, поэтому день между двумя листами не
+        покрыт ничем: старый кончился в субботу, новый начнётся в понедельник.
+        Раньше это роняло поиск, служба уходила в stale на все сутки и отдавала
+        пустую неделю — при том что новый лист уже был опубликован и найден.
+
+        Ближайший лист лучше пустоты, и будущий предпочтительнее прошедшего:
+        в воскресенье человек смотрит на неделю, которая начнётся завтра.
+        """
+        best = None
+        for title, info in self.known.items():
+            try:
+                first = dt.date.fromisoformat(info["from"])
+                last = dt.date.fromisoformat(info["to"])
+            except (KeyError, ValueError):
+                continue
+            if day < first:
+                key = (0, (first - day).days)
+            elif day > last:
+                key = (1, (day - last).days)
+            else:
+                key = (0, 0)
+            if best is None or key < best[0]:
+                best = (key, (title, info.get("gid")))
+        return best[1] if best else None
+
     def covering(self, day: dt.date) -> tuple[str, str | None] | None:
         for title, info in self.known.items():
             try:
@@ -182,5 +210,15 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
         index.remember(sheet.title, sheet.gid, *coverage)
         if coverage[0] <= day <= coverage[1]:
             return sheet.title, sheet.gid
+
+    # Ни один лист не покрывает день. Это не обязательно поломка: между листами
+    # есть воскресенье, которого нет ни в одном из них.
+    fallback = index.nearest(day)
+    if fallback:
+        log.info(
+            "лист на %s не нашёлся, беру ближайший: %r",
+            day.isoformat(), fallback[0],
+        )
+        return fallback
 
     raise LookupError(f"не нашёл лист, покрывающий {day.isoformat()}")
