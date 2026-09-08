@@ -3,19 +3,19 @@ package ru.whensclass.widget
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -132,9 +132,10 @@ private fun Header(groupName: String?, fetchedAt: Long, colors: Palette) {
 /**
  * Неделя одним списком.
  *
- * Дни и пары идут вперемешку в одном ленивом списке: вложенные списки виджет
- * рисовать не умеет, а прокрутка нужна — шесть дней с парами на экран не
- * помещаются.
+ * Дни и пары идут вперемешку: вложенные списки виджет рисовать не умеет.
+ * Список обычный, не ленивый — ленивый прокручивался, но пустел насовсем,
+ * стоило системе выгрузить приложение. Поэтому показываем столько, сколько
+ * помещается, а остаток считаем последней строкой.
  */
 @Composable
 private fun Week(
@@ -143,9 +144,14 @@ private fun Week(
     colors: Palette,
     modifier: GlanceModifier,
 ) {
+    val context = LocalContext.current
     val rows = remember(days) { rowsOf(days) }
-    LazyColumn(modifier = modifier) {
-        items(rows, itemId = { it.id }) { row ->
+    val height = LocalSize.current.height
+    val shown = remember(rows, height) { fitRows(rows, height - HEADER_SPACE) }
+    val hidden = rows.drop(shown.size).count { it is WeekRow.Lesson }
+
+    Column(modifier = modifier) {
+        shown.forEach { row ->
             when (row) {
                 is WeekRow.Title -> DayTitle(row, colors)
                 is WeekRow.Lesson -> LessonLine(row, bells, colors)
@@ -157,7 +163,48 @@ private fun Week(
                 )
             }
         }
+        if (hidden > 0) {
+            Text(
+                morePairs(hidden),
+                maxLines = 1,
+                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp)
+                    .clickable(actionStartActivity(openDay(context, LocalDate.now()))),
+            )
+        }
     }
+}
+
+/** Шапка со строкой группы и отступы — то, что списку не достаётся. */
+private val HEADER_SPACE = 66.dp
+
+/** Высота строки на глаз: точной разметки виджет не сообщает. */
+private fun rowHeight(row: WeekRow): Dp = when (row) {
+    is WeekRow.Title -> 24.dp
+    is WeekRow.Lesson -> 21.dp
+    is WeekRow.Empty -> 19.dp
+}
+
+/**
+ * Сколько строк поместится.
+ *
+ * Под «ещё N» оставляется место заранее, иначе строка вытеснила бы последнюю
+ * пару и соврала бы на единицу. Заголовок дня, под которым не осталось ни
+ * одной пары, отбрасывается: день без содержимого выглядит обрывом.
+ */
+private fun fitRows(rows: List<WeekRow>, free: Dp): List<WeekRow> {
+    var used = 20.dp
+    var count = 0
+    for (row in rows) {
+        val next = used + rowHeight(row)
+        if (next > free) break
+        used = next
+        count++
+    }
+    while (count > 0 && rows[count - 1] is WeekRow.Title) count--
+    return rows.take(count)
 }
 
 @Composable
@@ -267,7 +314,10 @@ private fun rowsOf(days: List<DayDto>): List<WeekRow> {
     val out = mutableListOf<WeekRow>()
     for (day in days) {
         val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
-        val past = date.isBefore(today)
+        // Прожитые дни в недельном виджете не показываем: места мало, а к
+        // пятнице понедельник занимает верх экрана и вытесняет нужное.
+        if (date.isBefore(today)) continue
+        val past = false
         out += WeekRow.Title(
             id = out.size.toLong(),
             date = date,

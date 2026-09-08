@@ -42,6 +42,22 @@ import ru.whensclass.widget.ThemeChoice
 import ru.whensclass.work.SyncWorker
 
 class MainActivity : ComponentActivity() {
+
+    // Разрешение на точное время напоминаний выдаётся в настройках телефона,
+    // за пределами приложения. Перечитываем его при каждом возвращении, иначе
+    // переключатель остаётся выключенным сразу после того, как его включили.
+    private val exactAlarms = mutableStateOf(false)
+
+    override fun onResume() {
+        super.onResume()
+        val allowed = LessonAlarms.exactAllowed(this)
+        if (allowed != exactAlarms.value) {
+            exactAlarms.value = allowed
+            // Разрешение появилось — переставить будильники уже точными.
+            LessonAlarms.reschedule(this)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -52,7 +68,7 @@ class MainActivity : ComponentActivity() {
         // новой версии — сразу настройки с кнопкой установки.
         val day = intent?.getStringExtra(EXTRA_DAY)
         val update = intent?.getBooleanExtra(EXTRA_UPDATE, false) == true
-        setContent { App(startDay = day, openUpdate = update) }
+        setContent { App(startDay = day, openUpdate = update, exactAlarms = exactAlarms.value) }
     }
 
     companion object {
@@ -99,7 +115,11 @@ private val LightScheme = lightColorScheme(
 )
 
 @Composable
-private fun App(startDay: String? = null, openUpdate: Boolean = false) {
+private fun App(
+    startDay: String? = null,
+    openUpdate: Boolean = false,
+    exactAlarms: Boolean = false,
+) {
     val context = LocalContext.current
     val container = remember { AppContainer.get(context) }
     val scope = rememberCoroutineScope()
@@ -279,6 +299,7 @@ private fun App(startDay: String? = null, openUpdate: Boolean = false) {
                         notifyEnabled = notifyEnabled,
                         notifyChanges = notifyChanges,
                         notifyUpdates = notifyUpdates,
+                        exactAlarms = exactAlarms,
                         onNotifyBefore = { minutes ->
                             scope.launch {
                                 container.store.setNotifyBefore(minutes)

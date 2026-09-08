@@ -107,4 +107,24 @@ class DayFormatTest {
         assertNull(roomLabel(null))
         assertNull(roomLabel("  "))
     }
+
+    @Test
+    fun `длинный формат склоняет слова`() {
+        assertEquals("20 минут", formatDurationLong(20))
+        assertEquals("минуту", formatDurationLong(1))
+        assertEquals("2 минуты", formatDurationLong(2))
+        // Одиннадцать — не «11 минута», хотя оканчивается на единицу.
+        assertEquals("11 минут", formatDurationLong(11))
+        assertEquals("час", formatDurationLong(60))
+        assertEquals("2 часа", formatDurationLong(120))
+        assertEquals("3 часа 5 минут", formatDurationLong(185))
+        assertEquals("час 1 минуту", formatDurationLong(61))
+    }
+
+    @Test
+    fun `короткий формат остаётся коротким`() {
+        assertEquals("20 мин", formatDurationShort(20))
+        assertEquals("3 ч", formatDurationShort(180))
+        assertEquals("3 ч 5 мин", formatDurationShort(185))
+    }
 }

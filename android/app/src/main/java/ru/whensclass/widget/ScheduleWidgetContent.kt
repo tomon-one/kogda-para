@@ -12,8 +12,6 @@ import androidx.glance.LocalSize
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.ColorFilter
 import androidx.glance.Image
 import androidx.glance.ImageProvider
@@ -33,6 +31,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 import ru.whensclass.R
 import ru.whensclass.data.LessonDto
@@ -253,16 +252,61 @@ private fun Lessons(
         return
     }
     val current = currentLessonNumber(bells, day)
-    // Ленивый список — единственное, что в виджете прокручивается пальцем:
-    // в высокую пару дней шесть занятий не влезают, а листать их надо.
-    LazyColumn(modifier = modifier) {
-        items(lessons, itemId = { it.number.toLong() }) { lesson ->
-            Column(modifier = GlanceModifier.fillMaxWidth()) {
-                LessonRow(lesson, bells, isNow = lesson.number == current, fit, colors)
-                Spacer(GlanceModifier.height(if (fit.dense) 4.dp else 6.dp))
-            }
+    // Обычный список, не ленивый. Ленивый прокручивался пальцем, но жил только
+    // пока жив процесс приложения: система выгружала его — и виджет чернел
+    // насовсем, не оживая ни обновлением, ни запуском приложения.
+    val rowHeight = if (fit.dense) 42.dp else 48.dp
+    val free = LocalSize.current.height - if (fit.dense) 56.dp else 70.dp
+    val fits = (free / rowHeight).toInt().coerceIn(1, lessons.size)
+    val start = windowStart(lessons, bells, day, fits)
+    // Последняя строка уходит под «ещё N», если всё не поместилось.
+    val room = if (lessons.size - start > fits && fits >= 2) fits - 1 else fits
+    val shown = lessons.subList(start, minOf(lessons.size, start + room))
+    val rest = lessons.size - start - shown.size
+
+    Column(modifier = modifier) {
+        shown.forEach { lesson ->
+            LessonRow(lesson, bells, isNow = lesson.number == current, fit, colors)
+            Spacer(GlanceModifier.height(if (fit.dense) 4.dp else 6.dp))
+        }
+        if (rest > 0) {
+            val context = LocalContext.current
+            Text(
+                morePairs(rest),
+                maxLines = 1,
+                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp)
+                    .clickable(actionStartActivity(openDay(context, day))),
+            )
         }
     }
+}
+
+/**
+ * С какой пары начинать список, когда влезают не все.
+ *
+ * К обеду первые пары уже не нужны, а последние не видны. Поэтому сегодняшний
+ * список начинается с той пары, которая ещё не кончилась, и съезжает вниз сам
+ * собой в течение дня. Прошлые и будущие дни показываются с начала.
+ */
+private fun windowStart(
+    lessons: List<LessonDto>,
+    bells: Map<String, List<String>>,
+    day: LocalDate,
+    fits: Int,
+): Int {
+    if (day != LocalDate.now()) return 0
+    val now = LocalTime.now()
+    val index = lessons.indexOfFirst { lesson ->
+        val end = bells[lesson.number.toString()]?.getOrNull(1)
+            ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+        end == null || !now.isAfter(end)
+    }
+    if (index <= 0) return 0
+    // У конца дня не оставляем пустоту снизу: окно упирается в последнюю пару.
+    return minOf(index, maxOf(0, lessons.size - fits))
 }
 
 /** Насколько тесно виджету — от этого зависит, что показывать. */

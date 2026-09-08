@@ -5,6 +5,8 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -16,6 +18,7 @@ import ru.whensclass.AppContainer
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.widget.ScheduleWidget
+import ru.whensclass.widget.formatDurationLong
 import ru.whensclass.widget.kindName
 import ru.whensclass.widget.roomLabel
 
@@ -72,12 +75,18 @@ object LessonAlarms {
         val lesson: LessonDto,
         val minutes: Int,
         val day: String,
-    )
+    ) {
+        /** Когда пара начнётся: будильник стоит настолько же раньше. */
+        val start: LocalDateTime get() = at.plusMinutes(minutes.toLong())
+    }
 
     private fun schedule(context: Context, index: Int, alarm: Alarm) {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         val intent = Intent(context, LessonAlarmReceiver::class.java)
-            .putExtra(EXTRA_TITLE, title(alarm))
+            // Предмет и время начала, а не готовый заголовок: сколько осталось,
+            // считается в момент показа. См. title().
+            .putExtra(EXTRA_SUBJECT, alarm.lesson.subject)
+            .putExtra(EXTRA_START, alarm.start.toString())
             .putExtra(EXTRA_TEXT, text(alarm))
             .putExtra(EXTRA_DAY, alarm.day)
         val pending = PendingIntent.getBroadcast(
@@ -87,9 +96,26 @@ object LessonAlarms {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val millis = alarm.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        // setAndAllowWhileIdle, а не точный будильник: минута туда-сюда роли не
-        // играет, зато не нужно просить особое разрешение у системы.
-        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
+        if (exactAllowed(context)) {
+            manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
+        } else {
+            // Запасной путь: разрешение на точное время не выдали. Напоминание
+            // придёт, но система вправе его отложить.
+            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
+        }
+    }
+
+    /**
+     * Разрешено ли будить телефон в точное время.
+     *
+     * До Android 12 отдельного разрешения не было. Начиная с 14-й версии оно
+     * по умолчанию не выдано, и человек включает его сам — в настройках
+     * приложения есть подсказка.
+     */
+    fun exactAllowed(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val manager = context.getSystemService(AlarmManager::class.java) ?: return false
+        return manager.canScheduleExactAlarms()
     }
 
     private fun cancelAll(context: Context) {
@@ -105,7 +131,25 @@ object LessonAlarms {
         }
     }
 
-    fun title(alarm: Alarm): String = "Через ${alarm.minutes} мин — ${alarm.lesson.subject}"
+    /**
+     * Заголовок напоминания.
+     *
+     * Остаток считается сейчас, а не при постановке будильника: будильник может
+     * сработать позже назначенного, и обещание «через двадцать минут», данное
+     * заранее, к моменту показа успевает соврать.
+     */
+    fun title(
+        subject: String,
+        start: LocalDateTime,
+        now: LocalDateTime = LocalDateTime.now(),
+    ): String {
+        val left = Math.round(Duration.between(now, start).seconds / 60.0).toInt()
+        return when {
+            left > 0 -> "Через ${formatDurationLong(left)} — $subject"
+            left == 0 -> "Пара начинается — $subject"
+            else -> "Пара уже идёт — $subject"
+        }
+    }
 
     fun text(alarm: Alarm): String = buildString {
         append("${alarm.lesson.number} пара")
@@ -118,7 +162,8 @@ object LessonAlarms {
         alarm.lesson.teachers.firstOrNull()?.let { append(". $it") }
     }
 
-    const val EXTRA_TITLE = "title"
+    const val EXTRA_SUBJECT = "subject"
+    const val EXTRA_START = "start"
     const val EXTRA_TEXT = "text"
     const val EXTRA_DAY = "day"
 }
@@ -126,10 +171,15 @@ object LessonAlarms {
 /** Показывает напоминание и заодно переставляет будильники на следующие пары. */
 class LessonAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        val title = intent?.getStringExtra(LessonAlarms.EXTRA_TITLE) ?: return
+        val subject = intent?.getStringExtra(LessonAlarms.EXTRA_SUBJECT) ?: return
+        val start = intent.getStringExtra(LessonAlarms.EXTRA_START)
+            ?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return
         val text = intent.getStringExtra(LessonAlarms.EXTRA_TEXT).orEmpty()
         Notifications.lessonSoon(
-            context, title, text, intent.getStringExtra(LessonAlarms.EXTRA_DAY),
+            context,
+            LessonAlarms.title(subject, start),
+            text,
+            intent.getStringExtra(LessonAlarms.EXTRA_DAY),
         )
         LessonAlarms.reschedule(context)
     }

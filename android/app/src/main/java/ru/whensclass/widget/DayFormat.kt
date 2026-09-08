@@ -147,3 +147,44 @@ fun shortenName(fullName: String): String {
     val initials = parts.drop(1).joinToString(" ") { "${it.first()}." }
     return "${parts.first()} $initials"
 }
+
+/** «3 ч 5 мин» — там, где место дорого: подписи кнопок и виджеты. */
+fun formatDurationShort(minutes: Int): String = when {
+    minutes < 60 -> "$minutes мин"
+    minutes % 60 == 0 -> "${minutes / 60} ч"
+    else -> "${minutes / 60} ч ${minutes % 60} мин"
+}
+
+/**
+ * «20 минут», «час», «3 часа 5 минут» — там, где место есть: уведомления.
+ *
+ * Сокращения экономят место, которого в уведомлении не жалко, зато заставляют
+ * человека делить в уме: «185 мин» — это сколько?
+ */
+fun formatDurationLong(minutes: Int): String {
+    val hours = minutes / 60
+    val rest = minutes % 60
+    val h = if (hours == 1) "час" else plural(hours, "час", "часа", "часов")
+    // «минуту» без числа звучит естественно только само по себе: «через минуту».
+    // Рядом с часами число нужно — «час 1 минуту».
+    val m = if (hours == 0 && rest == 1) "минуту" else plural(rest, "минуту", "минуты", "минут")
+    return when {
+        hours == 0 -> m
+        rest == 0 -> h
+        else -> "$h $m"
+    }
+}
+
+/** Русский счёт: 1 минута, 2 минуты, 5 минут, 11 минут. */
+private fun plural(n: Int, one: String, few: String, many: String): String {
+    val word = when {
+        n % 100 in 11..14 -> many
+        n % 10 == 1 -> one
+        n % 10 in 2..4 -> few
+        else -> many
+    }
+    return "$n $word"
+}
+
+/** «ещё 2 пары» — строка вместо тех занятий, что не поместились в виджет. */
+fun morePairs(count: Int): String = "ещё " + plural(count, "пара", "пары", "пар")

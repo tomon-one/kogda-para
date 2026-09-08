@@ -1,6 +1,8 @@
 package ru.whensclass.ui
 
 import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,7 +52,9 @@ import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.ReleaseDto
+import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.widget.ThemeChoice
+import ru.whensclass.widget.formatDurationShort
 
 /**
  * Настройки и короткий честный рассказ о данных.
@@ -72,6 +76,7 @@ fun SettingsScreen(
     notifyEnabled: Boolean,
     notifyChanges: Boolean,
     notifyUpdates: Boolean,
+    exactAlarms: Boolean,
     onNotifyBefore: (Int) -> Unit,
     onNotifyEnabled: (Boolean) -> Unit,
     onNotifyChanges: (Boolean) -> Unit,
@@ -195,12 +200,13 @@ fun SettingsScreen(
                     // Готовых значений хватает не всем: кто-то едет ровно сорок
                     // семь минут и хочет именно столько.
                     MinutesChip(
-                        label = if (notifyBefore !in NOTIFY_OPTIONS) minutesLabel(notifyBefore)
+                        label = if (notifyBefore !in NOTIFY_OPTIONS) formatDurationShort(notifyBefore)
                         else "Своё",
                         selected = notifyBefore !in NOTIFY_OPTIONS,
                         onPick = { askOwnTime = true },
                     )
                 }
+                ExactAlarms(exactAlarms)
             }
 
             Row(
@@ -387,12 +393,6 @@ private val NOTIFY_OPTIONS = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180, 240)
 private const val MIN_NOTIFY = 10
 private const val MAX_NOTIFY = 240
 
-private fun minutesLabel(minutes: Int): String = when {
-    minutes < 60 -> "$minutes мин"
-    minutes % 60 == 0 -> "${minutes / 60} ч"
-    else -> "${minutes / 60} ч ${minutes % 60} мин"
-}
-
 /**
  * Своё время напоминания.
  *
@@ -437,7 +437,7 @@ private fun OwnTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> 
 @Composable
 private fun MinutesChip(
     minutes: Int = 0,
-    label: String = minutesLabel(minutes),
+    label: String = formatDurationShort(minutes),
     selected: Boolean,
     onPick: () -> Unit,
 ) {
@@ -499,4 +499,47 @@ private fun ThemeOption(
         MinimalCheck(selected = value == current, modifier = Modifier.padding(end = 12.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
+}
+
+/**
+ * Точное время напоминаний.
+ *
+ * Обычный будильник система вправе отложить, экономя батарею, — на десятки
+ * минут, если телефон спит. Для расписания это значит «предупредили, когда
+ * пара уже идёт». Точное время требует отдельного разрешения, и выдаётся оно
+ * не здесь, а в настройках телефона: переключатель показывает, что там сейчас,
+ * и открывает нужный экран.
+ *
+ * До Android 12 разрешения не существовало — там раздел просто не нужен.
+ */
+@Composable
+private fun ExactAlarms(allowed: Boolean) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    val context = LocalContext.current
+    val open = {
+        context.startActivity(
+            Intent(
+                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                Uri.parse("package:${context.packageName}"),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text("Точные уведомления", style = MaterialTheme.typography.bodyLarge)
+        MinimalSwitch(checked = allowed, onCheckedChange = { open() })
+    }
+    Text(
+        if (allowed) {
+            "Напоминание придёт минута в минуту."
+        } else {
+            "Система вправе отложить напоминание, экономя батарею. Нажмите, " +
+                "чтобы разрешить точное время."
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
