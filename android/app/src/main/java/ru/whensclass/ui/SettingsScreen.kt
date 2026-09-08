@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
@@ -93,9 +94,12 @@ fun SettingsScreen(
     onPickSecondGroup: () -> Unit,
     onClearSecondGroup: () -> Unit,
     onUpdate: () -> Unit,
+    loadDiagnostics: suspend () -> String,
     onBack: () -> Unit,
 ) {
     var askOwnTime by remember { mutableStateOf(false) }
+    var showReport by remember { mutableStateOf(false) }
+    if (showReport) ReportDialog(loadDiagnostics) { showReport = false }
     if (askOwnTime) {
         OwnTimeDialog(
             current = notifyBefore,
@@ -368,6 +372,16 @@ fun SettingsScreen(
             )
 
             Link("Нашли ошибку? Напишите мне в Telegram", "https://t.me/toomonn")
+            Text(
+                "Сведения для отчёта",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showReport = true }
+                    .padding(top = 10.dp, bottom = 2.dp),
+            )
             Link("GitHub автора", "https://github.com/tomon-one")
             Text(
                 if (teacherMode) "Я студент" else "Я преподаватель",
@@ -391,6 +405,62 @@ fun SettingsScreen(
 }
 
 /** Строка-ссылка: открывает адрес в браузере или в приложении Telegram. */
+/**
+ * Отчёт об ошибке готовым текстом.
+ *
+ * Скриншот показывает, что человек видит, но не показывает, какая у него
+ * сборка и что она в последний раз получила от сервера. Отсюда это уезжает
+ * одной кнопкой — и разговор начинается не с десяти вопросов.
+ */
+@Composable
+private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var report by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { report = load() }
+    val text = report
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Сведения для отчёта") },
+        text = {
+            // Список короткий, но на маленьком экране вместе с заголовком и
+            // кнопками он всё же упирается в край.
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "Пришлите это вместе с жалобой. Личного здесь нет: " +
+                        "версия, группа и то, что приложению ответил сервер.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                ) {
+                    Text(
+                        text ?: "Собираю…",
+                        style = MaterialTheme.typography.bodySmall,
+                        // Ровными столбцами: так видно, что это выписка, а не
+                        // рассказ, и её надо переслать целиком.
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(10.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    text?.let { copyToClipboard(context, "Отчёт «Когда пара?»", it) }
+                    onDismiss()
+                },
+                enabled = text != null,
+            ) { Text("Скопировать") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+    )
+}
+
 @Composable
 private fun Link(text: String, url: String) {
     val context = LocalContext.current

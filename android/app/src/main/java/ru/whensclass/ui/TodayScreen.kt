@@ -1,10 +1,7 @@
 package ru.whensclass.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -919,11 +916,5 @@ private fun openLink(context: android.content.Context, url: String) {
     }
 }
 
-private fun copyLink(context: android.content.Context, url: String) {
-    context.getSystemService(ClipboardManager::class.java)
-        ?.setPrimaryClip(ClipData.newPlainText("Ссылка на занятие", url))
-    // С Android 13 система показывает это сама.
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-        Toast.makeText(context, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
-    }
-}
+private fun copyLink(context: android.content.Context, url: String) =
+    copyToClipboard(context, "Ссылка на занятие", url, "Ссылка скопирована")

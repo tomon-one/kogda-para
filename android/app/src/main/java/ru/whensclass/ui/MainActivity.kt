@@ -415,6 +415,7 @@ private fun App(
                         updateChecked = updateChecked,
                         updateFailed = updateFailed,
                         updateError = updateError,
+                        loadDiagnostics = { container.repository.diagnostics() },
                         onCheckUpdate = {
                             scope.launch {
                                 checkingUpdate = true

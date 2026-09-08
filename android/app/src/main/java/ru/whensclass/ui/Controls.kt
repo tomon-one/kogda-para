@@ -1,5 +1,10 @@
 package ru.whensclass.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Build
+import android.widget.Toast
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -232,5 +237,25 @@ fun ActionButton(
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
+    }
+}
+
+/**
+ * Положить текст в буфер обмена и сказать об этом.
+ *
+ * С Android 13 система показывает это сама, и собственное сообщение поверх
+ * системного читается как заикание. Поэтому тост только для тех, кто иначе
+ * не поймёт, случилось ли что-нибудь.
+ */
+fun copyToClipboard(
+    context: Context,
+    label: String,
+    text: String,
+    toast: String = "Скопировано",
+) {
+    context.getSystemService(ClipboardManager::class.java)
+        ?.setPrimaryClip(ClipData.newPlainText(label, text))
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
     }
 }
