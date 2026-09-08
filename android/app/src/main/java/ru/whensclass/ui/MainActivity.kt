@@ -48,13 +48,16 @@ class MainActivity : ComponentActivity() {
         // Человек открыл приложение — самое время сходить за свежим расписанием.
         SyncWorker.now(this)
 
-        // Виджет мог попросить открыть конкретный день.
+        // Виджет мог попросить открыть конкретный день, а уведомление о
+        // новой версии — сразу настройки с кнопкой установки.
         val day = intent?.getStringExtra(EXTRA_DAY)
-        setContent { App(startDay = day) }
+        val update = intent?.getBooleanExtra(EXTRA_UPDATE, false) == true
+        setContent { App(startDay = day, openUpdate = update) }
     }
 
     companion object {
         const val EXTRA_DAY = "day"
+        const val EXTRA_UPDATE = "update"
     }
 }
 
@@ -96,7 +99,7 @@ private val LightScheme = lightColorScheme(
 )
 
 @Composable
-private fun App(startDay: String? = null) {
+private fun App(startDay: String? = null, openUpdate: Boolean = false) {
     val context = LocalContext.current
     val container = remember { AppContainer.get(context) }
     val scope = rememberCoroutineScope()
@@ -112,6 +115,7 @@ private fun App(startDay: String? = null) {
         .collectAsState(initial = DEFAULT_NOTIFY_BEFORE)
     val notifyEnabled by container.store.notifyEnabled.collectAsState(initial = false)
     val notifyChanges by container.store.notifyChanges.collectAsState(initial = true)
+    val notifyUpdates by container.store.notifyUpdates.collectAsState(initial = true)
     val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
     val teacherMode by container.store.isTeacher.collectAsState(initial = false)
     val teacherName by container.store.teacherName.collectAsState(initial = null)
@@ -121,13 +125,13 @@ private fun App(startDay: String? = null) {
     LaunchedEffect(Unit) { groups = container.repository.groups() }
     val theme = ThemeChoice.from(storedTheme)
 
-    var screen by remember { mutableStateOf(Screen.TODAY) }
+    var screen by remember { mutableStateOf(if (openUpdate) Screen.SETTINGS else Screen.TODAY) }
     var update by remember { mutableStateOf<ReleaseDto?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
     var updateChecked by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
-    var focusUpdate by remember { mutableStateOf(false) }
+    var focusUpdate by remember { mutableStateOf(openUpdate) }
     // Список преподавателей грузим один раз за запуск и держим здесь: если
     // держать его во вкладке, он перезагружается на каждое переключение.
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
@@ -274,6 +278,7 @@ private fun App(startDay: String? = null) {
                         notifyBefore = notifyBefore,
                         notifyEnabled = notifyEnabled,
                         notifyChanges = notifyChanges,
+                        notifyUpdates = notifyUpdates,
                         onNotifyBefore = { minutes ->
                             scope.launch {
                                 container.store.setNotifyBefore(minutes)
@@ -288,6 +293,9 @@ private fun App(startDay: String? = null) {
                         },
                         onNotifyChanges = { on ->
                             scope.launch { container.store.setNotifyChanges(on) }
+                        },
+                        onNotifyUpdates = { on ->
+                            scope.launch { container.store.setNotifyUpdates(on) }
                         },
                         focusUpdate = focusUpdate,
                         checkingUpdate = checkingUpdate,

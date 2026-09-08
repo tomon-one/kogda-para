@@ -20,8 +20,12 @@ class SyncWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val repository = AppContainer.get(applicationContext).repository
-        return when (repository.refresh()) {
+        val container = AppContainer.get(applicationContext)
+        val result = container.repository.refresh()
+        // Заодно смотрим, не вышла ли новая сборка: раз в час — ровно та
+        // частота, с которой об этом стоит узнавать.
+        runCatching { container.updates.announceIfNew(container.store) }
+        return when (result) {
             is RefreshResult.Failed -> Result.retry()
             else -> Result.success()
         }

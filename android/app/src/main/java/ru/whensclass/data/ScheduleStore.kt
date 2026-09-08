@@ -78,6 +78,31 @@ class ScheduleStore(private val context: Context) {
         prefs[KEY_NOTIFY_ON]?.let { it == "1" }
             ?: ((prefs[KEY_NOTIFY_BEFORE]?.toIntOrNull() ?: 0) > 0)
 
+    /**
+     * Сообщать ли о новой версии приложения.
+     *
+     * Магазина нет, обновление никто не принесёт: если о нём не сказать,
+     * человек останется со сборкой, в которой ошибка, уже починенная неделю
+     * назад.
+     */
+    val notifyUpdates: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_NOTIFY_UPDATES] != "0"
+    }
+
+    suspend fun notifyUpdatesEnabled(): Boolean = notifyUpdates.first()
+
+    suspend fun setNotifyUpdates(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFY_UPDATES] = if (enabled) "1" else "0" }
+    }
+
+    /** Про какую сборку уже сказали — чтобы не повторяться каждый час. */
+    suspend fun announcedVersion(): Int =
+        context.dataStore.data.first()[KEY_UPDATE_ANNOUNCED]?.toIntOrNull() ?: 0
+
+    suspend fun setAnnouncedVersion(code: Int) {
+        context.dataStore.edit { it[KEY_UPDATE_ANNOUNCED] = code.toString() }
+    }
+
     /** Сообщать ли об изменениях в расписании. */
     val notifyChanges: Flow<Boolean> = context.dataStore.data.map {
         it[KEY_NOTIFY_CHANGES] != "0"
@@ -286,6 +311,8 @@ class ScheduleStore(private val context: Context) {
         val KEY_WELCOME = stringPreferencesKey("welcome_seen")
         val KEY_GROUP2_ID = stringPreferencesKey("group2_id")
         val KEY_GROUP2_NAME = stringPreferencesKey("group2_name")
+        val KEY_NOTIFY_UPDATES = stringPreferencesKey("notify_updates")
+        val KEY_UPDATE_ANNOUNCED = stringPreferencesKey("update_announced")
         val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
         val KEY_NOTIFY_ON = stringPreferencesKey("notify_on")
         val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")

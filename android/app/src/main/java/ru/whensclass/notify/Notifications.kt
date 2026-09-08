@@ -17,17 +17,20 @@ import ru.whensclass.ui.MainActivity
 /**
  * Уведомления приложения.
  *
- * Их два вида, и намеренно в разных каналах: напоминание о паре человек хочет
- * слышать, а сообщение об изменении расписания — скорее видеть. Разделение
- * даёт отключить одно, не трогая другое, прямо в системных настройках.
+ * Их три вида, и намеренно в разных каналах: напоминание о паре человек хочет
+ * слышать, сообщение об изменении расписания — скорее видеть, а о новой сборке
+ * достаточно узнать молча. Разделение даёт отключить одно, не трогая другое,
+ * прямо в системных настройках.
  */
 object Notifications {
 
     const val CHANNEL_LESSON = "lesson_soon"
     const val CHANNEL_CHANGES = "schedule_changes"
+    const val CHANNEL_UPDATE = "app_update"
 
     private const val ID_LESSON = 1
     private const val ID_CHANGES = 2
+    private const val ID_UPDATE = 3
 
     fun ensureChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -44,6 +47,13 @@ object Notifications {
                 "Изменения в расписании",
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = "Отмены, переносы и новые пары" },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_UPDATE,
+                "Новые версии",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply { description = "Вышла новая сборка приложения" },
         )
     }
 
@@ -63,6 +73,11 @@ object Notifications {
         show(context, CHANNEL_CHANGES, ID_CHANGES, title, text, day = null)
     }
 
+    /** Нажатие открывает настройки на кнопке установки — идти искать не надо. */
+    fun newVersion(context: Context, title: String, text: String) {
+        show(context, CHANNEL_UPDATE, ID_UPDATE, title, text, day = null, update = true)
+    }
+
     private fun show(
         context: Context,
         channel: String,
@@ -70,6 +85,7 @@ object Notifications {
         title: String,
         text: String,
         day: String?,
+        update: Boolean = false,
     ) {
         if (!allowed(context)) return
         ensureChannels(context)
@@ -77,6 +93,7 @@ object Notifications {
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .putExtra(MainActivity.EXTRA_DAY, day)
+            .putExtra(MainActivity.EXTRA_UPDATE, update)
         val pending = PendingIntent.getActivity(
             context,
             id,

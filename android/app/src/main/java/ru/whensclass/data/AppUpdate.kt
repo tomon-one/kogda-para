@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import ru.whensclass.BuildConfig
+import ru.whensclass.notify.Notifications
 
 /** Что лежит на сервере — приложение раздаётся файлом, а не через магазин. */
 @Serializable
@@ -43,6 +44,26 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     suspend fun check(): ReleaseDto? = withContext(Dispatchers.IO) {
         val release = runCatching { api.release() }.getOrNull() ?: return@withContext null
         if (release.versionCode > BuildConfig.VERSION_CODE) release else null
+    }
+
+    /**
+     * Сказать о новой сборке, если она вышла.
+     *
+     * Зовётся из фонового обновления расписания: приложение раздаётся файлом,
+     * и узнать о новой версии человеку больше неоткуда. Про одну и ту же
+     * сборку говорим один раз — иначе это будет ежечасное напоминание.
+     */
+    suspend fun announceIfNew(store: ScheduleStore) {
+        if (!store.notifyUpdatesEnabled()) return
+        val release = check() ?: return
+        if (store.announcedVersion() >= release.versionCode) return
+
+        Notifications.newVersion(
+            context,
+            "Вышла версия ${release.versionName}",
+            release.notes.ifBlank { "Откройте настройки, чтобы установить." },
+        )
+        store.setAnnouncedVersion(release.versionCode)
     }
 
     /**

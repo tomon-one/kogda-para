@@ -73,9 +73,11 @@ fun SettingsScreen(
     notifyBefore: Int,
     notifyEnabled: Boolean,
     notifyChanges: Boolean,
+    notifyUpdates: Boolean,
     onNotifyBefore: (Int) -> Unit,
     onNotifyEnabled: (Boolean) -> Unit,
     onNotifyChanges: (Boolean) -> Unit,
+    onNotifyUpdates: (Boolean) -> Unit,
     focusUpdate: Boolean,
     checkingUpdate: Boolean,
     updateChecked: Boolean,
@@ -211,6 +213,21 @@ fun SettingsScreen(
             }
             Text(
                 "Отмены и замены на сегодня и завтра.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Сообщать о новых версиях", style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = notifyUpdates, onCheckedChange = onNotifyUpdates)
+            }
+            Text(
+                // Магазина нет, обновление никто не принесёт.
+                "Приложение проверяет это раз в час вместе с расписанием.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
