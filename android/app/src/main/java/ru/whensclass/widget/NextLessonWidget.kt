@@ -167,6 +167,6 @@ private fun place(lesson: LessonDto): String = buildString {
         append("онлайн  ⧉")
     } else {
         if (isNotEmpty()) append(" · ")
-        append(roomLabel(lesson.room) ?: "места нет")
+        append(roomLabel(lesson.room) ?: "не указано")
     }
 }

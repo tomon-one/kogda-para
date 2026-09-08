@@ -598,7 +598,7 @@ private fun LessonRow(
                     // Ни кабинета, ни ссылки — так и говорим: пустая строка
                     // читается как «не загрузилось», хотя в таблице там пусто.
                     val room = roomLabel(lesson.room)
-                    Place(room ?: "Места нет", muted = room == null)
+                    Place(room ?: "Не указано", muted = room == null)
                 }
                 kindName(lesson.kind)?.let {
                     Text(

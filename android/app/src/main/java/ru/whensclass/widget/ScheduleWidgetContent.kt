@@ -398,7 +398,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
     val parts = buildList {
         if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
         kindName(lesson.kind)?.let { add(it) }
-        add(if (lesson.url != null) "онлайн" else roomLabel(lesson.room) ?: "места нет")
+        add(if (lesson.url != null) "онлайн" else roomLabel(lesson.room) ?: "не указано")
         // В расписании преподавателя вместо его имени — группы, которым читается
         // пара: сам он и так знает, кто ведёт.
         (lesson.groups ?: lesson.teachers.firstOrNull()?.let(::shortenName))?.let { add(it) }

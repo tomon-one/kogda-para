@@ -140,6 +140,10 @@ class ScheduleRepository(
     suspend fun selectGroup(group: GroupDto) {
         store.setTeacherMode(false)
         store.selectGroup(group.id, group.name)
+        // Перерисовать сразу, не дожидаясь сети: смена роли стирает расписание,
+        // и до конца запроса виджет иначе показывает чужое — то, что осталось от
+        // прошлой роли. Если запрос не дойдёт, честнее «ещё не загружено».
+        updateWidgets()
         refresh(force = true)
     }
 
@@ -147,6 +151,7 @@ class ScheduleRepository(
     suspend fun selectSelfAsTeacher(teacher: GroupDto) {
         store.setTeacherMode(true)
         store.selectTeacher(teacher.id, teacher.name)
+        updateWidgets()
         refresh(force = true)
     }
 
