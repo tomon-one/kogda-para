@@ -31,8 +31,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -140,22 +138,24 @@ fun SettingsScreen(
     ) {
         Section(if (teacherMode) "Преподаватель" else "Группа") {
             Text(groupName ?: "не выбрано", style = MaterialTheme.typography.bodyLarge)
-            TextButton(onClick = onChangeGroup) {
-                Text(if (teacherMode) "Сменить преподавателя" else "Сменить группу")
-            }
+            ActionButton(
+                label = if (teacherMode) "Сменить преподавателя" else "Сменить группу",
+                onClick = onChangeGroup,
+            )
 
             if (!teacherMode) {
                 Text(
-                    "Вторая подгруппа: " + (secondGroupName ?: "нет"),
+                    "Подгруппа: " + (secondGroupName ?: "нет"),
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-                Row {
-                    TextButton(onClick = onPickSecondGroup) {
-                        Text(if (secondGroupName == null) "Добавить" else "Заменить")
-                    }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionButton(
+                        label = if (secondGroupName == null) "Добавить" else "Заменить",
+                        onClick = onPickSecondGroup,
+                    )
                     if (secondGroupName != null) {
-                        TextButton(onClick = onClearSecondGroup) { Text("Убрать") }
+                        ActionButton(label = "Убрать", onClick = onClearSecondGroup)
                     }
                 }
             }
@@ -174,7 +174,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Напоминать о паре", style = MaterialTheme.typography.bodyLarge)
-                Switch(checked = notifyEnabled, onCheckedChange = onNotifyEnabled)
+                MinimalSwitch(checked = notifyEnabled, onCheckedChange = onNotifyEnabled)
             }
             if (notifyEnabled) {
                 Text(
@@ -209,7 +209,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Сообщать об изменениях", style = MaterialTheme.typography.bodyLarge)
-                Switch(checked = notifyChanges, onCheckedChange = onNotifyChanges)
+                MinimalSwitch(checked = notifyChanges, onCheckedChange = onNotifyChanges)
             }
             Text(
                 "Отмены и замены на сегодня и завтра.",
@@ -223,7 +223,7 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Сообщать о новых версиях", style = MaterialTheme.typography.bodyLarge)
-                Switch(checked = notifyUpdates, onCheckedChange = onNotifyUpdates)
+                MinimalSwitch(checked = notifyUpdates, onCheckedChange = onNotifyUpdates)
             }
             Text(
                 // Магазина нет, обновление никто не принесёт.
@@ -252,8 +252,8 @@ fun SettingsScreen(
                         "ни номера, ни местоположения. Учётной записи нет, " +
                         "аналитики и рекламы нет. Всё для вашего удобства ;)"
                 } else {
-                    "На сервер уходит только название вашей группы — и второй " +
-                        "подгруппы, если вы её выбрали. Больше ничего: ни имени, " +
+                    "На сервер уходит только название вашей группы — и подгруппы, " +
+                        "если вы её выбрали. Больше ничего: ни имени, " +
                         "ни номера, ни местоположения. Учётной записи нет, " +
                         "аналитики и рекламы нет. Всё для вашего удобства ;)"
                 },
@@ -285,6 +285,8 @@ fun SettingsScreen(
             Text(
                 "Установлена ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium,
             )
             if (update != null) {
                 Text(
@@ -305,9 +307,11 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = onUpdate, enabled = !installing) {
-                    Text(if (installing) "Скачиваю…" else "Обновить приложение")
-                }
+                ActionButton(
+                    label = if (installing) "Скачиваю…" else "Обновить приложение",
+                    onClick = onUpdate,
+                    enabled = !installing,
+                )
             } else {
                 // Раньше кнопка молчала, когда обновления не было, и выглядела
                 // сломанной. Теперь всегда отвечает.
@@ -318,15 +322,15 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton(onClick = onCheckUpdate, enabled = !checkingUpdate) {
-                    Text(
-                        when {
-                            checkingUpdate -> "Проверка…"
-                            updateChecked -> "Проверить ещё раз"
-                            else -> "Проверить обновления"
-                        }
-                    )
-                }
+                ActionButton(
+                    label = when {
+                        checkingUpdate -> "Проверка…"
+                        updateChecked -> "Проверить ещё раз"
+                        else -> "Проверить обновления"
+                    },
+                    onClick = onCheckUpdate,
+                    enabled = !checkingUpdate,
+                )
             }
         }
 
@@ -497,7 +501,7 @@ private fun ThemeOption(
             .selectable(selected = value == current, onClick = { onPick(value) }),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = value == current, onClick = { onPick(value) })
+        MinimalCheck(selected = value == current, modifier = Modifier.padding(end = 12.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
