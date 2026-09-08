@@ -416,7 +416,12 @@ fun SettingsScreen(
 private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var report by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { report = load() }
+    // Сведения нужны ровно тогда, когда что-то не так. Уронить
+    // приложение на сборе сведений о поломке было бы издевательством.
+    LaunchedEffect(Unit) {
+        report = runCatching { load() }
+            .getOrElse { "Собрать не вышло: ${it.javaClass.simpleName}" }
+    }
     val text = report
 
     AlertDialog(
