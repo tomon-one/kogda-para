@@ -153,7 +153,11 @@ private fun App(
     val pinnedGroups by container.store.pinnedGroups.collectAsState(initial = emptyList())
     var groups by remember { mutableStateOf<List<GroupDto>?>(null) }
     LaunchedEffect(Unit) { groups = container.repository.groups() }
-    val theme = ThemeChoice.from(storedTheme)
+    // Выбранная тема применяется сразу, не дожидаясь записи на диск и обратной
+    // волны из хранилища. Из-за этого круга смена выглядела рваной: экран ждал
+    // ответа хранилища, а перерисовка виджетов, идущая там же, его задерживала.
+    var chosenTheme by remember { mutableStateOf<ThemeChoice?>(null) }
+    val theme = chosenTheme ?: ThemeChoice.from(storedTheme)
 
     var screen by remember { mutableStateOf(if (openUpdate) Screen.SETTINGS else Screen.TODAY) }
     var update by remember { mutableStateOf<ReleaseDto?>(null) }
@@ -362,6 +366,7 @@ private fun App(
                             }
                         },
                         onTheme = { choice ->
+                            chosenTheme = choice
                             scope.launch {
                                 container.store.setTheme(ThemeChoice.toStored(choice))
                                 // Виджет обязан перекраситься сразу, а не через

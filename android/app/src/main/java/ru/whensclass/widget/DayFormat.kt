@@ -156,6 +156,15 @@ fun roomLabel(room: String?): String? {
     return if (looksLikeNumber) "каб. $text" else text
 }
 
+/**
+ * «Трухачев Даниил Дмитриевич» -> «Трухачев»: для строки, где место на исходе.
+ *
+ * Инициалы в виджете не помогают: однофамильцев в колледже нет, а «Старостина
+ * Е. А.» обрывалась на «Старост…» — это хуже, чем короткая, но целая фамилия.
+ */
+fun surnameOnly(fullName: String): String =
+    fullName.trim().split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: fullName
+
 /** «Трухачев Даниил Дмитриевич» -> «Трухачев Д. Д.»: иначе не влезает в строку. */
 fun shortenName(fullName: String): String {
     val parts = fullName.trim().split(" ").filter { it.isNotEmpty() }

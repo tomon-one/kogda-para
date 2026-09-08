@@ -35,7 +35,12 @@ class CopyLinkActivity : Activity() {
         // С Android 13 система сама показывает, что скопировано, — свой ответ
         // был бы вторым подряд.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            Toast.makeText(this, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+            // Android 13 и новее показывает своё подтверждение копирования,
+            // с превью ссылки. Наше поверх него — второе окно об одном и том же,
+            // да ещё и с чужим значком: оболочка рисует его сама.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                Toast.makeText(this, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

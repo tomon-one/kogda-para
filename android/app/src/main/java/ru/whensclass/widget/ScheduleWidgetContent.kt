@@ -208,15 +208,18 @@ private fun Header(
                     modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )
                 // Отдельной строкой, а не хвостом времени: внутри одного текста
-                // значок вставал по базовой линии букв и висел выше цифр.
-                if (!busy && !done) {
-                    Text(
-                        " ↻",
-                        maxLines = 1,
-                        style = TextStyle(fontSize = 12.sp, color = colors.textDim),
-                        modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
-                    )
-                }
+                // значок вставал по базовой линии букв и висел выше цифр. Размер
+                // тот же, что у времени, и показывается он всегда — пропадая на
+                // время запроса, он менял высоту строки, и виджет подпрыгивал.
+                Text(
+                    " ⟳",
+                    maxLines = 1,
+                    style = TextStyle(
+                        fontSize = 11.sp,
+                        color = if (busy || done) colors.accent else colors.textDim,
+                    ),
+                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+                )
             }
         }
         ArrowButton("‹", step = -1, enabled = offset > firstDay, colors = colors)
@@ -422,7 +425,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
         add(if (lesson.url != null) "онлайн" else roomLabel(lesson.room) ?: "не указано")
         // В расписании преподавателя вместо его имени — группы, которым читается
         // пара: сам он и так знает, кто ведёт.
-        (lesson.groups ?: lesson.teachers.firstOrNull()?.let(::shortenName))?.let { add(it) }
+        (lesson.groups ?: lesson.teachers.firstOrNull()?.let(::surnameOnly))?.let { add(it) }
     }
     if (parts.isEmpty()) return
 
