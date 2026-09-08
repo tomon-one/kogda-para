@@ -54,6 +54,7 @@ fun ScheduleWidgetContent(
     day: LocalDate,
     offset: Int,
     busy: Boolean = false,
+    done: Boolean = false,
     modifier: GlanceModifier = GlanceModifier,
 ) {
     val size = LocalSize.current
@@ -77,6 +78,7 @@ fun ScheduleWidgetContent(
             firstOffset(schedule),
             lastOffset(schedule),
             busy,
+            done,
             fit,
             colors,
         )
@@ -135,6 +137,7 @@ private fun Header(
     firstDay: Int,
     lastDay: Int,
     busy: Boolean,
+    done: Boolean,
     fit: Fit,
     colors: Palette,
 ) {
@@ -184,21 +187,24 @@ private fun Header(
                 // Время последней проверки — служебная мелочь, поэтому тем же
                 // приглушённым цветом; краснеет, только когда данные протухли.
                 Text(
-                    if (busy) " · обновляю…" else " · " + formatFetchedShort(fetchedAt),
+                    when {
+                        busy -> " · обновляю…"
+                        done -> " · обновлено"
+                        else -> " · " + formatFetchedShort(fetchedAt) + " ⟳"
+                    },
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            busy -> colors.accent
+                            busy || done -> colors.accent
                             isStale(fetchedAt) -> colors.error
                             else -> colors.textDim
                         },
                     ),
+                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )
             }
         }
-        RefreshButton(busy, colors)
-        Spacer(GlanceModifier.width(4.dp))
         ArrowButton("‹", step = -1, enabled = offset > firstDay, colors = colors)
         Spacer(GlanceModifier.width(4.dp))
         ArrowButton("›", step = 1, enabled = offset < lastDay, colors = colors)
@@ -256,7 +262,7 @@ private fun Lessons(
     // Обычный список, не ленивый. Ленивый прокручивался пальцем, но жил только
     // пока жив процесс приложения: система выгружала его — и виджет чернел
     // насовсем, не оживая ни обновлением, ни запуском приложения.
-    val rowHeight = if (fit.dense) 50.dp else 58.dp
+    val rowHeight = if (fit.dense) 46.dp else 52.dp
     // Шапка с группой и стрелками плюс строка «ещё N»: их место списку не
     // достаётся. Раньше «ещё» отнимало строку у пары, и вместо двух занятий
     // виджет показывал одно — хуже, чем не показать остаток вовсе.
@@ -362,7 +368,7 @@ private fun LessonRow(
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
                 lesson.subject,
-                maxLines = 2,
+                maxLines = 1,
                 style = TextStyle(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
@@ -407,30 +413,6 @@ private fun Details(lesson: LessonDto, colors: Palette) {
             val context = LocalContext.current
             line.clickable(actionStartActivity(CopyLinkActivity.intent(context, url)))
         } ?: line,
-    )
-}
-
-/**
- * Кнопка обновления.
- *
- * Была значком ⟳ внутри служебной строки — её не находили глазами. Теперь это
- * такая же площадка, как стрелки листания, и пока идёт запрос она показывает
- * многоточие: анимации виджет не умеет, а обратная связь нужна.
- */
-@Composable
-internal fun RefreshButton(busy: Boolean, colors: Palette) {
-    Text(
-        if (busy) "•••" else "⟳",
-        maxLines = 1,
-        style = TextStyle(
-            fontSize = 15.sp,
-            color = if (busy) colors.accent else colors.text,
-        ),
-        modifier = GlanceModifier
-            .background(colors.button)
-            .cornerRadius(8.dp)
-            .clickable(actionRunCallback<RefreshAction>())
-            .padding(horizontal = 10.dp, vertical = 5.dp),
     )
 }
 

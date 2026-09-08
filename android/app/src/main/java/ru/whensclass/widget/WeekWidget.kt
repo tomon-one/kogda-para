@@ -3,14 +3,12 @@ package ru.whensclass.widget
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
 import androidx.glance.currentState
-import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
@@ -67,6 +65,7 @@ class WeekWidget : GlanceAppWidget() {
                     state?.groupName,
                     state?.fetchedAt ?: 0L,
                     currentState(ScheduleWidget.KEY_BUSY) == true,
+                    currentState(ScheduleWidget.KEY_DONE) == true,
                     colors,
                 )
                 Spacer(GlanceModifier.height(6.dp))
@@ -94,7 +93,13 @@ class WeekWidget : GlanceAppWidget() {
 }
 
 @Composable
-private fun Header(groupName: String?, fetchedAt: Long, busy: Boolean, colors: Palette) {
+private fun Header(
+    groupName: String?,
+    fetchedAt: Long,
+    busy: Boolean,
+    done: Boolean,
+    colors: Palette,
+) {
     val context = LocalContext.current
     val today = LocalDate.now()
 
@@ -124,19 +129,22 @@ private fun Header(groupName: String?, fetchedAt: Long, busy: Boolean, colors: P
             }
         }
         Text(
-            if (busy) "обновляю…" else formatFetchedShort(fetchedAt),
+            when {
+                busy -> "обновляю…"
+                done -> "обновлено"
+                else -> formatFetchedShort(fetchedAt) + " ⟳"
+            },
             maxLines = 1,
             style = TextStyle(
                 fontSize = 11.sp,
                 color = when {
-                    busy -> colors.accent
+                    busy || done -> colors.accent
                     isStale(fetchedAt) -> colors.error
                     else -> colors.textDim
                 },
             ),
+            modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
         )
-        Spacer(GlanceModifier.width(6.dp))
-        RefreshButton(busy, colors)
     }
 }
 
@@ -155,14 +163,9 @@ private fun Week(
     colors: Palette,
     modifier: GlanceModifier,
 ) {
-    val context = LocalContext.current
     val rows = remember(days) { rowsOf(days) }
-    val height = LocalSize.current.height
-    val shown = remember(rows, height) { fitRows(rows, height - HEADER_SPACE) }
-    val hidden = rows.drop(shown.size).count { it is WeekRow.Lesson }
-
     Column(modifier = modifier) {
-        shown.forEach { row ->
+        rows.forEach { row ->
             when (row) {
                 is WeekRow.Title -> DayTitle(row, colors)
                 is WeekRow.Lesson -> LessonLine(row, bells, colors)
@@ -174,54 +177,7 @@ private fun Week(
                 )
             }
         }
-        if (hidden > 0) {
-            Text(
-                morePairs(hidden),
-                maxLines = 1,
-                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp)
-                    .clickable(actionStartActivity(openDay(context, LocalDate.now()))),
-            )
-        }
     }
-}
-
-/** Шапка со строкой группы и отступы — то, что списку не достаётся. */
-private val HEADER_SPACE = 46.dp
-
-/**
- * Высота строки на глаз: точной разметки виджет не сообщает.
- *
- * Числа занижены намеренно. Ошибка вверх обрывает список раньше времени и
- * оставляет под ним пустоту — это видно и злит; ошибка вниз лишь прижимает
- * последнюю строку к краю.
- */
-private fun rowHeight(row: WeekRow): Dp = when (row) {
-    is WeekRow.Title -> 20.dp
-    is WeekRow.Lesson -> 18.dp
-    is WeekRow.Empty -> 16.dp
-}
-
-/**
- * Сколько строк поместится.
- *
- * Под «ещё N» оставляется место заранее, иначе строка вытеснила бы последнюю
- * пару и соврала бы на единицу. Заголовок дня, под которым не осталось ни
- * одной пары, отбрасывается: день без содержимого выглядит обрывом.
- */
-private fun fitRows(rows: List<WeekRow>, free: Dp): List<WeekRow> {
-    var used = 14.dp
-    var count = 0
-    for (row in rows) {
-        val next = used + rowHeight(row)
-        if (next > free) break
-        used = next
-        count++
-    }
-    while (count > 0 && rows[count - 1] is WeekRow.Title) count--
-    return rows.take(count)
 }
 
 @Composable

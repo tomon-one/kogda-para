@@ -7,6 +7,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
+import kotlinx.coroutines.delay
 import ru.whensclass.AppContainer
 
 /**
@@ -49,15 +50,22 @@ class RefreshAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
-        setBusy(context, glanceId, true)
+        mark(context, glanceId, busy = true, done = false)
         AppContainer.get(context).repository.refresh(force = true)
-        setBusy(context, glanceId, false)
+        // «Обновлено» на пару секунд: время в шапке меняется, только когда
+        // расписание и правда другое, а нажавшему нужен ответ в любом случае.
+        mark(context, glanceId, busy = false, done = true)
+        delay(DONE_MS)
+        mark(context, glanceId, busy = false, done = false)
     }
 
-    /** Отметка «обновляю» и сразу перерисовка: запрос идёт заметные секунды. */
-    private suspend fun setBusy(context: Context, glanceId: GlanceId, busy: Boolean) {
+    /** Отметка состояния и сразу перерисовка: запрос идёт заметные секунды. */
+    private suspend fun mark(context: Context, glanceId: GlanceId, busy: Boolean, done: Boolean) {
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
-            prefs.toMutablePreferences().apply { this[ScheduleWidget.KEY_BUSY] = busy }
+            prefs.toMutablePreferences().apply {
+                this[ScheduleWidget.KEY_BUSY] = busy
+                this[ScheduleWidget.KEY_DONE] = done
+            }
         }
         // Кнопка есть на обоих виджетах, а перерисовать нужно тот, на котором
         // нажали: чужая разметка сюда не встанет.
@@ -71,5 +79,9 @@ class RefreshAction : ActionCallback {
 
             else -> NextLessonWidget().update(context, glanceId)
         }
+    }
+
+    private companion object {
+        const val DONE_MS = 2000L
     }
 }

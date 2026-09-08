@@ -50,6 +50,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 colors,
                 offset = currentOffset(),
                 busy = currentState(KEY_BUSY) == true,
+                done = currentState(KEY_DONE) == true,
             )
         }
     }
@@ -65,12 +66,14 @@ class ScheduleWidget : GlanceAppWidget() {
         colors: Palette,
         offset: Int,
         busy: Boolean,
+        done: Boolean,
     ) {
         ScheduleWidgetContent(
             schedule = schedule,
             groupName = groupName,
             fetchedAt = fetchedAt,
             busy = busy,
+            done = done,
             colors = colors,
             day = LocalDate.now().plusDays(offset.toLong()),
             offset = offset,
@@ -94,6 +97,7 @@ class ScheduleWidget : GlanceAppWidget() {
 
         /** Идёт ли сейчас обновление: нажатие должно отзываться сразу. */
         val KEY_BUSY = booleanPreferencesKey("busy")
+        val KEY_DONE = booleanPreferencesKey("done")
 
         /** Дальше недели листать нечего: ровно столько храним на телефоне. */
         const val MAX_OFFSET = 6
