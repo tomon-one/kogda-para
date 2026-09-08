@@ -40,9 +40,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.whensclass.R
 import ru.whensclass.data.GroupDto
+import ru.whensclass.widget.plural
 
 /** Сообщение о неудачной загрузке — со ссылкой, куда написать. */
 @Composable
@@ -196,6 +198,21 @@ fun GroupPickerScreen(
                                         .heightIn(min = 48.dp)
                                         .clickable { onPick(group) }
                                         .padding(horizontal = 16.dp, vertical = 14.dp),
+                                )
+                            }
+                        }
+                        // Дно списка. Видит только тот, кто долистал до
+                        // конца вместо того, чтобы искать поиском.
+                        if (query.isBlank()) {
+                            item(key = "конец") {
+                                Text(
+                                    "Всё. ${plural(list.size, "группа", "группы", "групп")}, и ни одной лишней.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 18.dp, bottom = 8.dp),
                                 )
                             }
                         }

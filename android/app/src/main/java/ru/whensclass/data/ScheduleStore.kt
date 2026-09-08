@@ -299,6 +299,39 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_TEACHERS] = body }
     }
 
+    /**
+     * Сколько раз приложение ответило вместо таблицы колледжа.
+     *
+     * Два счётчика, а не один: приложение человек открывает сам, а
+     * виджет отвечает и без него. Сложить их в одно число значило бы
+     * выдать одно за другое.
+     */
+    suspend fun countOpen() = bump(KEY_TALLY_OPENS)
+
+    suspend fun countWidgetDraw() = bump(KEY_TALLY_DRAWS)
+
+    suspend fun tally(): Tally = context.dataStore.data.first().let {
+        Tally(
+            opens = it[KEY_TALLY_OPENS]?.toLongOrNull() ?: 0L,
+            draws = it[KEY_TALLY_DRAWS]?.toLongOrNull() ?: 0L,
+            since = it[KEY_TALLY_SINCE]?.toLongOrNull() ?: 0L,
+        )
+    }
+
+    private suspend fun bump(key: Preferences.Key<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[key] = ((prefs[key]?.toLongOrNull() ?: 0L) + 1).toString()
+            // Дату первого счёта запоминаем один раз: без неё число
+            // ни о чём не говорит — за неделю оно значит одно, за год другое.
+            if (prefs[KEY_TALLY_SINCE] == null) {
+                prefs[KEY_TALLY_SINCE] = System.currentTimeMillis().toString()
+            }
+        }
+    }
+
+    /** Счёт ответов: открытия приложения, перерисовки виджетов и с какого дня. */
+    data class Tally(val opens: Long, val draws: Long, val since: Long)
+
     data class WidgetState(
         val groupName: String?,
         val scheduleJson: String?,
@@ -329,5 +362,8 @@ class ScheduleStore(private val context: Context) {
         val KEY_ROLE = stringPreferencesKey("role")
         val KEY_TEACHER_ID = stringPreferencesKey("teacher_id")
         val KEY_TEACHER_NAME = stringPreferencesKey("teacher_name")
+        val KEY_TALLY_OPENS = stringPreferencesKey("tally_opens")
+        val KEY_TALLY_DRAWS = stringPreferencesKey("tally_draws")
+        val KEY_TALLY_SINCE = stringPreferencesKey("tally_since")
     }
 }

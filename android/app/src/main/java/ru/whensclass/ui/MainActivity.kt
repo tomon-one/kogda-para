@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import ru.whensclass.AppContainer
 import ru.whensclass.data.AppUpdate
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
@@ -88,6 +89,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // Человек открыл приложение — самое время сходить за свежим расписанием.
         SyncWorker.now(this)
+        // И ещё один раз, когда таблицу открывать не пришлось.
+        lifecycleScope.launch { AppContainer.get(applicationContext).store.countOpen() }
 
         // Виджет мог попросить открыть конкретный день, а уведомление о
         // новой версии — сразу настройки с кнопкой установки.
@@ -496,6 +499,7 @@ private fun App(
                         refreshing = refreshing,
                         refreshError = refreshError,
                         onErrorShown = { refreshError = null },
+                        loadTally = { container.store.tally() },
                         reloadKey = reloadKey,
                         onSettings = {
                             focusUpdate = false

@@ -204,7 +204,7 @@ fun formatDurationLong(minutes: Int): String {
 }
 
 /** Русский счёт: 1 минута, 2 минуты, 5 минут, 11 минут. */
-private fun plural(n: Int, one: String, few: String, many: String): String {
+fun plural(n: Int, one: String, few: String, many: String): String {
     val word = when {
         n % 100 in 11..14 -> many
         n % 10 == 1 -> one

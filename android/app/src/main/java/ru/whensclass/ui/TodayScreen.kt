@@ -8,6 +8,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.BorderStroke
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -71,25 +73,31 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.ScheduleStore
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
+import ru.whensclass.widget.formatDurationLong
 import ru.whensclass.widget.formatFetchedAt
 import ru.whensclass.widget.kindName
 import ru.whensclass.widget.roomLabel
 import ru.whensclass.widget.lessonTime
+import ru.whensclass.widget.plural
 import ru.whensclass.widget.shortenName
 
 /** Ширина колонки времени: «09:00–10:30» должно помещаться в одну строку. */
@@ -128,6 +136,7 @@ fun TodayScreen(
     onRefresh: () -> Unit,
     refreshError: String? = null,
     onErrorShown: () -> Unit = {},
+    loadTally: suspend () -> ScheduleStore.Tally = { ScheduleStore.Tally(0, 0, 0) },
 ) {
     val today = remember { LocalDate.now() }
     val listState = rememberLazyListState()
@@ -146,6 +155,11 @@ fun TodayScreen(
         }
     }
     val scope = rememberCoroutineScope()
+
+    var showTally by remember { mutableStateOf(false) }
+    if (showTally) {
+        TallyDialog(loadTally = loadTally, onDismiss = { showTally = false })
+    }
 
     Scaffold(
         snackbarHost = {
@@ -166,6 +180,12 @@ fun TodayScreen(
                             groupName,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
+                            // Долгое нажатие по названию группы — счёт ответов.
+                            // Ничего не подсказывает, что он здесь: на то и
+                            // расчёт. Обычное нажатие не занято, но и не нужно.
+                            modifier = Modifier.pointerInput(Unit) {
+                                detectTapGestures(onLongPress = { showTally = true })
+                            },
                         )
                         Text(
                             formatFetchedAt(fetchedAt),
@@ -690,6 +710,75 @@ private fun Place(text: String, muted: Boolean = false) {
     )
 }
 
+
+/** За сколько грузится таблица колледжа. Перемерено 8 сентября 2026 года. */
+private const val SHEET_SECONDS = 8
+
+/**
+ * Счёт ответов: сколько раз таблицу открывать не пришлось.
+ *
+ * Ровно то, ради чего всё затевалось, только числом. Прячется под долгим
+ * нажатием на название группы: ничто на неё не указывает, и не должно.
+ *
+ * Два счётчика показаны отдельно, а не сложены в одно красивое число:
+ * приложение человек открывает сам, а виджет отвечает и без него. Выдать
+ * второе за первое было бы враньём ради красоты.
+ */
+@Composable
+private fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss: () -> Unit) {
+    var tally by remember { mutableStateOf<ScheduleStore.Tally?>(null) }
+    LaunchedEffect(Unit) { tally = loadTally() }
+    // Пока считается — не показываем ничего: окно, мигнувшее нулями и
+    // тут же переписавшее себя, выглядит поломкой.
+    val counted = tally ?: return
+
+    val total = counted.opens + counted.draws
+    val seconds = total * SHEET_SECONDS
+    val spent = if (seconds < 60) {
+        plural(seconds.toInt(), "секунду", "секунды", "секунд")
+    } else {
+        formatDurationLong((seconds / 60).toInt())
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Таблицу вы не открывали") },
+        text = {
+            Column {
+                Text(
+                    plural(total.toInt(), "раз", "раза", "раз"),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "${counted.opens} раз ответило приложение, " +
+                        "${counted.draws} — виджеты. Каждый раз это было вместо " +
+                        "таблицы колледжа.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Она грузится $SHEET_SECONDS секунд. Считайте, что $spent " +
+                        "вы потратили на что-то другое.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (counted.since > 0L) {
+                    Spacer(Modifier.height(8.dp))
+                    val day = Instant.ofEpochMilli(counted.since)
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate()
+                    Text(
+                        "Счёт идёт с ${formatDayTitle(day)}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Ладно") } },
+    )
+}
 
 /**
  * Ссылка на онлайн-занятие: две кнопки и ничего больше.

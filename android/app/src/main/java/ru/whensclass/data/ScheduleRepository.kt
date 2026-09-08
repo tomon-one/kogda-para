@@ -1,6 +1,7 @@
 package ru.whensclass.data
 
 import android.content.Context
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +15,6 @@ import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.WeekWidget
 
-/** Что случилось при обновлении — приложению есть что показать, виджету нет. */
 /** Сколько дней держим на телефоне: неделя целиком. */
 const val DAYS = 7
 
@@ -32,6 +32,7 @@ fun weekStart(today: java.time.LocalDate = java.time.LocalDate.now()): java.time
         today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
     }
 
+/** Что случилось при обновлении — приложению есть что показать, виджету нет. */
 sealed interface RefreshResult {
     data object Updated : RefreshResult
     data object AlreadyFresh : RefreshResult
@@ -87,7 +88,20 @@ class ScheduleRepository(
         ScheduleWidget().updateAll(context)
         WeekWidget().updateAll(context)
         NextLessonWidget().updateAll(context)
+        // Считаем только тогда, когда виджет и правда стоит на экране.
+        // Перерисовка пустого места ответом не была: счётчик обещает, что
+        // столько раз расписание показали вместо таблицы.
+        if (widgetsPlaced()) store.countWidgetDraw()
     }
+
+    private suspend fun widgetsPlaced(): Boolean = runCatching {
+        val manager = GlanceAppWidgetManager(context)
+        listOf(
+            ScheduleWidget::class.java,
+            WeekWidget::class.java,
+            NextLessonWidget::class.java,
+        ).any { manager.getGlanceIds(it).isNotEmpty() }
+    }.getOrDefault(false)
 
     /**
      * Добавить пары соседней подгруппы, если она выбрана.
