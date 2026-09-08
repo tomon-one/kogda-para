@@ -81,6 +81,9 @@ class ScheduleRepository(
     }
 
     /** Перерисовать все виджеты: день, неделю и ближайшую пару. */
+    /** Перерисовать виджеты по тому, что уже лежит на телефоне. */
+    suspend fun redrawWidgets() = updateWidgets()
+
     private suspend fun updateWidgets() {
         ScheduleWidget().updateAll(context)
         WeekWidget().updateAll(context)
@@ -93,13 +96,23 @@ class ScheduleRepository(
      * Не достучались до неё — показываем своё расписание как есть: без пары
      * соседей человек всё же обойдётся, а без своих пар — нет.
      */
-    private suspend fun withSecondGroup(mine: ScheduleDto): ScheduleDto {
-        val second = store.currentSecondGroupId() ?: return mine
+    private suspend fun withSecondGroup(mine: ScheduleDto): Merged {
+        val second = store.currentSecondGroupId() ?: return Merged(mine, whole = true)
         val extra = runCatching {
             api.schedule(second, from = weekStart(), days = DAYS)
-        }.getOrNull() ?: return mine
-        return mergeSecondGroup(mine, extra)
+        }.getOrNull() ?: return Merged(mine, whole = false)
+        return Merged(mergeSecondGroup(mine, extra), whole = true)
     }
+
+    /**
+     * Расписание и признак того, что склейка удалась целиком.
+     *
+     * Когда запрос за парами соседней подгруппы не прошёл, мы показываем своё
+     * расписание без них — так лучше, чем ничего. Но сравнивать такой обрубок с
+     * прежним полным снимком нельзя: разница выглядит как отмена, и человеку
+     * уходило уведомление «убрали 3 пару» на пару, которая никуда не делась.
+     */
+    private data class Merged(val schedule: ScheduleDto, val whole: Boolean)
 
     suspend fun groups(): List<GroupDto> = withContext(Dispatchers.IO) {
         val cached = store.groupsJson.first()
@@ -171,6 +184,7 @@ class ScheduleRepository(
     suspend fun refresh(force: Boolean = false): RefreshResult = withContext(Dispatchers.IO) {
         val teacherMode = store.teacherMode()
         val subject = if (teacherMode) store.teacherId.first() else store.currentGroupId()
+        val second = store.currentSecondGroupId()
         if (subject == null) return@withContext RefreshResult.NoGroup
         try {
             // Сохранённые дни начинаются с даты загрузки, поэтому со временем
@@ -193,21 +207,29 @@ class ScheduleRepository(
             } else {
                 api.schedule(subject, from = weekStart(), days = DAYS)
             }
-            val full = if (teacherMode) fresh else withSecondGroup(fresh)
+            val merged = if (teacherMode) Merged(fresh, whole = true) else withSecondGroup(fresh)
+            val full = merged.schedule
 
             // Пока шёл запрос, человек мог сменить группу, роль или подгруппу.
             // Тогда пришедшее расписание — чужое, и записывать его нельзя: оно
             // молча возвращало на экран прежние пары поверх только что выбранных.
             val nowTeacher = store.teacherMode()
             val nowSubject = if (nowTeacher) store.teacherId.first() else store.currentGroupId()
-            if (nowTeacher != teacherMode || nowSubject != subject) {
+            // Подгруппу проверяем тоже: запрос, начатый до её смены, приносил
+            // склейку с прежней соседкой и записывал её поверх новой.
+            if (nowTeacher != teacherMode ||
+                nowSubject != subject ||
+                store.currentSecondGroupId() != second
+            ) {
                 return@withContext RefreshResult.AlreadyFresh
             }
 
             val previous = schedule.first()
             store.putSchedule(json.encodeToString(full), full.generatedAt)
             updateWidgets()
-            announceChanges(previous, full)
+            // Об изменениях говорим только по целому снимку: обрубок без пар
+            // соседней подгруппы отличается от прежнего так же, как отмена.
+            if (merged.whole) announceChanges(previous, full)
             LessonAlarms.reschedule(context)
             RefreshResult.Updated
         } catch (error: Exception) {

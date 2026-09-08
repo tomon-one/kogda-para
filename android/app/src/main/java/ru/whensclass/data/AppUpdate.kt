@@ -36,14 +36,32 @@ data class ReleaseDto(
 class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
     private companion object {
-        const val POLL_MS = 400L
-        const val DOWNLOAD_TIMEOUT_MS = 120_000L
+        /** Куда кладём скачанное. Внутренняя память: снаружи туда не залезть. */
+        const val DIR = "updates"
     }
 
-    /** Новая сборка, если она есть и она новее установленной. */
-    suspend fun check(): ReleaseDto? = withContext(Dispatchers.IO) {
-        val release = runCatching { api.release() }.getOrNull() ?: return@withContext null
-        if (release.versionCode > BuildConfig.VERSION_CODE) release else null
+    /**
+     * Что известно о новой сборке.
+     *
+     * Раньше проверка возвращала null и на «обновлений нет», и на «не дозвонился
+     * до сервера», а настройки в обоих случаях писали «Установлена последняя
+     * версия». Магазина нет, узнать об исправлении больше неоткуда: приложение
+     * не должно утверждать про версию то, чего оно не знает.
+     */
+    sealed interface Check {
+        data class Available(val release: ReleaseDto) : Check
+        data object UpToDate : Check
+        data object Failed : Check
+    }
+
+    suspend fun check(): Check = withContext(Dispatchers.IO) {
+        val release = runCatching { api.release() }.getOrNull()
+            ?: return@withContext Check.Failed
+        if (release.versionCode > BuildConfig.VERSION_CODE) {
+            Check.Available(release)
+        } else {
+            Check.UpToDate
+        }
     }
 
     /**
@@ -55,7 +73,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
      */
     suspend fun announceIfNew(store: ScheduleStore) {
         if (!store.notifyUpdatesEnabled()) return
-        val release = check() ?: return
+        val release = (check() as? Check.Available)?.release ?: return
         if (store.announcedVersion() >= release.versionCode) return
 
         Notifications.newVersion(
@@ -66,6 +84,12 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         store.setAnnouncedVersion(release.versionCode)
     }
 
+    /** Чем кончилась попытка обновиться. */
+    sealed interface Result {
+        data object Started : Result
+        data class Failed(val why: String) : Result
+    }
+
     /**
      * Скачивает обновление и открывает установщик, когда файл готов.
      *
@@ -73,58 +97,59 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
      * очередь, второе — открывало установщик. Со стороны это выглядело как
      * кнопка, срабатывающая через раз.
      */
-    suspend fun downloadAndInstall(release: ReleaseDto): Boolean {
-        downloaded(release)?.let {
-            install(it)
-            return true
-        }
-
-        val id = download(release)
-        val manager = context.getSystemService(DownloadManager::class.java) ?: return false
-
-        // Ждём окончания загрузки, поглядывая на её состояние: файл небольшой,
-        // но на плохой связи это может занять с минуту.
-        withContext(Dispatchers.IO) {
-            var waited = 0L
-            while (waited < DOWNLOAD_TIMEOUT_MS) {
-                val status = manager.query(DownloadManager.Query().setFilterById(id)).use { row ->
-                    if (!row.moveToFirst()) DownloadManager.STATUS_FAILED
-                    else row.getInt(row.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+    suspend fun downloadAndInstall(release: ReleaseDto): Result = withContext(Dispatchers.IO) {
+        val file = File(dir(), name(release))
+        if (!ready(file, release)) {
+            // Недокачанный файл раньше считался готовым: проверки было ровно
+            // «существует и не пустой». Установщик получал обрезанный APK и
+            // говорил «Не удалось выполнить синтаксический анализ пакета» —
+            // на файле, который просто не дошёл.
+            file.delete()
+            val written = runCatching { api.downloadTo(release.url, file) }
+                .getOrElse { error ->
+                    file.delete()
+                    return@withContext Result.Failed(reason(error))
                 }
-                if (status == DownloadManager.STATUS_SUCCESSFUL ||
-                    status == DownloadManager.STATUS_FAILED
-                ) {
-                    return@withContext
-                }
-                delay(POLL_MS)
-                waited += POLL_MS
+            if (!ready(file, release)) {
+                file.delete()
+                return@withContext Result.Failed(
+                    "файл дошёл не целиком: $written из ${release.size} байт",
+                )
             }
         }
-
-        val file = downloaded(release) ?: return false
+        sweep(file)
         install(file)
-        return true
+        Result.Started
     }
 
-    /** Ставит файл в очередь загрузки и возвращает её номер. */
-    private fun download(release: ReleaseDto): Long {
-        val name = "kogda-para-${release.versionName}.apk"
-        val saved = File(
-            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-            name,
-        )
-        if (saved.exists()) saved.delete()
+    private fun reason(error: Throwable): String = when (error) {
+        is java.net.UnknownHostException -> "нет связи с сервером"
+        is java.net.SocketTimeoutException -> "сервер не ответил вовремя"
+        is java.io.IOException -> error.message ?: "не удалось скачать"
+        else -> "не удалось скачать"
+    }
 
-        val request = DownloadManager.Request(Uri.parse(release.url))
-            .setTitle("Когда пара? ${release.versionName}")
-            .setDescription("Загрузка обновления")
-            .setNotificationVisibility(
-                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
-            )
-            .setDestinationInExternalFilesDir(
-                context, Environment.DIRECTORY_DOWNLOADS, name,
-            )
-        return context.getSystemService(DownloadManager::class.java)?.enqueue(request) ?: -1
+    /**
+     * Готов ли файл к установке.
+     *
+     * Сервер присылает размер сборки — сверяем с ним. Без этой сверки годным
+     * считался любой непустой файл, и оборванная загрузка навсегда занимала
+     * место «уже скачанного обновления».
+     */
+    private fun ready(file: File, release: ReleaseDto): Boolean =
+        file.exists() && release.size > 0 && file.length() == release.size
+
+    private fun dir(): File = File(context.filesDir, DIR).apply { mkdirs() }
+
+    // Имя по номеру сборки, а не по имени версии: имя человеку показывают, а
+    // машине оно не годится — две сборки могут называться одинаково.
+    private fun name(release: ReleaseDto): String = "kogda-para-${release.versionCode}.apk"
+
+    /** Убирает всё, кроме текущего файла: прошлые сборки копились навсегда. */
+    private fun sweep(keep: File) {
+        dir().listFiles()?.forEach { file ->
+            if (file != keep) file.delete()
+        }
     }
 
     /** Открывает системный установщик для уже скачанного файла. */
@@ -138,12 +163,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         context.startActivity(intent)
     }
 
-    /** Уже скачанный файл этой версии, если он есть. */
-    fun downloaded(release: ReleaseDto): File? {
-        val file = File(
-            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-            "kogda-para-${release.versionName}.apk",
-        )
-        return file.takeIf { it.exists() && it.length() > 0 }
-    }
+    /** Уже скачанный и проверенный файл этой версии, если он есть. */
+    fun downloaded(release: ReleaseDto): File? =
+        File(dir(), name(release)).takeIf { ready(it, release) }
 }

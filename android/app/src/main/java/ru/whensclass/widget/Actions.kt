@@ -9,6 +9,7 @@ import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import kotlinx.coroutines.delay
 import ru.whensclass.AppContainer
+import ru.whensclass.data.RefreshResult
 
 /**
  * Переключение дня в виджете.
@@ -50,21 +51,31 @@ class RefreshAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
-        mark(context, glanceId, busy = true, done = false)
-        AppContainer.get(context).repository.refresh(force = true)
+        mark(context, glanceId, busy = true, done = false, failed = false)
+        val result = AppContainer.get(context).repository.refresh(force = true)
         // «Обновлено» на пару секунд: время в шапке меняется, только когда
         // расписание и правда другое, а нажавшему нужен ответ в любом случае.
-        mark(context, glanceId, busy = false, done = true)
+        // Но ответ должен быть честным: раньше «обновлено» загоралось и после
+        // неудачи, потому что на результат никто не смотрел.
+        val failed = result is RefreshResult.Failed
+        mark(context, glanceId, busy = false, done = !failed, failed = failed)
         delay(DONE_MS)
-        mark(context, glanceId, busy = false, done = false)
+        mark(context, glanceId, busy = false, done = false, failed = false)
     }
 
     /** Отметка состояния и сразу перерисовка: запрос идёт заметные секунды. */
-    private suspend fun mark(context: Context, glanceId: GlanceId, busy: Boolean, done: Boolean) {
+    private suspend fun mark(
+        context: Context,
+        glanceId: GlanceId,
+        busy: Boolean,
+        done: Boolean,
+        failed: Boolean,
+    ) {
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
             prefs.toMutablePreferences().apply {
                 this[ScheduleWidget.KEY_BUSY] = busy
                 this[ScheduleWidget.KEY_DONE] = done
+                this[ScheduleWidget.KEY_FAILED] = failed
             }
         }
         // Кнопка есть на обоих виджетах, а перерисовать нужно тот, на котором

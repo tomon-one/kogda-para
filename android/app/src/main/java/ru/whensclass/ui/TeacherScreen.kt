@@ -52,6 +52,7 @@ fun TeacherScreen(
     searchLabel: String = "Поиск по фамилии",
     showGroups: Boolean = true,
     selfId: String? = null,
+    startDay: String? = null,
     ownScheduleTitle: String = "Посмотреть других преподавателей",
     othersTitle: String = "Другие преподаватели",
 ) {
@@ -64,6 +65,7 @@ fun TeacherScreen(
                 schedule = ownSchedule,
                 today = remember { LocalDate.now() },
                 modifier = Modifier.weight(1f),
+                startDay = startDay,
             )
             TextButton(
                 onClick = { browsing = true },

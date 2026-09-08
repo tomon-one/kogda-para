@@ -55,6 +55,7 @@ fun ScheduleWidgetContent(
     offset: Int,
     busy: Boolean = false,
     done: Boolean = false,
+    failed: Boolean = false,
     modifier: GlanceModifier = GlanceModifier,
 ) {
     val size = LocalSize.current
@@ -79,6 +80,7 @@ fun ScheduleWidgetContent(
             lastOffset(schedule),
             busy,
             done,
+            failed,
             fit,
             colors,
         )
@@ -88,7 +90,7 @@ fun ScheduleWidgetContent(
         when {
             groupName == null -> Hint("Откройте приложение и выберите свою группу", colors)
             schedule == null -> Hint("Расписание ещё не загружено", colors)
-            today == null -> Hint("Расписание на этот день ещё не опубликовано", colors)
+            today == null -> Hint(missingDay(schedule, day, fetchedAt), colors)
             today.lessons.isEmpty() -> Hint("Пар нет", colors)
             else -> Lessons(
                 today.lessons,
@@ -138,6 +140,7 @@ private fun Header(
     lastDay: Int,
     busy: Boolean,
     done: Boolean,
+    failed: Boolean,
     fit: Fit,
     colors: Palette,
 ) {
@@ -193,6 +196,7 @@ private fun Header(
                 Text(
                     when {
                         busy -> " · обновляю…"
+                        failed -> " · не вышло"
                         done -> " · обновлено"
                         else -> " · " + formatFetchedShort(fetchedAt)
                     },
@@ -200,8 +204,8 @@ private fun Header(
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
+                            failed || isStale(fetchedAt) -> colors.error
                             busy || done -> colors.accent
-                            isStale(fetchedAt) -> colors.error
                             else -> colors.textDim
                         },
                     ),
@@ -216,7 +220,11 @@ private fun Header(
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
-                        color = if (busy || done) colors.accent else colors.textDim,
+                        color = when {
+                            failed -> colors.error
+                            busy || done -> colors.accent
+                            else -> colors.textDim
+                        },
                     ),
                     modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )
@@ -315,6 +323,26 @@ private fun Lessons(
 }
 
 /**
+ * Почему дня нет в расписании.
+ *
+ * Раньше на любой такой случай виджет отвечал «ещё не опубликовано» —
+ * утверждением о колледже, которого приложение в этот момент знать не может.
+ * Воскресенье внутри опубликованного листа объявлялось неопубликованным, а
+ * недельной давности данные — тоже.
+ */
+private fun missingDay(schedule: ScheduleDto, day: LocalDate, fetchedAt: Long): String {
+    val covered = schedule.coverage.size == 2 && runCatching {
+        !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
+            !day.isAfter(LocalDate.parse(schedule.coverage[1]))
+    }.getOrDefault(false)
+    return when {
+        covered -> "Выходной: пар в этот день нет"
+        isStale(fetchedAt) -> "Данные устарели. Нажмите на время в шапке"
+        else -> "Расписание на этот день ещё не опубликовано"
+    }
+}
+
+/**
  * С какой пары начинать список, когда влезают не все.
  *
  * К обеду первые пары уже не нужны, а последние не видны. Поэтому сегодняшний
@@ -334,7 +362,11 @@ private fun windowStart(
             ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
         end == null || !now.isAfter(end)
     }
-    if (index <= 0) return 0
+    // Все пары кончились: остаёмся в конце дня. Раньше indexOfFirst возвращал
+    // −1, условие «index <= 0» отбрасывало окно в начало, и вечером виджет
+    // прыгал обратно на утренние пары.
+    if (index < 0) return maxOf(0, lessons.size - fits)
+    if (index == 0) return 0
     // У конца дня не оставляем пустоту снизу: окно упирается в последнюю пару.
     return minOf(index, maxOf(0, lessons.size - fits))
 }

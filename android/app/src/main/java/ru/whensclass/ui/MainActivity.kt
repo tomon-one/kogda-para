@@ -38,6 +38,7 @@ import androidx.core.view.WindowCompat
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
+import ru.whensclass.data.AppUpdate
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.ReleaseDto
@@ -60,8 +61,18 @@ class MainActivity : ComponentActivity() {
     // настройках телефона, поэтому перечитываем при каждом возвращении.
     private val notifications = mutableStateOf(true)
 
+    // Первый onResume идёт сразу за onCreate, где расписание уже запрошено:
+    // второй запрос подряд там ни к чему.
+    private var started = false
+
     override fun onResume() {
         super.onResume()
+        // «Приложение забирает расписание при каждом открытии» — обещание из
+        // настроек. Оба захода за расписанием висели на onCreate, поэтому
+        // возврат из фона (список недавних, значок на экране) ничего не
+        // запрашивал: Activity жива, onCreate не зовётся.
+        if (started) SyncWorker.now(this)
+        started = true
         notifications.value = Notifications.allowed(this)
         val allowed = LessonAlarms.exactAllowed(this)
         if (allowed != exactAlarms.value) {
@@ -193,6 +204,12 @@ private fun App(
 
     var screen by remember { mutableStateOf(if (openUpdate) Screen.SETTINGS else Screen.TODAY) }
     var update by remember { mutableStateOf<ReleaseDto?>(null) }
+    // Отдельно от update: «сервер сказал, что новее ничего нет» и «до сервера
+    // не достучались» — разные вещи, и человеку об этом надо говорить разное.
+    var updateFailed by remember { mutableStateOf(false) }
+    // Почему не удалось скачать. Раньше провал был молчаливым: кнопка
+    // возвращалась из «Скачиваю…» в исходное, и всё.
+    var updateError by remember { mutableStateOf<String?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
     var updateChecked by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
@@ -222,7 +239,9 @@ private fun App(
 
     // Проверяем обновление один раз при запуске: чаще незачем, сборки выходят
     // не по расписанию.
-    LaunchedEffect(Unit) { update = container.updates.check() }
+    LaunchedEffect(Unit) {
+        (container.updates.check() as? AppUpdate.Check.Available)?.let { update = it.release }
+    }
 
     // И сразу забираем свежее расписание: после установки новой версии старые
     // данные на экране выглядят как поломка.
@@ -298,6 +317,11 @@ private fun App(
                             onPick = { group: GroupDto ->
                                 scope.launch {
                                     container.store.selectSecondGroup(group.id, group.name)
+                                    // Перерисовать сразу: смена подгруппы стирает
+                                    // расписание, и до ответа сети виджет иначе
+                                    // показывает пары прежней соседки. Если сети
+                                    // нет вовсе, он так и останется с ними.
+                                    container.repository.redrawWidgets()
                                     container.repository.refresh(force = true)
                                     pickSecond = false
                                     screen = Screen.SETTINGS
@@ -380,10 +404,23 @@ private fun App(
                         focusUpdate = focusUpdate,
                         checkingUpdate = checkingUpdate,
                         updateChecked = updateChecked,
+                        updateFailed = updateFailed,
+                        updateError = updateError,
                         onCheckUpdate = {
                             scope.launch {
                                 checkingUpdate = true
-                                update = container.updates.check()
+                                updateError = null
+                                when (val result = container.updates.check()) {
+                                    is AppUpdate.Check.Available -> {
+                                        update = result.release
+                                        updateFailed = false
+                                    }
+                                    AppUpdate.Check.UpToDate -> {
+                                        update = null
+                                        updateFailed = false
+                                    }
+                                    AppUpdate.Check.Failed -> updateFailed = true
+                                }
                                 checkingUpdate = false
                                 updateChecked = true
                             }
@@ -393,7 +430,11 @@ private fun App(
                             if (release != null) {
                                 scope.launch {
                                     installing = true
-                                    container.updates.downloadAndInstall(release)
+                                    updateError = null
+                                    val result = container.updates.downloadAndInstall(release)
+                                    if (result is AppUpdate.Result.Failed) {
+                                        updateError = result.why
+                                    }
                                     installing = false
                                 }
                             }
@@ -421,6 +462,7 @@ private fun App(
                         onClearSecondGroup = {
                             scope.launch {
                                 container.store.clearSecondGroup()
+                                container.repository.redrawWidgets()
                                 container.repository.refresh(force = true)
                             }
                         },

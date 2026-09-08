@@ -75,6 +75,7 @@ class WeekWidget : GlanceAppWidget() {
                     state?.fetchedAt ?: 0L,
                     currentState(ScheduleWidget.KEY_BUSY) == true,
                     currentState(ScheduleWidget.KEY_DONE) == true,
+                    currentState(ScheduleWidget.KEY_FAILED) == true,
                     colors,
                 )
                 Spacer(GlanceModifier.height(6.dp))
@@ -84,7 +85,11 @@ class WeekWidget : GlanceAppWidget() {
                         Hint("Откройте приложение и выберите свою группу", colors)
 
                     schedule == null -> Hint("Расписание ещё не загружено", colors)
-                    days.isEmpty() -> Hint("На эту неделю расписания нет", colors)
+                    // Проверяем то, что рисуется, а не то, что пришло: дни
+                    // старше сегодняшнего виджет выбрасывает, и при непустом
+                    // days под шапкой оставалась пустота без единого слова.
+                    weekDays(days).isEmpty() ->
+                        Hint("Расписание кончилось. Нажмите на время в шапке", colors)
                     // Долю высоты список получает здесь, из Column:
                     // без неё он в некоторых оболочках схлопывается в
                     // ноль, и под шапкой остаётся пустота.
@@ -107,6 +112,7 @@ private fun Header(
     fetchedAt: Long,
     busy: Boolean,
     done: Boolean,
+    failed: Boolean,
     colors: Palette,
 ) {
     val context = LocalContext.current
@@ -150,6 +156,7 @@ private fun Header(
         Text(
             when {
                 busy -> "обновляю…"
+                failed -> "не вышло"
                 done -> "обновлено"
                 else -> formatFetchedShort(fetchedAt)
             },
@@ -157,8 +164,8 @@ private fun Header(
             style = TextStyle(
                 fontSize = 11.sp,
                 color = when {
+                    failed || isStale(fetchedAt) -> colors.error
                     busy || done -> colors.accent
-                    isStale(fetchedAt) -> colors.error
                     else -> colors.textDim
                 },
             ),

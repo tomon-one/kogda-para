@@ -38,6 +38,9 @@ fun formatWeekDay(day: LocalDate): String =
  */
 fun formatWeekRange(from: LocalDate, to: LocalDate): String {
     val month = DateTimeFormatter.ofPattern("MMM", RU)
+    // В субботу и в последний день листа виден один день, и «12–12 сент.»
+    // читается как опечатка.
+    if (from == to) return "Неделя, ${from.dayOfMonth} ${from.format(month)}"
     return if (from.month == to.month) {
         "Неделя ${from.dayOfMonth}–${to.dayOfMonth} ${to.format(month)}"
     } else {

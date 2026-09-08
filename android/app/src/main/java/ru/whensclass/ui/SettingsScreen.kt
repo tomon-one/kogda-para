@@ -85,6 +85,8 @@ fun SettingsScreen(
     focusUpdate: Boolean,
     checkingUpdate: Boolean,
     updateChecked: Boolean,
+    updateFailed: Boolean,
+    updateError: String?,
     onCheckUpdate: () -> Unit,
     onTheme: (ThemeChoice) -> Unit,
     onChangeGroup: () -> Unit,
@@ -315,14 +317,31 @@ fun SettingsScreen(
                     onClick = onUpdate,
                     enabled = !installing,
                 )
+                updateError?.let { why ->
+                    Text(
+                        "Не удалось: $why",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             } else {
                 // Раньше кнопка молчала, когда обновления не было, и выглядела
                 // сломанной. Теперь всегда отвечает.
                 if (updateChecked && !checkingUpdate) {
+                    // «Не дозвонился» и «новее нет» раньше выглядели одинаково,
+                    // и человек уходил уверенным, что у него свежая сборка.
                     Text(
-                        "Установлена последняя версия",
+                        if (updateFailed) {
+                            "Проверить не вышло: сервер не ответил"
+                        } else {
+                            "Установлена последняя версия"
+                        },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (updateFailed) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
                 ActionButton(

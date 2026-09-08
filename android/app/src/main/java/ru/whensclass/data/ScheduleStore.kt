@@ -268,6 +268,13 @@ class ScheduleStore(private val context: Context) {
         prefs.remove(KEY_GENERATED_AT)
     }
 
+    /** Дата последней перерисовки виджетов: по ней узнаём смену суток. */
+    suspend fun lastWidgetDay(): String? = context.dataStore.data.first()[KEY_WIDGET_DAY]
+
+    suspend fun setLastWidgetDay(day: String) {
+        context.dataStore.edit { it[KEY_WIDGET_DAY] = day }
+    }
+
     suspend fun putSchedule(body: String, generatedAt: String) {
         context.dataStore.edit {
             it[KEY_SCHEDULE] = body
@@ -308,6 +315,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_FETCHED_AT = stringPreferencesKey("fetched_at")
         val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
         val KEY_THEME = stringPreferencesKey("theme")
+        val KEY_WIDGET_DAY = stringPreferencesKey("widget_day")
         val KEY_WELCOME = stringPreferencesKey("welcome_seen")
         val KEY_GROUP2_ID = stringPreferencesKey("group2_id")
         val KEY_GROUP2_NAME = stringPreferencesKey("group2_name")

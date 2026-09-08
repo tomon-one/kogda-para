@@ -65,7 +65,13 @@ def app_release(request: Request) -> Response:
         return Response(status_code=404, content='{"error":"сборка не выложена"}',
                         media_type=JSON)
 
+    # Схему берём не из запроса: служба намеренно не верит заголовкам от
+    # nginx (--no-proxy-headers, иначе в журнал попадал адрес телефона), и
+    # request.base_url для неё всегда http. Приложение должно качать по https:
+    # ссылка уходит наружу и переживает нас в чатах.
     base = str(request.base_url).rstrip("/")
+    if base.startswith("http://") and not base.startswith("http://127."):
+        base = "https://" + base[len("http://"):]
     body = {
         "v": 1,
         "versionCode": release["versionCode"],

@@ -90,3 +90,22 @@ def test_user_agent_is_ascii():
     from whensclass.config import settings
 
     settings.user_agent.encode("latin-1")
+
+
+def test_release_url_is_https(client, monkeypatch):
+    """Ссылка на сборку уходит наружу и живёт в чатах: только https.
+
+    Служба не верит заголовкам от nginx (иначе в журнал попадал бы адрес
+    телефона), поэтому сама она видит http. Раньше этот адрес и попадал
+    в /v1/app, и приложение шло качать обновление по незащищённому каналу.
+    """
+    from whensclass.api import routes
+
+    monkeypatch.setattr(routes, "latest_release", lambda _: {
+        "versionCode": 1,
+        "versionName": "b-Тест.0.0.1",
+        "file": "kogda-para-1.apk",
+    })
+    body = client.get("/v1/app").json()
+    assert body["url"].startswith("https://"), body["url"]
+    assert body["url"].endswith("/download/kogda-para-1.apk")

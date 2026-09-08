@@ -51,6 +51,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 offset = currentOffset(),
                 busy = currentState(KEY_BUSY) == true,
                 done = currentState(KEY_DONE) == true,
+                failed = currentState(KEY_FAILED) == true,
             )
         }
     }
@@ -67,6 +68,7 @@ class ScheduleWidget : GlanceAppWidget() {
         offset: Int,
         busy: Boolean,
         done: Boolean,
+        failed: Boolean,
     ) {
         ScheduleWidgetContent(
             schedule = schedule,
@@ -74,6 +76,7 @@ class ScheduleWidget : GlanceAppWidget() {
             fetchedAt = fetchedAt,
             busy = busy,
             done = done,
+            failed = failed,
             colors = colors,
             day = LocalDate.now().plusDays(offset.toLong()),
             offset = offset,
@@ -82,6 +85,21 @@ class ScheduleWidget : GlanceAppWidget() {
     }
 
     /** Утром виджет обязан показывать сегодня, а не вчерашнее «завтра». */
+    /**
+     * Сменились ли сутки с прошлой проверки.
+     *
+     * Дата последней перерисовки лежит в общем хранилище, а не привязана к часу
+     * срабатывания будильника: он неточный, телефон ночью спит, а после
+     * перезагрузки будильник и вовсе не переживает выключение.
+     */
+    suspend fun newDay(context: Context): Boolean {
+        val store = AppContainer.get(context).store
+        val today = java.time.LocalDate.now().toString()
+        if (store.lastWidgetDay() == today) return false
+        store.setLastWidgetDay(today)
+        return true
+    }
+
     suspend fun resetDayOffset(context: Context) {
         val manager = GlanceAppWidgetManager(context)
         manager.getGlanceIds(ScheduleWidget::class.java).forEach { id ->
@@ -98,6 +116,7 @@ class ScheduleWidget : GlanceAppWidget() {
         /** Идёт ли сейчас обновление: нажатие должно отзываться сразу. */
         val KEY_BUSY = booleanPreferencesKey("busy")
         val KEY_DONE = booleanPreferencesKey("done")
+        val KEY_FAILED = booleanPreferencesKey("failed")
 
         /** Дальше недели листать нечего: ровно столько храним на телефоне. */
         const val MAX_OFFSET = 6
