@@ -80,7 +80,6 @@ class ScheduleRepository(
         Notifications.changes(context, "Расписание изменилось", text)
     }
 
-    /** Перерисовать все виджеты: день, неделю и ближайшую пару. */
     /** Перерисовать виджеты по тому, что уже лежит на телефоне. */
     suspend fun redrawWidgets() = updateWidgets()
 

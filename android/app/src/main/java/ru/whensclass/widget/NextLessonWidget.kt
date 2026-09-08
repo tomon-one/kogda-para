@@ -118,7 +118,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     style = TextStyle(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (lesson.url != null) colors.accent else colors.text,
+                        color = if (lesson.isOnline) colors.accent else colors.text,
                     ),
                     modifier = lesson.url?.let { url ->
                         val context = LocalContext.current
@@ -164,9 +164,11 @@ fun nextLesson(schedule: ScheduleDto?, today: LocalDate): NextLesson? {
 
 private fun place(lesson: LessonDto): String = buildString {
     kindName(lesson.kind)?.let { append(it) }
-    if (lesson.url != null) {
+    if (lesson.isOnline) {
         if (isNotEmpty()) append(" · ")
-        append("онлайн  ⧉")
+        // Значок обещает, что по нажатию скопируется ссылка. Пары без
+        // ссылки помечены тем же словом, но нажимать там нечего.
+        append(if (lesson.url != null) "онлайн  ⧉" else "онлайн")
     } else {
         if (isNotEmpty()) append(" · ")
         append(roomLabel(lesson.room) ?: "не указано")

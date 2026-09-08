@@ -11,6 +11,7 @@ class ScheduleDiffTest {
         subject: String,
         room: String? = null,
         url: String? = null,
+        online: Boolean = false,
         cancelled: Boolean = false,
         groups: String? = null,
     ) = LessonDto(
@@ -18,6 +19,7 @@ class ScheduleDiffTest {
         subject = subject,
         room = room,
         url = url,
+        online = if (online) 1 else 0,
         cancelled = if (cancelled) 1 else 0,
         groups = groups,
     )
@@ -48,6 +50,29 @@ class ScheduleDiffTest {
         val texts = ScheduleDiff.compare(was, now).map { it.text }
         assertTrue(texts.contains("3 пара переехала в 355"))
         assertTrue(texts.contains("отменили 4 пару: Физика"))
+    }
+
+    @Test
+    fun `дописанная ссылка не выдаётся за переход в онлайн`() {
+        // Живой случай 8 сентября: пары стояли онлайн со словом вместо
+        // аудитории, вечером к ним дописали ссылки — и приложение
+        // объявило все четыре «стали онлайн».
+        val was = schedule(lesson(2, "Английский", online = true))
+        val now = schedule(
+            lesson(2, "Английский", online = true, url = "https://mts-link/1"),
+        )
+        val texts = ScheduleDiff.compare(was, now).map { it.text }
+        assertEquals(listOf("у 2 пары появилась ссылка"), texts)
+    }
+
+    @Test
+    fun `настоящий переход в онлайн назван словами`() {
+        val was = schedule(lesson(2, "Английский", room = "272"))
+        val now = schedule(lesson(2, "Английский", online = true))
+        assertEquals(
+            listOf("2 пара стала онлайн"),
+            ScheduleDiff.compare(was, now).map { it.text },
+        )
     }
 
     @Test

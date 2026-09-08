@@ -57,4 +57,5 @@ private fun same(a: LessonDto, b: LessonDto): Boolean =
         a.subject.trim() == b.subject.trim() &&
         a.room?.trim() == b.room?.trim() &&
         a.url == b.url &&
+        a.isOnline == b.isOnline &&
         a.isCancelled == b.isCancelled

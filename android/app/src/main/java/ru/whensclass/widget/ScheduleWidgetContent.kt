@@ -211,13 +211,25 @@ private fun Header(
                     ),
                     modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )
+                // Отдельной строкой, а не хвостом времени: внутри одного текста
+                // значок вставал по базовой линии букв и висел выше цифр. Размер
+                // тот же, что у времени, и показывается он всегда — пропадая на
+                // время запроса, он менял высоту строки, и виджет подпрыгивал.
+                Text(
+                    " ⟳",
+                    maxLines = 1,
+                    style = TextStyle(
+                        fontSize = 11.sp,
+                        color = when {
+                            failed -> colors.error
+                            busy || done -> colors.accent
+                            else -> colors.textDim
+                        },
+                    ),
+                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+                )
             }
         }
-        // Обновление стоит в самой строке шапки, а не хвостом ко времени внизу:
-        // в тексте его нельзя выровнять по высоте, и оно висело у нижнего края.
-        // Рядом со стрелками оно ещё и читается как кнопка, а не как знак.
-        RefreshButton(colors = colors, busy = busy, done = done, failed = failed)
-        Spacer(GlanceModifier.width(4.dp))
         ArrowButton("‹", step = -1, enabled = offset > firstDay, colors = colors)
         Spacer(GlanceModifier.width(4.dp))
         ArrowButton("›", step = 1, enabled = offset < lastDay, colors = colors)
@@ -442,7 +454,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
     val parts = buildList {
         if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
         kindName(lesson.kind)?.let { add(it) }
-        add(if (lesson.url != null) "онлайн" else roomLabel(lesson.room) ?: "не указано")
+        add(if (lesson.isOnline) "онлайн" else roomLabel(lesson.room) ?: "не указано")
         // В расписании преподавателя вместо его имени — группы, которым читается
         // пара: сам он и так знает, кто ведёт.
         (lesson.groups ?: lesson.teachers.firstOrNull()?.let(::surnameOnly))?.let { add(it) }
@@ -458,7 +470,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
             fontWeight = FontWeight.Medium,
             color = when {
                 lesson.isCancelled -> colors.error
-                lesson.url != null -> colors.accent
+                lesson.isOnline -> colors.accent
                 else -> colors.text
             },
         ),

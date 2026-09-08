@@ -154,7 +154,7 @@ object LessonAlarms {
     fun text(alarm: Alarm): String = buildString {
         append("${alarm.lesson.number} пара")
         kindName(alarm.lesson.kind)?.let { append(", ${it.lowercase()}") }
-        if (alarm.lesson.url != null) {
+        if (alarm.lesson.isOnline) {
             append(". Занятие онлайн")
         } else {
             roomLabel(alarm.lesson.room)?.let { append(". $it") }

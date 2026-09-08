@@ -106,6 +106,7 @@ def _lesson_to_dict(lesson: Lesson) -> dict:
         "teachers": list(lesson.teachers),
         "room": lesson.room,
         "url": lesson.url,
+        "online": lesson.online,
         "cancelled": lesson.cancelled,
         "note": lesson.note,
     }
@@ -127,6 +128,9 @@ def _from_dict(data: dict) -> Snapshot:
                     teachers=tuple(x["teachers"]),
                     room=x["room"],
                     url=x["url"],
+                    # Снимок на диске мог быть записан до того, как
+                    # признак появился: тогда его просто нет.
+                    online=x.get("online", x["url"] is not None),
                     cancelled=x["cancelled"],
                     note=x.get("note"),
                 )

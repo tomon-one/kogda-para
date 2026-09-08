@@ -618,7 +618,7 @@ private fun LessonRow(
             // поэтому они идут сразу под названием и заметно, а не подписью
             // мелким шрифтом.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (lesson.url != null) {
+                if (lesson.isOnline) {
                     Place("Онлайн")
                 } else {
                     // Ни кабинета, ни ссылки — так и говорим: пустая строка
@@ -715,9 +715,9 @@ private fun OnlineLink(url: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        // Зазор между кнопками: вплотную рамки сливались в одну рамку с
-        // перегородкой, и пара читалась как одна широкая кнопка.
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Волосок между кнопками: вплотную их рамки сливались в одну рамку с
+        // перегородкой, а зазор пошире разносил пару в две разные кнопки.
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             LinkButton("Открыть") { openLink(context, url) }
             LinkButton("Копировать") { copyLink(context, url) }
         }

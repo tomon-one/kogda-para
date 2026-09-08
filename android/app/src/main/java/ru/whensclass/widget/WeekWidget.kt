@@ -171,11 +171,14 @@ private fun Header(
             ),
             modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
         )
-        Spacer(GlanceModifier.width(6.dp))
-        // Кнопка, а не значок в конце строки: строка шапки ставит её по центру
-        // сама, и она перестала выглядеть уехавшей вниз. Показывается всегда —
-        // пропадая на время запроса, она меняла ширину, и шапка дёргалась.
-        RefreshButton(colors = colors, busy = busy, done = done, failed = failed)
+        if (!busy && !done) {
+            Text(
+                " ↻",
+                maxLines = 1,
+                style = TextStyle(fontSize = 12.sp, color = colors.textDim),
+                modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+            )
+        }
     }
 }
 
@@ -402,11 +405,11 @@ private fun LessonLine(
             modifier = GlanceModifier.defaultWeight(),
         )
         Text(
-            if (lesson.url != null) "онлайн" else lesson.room?.trim().orEmpty(),
+            if (lesson.isOnline) "онлайн" else lesson.room?.trim().orEmpty(),
             maxLines = 1,
             style = TextStyle(
                 fontSize = 11.sp,
-                color = if (lesson.url != null) colors.accent else colors.textDim,
+                color = if (lesson.isOnline) colors.accent else colors.textDim,
             ),
             modifier = GlanceModifier.padding(start = 4.dp),
         )

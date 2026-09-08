@@ -21,8 +21,8 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт:
         // по нему приложение узнаёт о новой сборке на сервере.
-        versionCode = 57
-        versionName = "b-Омут.0.7.4"
+        versionCode = 58
+        versionName = "b-Омут.0.7.5"
     }
 
     signingConfigs {

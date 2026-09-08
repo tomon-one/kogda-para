@@ -67,11 +67,17 @@ object ScheduleDiff {
                 previous.isCancelled && !lesson.isCancelled ->
                     changes.add(Change(day, "вернули $number пару: ${lesson.subject}"))
 
-                previous.url == null && lesson.url != null ->
+                // Онлайн — состояние пары, а не наличие ссылки. Ссылку к
+                // давно онлайновой паре дописывают отдельно и позже:
+                // объявлять из-за этого «стала онлайн» значит врать.
+                !previous.isOnline && lesson.isOnline ->
                     changes.add(Change(day, "$number пара стала онлайн"))
 
-                previous.url != null && lesson.url == null ->
+                previous.isOnline && !lesson.isOnline ->
                     changes.add(Change(day, "$number пара снова очная"))
+
+                previous.url == null && lesson.url != null ->
+                    changes.add(Change(day, "у $number пары появилась ссылка"))
 
                 previous.room != lesson.room && lesson.room != null ->
                     changes.add(Change(day, "$number пара переехала в ${lesson.room}"))

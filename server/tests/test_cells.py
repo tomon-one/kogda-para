@@ -41,9 +41,9 @@ CASES = [
         dict(url="https://my.mts-link.ru/j/100000001/20000000018", room=None),
     ),
     (
-        ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 2 (Б.Хмельницкого 2)", ""),
+        ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 1 (Б.Хмельницкого 1)", ""),
         # скобка в конце аудитории — это адрес, а не тип занятия
-        dict(room="Спортзал Б.Хмельницкого 2 (Б.Хмельницкого 2)", kind="Пр"),
+        dict(room="Спортзал Б.Хмельницкого 1 (Б.Хмельницкого 1)", kind="Пр"),
     ),
     (
         ('Технология выполнения работ по профессии "Графический дизайнер" (Пр)',
@@ -81,6 +81,40 @@ def test_unknown_kind_survives():
     assert lesson.kind == "Вебинар"
 
 
+def test_online_word_is_a_state_not_a_room():
+    """«онлайн» в колонке аудитории — это не аудитория.
+
+    Так помечено большинство онлайн-пар: ссылку дают позже или в чате. Считая
+    слово названием аудитории, мы держали такую пару очной — и приложение
+    объявляло «пара стала онлайн» в тот день, когда к ней дописывали ссылку.
+    """
+    lesson = parse_lesson(1, "Информатика (Лек)", "онлайн", "")
+    assert lesson.online is True
+    assert lesson.room is None
+
+
+def test_online_word_survives_upper_case_and_synonyms():
+    for word in ("ОНЛАЙН", "Дистанционно", "удалённо"):
+        assert parse_lesson(1, "Информатика", word, "").online is True, word
+
+
+def test_room_that_only_starts_with_online_stays_a_room():
+    """Сверяем ячейку целиком: «онлайн-центр» был бы зданием, а не вебинаром."""
+    lesson = parse_lesson(1, "Информатика", "онлайн-центр", "")
+    assert lesson.online is False
+    assert lesson.room == "онлайн-центр"
+
+
+def test_link_means_online_too():
+    lesson = parse_lesson(1, "Информатика", "https://my.mts-link.ru/j/4/1", "")
+    assert lesson.online is True
+    assert lesson.url == "https://my.mts-link.ru/j/4/1"
+
+
+def test_ordinary_room_is_not_online():
+    assert parse_lesson(1, "Информатика", "272", "").online is False
+
+
 def test_two_teachers_through_slash():
     """В таблице встречается запись двух преподавателей через косую черту."""
     lesson = parse_lesson(
@@ -115,18 +149,18 @@ AUDIT_CASES = [
     ),
     (
         # Ссылка слитно с подписью: ГД-925/3, 04.09, пара 1.
-        ("Иностранный язык", "онлайнhttps://my.mts-link.ru/j/100000001/20000000019", ""),
-        dict(url="https://my.mts-link.ru/j/100000001/20000000019", room=None),
+        ("Иностранный язык", "онлайнhttps://my.mts-link.ru/j/100000001/20000000020", ""),
+        dict(url="https://my.mts-link.ru/j/100000001/20000000020", room=None),
     ),
     (
         # Голая ссылка разбиралась и раньше.
-        ("Информатика", "https://my.mts-link.ru/j/4/2", ""),
-        dict(url="https://my.mts-link.ru/j/4/2", room=None),
+        ("Информатика", "https://my.mts-link.ru/j/4/1", ""),
+        dict(url="https://my.mts-link.ru/j/4/1", room=None),
     ),
     (
         # Ссылка в колонке предмета: УП-926/1, 07.09, пара 4.
-        ("https://my.mts-link.ru/j/4/2", "", "Новиков Вячеслав Сергеевич"),
-        dict(url="https://my.mts-link.ru/j/4/2", subject="Занятие онлайн"),
+        ("https://my.mts-link.ru/j/4/1", "", "Новиков Вячеслав Сергеевич"),
+        dict(url="https://my.mts-link.ru/j/4/1", subject="Занятие онлайн"),
     ),
     (
         # Причина отмены в колонке аудитории: Т-1125, 07.09, пара 4.

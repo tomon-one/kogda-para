@@ -33,11 +33,18 @@ data class LessonDto(
     @SerialName("t") val teachers: List<String> = emptyList(),
     @SerialName("r") val room: String? = null,
     @SerialName("u") val url: String? = null,
+    // Пара идёт не в аудитории. Признак отдельный от ссылки: чаще всего
+    // в таблице просто написано «онлайн», а ссылку дают позже или в чате
+    // группы, и до неё пара всё равно уже онлайн.
+    @SerialName("o") val online: Int = 0,
     @SerialName("x") val cancelled: Int = 0,
     @SerialName("c") val note: String? = null,
     @SerialName("gr") val groups: String? = null,
 ) {
     val isCancelled: Boolean get() = cancelled != 0
+
+    /** Ссылка без признака — снимок, скачанный до появления поля. */
+    val isOnline: Boolean get() = online != 0 || url != null
 }
 
 @Serializable

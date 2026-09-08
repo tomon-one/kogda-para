@@ -25,6 +25,10 @@ def _lesson(lesson: Lesson) -> dict:
         out["r"] = lesson.room
     if lesson.url:
         out["u"] = lesson.url
+    if lesson.online or lesson.url:
+        # Онлайн без ссылки — обычное дело: ссылку дают позже. Поэтому
+        # признак отдельный, а не выводится из наличия «u».
+        out["o"] = 1
     if lesson.cancelled:
         out["x"] = 1
     if lesson.note:
