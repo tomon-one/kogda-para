@@ -336,9 +336,9 @@ private fun Lessons(
  * Воскресенье внутри опубликованного листа объявлялось неопубликованным, а
  * недельной давности данные — тоже.
  */
-private data class Missing(val text: String, val toSource: Boolean = false)
+internal data class Missing(val text: String, val toSource: Boolean = false)
 
-private fun missingDay(
+internal fun missingDay(
     schedule: ScheduleDto,
     day: LocalDate,
     fetchedAt: Long,
@@ -350,10 +350,14 @@ private fun missingDay(
     }.getOrDefault(false)
     return when {
         covered -> Missing("Выходной: пар в этот день нет")
-        isStale(fetchedAt) -> Missing("Данные устарели. Нажмите на время в шапке")
+        // Сбой проверяем раньше несвежести. Данные при сбое всегда рано
+        // или поздно стареют, и «нажмите на время в шапке» отправляло
+        // человека жать кнопку, которая в этом случае помочь не может.
+        //
         // Пустой день и наша поломка выглядели одинаково, и человек
         // спокойно ждал расписания, которого мы уже не принесём.
         serverBroken -> Missing("Сбой у нас: расписание не обновляется", toSource = true)
+        isStale(fetchedAt) -> Missing("Данные устарели. Нажмите на время в шапке")
         // Единственное объяснение, которое приложение проверить не может:
         // ровно так же выглядит наш собственный промах с поиском листа.
         // Поэтому спорить о виновнике незачем — надо дать выход к таблице.
