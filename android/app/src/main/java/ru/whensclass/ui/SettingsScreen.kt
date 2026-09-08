@@ -532,8 +532,12 @@ private fun ThemeOption(
  * Обычный будильник система вправе отложить, экономя батарею, — на десятки
  * минут, если телефон спит. Для расписания это значит «предупредили, когда
  * пара уже идёт». Точное время требует отдельного разрешения, и выдаётся оно
- * не здесь, а в настройках телефона: переключатель показывает, что там сейчас,
- * и открывает нужный экран.
+ * не здесь, а в настройках телефона.
+ *
+ * Поэтому строка не тумблер, а ссылка: тумблер обещает, что переключится сам,
+ * и нажатие на него выглядело поломкой — бегунок не двигался, а вместо этого
+ * открывался чужой экран. Галочка слева от значка говорит, что там сейчас,
+ * значок — что нажатие уводит наружу.
  *
  * До Android 12 разрешения не существовало — там раздел просто не нужен.
  */
@@ -550,19 +554,26 @@ private fun ExactAlarms(allowed: Boolean) {
         )
     }
     Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .heightIn(min = 48.dp)
+            .clickable(onClick = open),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text("Точные уведомления", style = MaterialTheme.typography.bodyLarge)
-        MinimalSwitch(checked = allowed, onCheckedChange = { open() })
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            MinimalCheck(selected = allowed, modifier = Modifier.padding(end = 10.dp))
+            ExternalMark(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
     Text(
         if (allowed) {
             "Напоминание придёт минута в минуту."
         } else {
-            "Система вправе отложить напоминание, экономя батарею. Нажмите, " +
-                "чтобы разрешить точное время."
+            "Система вправе отложить напоминание, экономя батарею. Нажмите — " +
+                "откроются настройки телефона, разрешение выдаётся там."
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

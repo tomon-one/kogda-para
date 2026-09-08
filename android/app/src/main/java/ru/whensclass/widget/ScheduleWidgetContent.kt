@@ -211,25 +211,13 @@ private fun Header(
                     ),
                     modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                 )
-                // Отдельной строкой, а не хвостом времени: внутри одного текста
-                // значок вставал по базовой линии букв и висел выше цифр. Размер
-                // тот же, что у времени, и показывается он всегда — пропадая на
-                // время запроса, он менял высоту строки, и виджет подпрыгивал.
-                Text(
-                    " ⟳",
-                    maxLines = 1,
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        color = when {
-                            failed -> colors.error
-                            busy || done -> colors.accent
-                            else -> colors.textDim
-                        },
-                    ),
-                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
-                )
             }
         }
+        // Обновление стоит в самой строке шапки, а не хвостом ко времени внизу:
+        // в тексте его нельзя выровнять по высоте, и оно висело у нижнего края.
+        // Рядом со стрелками оно ещё и читается как кнопка, а не как знак.
+        RefreshButton(colors = colors, busy = busy, done = done, failed = failed)
+        Spacer(GlanceModifier.width(4.dp))
         ArrowButton("‹", step = -1, enabled = offset > firstDay, colors = colors)
         Spacer(GlanceModifier.width(4.dp))
         ArrowButton("›", step = 1, enabled = offset < lastDay, colors = colors)

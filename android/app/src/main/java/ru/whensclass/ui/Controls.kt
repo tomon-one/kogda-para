@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
@@ -130,6 +132,48 @@ fun MinimalCheck(selected: Boolean, modifier: Modifier = Modifier) {
                         cornerRadius = CornerRadius(3.dp.toPx()),
                     )
                 }
+            },
+    )
+}
+
+/**
+ * Пометка «нажатие уводит из приложения».
+ *
+ * Строка с тумблером обещает, что переключение случится здесь. Для точного
+ * времени напоминаний это неправда: разрешение выдаёт система, и приложение
+ * может только открыть нужный экран. Без пометки нажатие выглядит поломкой —
+ * тумблер не двигается, а вместо этого куда-то уносит.
+ *
+ * Рисуем сами: рамка с вырезанным углом и стрелка наружу. Своего набора
+ * значков в приложении нет, а тащить материаловский ради одной картинки — это
+ * лишние полтора мегабайта в APK.
+ */
+@Composable
+fun ExternalMark(color: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(16.dp)
+            .drawBehind {
+                val w = size.width
+                val h = size.height
+                val line = 1.5.dp.toPx()
+                val cap = StrokeCap.Round
+                val left = line / 2
+                val bottom = h - line / 2
+                val right = w * 0.66f
+                val top = h * 0.34f
+                // Угол не дорисовываем: в разрыв уходит стрелка.
+                val gap = w * 0.20f
+                drawLine(color, Offset(left, top), Offset(left, bottom), line, cap)
+                drawLine(color, Offset(left, bottom), Offset(right, bottom), line, cap)
+                drawLine(color, Offset(right, bottom), Offset(right, top + gap), line, cap)
+                drawLine(color, Offset(left, top), Offset(right - gap, top), line, cap)
+
+                val tipX = w - line / 2
+                val tipY = line / 2
+                drawLine(color, Offset(w * 0.40f, h * 0.60f), Offset(tipX, tipY), line, cap)
+                drawLine(color, Offset(tipX, tipY), Offset(tipX - w * 0.32f, tipY), line, cap)
+                drawLine(color, Offset(tipX, tipY), Offset(tipX, tipY + h * 0.32f), line, cap)
             },
     )
 }

@@ -715,7 +715,9 @@ private fun OnlineLink(url: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Row {
+        // Зазор между кнопками: вплотную рамки сливались в одну рамку с
+        // перегородкой, и пара читалась как одна широкая кнопка.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LinkButton("Открыть") { openLink(context, url) }
             LinkButton("Копировать") { copyLink(context, url) }
         }
