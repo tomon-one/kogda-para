@@ -69,5 +69,7 @@ data class TeachersDto(
 data class MetaDto(
     @SerialName("gen") val generatedAt: String,
     @SerialName("status") val status: String = "ok",
+    /** Адрес таблицы колледжа: куда идти, когда расписание застряло. */
+    @SerialName("src_url") val sourceUrl: String? = null,
     @SerialName("cov") val coverage: List<String> = emptyList(),
 )

@@ -195,6 +195,8 @@ private fun App(
     val notifyUpdates by container.store.notifyUpdates.collectAsState(initial = true)
     val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
     val teacherMode by container.store.isTeacher.collectAsState(initial = false)
+    val serverStatus by container.store.serverStatus.collectAsState(initial = "ok")
+    val tableUrl by container.store.sourceUrl.collectAsState(initial = null)
     val teacherName by container.store.teacherName.collectAsState(initial = null)
     val teacherId by container.store.teacherId.collectAsState(initial = null)
     val pinnedGroups by container.store.pinnedGroups.collectAsState(initial = emptyList())
@@ -500,6 +502,8 @@ private fun App(
                         refreshError = refreshError,
                         onErrorShown = { refreshError = null },
                         loadTally = { container.store.tally() },
+                        serverBroken = serverStatus != "ok",
+                        sourceUrl = tableUrl,
                         reloadKey = reloadKey,
                         onSettings = {
                             focusUpdate = false

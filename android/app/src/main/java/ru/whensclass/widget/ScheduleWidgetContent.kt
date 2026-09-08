@@ -56,6 +56,7 @@ fun ScheduleWidgetContent(
     busy: Boolean = false,
     done: Boolean = false,
     failed: Boolean = false,
+    serverBroken: Boolean = false,
     modifier: GlanceModifier = GlanceModifier,
 ) {
     val size = LocalSize.current
@@ -90,7 +91,8 @@ fun ScheduleWidgetContent(
         when {
             groupName == null -> Hint("Откройте приложение и выберите свою группу", colors)
             schedule == null -> Hint("Расписание ещё не загружено", colors)
-            today == null -> Hint(missingDay(schedule, day, fetchedAt), colors)
+            today == null ->
+                Hint(missingDay(schedule, day, fetchedAt, serverBroken), colors)
             today.lessons.isEmpty() -> Hint("Пар нет", colors)
             else -> Lessons(
                 today.lessons,
@@ -330,7 +332,12 @@ private fun Lessons(
  * Воскресенье внутри опубликованного листа объявлялось неопубликованным, а
  * недельной давности данные — тоже.
  */
-private fun missingDay(schedule: ScheduleDto, day: LocalDate, fetchedAt: Long): String {
+private fun missingDay(
+    schedule: ScheduleDto,
+    day: LocalDate,
+    fetchedAt: Long,
+    serverBroken: Boolean,
+): String {
     val covered = schedule.coverage.size == 2 && runCatching {
         !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
             !day.isAfter(LocalDate.parse(schedule.coverage[1]))
@@ -338,6 +345,10 @@ private fun missingDay(schedule: ScheduleDto, day: LocalDate, fetchedAt: Long): 
     return when {
         covered -> "Выходной: пар в этот день нет"
         isStale(fetchedAt) -> "Данные устарели. Нажмите на время в шапке"
+        // Пустой день и наша поломка выглядели одинаково, и человек
+        // спокойно ждал расписания, которого мы уже не принесём.
+        serverBroken -> "Сбой у нас: расписание не обновляется. " +
+            "Смотрите таблицу колледжа"
         else -> "Расписание на этот день ещё не опубликовано"
     }
 }

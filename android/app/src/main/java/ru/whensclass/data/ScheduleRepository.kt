@@ -204,9 +204,14 @@ class ScheduleRepository(
             // сегодняшнего среди них может не оказаться — и виджет пустеет.
             // В этом случае перезапрашиваем, даже если сервер говорит, что у
             // него ничего не изменилось.
-            val stale = !coversToday(schedule.first())
-            if (!force && !stale) {
-                val meta = api.meta()
+            val outdated = !coversToday(schedule.first())
+            // Состояние сервера спрашиваем всегда, даже когда идём за
+            // расписанием напрямую. Раньше /v1/meta пропускался ровно в
+            // тех случаях, ради которых состояние и нужно: при ручном
+            // обновлении и когда сегодняшнего дня в данных нет.
+            val meta = runCatching { api.meta() }.getOrNull()
+            meta?.let { store.putServerState(it.status, it.sourceUrl) }
+            if (!force && !outdated && meta != null) {
                 if (meta.generatedAt == store.generatedAt.first()) {
                     // Данные те же, но проверку показать надо: иначе кажется,
                     // что кнопка обновления не работает.

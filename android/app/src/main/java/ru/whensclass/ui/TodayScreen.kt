@@ -137,6 +137,8 @@ fun TodayScreen(
     refreshError: String? = null,
     onErrorShown: () -> Unit = {},
     loadTally: suspend () -> ScheduleStore.Tally = { ScheduleStore.Tally(0, 0, 0) },
+    serverBroken: Boolean = false,
+    sourceUrl: String? = null,
 ) {
     val today = remember { LocalDate.now() }
     val listState = rememberLazyListState()
@@ -228,6 +230,7 @@ fun TodayScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (serverBroken) ServerBroken(sourceUrl)
             ScheduleTabs(
                 current = tab,
                 teacherMode = teacherMode,
@@ -715,6 +718,50 @@ private fun Place(text: String, muted: Boolean = false) {
     )
 }
 
+
+/**
+ * Плашка «расписание застряло у нас».
+ *
+ * Без неё наш сбой выглядел ровно как «колледж ещё не выложил»: те же
+ * слова, и человек спокойно ждал расписания, которого мы уже не принесём.
+ * Поэтому здесь прямо сказано, чья это беда, и дана дорога в обход — та
+ * самая таблица, ради которой всё и затевалось.
+ *
+ * Цвета берём из своих: `errorContainer` в схеме не задан, и Material
+ * подставил бы туда чужой розовый.
+ */
+@Composable
+private fun ServerBroken(sourceUrl: String?) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                "Расписание застряло",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                "Сбой у нас, а не у колледжа: сервер не смог прочитать таблицу и " +
+                    "показывает последнее, что успел забрать. Пары могли поменяться.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            sourceUrl?.let { url ->
+                ActionButton(
+                    label = "Открыть таблицу колледжа",
+                    onClick = { openLink(context, url) },
+                )
+            }
+        }
+    }
+}
 
 /** За сколько грузится таблица колледжа. Перемерено 8 сентября 2026 года. */
 private const val SHEET_SECONDS = 8

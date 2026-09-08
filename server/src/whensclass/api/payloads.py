@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
+from ..config import settings
 from ..domain.models import Lesson, Snapshot
 from ..domain.teachers import TeacherIndex
 
@@ -157,6 +158,12 @@ def meta_payload(
         "src": snapshot.sheet_title,
         "groups": len(snapshot.groups),
         "status": status,
+        # Куда идти, когда мы подвели. Адрес отсюда, а не из APK:
+        # переедет таблица — переживём правкой настроек, а не сборкой.
+        "src_url": (
+            "https://docs.google.com/spreadsheets/d/"
+            f"{settings.spreadsheet_id}/edit"
+        ),
     }
     coverage = snapshot.coverage
     if coverage:

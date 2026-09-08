@@ -42,6 +42,25 @@ class ScheduleStore(private val context: Context) {
     val generatedAt: Flow<String?> = context.dataStore.data.map { it[KEY_GENERATED_AT] }
 
     /**
+     * Что сервер сказал о себе в последний раз: `ok`, `stale` или `empty`.
+     *
+     * Хранится, а не спрашивается на месте: без сети спросить некого, а
+     * последнее известное состояние — всё же знание. Оно же и устаревает:
+     * сервер мог починиться, пока телефон был вне сети.
+     */
+    val serverStatus: Flow<String> = context.dataStore.data.map { it[KEY_SERVER_STATUS] ?: "ok" }
+
+    /** Адрес таблицы колледжа, как его назвал сервер. */
+    val sourceUrl: Flow<String?> = context.dataStore.data.map { it[KEY_SOURCE_URL] }
+
+    suspend fun putServerState(status: String, sourceUrl: String?) {
+        context.dataStore.edit {
+            it[KEY_SERVER_STATUS] = status
+            sourceUrl?.let { url -> it[KEY_SOURCE_URL] = url }
+        }
+    }
+
+    /**
      * За сколько минут напоминать о паре.
      *
      * Выбранное время и выключатель — разные вещи. Раньше выключение писало
@@ -209,6 +228,7 @@ class ScheduleStore(private val context: Context) {
             // Виджету всё равно, чьё расписание, — он рисует то, что лежит.
             groupName = if (teacher) prefs[KEY_TEACHER_NAME] else prefs[KEY_GROUP_NAME],
             scheduleJson = prefs[KEY_SCHEDULE],
+            serverBroken = (prefs[KEY_SERVER_STATUS] ?: "ok") != "ok",
             fetchedAt = prefs[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L,
             theme = prefs[KEY_THEME] ?: "system",
         )
@@ -335,6 +355,8 @@ class ScheduleStore(private val context: Context) {
     data class WidgetState(
         val groupName: String?,
         val scheduleJson: String?,
+        /** Сервер сам признал, что расписание у него не обновилось. */
+        val serverBroken: Boolean = false,
         val fetchedAt: Long,
         val theme: String,
     )
@@ -365,5 +387,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_TALLY_OPENS = stringPreferencesKey("tally_opens")
         val KEY_TALLY_DRAWS = stringPreferencesKey("tally_draws")
         val KEY_TALLY_SINCE = stringPreferencesKey("tally_since")
+        val KEY_SERVER_STATUS = stringPreferencesKey("server_status")
+        val KEY_SOURCE_URL = stringPreferencesKey("source_url")
     }
 }
