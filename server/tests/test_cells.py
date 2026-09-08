@@ -41,9 +41,9 @@ CASES = [
         dict(url="https://my.mts-link.ru/j/100000001/20000000018", room=None),
     ),
     (
-        ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 1 (Б.Хмельницкого 1)", ""),
+        ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 2 (Б.Хмельницкого 2)", ""),
         # скобка в конце аудитории — это адрес, а не тип занятия
-        dict(room="Спортзал Б.Хмельницкого 1 (Б.Хмельницкого 1)", kind="Пр"),
+        dict(room="Спортзал Б.Хмельницкого 2 (Б.Хмельницкого 2)", kind="Пр"),
     ),
     (
         ('Технология выполнения работ по профессии "Графический дизайнер" (Пр)',
@@ -106,9 +106,9 @@ def test_room_that_only_starts_with_online_stays_a_room():
 
 
 def test_link_means_online_too():
-    lesson = parse_lesson(1, "Информатика", "https://my.mts-link.ru/j/4/1", "")
+    lesson = parse_lesson(1, "Информатика", "https://my.mts-link.ru/j/4/2", "")
     assert lesson.online is True
-    assert lesson.url == "https://my.mts-link.ru/j/4/1"
+    assert lesson.url == "https://my.mts-link.ru/j/4/2"
 
 
 def test_ordinary_room_is_not_online():
@@ -149,18 +149,18 @@ AUDIT_CASES = [
     ),
     (
         # Ссылка слитно с подписью: ГД-925/3, 04.09, пара 1.
-        ("Иностранный язык", "онлайнhttps://my.mts-link.ru/j/100000001/20000000020", ""),
-        dict(url="https://my.mts-link.ru/j/100000001/20000000020", room=None),
+        ("Иностранный язык", "онлайнhttps://my.mts-link.ru/j/100000001/20000000021", ""),
+        dict(url="https://my.mts-link.ru/j/100000001/20000000021", room=None),
     ),
     (
         # Голая ссылка разбиралась и раньше.
-        ("Информатика", "https://my.mts-link.ru/j/4/1", ""),
-        dict(url="https://my.mts-link.ru/j/4/1", room=None),
+        ("Информатика", "https://my.mts-link.ru/j/4/2", ""),
+        dict(url="https://my.mts-link.ru/j/4/2", room=None),
     ),
     (
         # Ссылка в колонке предмета: УП-926/1, 07.09, пара 4.
-        ("https://my.mts-link.ru/j/4/1", "", "Новиков Вячеслав Сергеевич"),
-        dict(url="https://my.mts-link.ru/j/4/1", subject="Занятие онлайн"),
+        ("https://my.mts-link.ru/j/4/2", "", "Новиков Вячеслав Сергеевич"),
+        dict(url="https://my.mts-link.ru/j/4/2", subject="Занятие онлайн"),
     ),
     (
         # Причина отмены в колонке аудитории: Т-1125, 07.09, пара 4.

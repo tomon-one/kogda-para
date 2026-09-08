@@ -709,7 +709,7 @@ private fun OnlineLink(url: String) {
         // после домена, но совсем без него проверить ссылку нечем: она приходит
         // из таблицы, которую заполняют руками.
         Text(
-            host(url),
+            linkTail(url),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -724,7 +724,22 @@ private fun OnlineLink(url: String) {
     }
 }
 
-/** «https://my.mts-link.ru/j/144...» -> «my.mts-link.ru». */
+/**
+ * «https://my.mts-link.ru/j/100000001/20000000019» -> «…/20000000019».
+ *
+ * Показываем хвост, а не домен. Домен у всех вебинаров колледжа один, и по
+ * нему не отличить три пары подряд в одной комнате от трёх разных: расходятся
+ * ровно последние цифры. Их и показываем.
+ */
+private fun linkTail(url: String): String {
+    val segment = runCatching { Uri.parse(url).pathSegments }
+        .getOrNull()
+        ?.lastOrNull { it.isNotBlank() }
+        ?: return host(url)
+    return "…/" + segment.takeLast(24)
+}
+
+/** «https://my.mts-link.ru/j/144...» -> «my.mts-link.ru»: запасной вид без пути. */
 private fun host(url: String): String =
     runCatching { Uri.parse(url).host }.getOrNull()?.removePrefix("www.") ?: url
 
