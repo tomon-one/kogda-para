@@ -183,6 +183,7 @@ private fun Week(
     modifier: GlanceModifier,
 ) {
     val week = remember(days) { weekDays(days) }
+    val current = currentLessonNumber(bells, LocalDate.now())
     val height = LocalSize.current.height
     val open = remember(week, height) { openCount(week, height - HEADER_SPACE) }
 
@@ -196,7 +197,15 @@ private fun Week(
                     if (day.lessons.isEmpty()) {
                         EmptyLine(colors)
                     } else {
-                        day.lessons.forEach { LessonLine(day.date, it, bells, colors) }
+                        day.lessons.forEach {
+                            LessonLine(
+                                day.date,
+                                it,
+                                bells,
+                                colors,
+                                isNow = day.isToday && it.number == current,
+                            )
+                        }
                     }
                 }
             } else {
@@ -337,14 +346,24 @@ private fun LessonLine(
     lesson: LessonDto,
     bells: Map<String, List<String>>,
     colors: Palette,
+    isNow: Boolean = false,
 ) {
     val context = LocalContext.current
     val dim = lesson.isCancelled
 
     Row(
+        // Подложка у идущей пары — как в дневном виджете. Отступ снаружи неё,
+        // иначе подсветка съезжает вниз и задевает соседнюю строку.
         modifier = GlanceModifier
             .fillMaxWidth()
             .padding(bottom = 2.dp)
+            .then(
+                if (isNow) {
+                    GlanceModifier.background(colors.nowSurface).cornerRadius(6.dp)
+                } else {
+                    GlanceModifier
+                }
+            )
             .clickable(actionStartActivity(openDay(context, date))),
         verticalAlignment = Alignment.Top,
     ) {

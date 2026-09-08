@@ -355,10 +355,21 @@ private fun LessonRow(
         // пополам, читается как опечатка. На узком виджете диапазон не влезает —
         // тогда показываем только начало пары.
         Column(modifier = GlanceModifier.width(if (fit.narrow) 48.dp else 72.dp)) {
+            // У текущей пары номер уступает место словам: номер и так виден по
+            // времени рядом, а «идёт сейчас» ищут глазами первым. Строка та же,
+            // поэтому высота пары не меняется.
             Text(
-                "${lesson.number} пара",
+                when {
+                    isNow && fit.narrow -> "сейчас"
+                    isNow -> "идёт сейчас"
+                    else -> "${lesson.number} пара"
+                },
                 maxLines = 1,
-                style = TextStyle(fontSize = 10.sp, color = colors.textDim),
+                style = TextStyle(
+                    fontSize = 10.sp,
+                    fontWeight = if (isNow) FontWeight.Medium else FontWeight.Normal,
+                    color = if (isNow) colors.accent else colors.textDim,
+                ),
             )
             val time = if (fit.narrow) {
                 lessonStart(bells, lesson.number)
