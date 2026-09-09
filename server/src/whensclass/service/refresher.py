@@ -42,6 +42,8 @@ class Refresher:
         self.last_error: str | None = None
         self._source_etags: dict[str, str | None] = {}
         self._sheets: list[tuple[str, str | None]] | None = None
+        # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
+        self._seen_titles: set[str] | None = None
 
     def refresh(self, today: dt.date | None = None, force: bool = False) -> bool:
         """Перечитывает таблицу. True, если снимок обновился."""
@@ -109,6 +111,44 @@ class Refresher:
             snapshot.sheet_title, len(snapshot.groups), snapshot.total_lessons(),
         )
         return True
+
+    def look_for_new_sheet(self) -> bool:
+        """Не появился ли в книге лист, которого мы ещё не видели.
+
+        Проверка дешёвая: один маленький запрос к Sheets API. Нужна ради
+        перехода между листами — самого опасного места в службе. Раньше новый
+        лист искался только ночью, и о неделе, выложенной в пятницу днём, мы
+        узнавали в субботу. Три дня форы на починку стоят одного запроса
+        в полчаса.
+
+        Без ключа не работает и не должна: там список листов — это выгрузка
+        книги на два десятка мегабайт.
+        """
+        if not settings.sheets_api_key:
+            return False
+        try:
+            titles = {
+                sheet.title
+                for sheet in sheet_index.candidates(sheet_index.list_sheets(), _today())
+            }
+        except Exception as exc:
+            # Не дозвонились — не беда: ночной поиск никуда не делся.
+            log.warning("список листов не посмотрелся: %s", exc)
+            return False
+
+        if self._seen_titles is None:
+            # Первый заход после запуска: запоминаем, с чем сравнивать. Гнать
+            # поиск прямо сейчас незачем — служба и так обновилась на старте.
+            self._seen_titles = titles
+            return False
+
+        fresh = titles - self._seen_titles
+        self._seen_titles = titles
+        if not fresh:
+            return False
+
+        log.info("в книге появился лист: %s — ищу заново", ", ".join(sorted(fresh)))
+        return self.refresh(force=True)
 
     def _fail(self, message: str, kind: str = "error") -> None:
         self.last_error = message

@@ -85,6 +85,20 @@ async def lifespan(app: FastAPI):
         id="reindex",
     )
 
+    # И между делом поглядываем, не появился ли лист новее. Ночного поиска
+    # мало: неделю выкладывают среди дня, а узнать об этом лучше в тот же
+    # час — переход между листами это самое опасное место в службе.
+    # С ключом такая проверка стоит одного маленького запроса, без него —
+    # выгрузки всей книги, поэтому и заводится только с ключом.
+    if settings.sheets_api_key:
+        scheduler.add_job(
+            refresher.look_for_new_sheet,
+            CronTrigger(hour=f"{first}-{last}", minute="*/30"),
+            id="watch-sheets",
+            max_instances=1,
+            coalesce=True,
+        )
+
     # Отдельный заход перед каждой парой: расписание правят и за десять минут
     # до звонка, а как раз в этот момент в него и смотрят.
     for number, moment in before_each_lesson(settings.refresh_before_lesson_minutes):
