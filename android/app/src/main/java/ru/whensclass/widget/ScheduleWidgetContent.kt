@@ -61,6 +61,7 @@ fun ScheduleWidgetContent(
     sourceUrl: String? = null,
     modifier: GlanceModifier = GlanceModifier,
 ) {
+    val context = LocalContext.current
     val size = LocalSize.current
     // Оболочки вроде Nova дают сжать виджет ниже объявленного минимума. Ругаться
     // на это некому — просто убираем то, без чего можно, начиная с логотипа.
@@ -69,6 +70,10 @@ fun ScheduleWidgetContent(
     Column(
         modifier = modifier
             .fillMaxSize()
+            // Нажатие по пустому месту открывает приложение. Стрелки,
+            // обновление и копирование ссылки перехватывают своё сами:
+            // у Glance ближний обработчик выигрывает у дальнего.
+            .clickable(actionStartActivity(openDay(context, day)))
             .background(colors.background)
             .cornerRadius(16.dp)
             .padding(horizontal = if (fit.narrow) 6.dp else 10.dp)
@@ -503,7 +508,10 @@ private fun Details(lesson: LessonDto, colors: Palette) {
 
     val line = GlanceModifier.fillMaxWidth()
     Text(
-        if (lesson.url != null) parts.joinToString(" · ") + "  ⧉" else parts.joinToString(" · "),
+        // Значок впереди строки, а не в хвосте: строка одна и обрезается
+        // справа, так что длинная фамилия преподавателя утаскивала за край
+        // единственную кнопку, ради которой на пару и нажимают.
+        if (lesson.url != null) "⧉  " + parts.joinToString(" · ") else parts.joinToString(" · "),
         maxLines = 1,
         style = TextStyle(
             fontSize = 11.sp,

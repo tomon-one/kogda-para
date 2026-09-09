@@ -64,6 +64,9 @@ class WeekWidget : GlanceAppWidget() {
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()
+                    // Нажатие по пустому месту открывает приложение —
+                    // так же, как по дню или по шапке.
+                    .clickable(actionStartActivity(openDay(context, LocalDate.now())))
                     .background(colors.background)
                     .cornerRadius(16.dp)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
