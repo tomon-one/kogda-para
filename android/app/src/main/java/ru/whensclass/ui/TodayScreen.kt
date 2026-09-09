@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -138,7 +137,6 @@ fun TodayScreen(
     sourceUrl: String? = null,
 ) {
     val today = rememberToday()
-    val listState = rememberLazyListState()
 
     // Преподаватель открывает приложение на своём разделе.
     var tab by remember(teacherMode) {
@@ -321,7 +319,6 @@ fun TodayScreen(
         ScheduleDays(
             schedule = schedule,
             today = today,
-            listState = listState,
             startDay = startDay,
         )
         }
@@ -517,17 +514,29 @@ fun ScheduleDays(
     schedule: ScheduleDto,
     today: LocalDate,
     modifier: Modifier = Modifier,
-    listState: LazyListState = rememberLazyListState(),
     startDay: String? = null,
 ) {
     val days = remember(schedule) { daysWithGaps(schedule) }
 
-    // Открываемся на сегодняшнем дне: неделя показывается с понедельника,
-    // и без этого расписание начинается с прожитых дней.
-    LaunchedEffect(days, startDay) {
-        val target = startDay ?: today.toString()
-        val index = days.indexOfFirst { it.date >= target }
-        if (index > 0) listState.scrollToItem(index)
+    // Открываемся на сегодняшнем дне: неделя показывается с понедельника, и без
+    // этого расписание начинается с прожитых дней.
+    //
+    // Позиция задаётся при создании списка, а не прокруткой после первого кадра.
+    // Прокрутка успевала показать понедельник и уехать с него на глазах — тем
+    // заметнее, чем медленнее запуск, а самый медленный он как раз первый.
+    val target = startDay ?: today.toString()
+    val opening = remember(days, target) {
+        days.indexOfFirst { it.date >= target }.coerceAtLeast(0)
+    }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = opening)
+
+    // День, открытый из виджета, приходит и позже: приложение уже на экране,
+    // человек нажал на другой день. Тогда прокрутка — единственный способ.
+    LaunchedEffect(startDay) {
+        if (startDay != null) {
+            val index = days.indexOfFirst { it.date >= startDay }
+            if (index > 0) listState.scrollToItem(index)
+        }
     }
 
     LazyColumn(
