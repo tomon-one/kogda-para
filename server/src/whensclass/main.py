@@ -52,6 +52,10 @@ async def lifespan(app: FastAPI):
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # httpx пишет каждый запрос целиком, вместе со строкой параметров, а в
+    # обращении к Sheets API туда входит ключ. Журнал службы лежит на общей
+    # машине и уезжает в journald надолго. Оставляем от httpx предупреждения.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     directory = state_dir()
     directory.mkdir(parents=True, exist_ok=True)
 
