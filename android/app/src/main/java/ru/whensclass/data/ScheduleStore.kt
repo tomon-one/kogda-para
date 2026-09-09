@@ -219,8 +219,19 @@ class ScheduleStore(private val context: Context) {
      * Раньше он спрашивал хранилище по разу на каждое поле — четыре обращения
      * к диску на каждую перерисовку, и переключение дня заметно подтормаживало.
      */
-    suspend fun widgetState(): WidgetState {
-        val prefs = context.dataStore.data.first()
+    suspend fun widgetState(): WidgetState = widgetStates.first()
+
+    /**
+     * То же самое потоком — за ним следит сама разметка виджета.
+     *
+     * Разовое чтение годится только на создание сессии: код до
+     * `provideContent` больше не выполняется, сколько ни зови `updateAll`.
+     * Смена роли меняла хранилище, перерисовка происходила — а виджет
+     * рисовал то, что прочитал при создании сессии, то есть чужую роль.
+     */
+    val widgetStates: Flow<WidgetState> = context.dataStore.data.map(::toWidgetState)
+
+    private fun toWidgetState(prefs: Preferences): WidgetState {
         val teacher = prefs[KEY_ROLE] == "teacher"
         return WidgetState(
             // Виджету всё равно, чьё расписание, — он рисует то, что лежит.

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.appwidget.GlanceAppWidget
@@ -32,17 +34,25 @@ class ScheduleWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val store = AppContainer.get(context).store
         // Если хранилище не открылось (бывает при обновлении приложения),
         // виджет должен сказать об этом, а не остаться пустым.
-        val state = runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()
-        val schedule = parse(state?.scheduleJson)
-        val colors = WidgetColors.resolve(
-            context, ThemeChoice.from(state?.theme),
-        )
+        val first = runCatching { store.widgetState() }.getOrNull()
 
         provideContent {
+            // Следим за хранилищем из самой разметки. Разовое чтение до
+            // provideContent живёт до конца сессии виджета: updateAll
+            // перекомпоновывает содержимое, но provideGlance заново не
+            // зовёт — и виджет оставался с прежней ролью и прежним
+            // расписанием, пока сессия не умрёт сама.
+            //
+            // Первым значением — то, что успели прочитать: иначе первый
+            // кадр моргнул бы надписью «расписание ещё не загружено».
+            val state by store.widgetStates.collectAsState(initial = first)
+            val schedule = parse(state?.scheduleJson)
             // Палитра своя (см. WidgetColors), а не системная: оболочки на
             // телефонах слишком по-разному понимают динамические цвета.
+            val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
             Content(
                 schedule,
                 state?.groupName,
