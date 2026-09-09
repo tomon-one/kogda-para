@@ -520,11 +520,13 @@ fun ScheduleDays(
     listState: LazyListState = rememberLazyListState(),
     startDay: String? = null,
 ) {
+    val days = remember(schedule) { daysWithGaps(schedule) }
+
     // Открываемся на сегодняшнем дне: неделя показывается с понедельника,
     // и без этого расписание начинается с прожитых дней.
-    LaunchedEffect(schedule, startDay) {
+    LaunchedEffect(days, startDay) {
         val target = startDay ?: today.toString()
-        val index = schedule.days.indexOfFirst { it.date >= target }
+        val index = days.indexOfFirst { it.date >= target }
         if (index > 0) listState.scrollToItem(index)
     }
 
@@ -534,10 +536,51 @@ fun ScheduleDays(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(schedule.days, key = { it.date }) { day ->
+        items(days, key = { it.date }) { day ->
             DayCard(day, schedule.bells, today)
         }
     }
+}
+
+/**
+ * Дни, которых в ответе нет, а по листу колледжа они есть.
+ *
+ * Воскресений в листе не бывает вовсе, поэтому сервер такой день не присылает —
+ * и суббота в списке сменялась понедельником без единого слова. Для воскресенья
+ * это ещё можно было угадать, но так же молча пропал бы любой другой день,
+ * которого в данных не оказалось.
+ *
+ * Дневной виджет это различает с первого аудита: он сверяет дату с `cov` и
+ * говорит «выходной». Здесь то же самое, только пустой карточкой — она уже
+ * умеет говорить, что пар нет.
+ *
+ * Дыры заполняются только между первым и последним пришедшим днём и только
+ * внутри `cov`: выдумывать дни за краем листа мы не вправе, там расписания
+ * может и не быть.
+ */
+internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
+    val present = schedule.days
+    if (present.size < 2) return present
+    val cover = schedule.coverage
+        .mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
+        .takeIf { it.size == 2 } ?: return present
+    val known = present.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+    val from = known.minOrNull() ?: return present
+    val to = known.maxOrNull() ?: return present
+
+    val have = present.associateBy { it.date }
+    val out = mutableListOf<DayDto>()
+    var day = from
+    while (!day.isAfter(to)) {
+        val date = day.toString()
+        val existing = have[date]
+        when {
+            existing != null -> out += existing
+            !day.isBefore(cover[0]) && !day.isAfter(cover[1]) -> out += DayDto(date = date)
+        }
+        day = day.plusDays(1)
+    }
+    return out
 }
 
 @Composable

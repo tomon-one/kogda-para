@@ -41,6 +41,19 @@ const val DAYS = 8
 fun weekStart(today: java.time.LocalDate = java.time.LocalDate.now()): java.time.LocalDate =
     today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
 
+/**
+ * Кому принадлежит расписание, за которым мы пошли.
+ *
+ * Сравнивается целиком: сменилось любое из трёх — ответ уже не тот, о котором
+ * просили. Отдельным типом, а не тремя переменными, чтобы добавить четвёртую
+ * настройку и забыть её в сравнении было негде.
+ */
+internal data class Subject(
+    val teacher: Boolean,
+    val id: String?,
+    val second: String?,
+)
+
 /** Что случилось при обновлении — приложению есть что показать, виджету нет. */
 sealed interface RefreshResult {
     data object Updated : RefreshResult
@@ -72,6 +85,23 @@ class ScheduleRepository(
 
     val fetchedAt: Flow<Long> = store.fetchedAt
     val groupName: Flow<String?> = store.groupName
+
+    /**
+     * Чьё расписание мы сейчас просим: роль, выбранный и соседняя подгруппа.
+     *
+     * Запрос идёт по сети секунды, и за это время человек успевает сменить
+     * группу или роль. Пришедший ответ тогда чужой, и записывать его нельзя —
+     * однажды он молча возвращал на экран прежние пары поверх только что
+     * выбранных. Поэтому перед записью спрашиваем ещё раз и сверяем целиком.
+     */
+    private suspend fun subject(): Subject {
+        val teacher = store.teacherMode()
+        return Subject(
+            teacher = teacher,
+            id = if (teacher) store.teacherId.first() else store.currentGroupId(),
+            second = store.currentSecondGroupId(),
+        )
+    }
 
     /** Есть ли сегодняшний день в том, что лежит на телефоне. */
     private fun coversToday(saved: ScheduleDto?): Boolean {
@@ -221,9 +251,10 @@ class ScheduleRepository(
      * ошибке вместо пар.
      */
     suspend fun refresh(force: Boolean = false): RefreshResult = withContext(Dispatchers.IO) {
-        val teacherMode = store.teacherMode()
-        val subject = if (teacherMode) store.teacherId.first() else store.currentGroupId()
-        val second = store.currentSecondGroupId()
+        val asked = subject()
+        val teacherMode = asked.teacher
+        val subject = asked.id
+        val second = asked.second
         if (subject == null) return@withContext RefreshResult.NoGroup
         try {
             // Сохранённые дни начинаются с даты загрузки, поэтому со временем
@@ -257,16 +288,10 @@ class ScheduleRepository(
             // Пока шёл запрос, человек мог сменить группу, роль или подгруппу.
             // Тогда пришедшее расписание — чужое, и записывать его нельзя: оно
             // молча возвращало на экран прежние пары поверх только что выбранных.
-            val nowTeacher = store.teacherMode()
-            val nowSubject = if (nowTeacher) store.teacherId.first() else store.currentGroupId()
-            // Подгруппу проверяем тоже: запрос, начатый до её смены, приносил
-            // склейку с прежней соседкой и записывал её поверх новой.
-            if (nowTeacher != teacherMode ||
-                nowSubject != subject ||
-                store.currentSecondGroupId() != second
-            ) {
-                return@withContext RefreshResult.AlreadyFresh
-            }
+            // Подгруппа входит в сравнение наравне с ролью и группой: запрос,
+            // начатый до её смены, приносил склейку с прежней соседкой и
+            // записывал её поверх новой.
+            if (subject() != asked) return@withContext RefreshResult.AlreadyFresh
 
             val previous = schedule.first()
             store.putSchedule(json.encodeToString(full), full.generatedAt)
