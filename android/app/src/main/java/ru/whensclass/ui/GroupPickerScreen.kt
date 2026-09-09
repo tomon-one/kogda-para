@@ -212,7 +212,7 @@ fun GroupPickerScreen(
                                 ListEnd(
                                     "Всё. " +
                                         plural(list.size, "группа", "группы", "групп") +
-                                        ", и ни одной лишней.",
+                                        ".",
                                 )
                             }
                         }
