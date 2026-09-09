@@ -71,7 +71,7 @@ fun TeacherScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             ScheduleDays(
                 schedule = ownSchedule,
-                today = remember { LocalDate.now() },
+                today = rememberToday(),
                 modifier = Modifier.weight(1f),
                 startDay = startDay,
             )
@@ -239,7 +239,7 @@ private fun ChosenTeacher(
             }
             else -> ScheduleDays(
                 schedule = schedule,
-                today = remember { LocalDate.now() },
+                today = rememberToday(),
             )
         }
     }

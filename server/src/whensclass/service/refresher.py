@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import pathlib
+import threading
 import zoneinfo
 
 from ..config import settings
@@ -44,10 +45,19 @@ class Refresher:
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
         self._seen_titles: set[str] | None = None
+        # Задачи планировщика идут в разных потоках и в начале каждого часа
+        # совпадают: обновление раз в 20 минут и проверка книги раз в 30.
+        # Без замка они переписывали друг другу status и набор листов —
+        # неудачный заход мог объявить stale поверх только что удавшегося.
+        # Замок повторный: слежка за книгой сама зовёт refresh.
+        self._lock = threading.RLock()
 
     def refresh(self, today: dt.date | None = None, force: bool = False) -> bool:
         """Перечитывает таблицу. True, если снимок обновился."""
-        today = today or _today()
+        with self._lock:
+            return self._refresh(today or _today(), force)
+
+    def _refresh(self, today: dt.date, force: bool) -> bool:
         self.checked_at = dt.datetime.now(dt.timezone.utc)
         try:
             if self._sheets is None or force:
@@ -126,6 +136,10 @@ class Refresher:
         """
         if not settings.sheets_api_key:
             return False
+        with self._lock:
+            return self._look()
+
+    def _look(self) -> bool:
         try:
             titles = {
                 sheet.title

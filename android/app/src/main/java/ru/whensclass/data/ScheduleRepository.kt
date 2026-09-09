@@ -16,22 +16,28 @@ import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.WeekWidget
 
-/** Сколько дней держим на телефоне: неделя целиком. */
-const val DAYS = 7
+/**
+ * Сколько дней держим на телефоне: неделя целиком и следующий понедельник.
+ *
+ * Восьмой день — не про запас: в воскресенье и в субботу вечером человек
+ * смотрит именно на завтрашний понедельник.
+ */
+const val DAYS = 8
 
 /**
- * С какого дня показывать расписание.
+ * С какого дня показывать расписание — с понедельника текущей недели.
  *
- * Обычно — с понедельника текущей недели: прошедшие пары никуда не деваются,
- * иногда нужно вспомнить, что было в начале недели. В воскресенье неделя уже
- * прожита, поэтому показываем следующую.
+ * Прошедшие пары никуда не деваются: иногда нужно вспомнить, что было в начале
+ * недели, и в приложении это обещано прямо.
+ *
+ * Раньше в воскресенье окно сдвигалось на следующий понедельник — и любое
+ * обновление в этот день затирало прожитую неделю данными следующей. Понедельник
+ * с субботой исчезали и с экрана, и из виджета, хотя приложение обещает
+ * обратное. Теперь воскресенье такой же день недели, как остальные, а завтрашний
+ * понедельник виден за счёт восьмого дня.
  */
 fun weekStart(today: java.time.LocalDate = java.time.LocalDate.now()): java.time.LocalDate =
-    if (today.dayOfWeek == java.time.DayOfWeek.SUNDAY) {
-        today.plusDays(1)
-    } else {
-        today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
-    }
+    today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
 
 /** Что случилось при обновлении — приложению есть что показать, виджету нет. */
 sealed interface RefreshResult {
@@ -175,8 +181,11 @@ class ScheduleRepository(
 
     /** Студент выбрал группу — заодно это и означает, что он студент. */
     suspend fun selectGroup(group: GroupDto) {
+        // Смотрим до смены роли: после неё «та же группа» уже не значит
+        // «ничего не изменилось» — у преподавателя лежит чужое расписание.
+        val unchanged = !store.teacherMode() && store.currentGroupId() == group.id
         store.setTeacherMode(false)
-        store.selectGroup(group.id, group.name)
+        store.selectGroup(group.id, group.name, unchanged)
         // Перерисовать сразу, не дожидаясь сети: смена роли стирает расписание,
         // и до конца запроса виджет иначе показывает чужое — то, что осталось от
         // прошлой роли. Если запрос не дойдёт, честнее «ещё не загружено».

@@ -84,6 +84,7 @@ fun ScheduleWidgetContent(
             busy,
             done,
             failed,
+            serverBroken,
             fit,
             colors,
         )
@@ -147,6 +148,7 @@ private fun Header(
     busy: Boolean,
     done: Boolean,
     failed: Boolean,
+    serverBroken: Boolean,
     fit: Fit,
     colors: Palette,
 ) {
@@ -204,13 +206,19 @@ private fun Header(
                         busy -> " · обновляю…"
                         failed -> " · не вышло"
                         done -> " · обновлено"
+                        // Сбой на сервере надо показывать и тогда, когда пары
+                        // на экране есть: снимок в этот момент прежний, а не
+                        // сегодняшний. Раньше про сбой говорила только надпись
+                        // вместо дня — то есть лишь на краю листа, а в середине
+                        // недели виджет молчал, пока экран уже говорил.
+                        serverBroken -> " · сбой у нас"
                         else -> " · " + formatFetchedShort(fetchedAt)
                     },
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || isStale(fetchedAt) -> colors.error
+                            failed || serverBroken || isStale(fetchedAt) -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },

@@ -235,10 +235,19 @@ class ScheduleStore(private val context: Context) {
         )
     }
 
-    suspend fun selectGroup(id: String, name: String) {
+    /**
+     * Запомнить выбранную группу.
+     *
+     * [unchanged] — человек выбрал ту же группу, в которой уже был, и роль при
+     * этом не менялась. Тогда трогать нечего: он ничего не выбрал заново, а
+     * терял при этом подгруппу, которую сам поставил. Список групп ту, что уже
+     * выбрана, никак не выделяет, так что промахнуться легко.
+     */
+    suspend fun selectGroup(id: String, name: String, unchanged: Boolean = false) {
         context.dataStore.edit {
             it[KEY_GROUP_ID] = id
             it[KEY_GROUP_NAME] = name
+            if (unchanged) return@edit
             // Расписание прошлой группы показывать нельзя ни секунды.
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)

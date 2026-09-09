@@ -137,7 +137,7 @@ fun TodayScreen(
     serverBroken: Boolean = false,
     sourceUrl: String? = null,
 ) {
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     val listState = rememberLazyListState()
 
     // Преподаватель открывает приложение на своём разделе.
