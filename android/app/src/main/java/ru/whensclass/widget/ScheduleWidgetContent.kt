@@ -301,12 +301,18 @@ private fun Lessons(
     // Обычный список, не ленивый. Ленивый прокручивался пальцем, но жил только
     // пока жив процесс приложения: система выгружала его — и виджет чернел
     // насовсем, не оживая ни обновлением, ни запуском приложения.
-    val rowHeight = if (fit.dense) 46.dp else 52.dp
+    val rowHeight = (if (fit.dense) 46.dp else 52.dp) * fontScale()
     // Шапка с группой и стрелками плюс строка «ещё N»: их место списку не
     // достаётся. Раньше «ещё» отнимало строку у пары, и вместо двух занятий
     // виджет показывал одно — хуже, чем не показать остаток вовсе.
     val free = LocalSize.current.height - (if (fit.dense) 48.dp else 58.dp) - 16.dp
-    val fits = (free / rowHeight).toInt().coerceAtLeast(2).coerceAtMost(lessons.size)
+    // Обычно показываем не меньше двух пар: одна пара на весь виджет
+    // выглядит как поломка. Но если оболочка ужала виджет ниже собственного
+    // минимума — а Nova это умеет, — вторая строка не влезет и обрежется
+    // корпусом. Тогда честнее показать одну целиком.
+    val room = (free / rowHeight).toInt()
+    val fits = (if (free < rowHeight) 1 else room.coerceAtLeast(2))
+        .coerceAtMost(lessons.size)
     val start = windowStart(lessons, bells, day, fits)
     val shown = lessons.subList(start, minOf(lessons.size, start + fits))
     val rest = lessons.size - start - shown.size
@@ -542,6 +548,21 @@ private fun Hint(text: String, colors: Palette, sourceUrl: String? = null) {
         }
     }
 }
+
+/**
+ * Во сколько раз система увеличила шрифт.
+ *
+ * Бюджет «сколько строк влезет» считается в dp, а текст в этих строках задан в
+ * sp и растёт вместе с системным размером шрифта. Считая по неизменным
+ * константам, виджет полагал, что помещается больше, чем помещалось на самом
+ * деле, — и нижние строки обрезались корпусом. Прокрутки в виджете нет,
+ * обрезанное просто пропадает.
+ *
+ * Снизу единица: уменьшенный шрифт лишних строк не даёт, зато пустоты добавит.
+ */
+@Composable
+internal fun fontScale(): Float =
+    LocalContext.current.resources.configuration.fontScale.coerceAtLeast(1f)
 
 /** Таблица колледжа в браузере: первоисточник, когда дня у нас нет. */
 private fun openSource(url: String): Intent =

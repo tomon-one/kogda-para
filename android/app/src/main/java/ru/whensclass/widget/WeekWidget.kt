@@ -200,7 +200,10 @@ private fun Week(
     val week = remember(days) { weekDays(days) }
     val current = currentLessonNumber(bells, LocalDate.now())
     val height = LocalSize.current.height
-    val open = remember(week, height) { openCount(week, height - HEADER_SPACE) }
+    val scale = fontScale()
+    val open = remember(week, height, scale) {
+        openCount(week, height - HEADER_SPACE * scale, scale)
+    }
 
     // Каждый день — свой контейнер. Плоским списком дни рисоваться не могут:
     // разметка виджета собрана заранее и вмещает не больше десяти детей.
@@ -212,7 +215,17 @@ private fun Week(
                     if (day.lessons.isEmpty()) {
                         EmptyLine(colors)
                     } else {
-                        day.lessons.forEach {
+                        // Заголовок дня уже занял одного ребёнка, и если пар
+                        // окажется больше девяти, всё сверх десятого молча
+                        // пропадёт — так когда-то обрывалась неделя на середине
+                        // четверга. Девяти пар в дне не бывает, но с включённой
+                        // соседней подгруппой их и правда становится до
+                        // двенадцати: свои шесть и чужие шесть, когда кабинеты
+                        // расходятся. Тогда последняя строка говорит, сколько
+                        // не поместилось, вместо того чтобы исчезнуть молча.
+                        val room = MAX_CHILDREN - 1
+                        val shown = if (day.lessons.size > room) room - 1 else day.lessons.size
+                        day.lessons.take(shown).forEach {
                             LessonLine(
                                 day.date,
                                 it,
@@ -221,6 +234,8 @@ private fun Week(
                                 isNow = day.isToday && it.number == current,
                             )
                         }
+                        val rest = day.lessons.size - shown
+                        if (rest > 0) MoreLine(rest, colors)
                     }
                 }
             } else {
@@ -228,6 +243,23 @@ private fun Week(
             }
         }
     }
+}
+
+/**
+ * Сколько детей вмещает контейнер Glance. Разметка виджета собирается заранее,
+ * и всё сверх десятого пропадает молча — ни ошибки, ни пустого места.
+ */
+private const val MAX_CHILDREN = 10
+
+/** «И ещё N» — когда пары в день не поместились в контейнер. */
+@Composable
+private fun MoreLine(rest: Int, colors: Palette) {
+    Text(
+        "и ещё " + plural(rest, "пара", "пары", "пар"),
+        maxLines = 1,
+        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+        modifier = GlanceModifier.padding(start = 4.dp),
+    )
 }
 
 /** «Неделя 7–12 сент.» по крайним дням расписания; без дат — просто «Неделя». */
@@ -268,11 +300,11 @@ private val SUMMARY_ROW = 21.dp
  * со сводкой. Разворачиваются ближайшие дни: дальние всё равно уточняют в
  * приложении.
  */
-private fun openCount(week: List<WeekDay>, free: Dp): Int {
-    var used = SUMMARY_ROW * week.size
+private fun openCount(week: List<WeekDay>, free: Dp, scale: Float = 1f): Int {
+    var used = SUMMARY_ROW * scale * week.size
     var count = 0
     for (day in week) {
-        val grown = dayHeight(day) - SUMMARY_ROW
+        val grown = (dayHeight(day) - SUMMARY_ROW) * scale
         if (used + grown > free) break
         used += grown
         count++

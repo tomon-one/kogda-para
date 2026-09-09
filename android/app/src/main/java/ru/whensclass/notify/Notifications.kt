@@ -57,8 +57,17 @@ object Notifications {
         )
     }
 
-    /** Разрешено ли показывать уведомления. С Android 13 их надо спрашивать. */
+    /**
+     * Разрешено ли показывать уведомления.
+     *
+     * С Android 13 есть отдельное разрешение, которое спрашивают. Но
+     * выключить уведомления руками в настройках телефона можно было
+     * всегда, и раньше на Android 8–12 мы отвечали «разрешено» не глядя:
+     * приложение уверяло, что напомнит о паре, а система молча гасила
+     * каждое уведомление.
+     */
     fun allowed(context: Context): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
         return ContextCompat.checkSelfPermission(
             context, Manifest.permission.POST_NOTIFICATIONS,

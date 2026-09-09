@@ -15,6 +15,7 @@ import ru.whensclass.notify.Notifications
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.WeekWidget
+import ru.whensclass.work.MidnightUpdater
 
 /**
  * Сколько дней держим на телефоне: неделя целиком и следующий понедельник.
@@ -269,6 +270,11 @@ class ScheduleRepository(
             // соседней подгруппы отличается от прежнего так же, как отмена.
             if (merged.whole) announceChanges(previous, full)
             LessonAlarms.reschedule(context)
+            // И будильник к звонку: он считается по сетке из снимка, а при
+            // первом запуске её ещё нет. Взведённый в WhensClassApp по пустой
+            // сетке, он не ставился вовсе — и подсветка «идёт сейчас» до
+            // следующего запуска процесса сама не появлялась.
+            MidnightUpdater.schedule(context)
             RefreshResult.Updated
         } catch (error: Exception) {
             RefreshResult.Failed(error)

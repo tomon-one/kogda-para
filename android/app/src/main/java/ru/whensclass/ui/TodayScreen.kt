@@ -497,6 +497,9 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit) {
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 softWrap = false,
+                // На разделённом экране «Преподавателям» в свою колонку не
+                // влезает, и без многоточия непонятно, что подпись урезана.
+                overflow = TextOverflow.Ellipsis,
                 // Неготовые разделы видно, но они приглушены.
                 color = if (tab.ready) MaterialTheme.colorScheme.onSurface
                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -644,6 +647,11 @@ private fun LessonRow(
                     color = if (isNow) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
+                    // Колонка времени шириной ровно под «09:00–10:30» при
+                    // обычном шрифте. С крупным системным диапазон перестаёт
+                    // помещаться, и обрыв без многоточия читается как другое
+                    // время.
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (isNow) {

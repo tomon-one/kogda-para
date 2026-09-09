@@ -87,9 +87,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // Человек открыл приложение — самое время сходить за свежим расписанием.
-        SyncWorker.now(this)
-        // И ещё один раз, когда таблицу открывать не пришлось.
+        // За свежим расписанием сходит сам экран (LaunchedEffect ниже): он же
+        // и покажет результат. Раньше отсюда вдобавок ставился SyncWorker, и
+        // на каждое открытие приложение дважды дёргало сервер — за одним и
+        // тем же, без всякой блокировки между заходами.
+        // Счёт ответов: ещё один раз таблицу открывать не пришлось.
         lifecycleScope.launch { AppContainer.get(applicationContext).store.countOpen() }
 
         // Виджет мог попросить открыть конкретный день, а уведомление о
