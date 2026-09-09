@@ -6,6 +6,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.ImageProvider
@@ -56,11 +58,15 @@ class WeekWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val state = runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()
-        val schedule = ScheduleWidget.parse(state?.scheduleJson)
-        val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
+        val store = AppContainer.get(context).store
+        val first = runCatching { store.widgetState() }.getOrNull()
 
         provideContent {
+            // См. ScheduleWidget: читать хранилище до provideContent мало —
+            // прочитанное живёт до конца сессии и не меняется от updateAll.
+            val state by store.widgetStates.collectAsState(initial = first)
+            val schedule = ScheduleWidget.parse(state?.scheduleJson)
+            val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()

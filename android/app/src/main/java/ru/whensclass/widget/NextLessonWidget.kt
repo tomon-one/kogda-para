@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
@@ -42,11 +44,15 @@ class NextLessonWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         // Как и у двух других виджетов: чтение хранилища может не удаться, и
         // ронять из-за этого перерисовку незачем — лучше показать подсказку.
-        val state = runCatching { AppContainer.store(context).widgetState() }.getOrNull()
-        val schedule = ScheduleWidget.parse(state?.scheduleJson)
-        val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
+        val store = AppContainer.store(context)
+        val first = runCatching { store.widgetState() }.getOrNull()
 
         provideContent {
+            // См. ScheduleWidget: прочитанное до provideContent живёт до
+            // конца сессии, и updateAll его не обновляет.
+            val state by store.widgetStates.collectAsState(initial = first)
+            val schedule = ScheduleWidget.parse(state?.scheduleJson)
+            val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
             val today = LocalDate.now()
             val next = nextLesson(schedule, today)
             val lesson = next?.lesson
