@@ -62,7 +62,11 @@ private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
     // Сведения нужны ровно тогда, когда что-то не так. Уронить приложение на
     // сборе сведений о поломке было бы издевательством.
     LaunchedEffect(Unit) {
-        report = runCatching { load() }.getOrElse { "Собрать не вышло: ${it.javaClass.simpleName}" }
+        report = runCatching { load() }
+            // Не имя класса: в release-сборке R8 его переименует, и человек
+            // пришлёт мне «Собрать не вышло: a». Текст ошибки переживает
+            // обфускацию, а когда его нет — честнее сказать, что его нет.
+            .getOrElse { "Собрать не вышло: " + (it.message ?: "без объяснения") }
     }
     val text = report
 

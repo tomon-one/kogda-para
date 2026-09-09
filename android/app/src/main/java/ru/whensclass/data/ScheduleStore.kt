@@ -207,8 +207,6 @@ class ScheduleStore(private val context: Context) {
     /** «system», «light» или «dark». По умолчанию — как в системе. */
     val theme: Flow<String> = context.dataStore.data.map { it[KEY_THEME] ?: "system" }
 
-    suspend fun currentTheme(): String = theme.first()
-
     suspend fun setTheme(value: String) {
         context.dataStore.edit { it[KEY_THEME] = value }
     }
