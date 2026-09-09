@@ -255,12 +255,14 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
             # обрезанному имени gviz отдаёт не наш лист, а первую вкладку книги,
             # причём с кодом 200: отличить успех от промаха нельзя.
             log.info("имя листа %r обрезано, пропускаю: gviz по нему врёт", sheet.title)
-            unread.append(sheet.title)
+            if _LOOKS_LIKE_GROUPS.search(sheet.title):
+                unread.append(sheet.title)
             continue
         try:
             text, _ = gsheets.fetch_sheet_csv(gid=sheet.gid, title=sheet.title)
             if text is None:
-                unread.append(sheet.title)
+                if _LOOKS_LIKE_GROUPS.search(sheet.title):
+                    unread.append(sheet.title)
                 continue
             snapshot = parse_csv(text, sheet.title)
         except SourceFormatChanged as exc:
@@ -273,7 +275,13 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
             log.info("лист %r не похож на расписание групп: %s", sheet.title, exc)
             continue
         except Exception as exc:
-            unread.append(sheet.title)
+            # Тревожимся только за листы, которые по имени и есть расписание
+            # групп: в книге сотня кандидатов, и половина из них — графики
+            # и расписания аудиторий, до которых нам дела нет. Раньше эта
+            # проверка стояла только в ветке разбора, а тут её не было, и
+            # сбой при чтении календарного графика уводил бы службу в stale.
+            if _LOOKS_LIKE_GROUPS.search(sheet.title):
+                unread.append(sheet.title)
             log.warning("лист %r не прочитался: %s", sheet.title, exc)
             continue
 

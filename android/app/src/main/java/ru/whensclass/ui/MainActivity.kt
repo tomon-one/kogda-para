@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -203,7 +204,6 @@ private fun App(
     val teacherId by container.store.teacherId.collectAsState(initial = null)
     val pinnedGroups by container.store.pinnedGroups.collectAsState(initial = emptyList())
     var groups by remember { mutableStateOf<List<GroupDto>?>(null) }
-    LaunchedEffect(Unit) { groups = container.repository.groups() }
     // Выбранная тема применяется сразу, не дожидаясь записи на диск и обратной
     // волны из хранилища. Из-за этого круга смена выглядела рваной: экран ждал
     // ответа хранилища, а перерисовка виджетов, идущая там же, его задерживала.
@@ -226,16 +226,31 @@ private fun App(
     var refreshError by remember { mutableStateOf<String?>(null) }
     var installing by remember { mutableStateOf(false) }
     var focusUpdate by remember { mutableStateOf(openUpdate) }
-    // Список преподавателей грузим один раз за запуск и держим здесь: если
-    // держать его во вкладке, он перезагружается на каждое переключение.
+    // Списки держим здесь, а не во вкладке: во вкладке они перезагружались
+    // бы на каждое переключение. Но и одного захода за запуск мало —
+    // не вышло с первого раза (метро, спящий вайфай), и список оставался
+    // пустым до перезапуска приложения, сколько бы человек ни возвращался
+    // на вкладку. Поэтому повтор при каждом заходе, пока пусто.
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
-    LaunchedEffect(Unit) { teachers = container.repository.teachers() }
-
     var reloadKey by remember { mutableStateOf(0) }
     // Какой список показывать на экране выбора: null — по текущей роли.
     var pickTeacher by remember { mutableStateOf<Boolean?>(null) }
     // Тот же экран, но выбирают не свою группу, а соседнюю подгруппу.
     var pickSecond by remember { mutableStateOf(false) }
+
+    LaunchedEffect(screen, reloadKey) {
+        if (groups.isNullOrEmpty()) groups = container.repository.groups()
+        if (teachers.isNullOrEmpty()) teachers = container.repository.teachers()
+    }
+
+    // Системная кнопка и жест «назад» закрывали приложение с любого экрана:
+    // навигация тут своя, а системе о ней никто не сказал. Из настроек и
+    // выбора группы вернуться можно было только стрелкой в шапке.
+    BackHandler(enabled = screen != Screen.TODAY) {
+        pickSecond = false
+        pickTeacher = null
+        screen = Screen.TODAY
+    }
 
     val refreshNow: () -> Unit = {
         scope.launch {

@@ -263,7 +263,7 @@ private fun MoreLine(rest: Int, colors: Palette) {
 }
 
 /** «Неделя 7–12 сент.» по крайним дням расписания; без дат — просто «Неделя». */
-private fun weekTitle(days: List<DayDto>): String {
+internal fun weekTitle(days: List<DayDto>): String {
     // Считаем по тем дням, что видны: прожитые виджет не показывает, и «7–12»
     // над списком, который начинается со вторника, сбивает с толку.
     val today = LocalDate.now()

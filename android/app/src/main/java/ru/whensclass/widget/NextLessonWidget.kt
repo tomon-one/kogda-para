@@ -62,7 +62,10 @@ class NextLessonWidget : GlanceAppWidget() {
                         // говорит виджет: иначе после нажатия ещё листать.
                         actionStartActivity(
                             Intent(LocalContext.current, MainActivity::class.java)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                .addFlags(
+                                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        Intent.FLAG_ACTIVITY_CLEAR_TOP,
+                                )
                                 .putExtra(MainActivity.EXTRA_DAY, next?.day?.toString()),
                         ),
                     ),

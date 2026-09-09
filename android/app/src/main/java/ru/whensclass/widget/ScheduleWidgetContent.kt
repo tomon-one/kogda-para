@@ -415,7 +415,10 @@ private data class Fit(val narrow: Boolean, val dense: Boolean)
 internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
     Intent(context, MainActivity::class.java)
         .putExtra(MainActivity.EXTRA_DAY, day.toString())
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // CLEAR_TOP, а не один NEW_TASK: без него каждое нажатие на виджет
+        // клало в стек ещё одну копию экрана, и «назад» пришлось бы жать
+        // столько раз, сколько раз человек за день заглянул в виджет.
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
 @Composable
 private fun LessonRow(
