@@ -48,9 +48,10 @@ class ScheduleRepository(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Разбор уводим с главного потока. collectAsState собирает поток в том же
-    // окружении, где идёт отрисовка, поэтому недельный JSON разбирался ровно
-    // там, где рисуется первый кадр, — и первый запуск спотыкался.
+    // Разбор уводим с главного потока: collectAsState собирает поток там же,
+    // где идёт отрисовка. Заминку на запуске это не убрало — мерили 9 сентября,
+    // разница внутри разброса, — но разбирать недельный JSON в потоке отрисовки
+    // неправильно и без неё: телефоны бывают медленнее нашего, а лист длиннее.
     val schedule: Flow<ScheduleDto?> = store.scheduleJson
         .map { body ->
             body?.let { runCatching { json.decodeFromString<ScheduleDto>(it) }.getOrNull() }

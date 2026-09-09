@@ -21,8 +21,8 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт:
         // по нему приложение узнаёт о новой сборке на сервере.
-        versionCode = 65
-        versionName = "b-Пар.0.8.3"
+        versionCode = 67
+        versionName = "b-Пар.0.8.5"
     }
 
     signingConfigs {
