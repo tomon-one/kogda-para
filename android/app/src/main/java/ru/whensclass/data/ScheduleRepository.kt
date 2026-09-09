@@ -82,7 +82,8 @@ class ScheduleRepository(
     }
 
     /** Сведения для отчёта об ошибке — см. [collectDiagnostics]. */
-    suspend fun diagnostics(): String = collectDiagnostics(store, schedule.first())
+    suspend fun diagnostics(): String =
+        collectDiagnostics(context, store, schedule.first())
 
     /** Перерисовать виджеты по тому, что уже лежит на телефоне. */
     suspend fun redrawWidgets() = updateWidgets()

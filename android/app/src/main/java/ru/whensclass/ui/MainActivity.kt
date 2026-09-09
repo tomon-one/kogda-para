@@ -343,6 +343,7 @@ private fun App(
                         // мгновение показывается чужое расписание.
                         SelfPickerScreen(
                             teachers = teachers,
+                            loadDiagnostics = { container.repository.diagnostics() },
                             canGoBack = chosenName != null,
                             onBack = {
                                 pickTeacher = null
@@ -360,6 +361,7 @@ private fun App(
                     } else {
                         GroupPickerScreen(
                             loadGroups = { container.repository.groups() },
+                            loadDiagnostics = { container.repository.diagnostics() },
                             canGoBack = chosenName != null,
                             onBack = {
                                 pickTeacher = null

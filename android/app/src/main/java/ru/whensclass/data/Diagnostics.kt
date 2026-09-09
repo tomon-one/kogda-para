@@ -1,12 +1,19 @@
 package ru.whensclass.data
 
+import android.content.Context
 import android.os.Build
+import androidx.core.app.NotificationManagerCompat
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.first
 import ru.whensclass.BuildConfig
+import ru.whensclass.notify.LessonAlarms
+import ru.whensclass.widget.NextLessonWidget
+import ru.whensclass.widget.ScheduleWidget
+import ru.whensclass.widget.WeekWidget
 
 /**
  * Что приложение знает о себе — одним куском текста.
@@ -16,11 +23,19 @@ import ru.whensclass.BuildConfig
  * одному в переписке долго, и человек всё равно не знает, где смотреть.
  * Пусть отвечает приложение.
  *
+ * Собрано не «всё, что нашлось», а ответы на вопросы, которые иначе пришлось
+ * бы задавать: какая сборка, чей это сбой — наш или телефона, стоит ли виджет
+ * вообще и что мешает напоминанию прийти.
+ *
  * Здесь нет ничего, чего не видно на экранах: ни опознавателя телефона, ни
  * чего-либо, что связало бы обращения к серверу с человеком. Обещание из
  * раздела «О данных» действует и тут.
  */
-internal suspend fun collectDiagnostics(store: ScheduleStore, schedule: ScheduleDto?): String {
+internal suspend fun collectDiagnostics(
+    context: Context,
+    store: ScheduleStore,
+    schedule: ScheduleDto?,
+): String {
     val zone = ZoneId.systemDefault()
     val lines = mutableListOf(
         "Когда пара? ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
@@ -44,6 +59,9 @@ internal suspend fun collectDiagnostics(store: ScheduleStore, schedule: Schedule
     if (schedule == null) {
         lines += "Расписание: не загружено"
     } else {
+        // Две даты, а не одна: расходятся они по-разному. Свежее «собрано» при
+        // старом «получено» — телефон перестал ходить за расписанием; старые
+        // обе — расписание встало у нас.
         lines += "Расписание: получено ${stamp(store.fetchedAt.first(), zone)}, " +
             "собрано ${stamp(schedule.generatedAt, zone)}"
         schedule.sheet?.let { lines += "Лист: $it" }
@@ -53,9 +71,45 @@ internal suspend fun collectDiagnostics(store: ScheduleStore, schedule: Schedule
         lines += "Дней на телефоне: ${schedule.days.size}"
     }
     lines += "Сервер: ${store.serverStatus.first()}"
+    lines += widgets(context)
+    lines += reminders(context, store)
     lines += "Телефон: ${LocalDateTime.now().format(STAMP)}, $zone"
 
     return lines.joinToString("\n")
+}
+
+/**
+ * Сколько наших виджетов стоит на экране.
+ *
+ * «Виджет не обновляется» — самая вероятная жалоба, и первый вопрос по ней:
+ * а виджет вообще добавлен? Спрашивать это словами неловко, а ошибиться легко:
+ * приложение и виджет — разные вещи, и не всем это очевидно.
+ */
+private suspend fun widgets(context: Context): String = runCatching {
+    val manager = GlanceAppWidgetManager(context)
+    val count = listOf(
+        ScheduleWidget::class.java,
+        WeekWidget::class.java,
+        NextLessonWidget::class.java,
+    ).sumOf { manager.getGlanceIds(it).size }
+    "Виджетов на экране: $count"
+}.getOrDefault("Виджетов на экране: посчитать не вышло")
+
+/**
+ * Почему могло не прийти напоминание — тремя условиями сразу.
+ *
+ * Условий три, и человек обычно не знает, какое у него не выполнено:
+ * напоминания выключены в приложении, уведомления запрещены системой или
+ * не выдано разрешение будить телефон в точное время.
+ */
+private suspend fun reminders(context: Context, store: ScheduleStore): String {
+    if (!store.notifyEnabled.first()) return "Напоминания: выключены"
+    val allowed = runCatching {
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }.getOrDefault(false)
+    return "Напоминания: за ${store.notifyBeforeMinutes()} мин, " +
+        "уведомления ${if (allowed) "разрешены" else "запрещены"}, " +
+        "точные будильники ${if (LessonAlarms.exactAllowed(context)) "да" else "нет"}"
 }
 
 /** Дата с часами, без года и секунд: отчёт читает человек, а не машина. */

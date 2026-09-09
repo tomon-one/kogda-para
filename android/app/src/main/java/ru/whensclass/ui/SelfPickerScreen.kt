@@ -51,6 +51,7 @@ fun SelfPickerScreen(
     canGoBack: Boolean = false,
     onBack: () -> Unit = {},
     onStudentMode: () -> Unit = {},
+    loadDiagnostics: (suspend () -> String)? = null,
 ) {
     var query by remember { mutableStateOf("") }
 
@@ -99,11 +100,14 @@ fun SelfPickerScreen(
                     CircularProgressIndicator()
                 }
 
-                teachers.isEmpty() -> Text(
-                    "Список преподавателей не загрузился. Проверьте интернет.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
+                teachers.isEmpty() -> Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "Список преподавателей не загрузился. Проверьте интернет.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    // До настроек отсюда не дойти: себя ещё не выбрали.
+                    loadDiagnostics?.let { ReportLink(it) }
+                }
 
                 else -> {
                     val filtered = remember(teachers, query) {

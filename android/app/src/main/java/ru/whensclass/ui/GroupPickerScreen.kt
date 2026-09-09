@@ -47,7 +47,7 @@ import ru.whensclass.widget.plural
 
 /** Сообщение о неудачной загрузке — со ссылкой, куда написать. */
 @Composable
-private fun LoadFailed() {
+private fun LoadFailed(loadDiagnostics: (suspend () -> String)?) {
     val context = LocalContext.current
     Column(modifier = Modifier.padding(16.dp)) {
         Text(
@@ -70,6 +70,10 @@ private fun LoadFailed() {
                 }
                 .padding(vertical = 4.dp),
         )
+        // Отсюда до настроек человек не дойдёт: группа не выбрана, а
+        // значит и остальное приложение ему закрыто. Между тем именно
+        // здесь спотыкается тот, кто поставил приложение впервые.
+        loadDiagnostics?.let { ReportLink(it) }
     }
 }
 
@@ -87,6 +91,7 @@ fun GroupPickerScreen(
     canGoBack: Boolean = false,
     onBack: () -> Unit = {},
     onTeacherMode: (() -> Unit)? = null,
+    loadDiagnostics: (suspend () -> String)? = null,
 ) {
     var groups by remember { mutableStateOf<List<GroupDto>?>(null) }
     var query by remember { mutableStateOf("") }
@@ -159,7 +164,7 @@ fun GroupPickerScreen(
                     CircularProgressIndicator()
                 }
 
-                list.isEmpty() -> LoadFailed()
+                list.isEmpty() -> LoadFailed(loadDiagnostics)
 
                 else -> {
                     // Отбор считаем только когда меняется запрос или сам список:
