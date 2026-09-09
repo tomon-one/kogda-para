@@ -128,22 +128,6 @@ def list_sheets_via_api(key: str) -> list[SheetInfo]:
     return out
 
 
-def read_sheet_from_workbook(blob: bytes, title: str) -> list[list[str]]:
-    """Читает лист прямо из xlsx — на случай, когда имя обрезано и gviz по
-    имени не отвечает."""
-    from openpyxl import load_workbook
-
-    book = load_workbook(io.BytesIO(blob), read_only=True, data_only=True)
-    try:
-        sheet = book[title]
-        return [
-            ["" if cell is None else str(cell) for cell in row]
-            for row in sheet.iter_rows(values_only=True)
-        ]
-    finally:
-        book.close()
-
-
 def _unescape(value: str) -> str:
     return (
         value.replace("&amp;", "&")

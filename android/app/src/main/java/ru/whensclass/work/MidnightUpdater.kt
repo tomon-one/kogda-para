@@ -99,11 +99,14 @@ class MidnightReceiver : BroadcastReceiver() {
                 // в 01:05 он раньше не сбрасывал листание и не шёл за
                 // расписанием. После ночной перезагрузки — то же самое.
                 val night = ScheduleWidget().newDay(app)
-                if (night) ScheduleWidget().resetDayOffset(app) else ScheduleWidget().updateAll(app)
+                // Сброс листания сам перерисовывает дневной виджет, поэтому
+                // здесь только он; остальные — общим путём ниже.
+                if (night) ScheduleWidget().resetDayOffset(app)
                 // Недельный виджет тоже живёт сегодняшним днём: он выделяет
                 // текущую пару, прячет прожитые дни и пишет даты в заголовке.
-                WeekWidget().updateAll(app)
-                NextLessonWidget().updateAll(app)
+                // Все три через репозиторий: счёт ответов вшит туда, и три
+                // вызова руками мимо него теряли отрисовку.
+                AppContainer.get(app).repository.redrawWidgets()
                 MidnightUpdater.schedule(app)
                 // Напоминания о парах живут в абсолютном времени, поэтому после
                 // перевода часов или смены пояса приходят не тогда. Приёмник и

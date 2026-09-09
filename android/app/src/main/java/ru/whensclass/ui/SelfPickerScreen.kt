@@ -114,6 +114,16 @@ fun SelfPickerScreen(
                         if (query.isBlank()) teachers
                         else teachers.filter { it.name.contains(query.trim(), ignoreCase = true) }
                     }
+                    if (filtered.isEmpty()) {
+                        // Тот же ответ, что и в списке групп: пустой экран после
+                        // поиска читается как поломка, а не как «не нашлось».
+                        Text(
+                            "Ничего не нашлось",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
                     LazyColumn(
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),

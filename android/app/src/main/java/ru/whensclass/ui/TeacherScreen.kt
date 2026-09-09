@@ -190,6 +190,18 @@ fun TeacherScreen(
                             )
                         }
                     }
+                    if (found.isEmpty()) {
+                        // Тот же ответ, что и в списке групп: пустой экран после
+                        // поиска читается как поломка, а не как «не нашлось».
+                        item(key = "пусто") {
+                            Text(
+                                "Ничего не нашлось",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
+                    }
                     if (others.isNotEmpty() && (self != null || favourites.isNotEmpty())) {
                         item(key = "others") { SectionTitle(othersTitle) }
                     }

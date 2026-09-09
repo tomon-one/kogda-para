@@ -458,10 +458,10 @@ private fun App(
                             scope.launch {
                                 container.store.setTheme(ThemeChoice.toStored(choice))
                                 // Виджет обязан перекраситься сразу, а не через
-                                // час при очередном обновлении.
-                                ScheduleWidget().updateAll(context)
-                                WeekWidget().updateAll(context)
-                                NextLessonWidget().updateAll(context)
+                                // час при очередном обновлении. Через репозиторий,
+                                // а не тремя вызовами руками: счёт ответов вшит
+                                // именно туда, и обход мимо него терял отрисовки.
+                                container.repository.redrawWidgets()
                             }
                         },
                         onChangeGroup = {
