@@ -6,6 +6,7 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -47,9 +48,14 @@ class ScheduleRepository(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    val schedule: Flow<ScheduleDto?> = store.scheduleJson.map { body ->
-        body?.let { runCatching { json.decodeFromString<ScheduleDto>(it) }.getOrNull() }
-    }
+    // Разбор уводим с главного потока. collectAsState собирает поток в том же
+    // окружении, где идёт отрисовка, поэтому недельный JSON разбирался ровно
+    // там, где рисуется первый кадр, — и первый запуск спотыкался.
+    val schedule: Flow<ScheduleDto?> = store.scheduleJson
+        .map { body ->
+            body?.let { runCatching { json.decodeFromString<ScheduleDto>(it) }.getOrNull() }
+        }
+        .flowOn(Dispatchers.Default)
 
     val fetchedAt: Flow<Long> = store.fetchedAt
     val groupName: Flow<String?> = store.groupName
