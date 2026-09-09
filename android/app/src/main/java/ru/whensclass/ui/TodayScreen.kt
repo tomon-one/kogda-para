@@ -76,6 +76,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -265,7 +266,7 @@ fun TodayScreen(
                         endNote = { n ->
                             "Всё. " +
                                 plural(n, "группа", "группы", "групп") +
-                                ", и ни одной лишней."
+                                "."
                         },
                     )
                     return@Column
@@ -609,7 +610,7 @@ private fun DayCard(
 
             if (day.lessons.isEmpty()) {
                 Text(
-                    "Пар нет",
+                    freeDay(day.date),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
@@ -620,10 +621,47 @@ private fun DayCard(
                     if (index > 0) HorizontalDivider()
                     LessonRow(lesson, bells, isNow = lesson.number == current)
                 }
+                // День, в котором отменили всё до единой пары. Случай редкий
+                // и по-своему счастливый: пары показать надо, а сказать о нём
+                // больше нечего.
+                if (day.lessons.all { it.isCancelled }) {
+                    Text(
+                        "Всё отменили. Завидую",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    )
+                }
             }
         }
     }
 }
+
+/**
+ * Что написать в свободный день.
+ *
+ * Единственное место в приложении, где новость хорошая, — грех говорить о ней
+ * теми же двумя словами, что и об отсутствии данных. Строка выбирается по дате,
+ * поэтому у одного и того же дня она всегда одна: подмигнуть — не то же самое,
+ * что мельтешить.
+ */
+private fun freeDay(date: String): String {
+    val day = runCatching { LocalDate.parse(date) }.getOrNull()
+        ?: return "Пар нет"
+    // Заголовок карточки день уже назвал, поэтому повторять его тут нечем.
+    // В воскресенье пар не бывает никогда — радоваться нечему, это просто
+    // так устроено, и слово выбрано соответствующее.
+    return if (day.dayOfWeek == DayOfWeek.SUNDAY) "Выходной"
+    else FREE[day.dayOfYear % FREE.size]
+}
+
+/** Про будни, у которых пар не оказалось. Редкая новость, и хорошая. */
+private val FREE = listOf(
+    "Пар нет. Повезло",
+    "Пар нет. Это не ошибка",
+    "Пар нет. Совсем",
+    "Пусто. Так тоже бывает",
+)
 
 @Composable
 private fun DayHeader(title: String, isToday: Boolean) {

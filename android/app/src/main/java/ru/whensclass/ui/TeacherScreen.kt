@@ -63,8 +63,7 @@ fun TeacherScreen(
     // равно пока не умеем, но утверждать про колледж лишнего не будем.
     endNote: (Int) -> String = { n ->
         "Всё. " +
-            plural(n, "преподаватель", "преподавателя", "преподавателей") +
-            ". Список собран из колонок групп: кто у кого ведёт, там и написано."
+            plural(n, "преподаватель", "преподавателя", "преподавателей") + "."
     },
 ) {
     // В роли преподавателя его собственное расписание уже лежит на телефоне:
@@ -244,7 +243,7 @@ private fun ChosenTeacher(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onBack) { Text("Другой") }
+            TextButton(onClick = onBack) { Text("К списку") }
         }
 
         when {
