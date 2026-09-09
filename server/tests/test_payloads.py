@@ -42,7 +42,7 @@ def test_empty_fields_are_absent(snapshot):
     for day in body["days"]:
         for lesson in day["l"]:
             assert None not in lesson.values()
-            assert set(lesson) <= {"n", "s", "k", "t", "r", "u", "x", "c"}
+            assert set(lesson) <= {"n", "s", "k", "t", "r", "u", "x", "c", "o"}
 
 
 def test_day_out_of_coverage_is_omitted(snapshot):
@@ -74,3 +74,34 @@ def test_groups_payload(snapshot):
     ids = [g["id"] for g in body["groups"]]
     assert "isp-924-2" in ids
     assert len(ids) == len(set(ids)), "идентификаторы групп обязаны быть уникальны"
+
+
+def test_online_without_a_link_still_says_online(snapshot):
+    """Признак «онлайн» отдельный от ссылки, и в ответе он есть без неё.
+
+    Ровно эта подмена — признак через его следствие — стоила нам вечера
+    8 сентября: приложение объявило четыре пары «ставшими онлайн» в день,
+    когда им всего лишь дописали ссылки. Разбор ячейки закреплён в
+    test_cells.py, а сборка ответа не проверялась ничем: ключ можно было
+    выбросить целиком, и весь набор остался бы зелёным.
+    """
+    group = next(g for g in snapshot.groups if g.name == "БП-926/1")
+    body = schedule_payload(snapshot, group.id, dt.date(2026, 9, 11), 1, GENERATED)
+
+    lessons = body["days"][0]["l"]
+    assert lessons, "в фикстуре у этой группы 11 сентября четыре онлайн-пары"
+    for lesson in lessons:
+        assert lesson["o"] == 1
+        assert "u" not in lesson, "ссылку к этим парам колледж не давал"
+        assert "r" not in lesson, "вместо аудитории в ячейке стояло слово «онлайн»"
+
+
+def test_offline_lesson_has_no_online_mark(snapshot):
+    """И обратное: у очной пары признака нет вовсе, а не «o»: 0."""
+    group = next(g for g in snapshot.groups if g.name == "ИСП-924/2")
+    body = schedule_payload(snapshot, group.id, START, 3, GENERATED)
+
+    offline = [lesson for day in body["days"] for lesson in day["l"] if "r" in lesson]
+    assert offline, "в окне должны быть пары с аудиторией"
+    for lesson in offline:
+        assert "o" not in lesson

@@ -90,6 +90,25 @@ class SheetIndex:
                 best = (key, (title, info.get("gid")))
         return best[1] if best else None
 
+    def following(self, after: dt.date) -> tuple[str, str | None] | None:
+        """Ближайший лист, начинающийся позже указанного дня.
+
+        Спрашивать вместо этого `covering(after + 1)` нельзя, хотя раньше так и
+        было: между листами всегда лежит воскресенье, которого нет ни в одном
+        из них. Память отвечала «не знаю» ровно на той границе, ради которой её
+        и спрашивают, — и неделя вперёд в пятницу обрывалась субботой, даже
+        когда следующий лист был давно найден и записан.
+        """
+        best = None
+        for title, info in self.known.items():
+            try:
+                first = dt.date.fromisoformat(info["from"])
+            except (KeyError, ValueError):
+                continue
+            if first > after and (best is None or first < best[0]):
+                best = (first, (title, info.get("gid")))
+        return best[1] if best else None
+
     def covering(self, day: dt.date) -> tuple[str, str | None] | None:
         for title, info in self.known.items():
             try:
@@ -184,7 +203,7 @@ def resolve_window(
         return sheets
 
     # Окно выходит за край текущего листа — ищем следующий.
-    following = index.covering(covered_to + dt.timedelta(days=1))
+    following = index.following(covered_to)
     if following is None:
         if not deep:
             # Искать соседний лист в сети — это выгрузка всей книги на два
