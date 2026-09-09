@@ -10,8 +10,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -63,10 +66,14 @@ private val MOTION = spring<Float>(
 )
 
 /** Тумблер: прямоугольный трек, квадратный бегунок. */
+/**
+ * Тумблер. С [onCheckedChange] = null — только вид, без своей нажимаемости:
+ * так он ведёт себя внутри [SwitchRow], где нажимается вся строка.
+ */
 @Composable
 fun MinimalSwitch(
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+    onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     // Одна доля пути на всё: и сдвиг, и цвет считаются из неё в фазах разметки
@@ -91,7 +98,14 @@ fun MinimalSwitch(
                     cornerRadius = CornerRadius(8.dp.toPx()),
                 )
             }
-            .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch)
+            .then(
+                if (onCheckedChange == null) Modifier
+                else Modifier.toggleable(
+                    value = checked,
+                    onValueChange = onCheckedChange,
+                    role = Role.Switch,
+                ),
+            )
             .padding(3.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -257,5 +271,28 @@ fun copyToClipboard(
         ?.setPrimaryClip(ClipData.newPlainText(label, text))
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
         Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * Строка настройки с тумблером — нажимается целиком.
+ *
+ * Сам тумблер 42×24 dp: вдвое ниже той высоты, до которой палец достаёт не
+ * целясь. А нажимают всё равно по названию — соседние строки того же экрана,
+ * выбор темы и точные уведомления, именно так и устроены, и человек ждёт того
+ * же здесь. Раньше нажатие по надписи не делало ничего.
+ */
+@Composable
+fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        MinimalSwitch(checked = checked, onCheckedChange = null)
     }
 }

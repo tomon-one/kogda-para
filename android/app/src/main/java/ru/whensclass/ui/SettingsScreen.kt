@@ -178,21 +178,15 @@ fun SettingsScreen(
 
         Section("Уведомления") {
             NotificationsDenied(notifications)
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Напоминать о паре", style = MaterialTheme.typography.bodyLarge)
-                MinimalSwitch(checked = notifyEnabled, onCheckedChange = onNotifyEnabled)
-            }
+            SwitchRow("Напоминать о паре", notifyEnabled, onNotifyEnabled)
             if (notifyEnabled) {
                 // Обещание должно совпадать с поведением: напоминаем не о
                 // каждой паре, и человек вправе знать об этом до того, как
                 // решит, что напоминания сломались.
                 Text(
-                    "О первой паре дня и о паре после окна — о том, к чему надо " +
-                        "прийти. Посреди пары о следующей не пишем: вы уже здесь.",
+                    "О первой паре дня — всегда. О следующих — только если " +
+                        "напоминание успевает прийти после звонка с предыдущей: " +
+                        "посреди пары писать о следующей незачем, вы уже здесь.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 10.dp),
@@ -224,28 +218,14 @@ fun SettingsScreen(
                 ExactAlarms(exactAlarms)
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Сообщать об изменениях", style = MaterialTheme.typography.bodyLarge)
-                MinimalSwitch(checked = notifyChanges, onCheckedChange = onNotifyChanges)
-            }
+            SwitchRow("Сообщать об изменениях", notifyChanges, onNotifyChanges)
             Text(
                 "Отмены и замены на сегодня и завтра.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Сообщать о новых версиях", style = MaterialTheme.typography.bodyLarge)
-                MinimalSwitch(checked = notifyUpdates, onCheckedChange = onNotifyUpdates)
-            }
+            SwitchRow("Сообщать о новых версиях", notifyUpdates, onNotifyUpdates)
             Text(
                 // Магазина нет, обновление никто не принесёт.
                 "Приложение проверяет это раз в час вместе с расписанием.",

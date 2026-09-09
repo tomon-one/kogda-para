@@ -179,6 +179,14 @@ fun TodayScreen(
                             groupName,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
+                            // Единственное место, где в шапку попадает
+                            // произвольно длинный текст: у преподавателя
+                            // тут фамилия, имя и отчество целиком, до
+                            // тридцати семи знаков. Без ограничения оно
+                            // расползалось на три строки и наезжало на
+                            // время обновления под собой.
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             // Долгое нажатие по названию группы — счёт ответов.
                             // Ничего не подсказывает, что он здесь: на то и
                             // расчёт. Обычное нажатие не занято, но и не нужно.
@@ -377,8 +385,18 @@ private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
 enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String = "") {
     STUDENTS("Студентам", true),
     TEACHERS("Преподавателям", true),
-    RETAKES("Пересдачи", false, "Сейчас пересдач нет"),
-    EXAMS("Экзамены", false, "Сейчас экзаменов нет"),
+    // «Сейчас пусто» читалось бы как «зайдите позже, и появится». Для
+    // пересдач не появится никогда в том виде, какого ждут: в листе
+    // колледжа нет колонки группы, и персональных пересдач из него не
+    // собрать ни при каком разборе. Для экзаменов — пока не написан
+    // разборщик: лист устроен поперёк основного.
+    RETAKES(
+        "Пересдачи",
+        false,
+        "Раздел ещё не готов. И покажет он общий список по предметам: " +
+            "в листе колледжа не написано, чьи это пересдачи",
+    ),
+    EXAMS("Экзамены", false, "Раздел ещё не готов: лист экзаменов мы пока не читаем"),
 }
 
 /**
@@ -654,13 +672,17 @@ private fun LessonRow(
             // поэтому они идут сразу под названием и заметно, а не подписью
             // мелким шрифтом.
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Аудитория ужимается, тип занятия — нет: «Лекция» короче
+                // и важнее, а длинное текстовое название места иначе съедало
+                // строку целиком.
+                val shrink = Modifier.weight(1f, fill = false)
                 if (lesson.isOnline) {
-                    Place("Онлайн")
+                    Place("Онлайн", modifier = shrink)
                 } else {
                     // Ни кабинета, ни ссылки — так и говорим: пустая строка
                     // читается как «не загрузилось», хотя в таблице там пусто.
                     val room = roomLabel(lesson.room)
-                    Place(room ?: "Не указано", muted = room == null)
+                    Place(room ?: "Не указано", muted = room == null, modifier = shrink)
                 }
                 kindName(lesson.kind)?.let {
                     Text(
@@ -713,7 +735,7 @@ private fun LessonRow(
  * выбивались из спокойного вида остальных строк.
  */
 @Composable
-private fun Place(text: String, muted: Boolean = false) {
+private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Modifier) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
@@ -722,7 +744,12 @@ private fun Place(text: String, muted: Boolean = false) {
         else MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,
-        modifier = Modifier.padding(end = 8.dp),
+        // Аудитория бывает и текстом: «Спортзал Б.Хмельницкого 2». Без
+        // многоточия обрыв читался как самостоятельное короткое название,
+        // а без weight эта строка отбирала место у типа занятия рядом,
+        // и «Лекция» пропадала за краем.
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.padding(end = 8.dp),
     )
 }
 
