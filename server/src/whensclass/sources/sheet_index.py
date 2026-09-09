@@ -26,6 +26,10 @@ log = logging.getLogger(__name__)
 # ищем среди тех, чьё имя говорит о расписании и не говорит об индивидуальном.
 _LOOKS_LIKE_SCHEDULE = re.compile(r"расписан|график", re.IGNORECASE)
 _NOT_SCHEDULE = re.compile(r"индивидуальн|преподавател|аудитор|экз", re.IGNORECASE)
+# Лист, который по имени и есть расписание групп. Нужен, чтобы отличить
+# честный отказ («это календарный график») от тревожного («это наш лист,
+# но прочитать его не вышло»).
+_LOOKS_LIKE_GROUPS = re.compile(r"групп", re.IGNORECASE)
 _NUMBERS = re.compile(r"\d{1,2}")
 
 
@@ -221,22 +225,36 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
     if remembered:
         return remembered
 
+    # Листы, до содержимого которых мы так и не добрались. Если день в итоге
+    # окажется не покрыт, разница принципиальная: «колледж ещё не выложил» —
+    # это одно, а «мы не смогли посмотреть» — совсем другое.
+    unread: list[str] = []
+
     for sheet in candidates(list_sheets(), day):
         if sheet.gid is None and sheet.title_may_be_truncated:
             # Имя ровно в 31 символ — признак того, что xlsx его обрезал. По
             # обрезанному имени gviz отдаёт не наш лист, а первую вкладку книги,
             # причём с кодом 200: отличить успех от промаха нельзя.
             log.info("имя листа %r обрезано, пропускаю: gviz по нему врёт", sheet.title)
+            unread.append(sheet.title)
             continue
         try:
             text, _ = gsheets.fetch_sheet_csv(gid=sheet.gid, title=sheet.title)
             if text is None:
+                unread.append(sheet.title)
                 continue
             snapshot = parse_csv(text, sheet.title)
         except SourceFormatChanged as exc:
+            # «Не похож на расписание групп» — обычно честный отказ: в книге
+            # лежат и календарный график, и расписание аудиторий. Но если так
+            # ответил лист, который по имени и есть расписание групп, то либо
+            # формат переделали, либо мы разучились его читать.
+            if _LOOKS_LIKE_GROUPS.search(sheet.title):
+                unread.append(sheet.title)
             log.info("лист %r не похож на расписание групп: %s", sheet.title, exc)
             continue
         except Exception as exc:
+            unread.append(sheet.title)
             log.warning("лист %r не прочитался: %s", sheet.title, exc)
             continue
 
@@ -249,6 +267,18 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
 
     # Ни один лист не покрывает день. Это не обязательно поломка: между листами
     # есть воскресенье, которого нет ни в одном из них.
+    #
+    # Но если мы при этом до чего-то не добрались, промолчать нельзя. Иначе
+    # прежний снимок останется под видом свежего, приложение скажет «колледж
+    # ещё не выложил» — а проверить это утверждение мы как раз и не смогли.
+    # Пусть лучше служба уйдёт в stale и скажет, что беда у нас.
+    if unread:
+        raise LookupError(
+            f"лист на {day.isoformat()} не нашёлся, а до "
+            + ", ".join(repr(title) for title in unread)
+            + " добраться не вышло"
+        )
+
     fallback = index.nearest(day)
     if fallback:
         log.info(
