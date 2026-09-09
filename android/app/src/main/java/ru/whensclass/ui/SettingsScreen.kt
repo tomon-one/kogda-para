@@ -187,6 +187,16 @@ fun SettingsScreen(
                 MinimalSwitch(checked = notifyEnabled, onCheckedChange = onNotifyEnabled)
             }
             if (notifyEnabled) {
+                // Обещание должно совпадать с поведением: напоминаем не о
+                // каждой паре, и человек вправе знать об этом до того, как
+                // решит, что напоминания сломались.
+                Text(
+                    "О первой паре дня и о паре после окна — о том, к чему надо " +
+                        "прийти. Посреди пары о следующей не пишем: вы уже здесь.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
                 Text(
                     "За сколько предупредить",
                     style = MaterialTheme.typography.bodySmall,

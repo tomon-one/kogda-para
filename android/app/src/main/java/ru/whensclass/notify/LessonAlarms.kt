@@ -58,11 +58,30 @@ object LessonAlarms {
         val out = mutableListOf<Alarm>()
         for (day in schedule.days) {
             val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
-            for (lesson in day.lessons) {
+            // Конец предыдущей пары этого дня. Отменённые не в счёт: они никого
+            // не держат, и пара после отменённой — это уже возвращение с улицы.
+            var busyUntil: LocalDateTime? = null
+            for (lesson in day.lessons.sortedBy { it.number }) {
                 if (lesson.isCancelled) continue
-                val start = schedule.bells[lesson.number.toString()]?.getOrNull(0)
+                val bells = schedule.bells[lesson.number.toString()]
+                val start = bells?.getOrNull(0)
                     ?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: continue
                 val fireAt = LocalDateTime.of(date, start).minusMinutes(minutes.toLong())
+
+                // Напоминание, приходящее посреди предыдущей пары, не сообщает
+                // ничего: человек уже здесь, а что дальше — видно в приложении.
+                // Напоминают о том, к чему надо прийти: о первой паре дня и о
+                // паре после окна.
+                //
+                // Ровно в звонок — тоже поздно: человек ещё в аудитории,
+                // собирает сумку. Перемены в сетке колледжа по 10 и 20 минут,
+                // и с напоминанием за 20 минут граница попадает точно в звонок.
+                val duringPrevious = busyUntil?.let { !fireAt.isAfter(it) } == true
+                busyUntil = bells.getOrNull(1)
+                    ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+                    ?.let { LocalDateTime.of(date, it) }
+
+                if (duringPrevious) continue
                 if (fireAt.isBefore(now)) continue
                 out.add(Alarm(fireAt, lesson, minutes, date.toString()))
             }
