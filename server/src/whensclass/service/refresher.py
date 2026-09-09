@@ -40,7 +40,6 @@ class Refresher:
         self.state_dir = state_dir
         self.status = "empty"          # empty | ok | stale
         self.checked_at: dt.datetime | None = None
-        self.last_error: str | None = None
         self._source_etags: dict[str, str | None] = {}
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
@@ -66,7 +65,6 @@ class Refresher:
                 )
 
             snapshot = None
-            unchanged = 0
             for title, gid in self._sheets:
                 text, etag = gsheets.fetch_sheet_csv(
                     gid=gid,
@@ -80,7 +78,6 @@ class Refresher:
                     # схлопнулось бы на одну неделю, а сегодняшний день пропал.
                     # Поэтому перечитываем его без условного запроса.
                     text, etag = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
-                    unchanged += 1
                     if text is None:
                         continue
                 self._source_etags[title] = etag
@@ -115,7 +112,6 @@ class Refresher:
 
         self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
         self.status = "ok"
-        self.last_error = None
         log.info(
             "снимок обновлён: лист %r, %d групп, %d пар",
             snapshot.sheet_title, len(snapshot.groups), snapshot.total_lessons(),
@@ -165,7 +161,6 @@ class Refresher:
         return self.refresh(force=True)
 
     def _fail(self, message: str, kind: str = "error") -> None:
-        self.last_error = message
         self.status = "stale" if self.store.snapshot else "empty"
         self._sheets = None
         log.error("%s (состояние: %s)", message, self.status)

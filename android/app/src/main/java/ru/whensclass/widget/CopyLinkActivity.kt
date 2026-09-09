@@ -1,13 +1,10 @@
 package ru.whensclass.widget
 
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
+import ru.whensclass.ui.copyToClipboard
 
 /**
  * Невидимое окно, которое кладёт ссылку на занятие в буфер обмена.
@@ -30,18 +27,10 @@ class CopyLinkActivity : Activity() {
 
     private fun copy(url: String?) {
         if (url.isNullOrBlank()) return
-        val clipboard = getSystemService(ClipboardManager::class.java) ?: return
-        clipboard.setPrimaryClip(ClipData.newPlainText("Ссылка на занятие", url))
-        // С Android 13 система сама показывает, что скопировано, — свой ответ
-        // был бы вторым подряд.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            // Android 13 и новее показывает своё подтверждение копирования,
-            // с превью ссылки. Наше поверх него — второе окно об одном и том же,
-            // да ещё и с чужим значком: оболочка рисует его сама.
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                Toast.makeText(this, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
-            }
-        }
+        // Через общую функцию: здесь та же логика была набрана заново, и при
+        // копировании в неё дважды попала одна и та же проверка версии —
+        // вложенная сама в себя.
+        copyToClipboard(this, "Ссылка на занятие", url, "Ссылка скопирована")
     }
 
     companion object {

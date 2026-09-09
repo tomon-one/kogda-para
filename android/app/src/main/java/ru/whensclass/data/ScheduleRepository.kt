@@ -5,6 +5,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -60,6 +61,10 @@ class ScheduleRepository(
     // разница внутри разброса, — но разбирать недельный JSON в потоке отрисовки
     // неправильно и без неё: телефоны бывают медленнее нашего, а лист длиннее.
     val schedule: Flow<ScheduleDto?> = store.scheduleJson
+        // Хранилище общее: любая запись в него — счётчик ответов, тема,
+        // время проверки — будила этот поток, и недельный JSON разбирался
+        // заново, хотя сам не менялся.
+        .distinctUntilChanged()
         .map { body ->
             body?.let { runCatching { json.decodeFromString<ScheduleDto>(it) }.getOrNull() }
         }
