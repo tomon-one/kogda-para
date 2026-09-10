@@ -1,6 +1,7 @@
 package ru.whensclass.widget
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
@@ -322,17 +323,38 @@ private fun Lessons(
     // выглядит как поломка. Но если оболочка ужала виджет ниже собственного
     // минимума — а Nova это умеет, — вторая строка не влезет и обрежется
     // корпусом. Тогда честнее показать одну целиком.
-    val room = (free / rowHeight).toInt()
-    val fits = (if (free < rowHeight) 1 else room.coerceAtLeast(2))
-        .coerceAtMost(lessons.size)
-    val start = windowStart(lessons, bells, day, fits)
+    // Строка «прошло N пар» или «ещё N пар» тоже занимает место, и сколько их
+    // будет — видно только после того, как выбрано окно. Поэтому прикидка,
+    // потом уточнение: одного круга хватает, дальше число не меняется.
+    val lineHeight = 17.dp * fontScale()
+
+    fun room(reserved: Dp): Int {
+        val left = free - reserved
+        return (if (left < rowHeight) 1 else (left / rowHeight).toInt().coerceAtLeast(2))
+            .coerceAtMost(lessons.size)
+    }
+
+    var fits = room(0.dp)
+    var start = windowStart(lessons, bells, day, fits)
+    val labels = (if (start > 0) 1 else 0) + (if (start + fits < lessons.size) 1 else 0)
+    if (labels > 0) {
+        // Больше восьми пар и так не бывает, но подписи занимают места в
+        // контейнере наравне с парами, а их всего десять.
+        fits = room(lineHeight * labels).coerceAtMost(MAX_CHILDREN - labels)
+        start = windowStart(lessons, bells, day, fits)
+    }
+
     val shown = lessons.subList(start, minOf(lessons.size, start + fits))
-    // Считаем всё, что не поместилось, а не только хвост. Вечером окно
-    // стоит в конце дня, и прошедшие пары оказывались выше него — виджет
-    // молчал о них вовсе, будто их и не было.
-    val rest = lessons.size - shown.size
+    // Два разных числа, а не одно. Сверху прячется прожитое, снизу —
+    // предстоящее, и человеку это не одно и то же: «ещё две пары» под списком
+    // обещает пары впереди, даже когда они давно кончились.
+    val passed = start
+    val ahead = lessons.size - start - shown.size
 
     Column(modifier = modifier) {
+        // Сверху — прожитое: список едет вниз вместе с днём, и то, что уехало
+        // за верхний край, должно быть названо там же, где исчезло.
+        if (passed > 0) HiddenLine(passedPairs(passed), day, colors)
         shown.forEach { lesson ->
             // Пара и отступ под ней — одним контейнером: разметка виджета
             // вмещает не больше десяти детей, и по два на пару их не хватало бы
@@ -342,19 +364,23 @@ private fun Lessons(
                 Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 4.dp))
             }
         }
-        if (rest > 0) {
-            val context = LocalContext.current
-            Text(
-                morePairs(rest),
-                maxLines = 1,
-                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp)
-                    .clickable(actionStartActivity(openDay(context, day))),
-            )
-        }
+        if (ahead > 0) HiddenLine(morePairs(ahead), day, colors)
     }
+}
+
+/** Строка о парах, которые в виджет не поместились. Нажатие открывает день. */
+@Composable
+private fun HiddenLine(text: String, day: LocalDate, colors: Palette) {
+    val context = LocalContext.current
+    Text(
+        text,
+        maxLines = 1,
+        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .padding(start = 4.dp)
+            .clickable(actionStartActivity(openDay(context, day))),
+    )
 }
 
 /**
@@ -401,13 +427,17 @@ internal fun missingDay(
  * список начинается с той пары, которая ещё не кончилась, и съезжает вниз сам
  * собой в течение дня. Прошлые и будущие дни показываются с начала.
  */
-private fun windowStart(
+internal fun windowStart(
     lessons: List<LessonDto>,
     bells: Map<String, List<String>>,
     day: LocalDate,
     fits: Int,
 ): Int {
-    if (day != LocalDate.now()) return 0
+    // Окно стоит там, где день граничит с «сейчас»: у будущего дня — в начале,
+    // у прожитого — в конце, у сегодняшнего — на ближайшей не кончившейся паре.
+    val today = LocalDate.now()
+    if (day.isAfter(today)) return 0
+    if (day.isBefore(today)) return maxOf(0, lessons.size - fits)
     val now = LocalTime.now()
     val index = lessons.indexOfFirst { lesson ->
         val end = bells[lesson.number.toString()]?.getOrNull(1)
