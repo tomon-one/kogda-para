@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import pathlib
 import threading
@@ -43,6 +44,14 @@ class Refresher:
         self.checked_at: dt.datetime | None = None
         # Кого как переименовали: по старому id отвечаем расписанием нового.
         self.renames = RenameBook(state_dir)
+        # С какого момента и почему не обновляемся. Лежит на диске: службу
+        # перезапускают при каждой выкладке, а «лежим с четверга» должно
+        # пережить перезапуск, иначе двое суток выглядят как минута.
+        self._failing_path = state_dir / "failing.json"
+        self.failing_since: dt.datetime | None = None
+        self.last_error: str | None = None
+        self._alerted = False
+        self._load_failing()
         self._source_etags: dict[str, str | None] = {}
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
@@ -100,7 +109,12 @@ class Refresher:
             self._fail(f"не нашёл лист на {today}: {exc}", kind="sheet")
             return False
         except Exception as exc:
-            self._fail(f"таблица не прочиталась: {exc}", kind="fetch")
+            # Наружу — только тип: в тексте httpx приводит адрес запроса с
+            # параметрами, а /v1/meta открыт всем.
+            self._fail(
+                f"таблица не прочиталась: {exc}", kind="fetch",
+                public=f"таблица не прочиталась: {type(exc).__name__}",
+            )
             return False
 
         coverage = snapshot.coverage
@@ -118,6 +132,7 @@ class Refresher:
         previous_teachers = self.store.teachers
         self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
         self.status = "ok"
+        self._recovered()
         if previous is not None and previous_teachers is not None:
             try:
                 self.renames.record(previous, snapshot, previous_teachers, self.store.teachers)
@@ -191,20 +206,82 @@ class Refresher:
         log.info("в книге появился лист: %s — ищу заново", ", ".join(sorted(fresh)))
         return self.refresh(force=True)
 
-    def _fail(self, message: str, kind: str = "error") -> None:
+    def _fail(self, message: str, kind: str = "error", public: str | None = None) -> None:
         self.status = "stale" if self.store.snapshot else "empty"
         self._sheets = None
         log.error("%s (состояние: %s)", message, self.status)
-        alerts.notify(
-            kind,
-            f"Когда пара?: {message}. "
-            f"Состояние службы: {self.status}. "
-            + (
-                "Отдаётся прежнее расписание."
-                if self.status == "stale"
-                else "Расписание отдавать нечего."
-            ),
-        )
+
+        now = dt.datetime.now(dt.timezone.utc)
+        first = self.failing_since is None
+        if first:
+            self.failing_since = now
+            self._alerted = False
+        self.last_error = public or message
+
+        # Формат и поиск листа сами не чинятся — говорить сразу. Сеть и
+        # Google чинятся к следующему заходу: о них — только если лежим
+        # дольше получаса, иначе каждый чих Google будит человека дважды.
+        lying = (now - self.failing_since).total_seconds()
+        if kind != "fetch" or lying >= 30 * 60:
+            sent = alerts.notify(
+                kind,
+                f"{message}. Состояние: {self.status}, "
+                + ("отдаётся прежнее расписание." if self.status == "stale"
+                   else "отдавать нечего.")
+                + ("" if first else
+                   f" Лежим с {self.failing_since.astimezone(_zone()):%d.%m %H:%M}."),
+                force=not self._alerted,
+            )
+            self._alerted = self._alerted or sent
+        self._save_failing(kind)
+
+    def _recovered(self) -> None:
+        """Обновление удалось после сбоя: сказать, что и сколько лежало."""
+        since = self.failing_since
+        if since is None:
+            return
+        lying = dt.datetime.now(dt.timezone.utc) - since
+        hours = lying.total_seconds() / 3600
+        if self._alerted:
+            alerts.notify(
+                "recovered",
+                f"Расписание снова обновляется. Лежало {hours:.1f} ч, "
+                f"с {since.astimezone(_zone()):%d.%m %H:%M}.",
+                force=True, good=True,
+            )
+        for kind in ("format", "sheet", "fetch", "error"):
+            alerts.forget(kind)
+        self.failing_since, self.last_error, self._alerted = None, None, False
+        self._save_failing(None)
+
+    def _save_failing(self, kind: str | None) -> None:
+        try:
+            if self.failing_since is None:
+                self._failing_path.unlink(missing_ok=True)
+                return
+            tmp = self._failing_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({
+                "since": self.failing_since.isoformat(),
+                "error": self.last_error,
+                "kind": kind,
+                "alerted": self._alerted,
+            }, ensure_ascii=False), "utf-8")
+            tmp.replace(self._failing_path)
+        except OSError as exc:
+            log.warning("состояние сбоя не записалось: %s", exc)
+
+    def _load_failing(self) -> None:
+        try:
+            data = json.loads(self._failing_path.read_text("utf-8"))
+            self.failing_since = dt.datetime.fromisoformat(data["since"])
+            self.last_error = data.get("error")
+            self._alerted = bool(data.get("alerted"))
+        except (OSError, ValueError, KeyError, TypeError):
+            self.failing_since, self.last_error, self._alerted = None, None, False
+
+
+def _zone() -> zoneinfo.ZoneInfo:
+    return zoneinfo.ZoneInfo(settings.timezone)
 
 
 def state_dir() -> pathlib.Path:

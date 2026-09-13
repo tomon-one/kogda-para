@@ -211,6 +211,8 @@ def meta_payload(
     status: str,
     checked: datetime | None,
     today: date | None = None,
+    failing_since: datetime | None = None,
+    error: str | None = None,
 ) -> dict:
     # Куда идти, когда мы подвели: на лист, где лежит сегодняшний день, а
     # без него — просто в книгу. Ближайший известный день годится тоже:
@@ -233,6 +235,13 @@ def meta_payload(
         out["cov"] = [coverage[0].isoformat(), coverage[1].isoformat()]
     if checked:
         out["checked"] = _iso(checked)
+    if status != "ok":
+        # С какого часа и почему: двое суток stale не должны выглядеть как
+        # минута. Текст ошибки уже без адресов — его чистит refresher.
+        if failing_since:
+            out["since"] = _iso(failing_since)
+        if error:
+            out["err"] = error
     return out
 
 

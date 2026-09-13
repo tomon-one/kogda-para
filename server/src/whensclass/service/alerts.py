@@ -2,72 +2,87 @@
 
 Служба устроена так, чтобы непонятный лист не подменял собой рабочий: она
 удерживает прежний снимок и уходит в состояние stale. Но молчаливая поломка —
-плохая поломка: без этого модуля о ней узнаёшь от одногруппников в понедельник.
+плохая поломка: 11–13 сентября 2026 служба два дня писала ERROR в журнал
+каждые двадцать минут, и узнали об этом по экрану телефона на третий день.
 
-Пишем письмом через локальный почтовый сервер: он на этой машине уже есть и
-работает, а до внешних служб оповещения отсюда не достучаться.
+Шлём в ntfy.sh: это HTTPS-запрос, такой же, как к таблице Google, — юнит
+режет файловую систему и setuid, а не сеть. Почта отсюда не уходила
+(ProtectSystem=strict прячет очередь /var/spool), а Telegram с этого сервера
+не отвечает вовсе (проверено 14 сентября 2026). Тема ntfy — длинная случайная
+строка, она же и пароль: знает её только /etc/whensclass/env и телефон.
 
-Адрес задаётся переменной WHENSCLASS_ALERT_EMAIL. Сейчас он намеренно не
-задан — владелец следит за расписанием сам, — и модуль молчит. Код оставлен
-на случай, если следить надоест.
-
-Но вписать адрес мало: под нынешним юнитом письмо не уйдёт. ProtectSystem=strict
-оставляет доступной на запись только /var/lib/whensclass, а очередь почты живёт
-в /var/spool; NoNewPrivileges вдобавок снимает setuid с sendmail. Чтобы
-оповещения заработали, в юнит нужно добавить ReadWritePaths=/var/spool и
-разрешить повышение прав. Пока этого нет, единственное место, где видно
-поломку, — журнал службы.
+Без темы модуль молчит, как раньше без адреса почты.
 """
 
 from __future__ import annotations
 
 import logging
-import subprocess
 import time
-from email.message import EmailMessage
+
+import httpx
 
 from ..config import settings
 
 log = logging.getLogger(__name__)
 
-# Чтобы неудачное обновление раз в двадцать минут не превратилось в поток писем.
+# Чтобы неудачное обновление раз в двадцать минут не превратилось в поток.
 _QUIET_SECONDS = 6 * 60 * 60
 _last_sent: dict[str, float] = {}
+# Своё, короткое: notify зовётся из _fail под замком обновления, и общий
+# таймаут в минуту держал бы замок ровно тогда, когда всё и так плохо.
+_TIMEOUT = 10.0
 
 
-def notify(kind: str, text: str, force: bool = False) -> bool:
-    """Отправляет письмо владельцу. True, если получилось.
+def configured() -> bool:
+    return bool(settings.ntfy_topic)
+
+
+def notify(kind: str, text: str, force: bool = False, good: bool = False) -> bool:
+    """Отправляет сообщение владельцу. True, если получилось.
 
     `kind` — вид происшествия: одинаковые не повторяются чаще, чем раз в шесть
     часов. Таблица может лежать сутки, и напоминать об этом каждые двадцать
-    минут незачем.
+    минут незачем. `good` — не тревога, а «починилось».
     """
-    address = settings.alert_email
-    if not address:
+    if not settings.ntfy_topic:
         log.debug("оповещения не настроены, пропускаю: %s", text)
         return False
 
     now = time.monotonic()
-    if not force and now - _last_sent.get(kind, 0) < _QUIET_SECONDS:
+    last = _last_sent.get(kind)
+    # «Ни разу не слали» — это None, а не ноль: monotonic считается от
+    # загрузки машины, и с нулём первые шесть часов после перезагрузки
+    # сервера любая тревога считалась бы уже отправленной.
+    if not force and last is not None and now - last < _QUIET_SECONDS:
         return False
 
-    message = EmailMessage()
-    message["To"] = address
-    message["From"] = settings.alert_from
-    message["Subject"] = "Когда пара?: расписание не обновляется"
-    message.set_content(text)
-
+    # Публикация JSON-ом в корень, а не POST в /<тема>: так тема не стоит в
+    # адресе и не попадёт в текст исключения httpx, а заголовки не надо
+    # кодировать ради кириллицы.
+    body = {
+        "topic": settings.ntfy_topic,
+        "title": "Когда пара?",
+        "message": text,
+        "priority": 3 if good else 4,
+        "tags": ["white_check_mark"] if good else ["rotating_light"],
+    }
     try:
-        subprocess.run(
-            ["/usr/sbin/sendmail", "-t", "-oi"],
-            input=message.as_bytes(),
-            check=True,
-            timeout=30,
-        )
+        with httpx.Client(timeout=_TIMEOUT, headers={"User-Agent": settings.user_agent}) as client:
+            response = client.post(settings.ntfy_url, json=body)
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        log.error("оповещение не ушло (%s): ответ %s", kind, exc.response.status_code)
+        return False
     except Exception as exc:
-        log.error("не смог отправить оповещение на %s: %s", address, exc)
+        # Тип, а не текст: в тексте httpx приводит адрес запроса.
+        log.error("оповещение не ушло (%s): %s", kind, type(exc).__name__)
         return False
 
     _last_sent[kind] = now
-    log.info("отправлено оповещение (%s) на %s", kind, address)
+    log.info("отправлено оповещение (%s)", kind)
     return True
+
+
+def forget(kind: str) -> None:
+    """Забыть, что об этом уже говорили: беда прошла, следующая — новая."""
+    _last_sent.pop(kind, None)

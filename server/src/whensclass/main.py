@@ -66,7 +66,8 @@ async def lifespan(app: FastAPI):
 
     if store.load():
         log.info("поднял снимок с диска: лист %r", store.snapshot.sheet_title)
-        refresher.status = "ok"
+        # Лежали до перезапуска — лежим и после: снимок тот же прежний.
+        refresher.status = "stale" if refresher.failing_since else "ok"
 
     zone = zoneinfo.ZoneInfo(settings.timezone)
     scheduler = BackgroundScheduler(timezone=zone)

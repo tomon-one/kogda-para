@@ -54,11 +54,31 @@ def _state(request: Request):
 
 @router.get("/healthz")
 def healthz(request: Request) -> Response:
+    """200 — расписание есть и оно про сегодня; иначе 503 с причиной.
+
+    Раньше 200 отвечался при любом снимке, и stale двое суток снаружи
+    выглядел здоровьем. Теперь по коду ответа можно поставить любой
+    сторожок — ему не надо разбирать /v1/meta.
+    """
     store, refresher = _state(request)
-    ok = store.snapshot is not None
+    snapshot = store.snapshot
+    today = _today()
+    reason = None
+    if snapshot is None:
+        reason = "расписание ещё не загружено"
+    elif refresher.status != "ok":
+        reason = f"не обновляется: {refresher.last_error or refresher.status}"
+    else:
+        coverage = snapshot.coverage
+        # Воскресений в листах нет — это не повод для тревоги.
+        if today.weekday() != 6 and coverage and not (coverage[0] <= today <= coverage[1]):
+            reason = f"лист покрывает {coverage[0]}—{coverage[1]}, а сегодня {today}"
+    body = {"ok": reason is None, "status": refresher.status}
+    if reason:
+        body["reason"] = reason
     return Response(
-        content=json.dumps({"ok": ok, "status": refresher.status}),
-        status_code=200 if ok else 503,
+        content=json.dumps(body, ensure_ascii=False),
+        status_code=200 if reason is None else 503,
         media_type=JSON,
     )
 
@@ -97,7 +117,8 @@ def meta(request: Request) -> Response:
         return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
                         media_type=JSON)
     body = meta_payload(store.snapshot, store.generated, refresher.status,
-                        refresher.checked_at, today=_today())
+                        refresher.checked_at, today=_today(),
+                        failing_since=refresher.failing_since, error=refresher.last_error)
     return _json_response(request, body, cache=False)
 
 
