@@ -50,3 +50,19 @@ def test_nearest_returns_covering_sheet_when_there_is_one(tmp_path):
 
 def test_empty_index_has_no_fallback(tmp_path):
     assert SheetIndex(tmp_path).nearest(dt.date(2026, 9, 13)) is None
+
+
+def test_renamed_sheet_replaces_its_old_name(tmp_path):
+    """Тот же gid под новым именем — тот же лист, старое имя забывается."""
+    index = SheetIndex(tmp_path)
+    index.remember("расписание групп 01.-05.09", "656498718", dt.date(2026, 9, 2), dt.date(2026, 9, 12))
+    index.remember("расписание групп 01.-19.09", "656498718", dt.date(2026, 9, 2), dt.date(2026, 9, 19))
+    assert list(index.known) == ["расписание групп 01.-19.09"]
+    assert index.covering(dt.date(2026, 9, 5)) == ("расписание групп 01.-19.09", "656498718")
+
+
+def test_sheets_without_gid_are_not_confused_with_each_other(tmp_path):
+    """Без gid листы различимы только по имени — ничего не забываем."""
+    index = index_with(tmp_path, ("а", "2026-09-02", "2026-09-05"), ("б", "2026-09-07", "2026-09-12"))
+    assert set(index.known) == {"а", "б"}
+
