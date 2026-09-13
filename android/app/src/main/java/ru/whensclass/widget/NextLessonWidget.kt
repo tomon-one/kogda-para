@@ -56,6 +56,7 @@ class NextLessonWidget : GlanceAppWidget() {
             val today = LocalDate.now()
             val next = nextLesson(schedule, today)
             val lesson = next?.lesson
+            val broken = state?.serverBroken == true
 
             Column(
                 modifier = GlanceModifier
@@ -83,8 +84,11 @@ class NextLessonWidget : GlanceAppWidget() {
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
                     Text(
-                        formatFetchedShort(state?.fetchedAt ?: 0L) + " ⟳",
-                        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                        (if (broken) "сбой у нас" else formatFetchedShort(state?.fetchedAt ?: 0L)) + " ⟳",
+                        style = TextStyle(
+                            fontSize = 11.sp,
+                            color = if (broken) colors.error else colors.textDim,
+                        ),
                         modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                     )
                     return@Column
@@ -101,12 +105,20 @@ class NextLessonWidget : GlanceAppWidget() {
                     next.day == today.plusDays(1) -> "завтра"
                     else -> formatDayTitleShort(next.day)
                 }
+                // Сбой на сервере — в ту же строку и тем же красным, что у
+                // остальных виджетов: пара на экране в этот момент из
+                // прежнего снимка, и промолчать здесь значит соврать.
+                val head = lesson.groups?.let { "$when_ · $time · $it" } ?: "$when_ · $time"
                 Text(
-                    lesson.groups?.let { "$when_ · $time · $it" } ?: "$when_ · $time",
+                    if (broken) "$head · сбой у нас" else head,
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
-                        color = if (now) colors.accent else colors.textDim,
+                        color = when {
+                            broken -> colors.error
+                            now -> colors.accent
+                            else -> colors.textDim
+                        },
                     ),
                 )
                 Text(
@@ -177,7 +189,8 @@ private fun place(lesson: LessonDto): String = buildString {
         if (isNotEmpty()) append(" · ")
         // Значок обещает, что по нажатию скопируется ссылка. Пары без
         // ссылки помечены тем же словом, но нажимать там нечего.
-        append(if (lesson.url != null) "онлайн  ⧉" else "онлайн")
+        append(onlineLabel(lesson))
+        if (lesson.url != null) append("  ⧉")
     } else {
         if (isNotEmpty()) append(" · ")
         append(roomLabel(lesson.room) ?: "не указано")

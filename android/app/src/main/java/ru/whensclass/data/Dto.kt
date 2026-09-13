@@ -17,12 +17,18 @@ data class ScheduleDto(
     @SerialName("cov") val coverage: List<String> = emptyList(),
     @SerialName("bells") val bells: Map<String, List<String>> = emptyMap(),
     @SerialName("days") val days: List<DayDto> = emptyList(),
+    /** Лист таблицы колледжа, с которого эти дни: адрес с `#gid=`. */
+    @SerialName("src_url") val sourceUrl: String? = null,
+    /** Колонка группы в этом листе, буквами как в Sheets: «EQ». */
+    @SerialName("col") val column: String? = null,
 )
 
 @Serializable
 data class DayDto(
     @SerialName("d") val date: String,
     @SerialName("l") val lessons: List<LessonDto> = emptyList(),
+    /** Строка листа, где стоит дата этого дня, — чтобы ссылка подвела к ней. */
+    @SerialName("row") val row: Int? = null,
 )
 
 @Serializable
@@ -40,6 +46,8 @@ data class LessonDto(
     @SerialName("x") val cancelled: Int = 0,
     @SerialName("c") val note: String? = null,
     @SerialName("gr") val groups: String? = null,
+    /** В расписании преподавателя — колонка группы, у которой эта пара. */
+    @SerialName("col") val column: String? = null,
 ) {
     val isCancelled: Boolean get() = cancelled != 0
 

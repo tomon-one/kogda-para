@@ -268,6 +268,34 @@ class ScheduleStore(private val context: Context) {
     }
 
     /**
+     * Группу переименовали в таблице — сервер ответил за неё под новым id.
+     *
+     * Записываем новый id и имя, ничего не стирая: расписание то же, только
+     * подпись другая. Иначе мы бы зависели от памяти сервера о старом имени,
+     * а она не вечна.
+     */
+    suspend fun adoptGroup(id: String, name: String) {
+        context.dataStore.edit {
+            it[KEY_GROUP_ID] = id
+            it[KEY_GROUP_NAME] = name
+        }
+    }
+
+    suspend fun adoptSecondGroup(id: String, name: String) {
+        context.dataStore.edit {
+            it[KEY_GROUP2_ID] = id
+            it[KEY_GROUP2_NAME] = name
+        }
+    }
+
+    suspend fun adoptTeacher(id: String, name: String) {
+        context.dataStore.edit {
+            it[KEY_TEACHER_ID] = id
+            it[KEY_TEACHER_NAME] = name
+        }
+    }
+
+    /**
      * Вторая подгруппа.
      *
      * В таблице колледжа подгруппы стоят разными колонками, и общая пара
