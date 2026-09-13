@@ -62,14 +62,23 @@ def build_column_map(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> lis
 
     starts = sorted(columns)
     steps = {b - a for a, b in zip(starts, starts[1:])}
-    if steps != {_BLOCK_WIDTH}:
+    if any(step % _BLOCK_WIDTH for step in steps):
+        # Шаг 3 или 5 — вставили или удалили колонку, карта поехала.
         raise SourceFormatChanged(
             f"блоки групп идут с шагом {sorted(steps)}, ожидался {_BLOCK_WIDTH}"
         )
+    if steps != {_BLOCK_WIDTH}:
+        # Шаг 8 — блок без имени группы: пропуск, не сдвиг. Колонка
+        # аудитории соседа остаётся на своём месте.
+        log.warning("между блоками групп есть пропуски: шаги %s", sorted(steps))
 
     for col in starts:
         mark = (row[col + 3] if col + 3 < len(row) else "").strip()
         if not mark.startswith(_ROOM_MARK):
+            if mark.casefold().startswith("ауд"):
+                # «Ауд», «ауд.», «АУД.» — то же слово, набранное иначе.
+                log.warning("в колонке %d «%s» вместо «%s»", col + 3, mark, _ROOM_MARK)
+                continue
             raise SourceFormatChanged(
                 f"в колонке {col + 3} ожидалась «{_ROOM_MARK}», а там {mark!r}"
             )

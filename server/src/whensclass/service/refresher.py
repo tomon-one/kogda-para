@@ -20,8 +20,9 @@ import httpx
 
 from ..config import settings
 from ..domain.models import SourceFormatChanged
-from ..parser.csv_schedule import parse_export
+from ..parser.csv_schedule import Limits, parse_export
 from ..sources import gsheets, sheet_index
+from ..storage import history
 from . import alerts
 from .renames import RenameBook
 from ..storage.snapshot_store import SnapshotStore
@@ -75,13 +76,13 @@ class Refresher:
 
     def _refresh(self, today: dt.date, force: bool, retried: bool = False) -> bool:
         self.checked_at = dt.datetime.now(dt.timezone.utc)
+        texts: list[tuple[str, str | None, str, str]] = []
         try:
             if self._sheets is None or force:
                 self._sheets = sheet_index.resolve_window(
                     today, settings.window_days, self.state_dir, deep=force
                 )
 
-            texts: list[tuple[str, str | None, str, str]] = []
             for title, gid in self._sheets:
                 try:
                     text = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
@@ -108,14 +109,20 @@ class Refresher:
 
             snapshot = None
             for title, gid, text, _ in texts:
-                current = parse_export(text, title or f"gid {gid}", gid, around=today)
+                current = parse_export(
+                    text, title or f"gid {gid}", gid, limits=_limits(), around=today
+                )
                 snapshot = current if snapshot is None else snapshot.merged_with(current)
             if snapshot is None:
                 self._fail(f"не нашёл лист на {today}: набор листов пуст", kind="sheet")
                 return False
             _check_group_drop(self.store.snapshot, snapshot)
         except SourceFormatChanged as exc:
-            # Самый опасный случай: таблицу переделали. Держим прежнее.
+            # Самый опасный случай: таблицу переделали. Держим прежнее —
+            # а отвергнутый лист кладём в архив вместе с причиной: разбирать
+            # инцидент по листу, который колледж уже переправил, нельзя.
+            for _, gid, text, digest in texts:
+                history.archive(self.state_dir, gid, text, digest, rejected=str(exc))
             self._fail(f"формат таблицы изменился: {exc}", kind="format")
             return False
         except LookupError as exc:
@@ -145,6 +152,8 @@ class Refresher:
         previous_teachers = self.store.teachers
         self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
         self._source_hashes = {title: digest for title, _, _, digest in texts}
+        for _, gid, text, digest in texts:
+            history.archive(self.state_dir, gid, text, digest)
         self.status = "ok"
         self._recovered()
         if previous is not None and previous_teachers is not None:
@@ -297,6 +306,14 @@ def _check_group_drop(previous, current) -> None:
             f"пропало {len(lost)} групп из {len(previous.groups)}: "
             + ", ".join(lost[:10]) + ("…" if len(lost) > 10 else "")
         )
+
+
+def _limits() -> Limits:
+    return Limits(
+        min_groups=settings.min_groups,
+        min_dates=settings.min_dates,
+        min_lessons=settings.min_lessons,
+    )
 
 
 def _zone() -> zoneinfo.ZoneInfo:
