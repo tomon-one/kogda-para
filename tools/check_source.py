@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import pathlib
 import sys
 
@@ -26,6 +25,7 @@ sys.path.insert(0, str(ROOT / "server" / "src"))
 from whensclass.domain.models import SourceFormatChanged  # noqa: E402
 from whensclass.service import alerts  # noqa: E402
 from whensclass.parser.csv_schedule import parse_csv  # noqa: E402
+from whensclass.service.refresher import _today  # noqa: E402
 from whensclass.sources import gsheets, sheet_index  # noqa: E402
 
 
@@ -35,7 +35,8 @@ def main() -> int:
     ap.add_argument("--state-dir", default=str(ROOT / "server" / "var"))
     args = ap.parse_args()
 
-    today = dt.date.today()
+    # По поясу колледжа, не машины: в 04:30 по Новосибирску UTC ещё вчера.
+    today = _today()
     state = pathlib.Path(args.state_dir)
 
     try:

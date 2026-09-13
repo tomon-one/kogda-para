@@ -34,6 +34,16 @@ class FakeRefresher:
     status = "ok"
     checked_at = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
     renames = FakeRenames()
+    failing_since = None
+    last_error = None
+
+
+@pytest.fixture(autouse=True)
+def today_inside_the_fixture(monkeypatch):
+    """Фикстура покрывает 02.09–12.09; «сегодня» для /healthz — вторник внутри."""
+    from whensclass.api import routes
+
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 8))
 
 
 @pytest.fixture(scope="module")
@@ -118,6 +128,42 @@ def test_meta_and_health(client):
     meta = client.get("/v1/meta").json()
     assert meta["status"] == "ok"
     assert meta["cov"] == ["2026-09-02", "2026-09-12"]
+    assert client.get("/healthz").status_code == 200
+
+
+def test_health_is_503_when_stale_or_today_is_uncovered(fixture_csv, monkeypatch):
+    """/healthz отвечает по существу: stale и непокрытый учебный день — 503.
+
+    Раньше 200 отвечался при любом снимке, и двое суток stale снаружи
+    выглядели здоровьем.
+    """
+    from whensclass.api import routes
+
+    snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
+    app = FastAPI()
+    app.include_router(router)
+    app.state.store = FakeStore(snapshot)
+    refresher = FakeRefresher()
+    app.state.refresher = refresher
+    client = TestClient(app)
+
+    refresher.status = "stale"
+    refresher.last_error = "формат таблицы изменился: повторный заголовок"
+    refresher.failing_since = dt.datetime(2026, 9, 11, 4, 0, tzinfo=dt.timezone.utc)
+    response = client.get("/healthz")
+    assert response.status_code == 503
+    assert "повторный заголовок" in response.json()["reason"]
+    meta = client.get("/v1/meta").json()
+    assert meta["since"] == "2026-09-11T04:00:00Z"
+    assert meta["err"].startswith("формат таблицы")
+
+    refresher.status = "ok"
+    refresher.last_error = refresher.failing_since = None
+    assert "since" not in client.get("/v1/meta").json()
+    # Понедельник за краем листа — 503; воскресенье за краем — норма.
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 14))
+    assert client.get("/healthz").status_code == 503
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 13))
     assert client.get("/healthz").status_code == 200
 
 

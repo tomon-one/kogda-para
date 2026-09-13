@@ -21,10 +21,10 @@ class Settings(BaseSettings):
     # gid и неурезанными именами; без него читаем тот же список из xlsx.
     sheets_api_key: str | None = None
 
-    # Оповещения владельцу о поломках. Без них служба работает как прежде,
-    # просто молча.
-    alert_email: str | None = None
-    alert_from: str = "whensclass@localhost"
+    # Оповещения владельцу о поломках через ntfy.sh. Тема — длинная случайная
+    # строка, она же пароль. Без темы служба работает как прежде, просто молча.
+    ntfy_topic: str | None = None
+    ntfy_url: str = "https://ntfy.sh/"
 
     state_dir: str = "var"
     timezone: str = "Asia/Novosibirsk"
