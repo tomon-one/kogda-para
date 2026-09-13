@@ -158,13 +158,14 @@ Apple Developer Program, это 99 долларов в год, и оплата �
 
 ```bash
 cd server
-python -m venv .venv
-.venv/Scripts/python.exe -m pip install -e ".[dev]"
-.venv/Scripts/python.exe -m uvicorn whensclass.main:app --port 8081 --app-dir src
+python3 -m venv .venv
+.venv/bin/python -m pip install -c constraints.txt -e ".[dev]"
+.venv/bin/python -m uvicorn whensclass.main:app --port 8081 --app-dir src
 ```
 
+На Windows вместо `.venv/bin/python` — `.venv/Scripts/python.exe`.
 Проверка: `curl http://127.0.0.1:8081/v1/schedule/isp-924-2`, тесты:
-`.venv/Scripts/python.exe -m pytest tests -q`.
+`.venv/bin/python -m pytest tests -q`.
 
 Приложение собирается на JDK 21, на 25-й Android Gradle Plugin не работает.
 

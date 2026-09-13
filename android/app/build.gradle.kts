@@ -27,15 +27,22 @@ android {
 
     signingConfigs {
         create("release") {
-            // Ключ и пароли лежат вне репозитория: C:/WhensClass-keys.
+            // Ключ и пароли лежат вне репозитория: ~/WhensClass-keys на
+            // линуксе, C:/WhensClass-keys на прежней машине с Windows.
             // Потеря ключа означает, что обновить приложение у одногруппников
             // уже нельзя, — папку не удалять и держать в копии.
             // Потерять его нельзя — с другим ключом обновление не встанет
             // поверх уже установленного приложения.
-            val props = gradleLocalProperties(File("C:/WhensClass-keys"), "keystore.properties")
+            val keysDir = listOf(
+                File(System.getProperty("user.home"), "WhensClass-keys"),
+                File("C:/WhensClass-keys"),
+            ).firstOrNull { it.isDirectory } ?: File("C:/WhensClass-keys")
+            val props = gradleLocalProperties(keysDir, "keystore.properties")
             val store = props.getProperty("storeFile")
             if (store != null) {
-                storeFile = File(store)
+                // В keystore.properties путь к ключу записан с той машины, где
+                // файл заводили. Нет такого пути — ищем ключ по имени рядом.
+                storeFile = File(store).takeIf { it.isFile } ?: File(keysDir, File(store).name)
                 storePassword = props.getProperty("storePassword")
                 keyAlias = props.getProperty("keyAlias")
                 keyPassword = props.getProperty("keyPassword")
