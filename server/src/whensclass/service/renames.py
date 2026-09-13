@@ -31,38 +31,52 @@ from ..domain.teachers import TeacherIndex
 
 log = logging.getLogger(__name__)
 
-# След сущности — набор пар, по которому её узнают под новым именем.
-Trace = frozenset
+# След сущности — пары, по которым её узнают под новым именем. Два ключа:
+# устойчивый (день, номер, предмет, преподаватели) — по нему порог, и полный
+# (плюс аудитория, ссылка, онлайн, отмена) — по нему лидерство. Порог по
+# полному ключу подводил: между снимками 11 и 13 сентября 2026 у 31 группы
+# из 184 совпало меньше 4/5 пар только потому, что к парам дописали ссылки,
+# а мы в тот же день переделали «онлайн 12». По устойчивому — 181 на 1.0.
+# Но один устойчивый ключ стирает разницу между подгруппами (у ПХД-923/1 и /2
+# совпадает 0.92 по слабому и 0.46 по полному) — поэтому победитель обязан
+# быть лидером и по полному ключу.
+Trace = tuple[frozenset, frozenset]
 
 # Меньше трёх общих пар — совпадение случайное. И меньше четырёх пятых
 # прежних пар — уже не «та же группа», даже если часть пар сошлась: пока
 # группу переименовывали, ей могли переписать и расписание, но не целиком.
 MIN_SHARED = 3
 MIN_SHARE = 0.8
+# Столько обновлений подряд состав id должен простоять, прежде чем книга
+# начнёт отвечать по новой записи: телефон, получив новый id, перепишет
+# выбор навсегда, а опечатку в заголовке колледж чинит через двадцать минут.
+CONFIRMATIONS = 3
 
 
 def group_traces(snapshot: Snapshot) -> dict[str, Trace]:
-    """Пары каждой группы целиком: у той же колонки они совпадут один в один."""
-    return {
-        gid: frozenset(
-            (day, x.number, x.subject, x.teachers, x.room, x.url, x.online, x.cancelled)
-            for day, lessons in by_date.items()
-            for x in lessons
-        )
-        for gid, by_date in snapshot.schedule.items()
-    }
+    """Следы групп: у переименованной колонки они совпадут один в один."""
+    out: dict[str, Trace] = {}
+    for gid, by_date in snapshot.schedule.items():
+        stable, full = set(), set()
+        for day, lessons in by_date.items():
+            for x in lessons:
+                stable.add((day, x.number, x.subject, x.teachers))
+                full.add((day, x.number, x.subject, x.teachers, x.room, x.url, x.online, x.cancelled))
+        out[gid] = (frozenset(stable), frozenset(full))
+    return out
 
 
 def teacher_traces(index: TeacherIndex) -> dict[str, Trace]:
     """Пары преподавателя без группы: группу могли переименовать в тот же час."""
-    return {
-        tid: frozenset(
+    out: dict[str, Trace] = {}
+    for tid, by_date in index.schedule.items():
+        stable = frozenset(
             (day, entry.lesson.number, entry.lesson.subject)
             for day, entries in by_date.items()
             for entry in entries
         )
-        for tid, by_date in index.schedule.items()
-    }
+        out[tid] = (stable, stable)
+    return out
 
 
 def detect(old: dict[str, Trace], new: dict[str, Trace]) -> dict[str, str]:
@@ -74,32 +88,47 @@ def detect(old: dict[str, Trace], new: dict[str, Trace]) -> dict[str, str]:
 
     renames: dict[str, str] = {}
     for old_id in vanished:
-        trace = old[old_id]
-        if len(trace) < MIN_SHARED:
+        offspring = [new_id for new_id in appeared if new_id.startswith(old_id + "-")]
+        if offspring:
+            # Имя с хвостом — подгруппа: 13 сентября 2026 КВД-926 стала
+            # КВД-926/1 и КВД-926/2. Колонка /1 совпадает с прежней целиком,
+            # но половина людей теперь в /2, и ответить им расписанием /1 при
+            # «ok» — то самое чужое расписание. Одного хвоста достаточно:
+            # второй колледж заведёт завтра. Пусть выберут себя заново.
+            log.info("%r исчез, а появились %s — это разделение, не гадаю", old_id, offspring)
             continue
-        scored: list[tuple[tuple[int, float], str]] = []
+        stable_old, full_old = old[old_id]
+        if len(stable_old) < MIN_SHARED:
+            continue
+        scored: list[tuple[tuple[int, int, float], str]] = []
         for new_id in appeared:
-            shared = len(trace & new[new_id])
-            if shared < MIN_SHARED or shared < MIN_SHARE * len(trace):
+            stable_new, full_new = new[new_id]
+            shared = len(stable_old & stable_new)
+            if shared < MIN_SHARED or shared < MIN_SHARE * len(stable_old):
                 continue
             # Из нескольких кандидатов с теми же парами (колонка на две
             # группы) берём того, чьё имя ближе к прежнему.
-            score = (shared, difflib.SequenceMatcher(None, old_id, new_id).ratio())
-            scored.append((score, new_id))
+            similarity = difflib.SequenceMatcher(None, old_id, new_id).ratio()
+            scored.append(((shared, len(full_old & full_new), similarity), new_id))
         if not scored:
             continue
         scored.sort(reverse=True)
-        if len(scored) > 1 and scored[0][0] == scored[1][0]:
-            # Два кандидата неотличимы — это не переименование, а разделение:
-            # 13 сентября 2026 КВД-926 стала КВД-926/1 и КВД-926/2 с теми же
-            # парами. Половине группы любой из ответов — чужая подгруппа.
-            # Честнее не отвечать вовсе: пусть выберут себя заново.
+        (best, winner), rest = scored[0], scored[1:]
+        if rest and rest[0][0][:2] == best[:2]:
+            # Два кандидата неотличимы и по устойчивому, и по полному ключу.
             log.info(
                 "%r исчез, а на его место претендуют %s поровну — не гадаю",
-                old_id, [new_id for _, new_id in scored[:2]],
+                old_id, [winner, rest[0][1]],
             )
             continue
-        renames[old_id] = scored[0][1]
+        by_full = max(scored, key=lambda item: item[0][1])[1]
+        if by_full != winner:
+            # По предметам ближе один, по аудиториям и ссылкам — другой:
+            # так выглядят подгруппы с общими лекциями. Не гадаем.
+            log.info("%r исчез: по предметам ближе %r, по полному следу %r — не гадаю",
+                     old_id, winner, by_full)
+            continue
+        renames[old_id] = winner
     return renames
 
 
@@ -111,6 +140,11 @@ class RenameBook:
         self._lock = threading.Lock()
         self.groups: dict[str, str] = {}
         self.teachers: dict[str, str] = {}
+        # Кандидаты в книгу: старый id -> {"to": новый, "seen": сколько
+        # обновлений подряд состав id это подтверждает}. Отдаются наружу
+        # только после CONFIRMATIONS.
+        self.pending_groups: dict[str, dict] = {}
+        self.pending_teachers: dict[str, dict] = {}
         self._load()
 
     def _load(self) -> None:
@@ -118,8 +152,11 @@ class RenameBook:
             data = json.loads(self.path.read_text("utf-8"))
             self.groups = dict(data.get("groups", {}))
             self.teachers = dict(data.get("teachers", {}))
+            self.pending_groups = dict(data.get("pending_groups", {}))
+            self.pending_teachers = dict(data.get("pending_teachers", {}))
         except (OSError, ValueError, AttributeError):
             self.groups, self.teachers = {}, {}
+            self.pending_groups, self.pending_teachers = {}, {}
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -129,6 +166,8 @@ class RenameBook:
                 {
                     "groups": self.groups,
                     "teachers": self.teachers,
+                    "pending_groups": self.pending_groups,
+                    "pending_teachers": self.pending_teachers,
                     "updated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
                 },
                 ensure_ascii=False,
@@ -169,11 +208,12 @@ class RenameBook:
         )
         with self._lock:
             changed = self._update(
-                self.groups, found_groups, alive=set(new_groups),
+                self.groups, self.pending_groups, found_groups, alive=set(new_groups),
                 names=(old_groups, new_groups), what="группа",
             )
             changed |= self._update(
-                self.teachers, found_teachers, alive=set(current_teachers.names),
+                self.teachers, self.pending_teachers, found_teachers,
+                alive=set(current_teachers.names),
                 names=(previous_teachers.names, current_teachers.names), what="преподаватель",
             )
             if changed:
@@ -182,6 +222,7 @@ class RenameBook:
     @staticmethod
     def _update(
         book: dict[str, str],
+        pending: dict[str, dict],
         found: dict[str, str],
         alive: set[str],
         names: tuple[dict[str, str], dict[str, str]],
@@ -190,20 +231,47 @@ class RenameBook:
         changed = False
         for old_id, new_id in found.items():
             log.warning(
-                "%s %r (%s) теперь %r (%s): по старому id отвечаю расписанием нового",
-                what, names[0].get(old_id, old_id), old_id, names[1].get(new_id, new_id), new_id,
+                "%s %r (%s), похоже, теперь %r (%s): подожду %d обновлений, потом по "
+                "старому id буду отвечать расписанием нового",
+                what, names[0].get(old_id, old_id), old_id,
+                names[1].get(new_id, new_id), new_id, CONFIRMATIONS,
             )
-            book[old_id] = new_id
-            # Цепочку не храним: A -> B -> C сворачивается в A -> C, иначе
-            # ответ по A придётся искать в два шага, а по три — никогда.
-            for key, value in list(book.items()):
-                if value == old_id:
-                    book[key] = new_id
+            pending[old_id] = {"to": new_id, "seen": 1}
             changed = True
-        # Старое имя вернулось в таблицу — значит, это снова настоящая
-        # сущность, и подменять её нельзя.
-        for old_id in list(book):
+
+        # Кандидат держится, пока старого id нет, а новый есть. Вернулся
+        # старый или пропал новый — не переименование, забываем.
+        for old_id, entry in list(pending.items()):
+            if old_id in found:
+                continue
+            if old_id in alive or entry["to"] not in alive:
+                del pending[old_id]
+                changed = True
+                continue
+            entry["seen"] += 1
+            changed = True
+            if entry["seen"] >= CONFIRMATIONS:
+                del pending[old_id]
+                log.warning("%s %s -> %s: подтверждено, отвечаю", what, old_id, entry["to"])
+                book[old_id] = entry["to"]
+                # Цепочку не храним: A -> B -> C сворачивается в A -> C, иначе
+                # ответ по A придётся искать в два шага, а по три — никогда.
+                for key, value in list(book.items()):
+                    if value == old_id:
+                        book[key] = entry["to"]
+
+        for old_id, target in list(book.items()):
+            # Старое имя вернулось в таблицу — значит, это снова настоящая
+            # сущность, и подменять её нельзя.
             if old_id in alive:
+                del book[old_id]
+                changed = True
+                continue
+            # Появилась подгруппа старого имени (кроме той, на которую
+            # отвечаем) — разделение прошло в два захода, и запись стала
+            # чужим расписанием для половины людей. Убираем.
+            if any(a.startswith(old_id + "-") and a != target for a in alive):
+                log.warning("%s %s -> %s: появились подгруппы, запись снята", what, old_id, target)
                 del book[old_id]
                 changed = True
         return changed
