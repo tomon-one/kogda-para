@@ -20,6 +20,9 @@ class TeacherLesson:
 
     lesson: Lesson
     group_name: str
+    # Колонка группы в листе — чтобы ссылка «открыть таблицу» подвела к
+    # ячейке этой пары. У склеенной из нескольких групп берём первую.
+    column: int | None = None
 
 
 @dataclass
@@ -56,6 +59,7 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
     # (id, дата, номер пары) -> список групп
     merged: dict[tuple[str, dt.date, int], list[str]] = {}
     best: dict[tuple[str, dt.date, int], Lesson] = {}
+    columns: dict[tuple[str, dt.date, int], int] = {}
 
     by_id = {g.id: g for g in snapshot.groups}
     for gid, by_date in snapshot.schedule.items():
@@ -72,13 +76,18 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
                     index.names.setdefault(tid, name)
                     key = (tid, day, lesson.number)
                     merged.setdefault(key, []).append(group.name)
+                    columns.setdefault(key, group.column)
                     known = best.get(key)
                     if known is None or len(lesson.subject) > len(known.subject):
                         best[key] = lesson
 
     for key, groups in merged.items():
         tid, day, _number = key
-        entry = TeacherLesson(lesson=best[key], group_name=", ".join(sorted(set(groups))))
+        entry = TeacherLesson(
+            lesson=best[key],
+            group_name=", ".join(sorted(set(groups))),
+            column=columns.get(key),
+        )
         index.schedule.setdefault(tid, {}).setdefault(day, []).append(entry)
 
     for by_date in index.schedule.values():

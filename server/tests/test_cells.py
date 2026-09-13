@@ -98,6 +98,19 @@ def test_online_word_survives_upper_case_and_synonyms():
         assert parse_lesson(1, "Информатика", word, "").online is True, word
 
 
+def test_numbered_online_room_is_online_with_a_number():
+    """«онлайн 12» — онлайн-комната с номером, с недели 14.09.2026 их четыре сотни.
+
+    Состояние — онлайн, номер — место внутри него: в JSON `o: 1` и `r: "12"`.
+    """
+    lesson = parse_lesson(1, "Информатика (Лек)", "онлайн 12", "")
+    assert lesson.online is True
+    assert lesson.room == "12"
+    for cell in ("Онлайн 3", "онлайн12", "online 15"):
+        assert parse_lesson(1, "Информатика", cell, "").online is True, cell
+    assert parse_lesson(1, "Информатика", "онлайн12", "").room == "12"
+
+
 def test_room_that_only_starts_with_online_stays_a_room():
     """Сверяем ячейку целиком: «онлайн-центр» был бы зданием, а не вебинаром."""
     lesson = parse_lesson(1, "Информатика", "онлайн-центр", "")

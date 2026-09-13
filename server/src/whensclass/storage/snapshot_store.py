@@ -13,7 +13,7 @@ import logging
 import pathlib
 import threading
 
-from ..domain.models import GroupRef, Lesson, Snapshot
+from ..domain.models import GroupRef, Lesson, SheetPlace, Snapshot
 from ..domain.teachers import TeacherIndex, build_index
 
 log = logging.getLogger(__name__)
@@ -88,6 +88,10 @@ def _to_dict(snapshot: Snapshot) -> dict:
             {"name": g.name, "id": g.id, "column": g.column} for g in snapshot.groups
         ],
         "dates": [d.isoformat() for d in snapshot.dates],
+        "places": {
+            day.isoformat(): {"gid": place.gid, "row": place.row}
+            for day, place in snapshot.places.items()
+        },
         "schedule": {
             gid: {
                 day.isoformat(): [_lesson_to_dict(x) for x in lessons]
@@ -118,6 +122,12 @@ def _from_dict(data: dict) -> Snapshot:
         groups=[GroupRef(**g) for g in data["groups"]],
         dates=[dt.date.fromisoformat(d) for d in data["dates"]],
     )
+    # Снимки до 14 сентября 2026 записаны без мест: тогда ссылка «открыть
+    # таблицу» просто откроет книгу, как и раньше.
+    snapshot.places = {
+        dt.date.fromisoformat(day): SheetPlace(gid=place.get("gid"), row=int(place["row"]))
+        for day, place in data.get("places", {}).items()
+    }
     snapshot.schedule = {
         gid: {
             dt.date.fromisoformat(day): [

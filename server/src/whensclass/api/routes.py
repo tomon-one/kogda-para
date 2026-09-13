@@ -97,7 +97,7 @@ def meta(request: Request) -> Response:
         return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
                         media_type=JSON)
     body = meta_payload(store.snapshot, store.generated, refresher.status,
-                        refresher.checked_at)
+                        refresher.checked_at, today=_today())
     return _json_response(request, body, cache=False)
 
 
@@ -127,20 +127,29 @@ def teacher(
     start: dt.date | None = Query(None, alias="from"),
     days: int = Query(settings.default_days, ge=1, le=14),
 ) -> Response:
-    store, _ = _state(request)
+    store, refresher = _state(request)
     if store.snapshot is None or store.teachers is None:
         return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
                         media_type=JSON)
 
-    body = teacher_payload(
-        store.snapshot,
-        store.teachers,
-        teacher_id,
-        start or _today(),
-        days,
-        store.generated,
-        bells=load_bells() or None,
-    )
+    def build(tid: str) -> dict | None:
+        return teacher_payload(
+            store.snapshot,
+            store.teachers,
+            tid,
+            start or _today(),
+            days,
+            store.generated,
+            bells=load_bells() or None,
+        )
+
+    body = build(teacher_id)
+    if body is None:
+        # Преподавателя переименовали в таблице — отвечаем за нового. В
+        # ответе стоит его новый id, приложение перепишет выбор у себя.
+        renamed = refresher.renames.teacher(teacher_id)
+        if renamed:
+            body = build(renamed)
     if body is None:
         return Response(status_code=404, content='{"error":"преподаватель не найден"}',
                         media_type=JSON)
@@ -154,19 +163,28 @@ def schedule(
     start: dt.date | None = Query(None, alias="from"),
     days: int = Query(settings.default_days, ge=1, le=14),
 ) -> Response:
-    store, _ = _state(request)
+    store, refresher = _state(request)
     if store.snapshot is None:
         return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
                         media_type=JSON)
 
-    body = schedule_payload(
-        store.snapshot,
-        group_id,
-        start or _today(),
-        days,
-        store.generated,
-        bells=load_bells() or None,
-    )
+    def build(gid: str) -> dict | None:
+        return schedule_payload(
+            store.snapshot,
+            gid,
+            start or _today(),
+            days,
+            store.generated,
+            bells=load_bells() or None,
+        )
+
+    body = build(group_id)
+    if body is None:
+        # Группу переименовали в таблице — отвечаем за новую. В ответе стоит
+        # её новый id, приложение перепишет выбор у себя.
+        renamed = refresher.renames.group(group_id)
+        if renamed:
+            body = build(renamed)
     if body is None:
         return Response(status_code=404, content='{"error":"группа не найдена"}',
                         media_type=JSON)
