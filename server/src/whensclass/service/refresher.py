@@ -108,11 +108,12 @@ class Refresher:
 
             snapshot = None
             for title, gid, text, _ in texts:
-                current = parse_export(text, title or f"gid {gid}", gid)
+                current = parse_export(text, title or f"gid {gid}", gid, around=today)
                 snapshot = current if snapshot is None else snapshot.merged_with(current)
             if snapshot is None:
                 self._fail(f"не нашёл лист на {today}: набор листов пуст", kind="sheet")
                 return False
+            _check_group_drop(self.store.snapshot, snapshot)
         except SourceFormatChanged as exc:
             # Самый опасный случай: таблицу переделали. Держим прежнее.
             self._fail(f"формат таблицы изменился: {exc}", kind="format")
@@ -273,6 +274,29 @@ class Refresher:
             self._alerted = bool(data.get("alerted"))
         except (OSError, ValueError, KeyError, TypeError):
             self.failing_since, self.last_error, self._alerted = None, None, False
+
+
+# Набор групп упал больше чем на треть между двумя снимками одного и того же
+# листа — это не «колледж убрал группы», а сломанный заголовок: 105 из 187
+# групп проходят порог в сто, и 80 групп молча получают 404. Самая крупная
+# когорта (-926) — 28 % от всех, уход целого курса под отказ не попадает.
+MAX_GROUP_DROP = 0.3
+
+
+def _check_group_drop(previous, current) -> None:
+    """Отказ, если группы пропали толпой при тех же датах."""
+    if previous is None or not previous.groups:
+        return
+    if not (set(previous.dates) & set(current.dates)):
+        # Новый лист, новый состав — сравнивать не с чем.
+        return
+    kept = {g.id for g in current.groups}
+    lost = [g.name for g in previous.groups if g.id not in kept]
+    if len(lost) > MAX_GROUP_DROP * len(previous.groups):
+        raise SourceFormatChanged(
+            f"пропало {len(lost)} групп из {len(previous.groups)}: "
+            + ", ".join(lost[:10]) + ("…" if len(lost) > 10 else "")
+        )
 
 
 def _zone() -> zoneinfo.ZoneInfo:

@@ -43,7 +43,7 @@ def setup_lookup(monkeypatch, sheets, behaviour):
             raise outcome("подстроено тестом")
         return title
 
-    def parse(text, title):
+    def parse(text, title, around=None):
         outcome = behaviour[title]
         if isinstance(outcome, type) and issubclass(outcome, Exception):
             raise outcome("подстроено тестом")
