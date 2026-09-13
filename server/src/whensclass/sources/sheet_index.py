@@ -54,6 +54,14 @@ class SheetIndex:
         tmp.replace(self.path)
 
     def remember(self, title: str, gid: str | None, first: dt.date, last: dt.date) -> None:
+        if gid is not None:
+            # Лист переименовали, не пересоздавая: 11 сентября 2026 «расписание
+            # групп 01.-05.09» стал «…01.-19.09» с тем же gid. Старое имя с тем
+            # же gid — тот же лист; оставить его значит подписывать снимок
+            # старым именем и читать один лист дважды.
+            for other, info in list(self.known.items()):
+                if other != title and info.get("gid") == gid:
+                    del self.known[other]
         self.known[title] = {
             "gid": gid,
             "from": first.isoformat(),

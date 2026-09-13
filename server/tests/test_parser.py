@@ -186,6 +186,18 @@ def test_date_written_by_hand_is_still_understood(written):
     assert _parse_date(written) == dt.date(2026, 9, 2)
 
 
+def _columnar_header(rows):
+    """(индекс строки «Дисциплина», её колонки, строка с именами групп) или None."""
+    for i, row in enumerate(rows):
+        columns = [c for c, v in enumerate(row) if (v or "").strip() == "Дисциплина"]
+        below = rows[i + 1] if i + 1 < len(rows) else []
+        if columns and any(
+            (below[c] or "").strip() == "Преподаватель" for c in columns if c < len(below)
+        ):
+            return i, columns, rows[i + 2] if i + 2 < len(rows) else []
+    return None
+
+
 def test_repeated_header_with_shifted_columns_stops_the_parse(fixture_csv):
     """Сдвиг колонок после повторного заголовка — худшее, что может случиться.
 
@@ -196,20 +208,64 @@ def test_repeated_header_with_shifted_columns_stops_the_parse(fixture_csv):
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
     by_column = {g.column: g.name for g in groups}
 
-    for i, row in enumerate(rows):
-        columns = [c for c, v in enumerate(row) if (v or "").strip() == "Дисциплина"]
-        below = rows[i + 1] if i + 1 < len(rows) else []
-        names_row = rows[i + 2] if i + 2 < len(rows) else []
-        if not columns or not any(
-            (below[c] or "").strip() == "Преподаватель" for c in columns if c < len(below)
-        ):
-            continue
-        # Ставим в колонку имя чужой группы — ровно то, что делает сдвиг блока.
-        target = next(c for c in columns if c in by_column and c < len(names_row))
-        names_row[target] = "ЧУЖАЯ-999"
-        break
-    else:
+    header = _columnar_header(rows)
+    if header is None:
         pytest.skip("в фикстуре нет повторного заголовка «столбиком»")
+    _, columns, names_row = header
+    # Ставим в колонку имя соседней группы — ровно то, что делает сдвиг
+    # блока: под заголовком оказываются пары другой группы.
+    target = next(c for c in columns if c in by_column and c < len(names_row))
+    names_row[target] = next(name for c, name in by_column.items() if c != target)
 
     with pytest.raises(SourceFormatChanged, match="повторный заголовок"):
+        parse_sheet(rows, "фикстура", FIXTURE)
+
+
+def test_repeated_header_with_renamed_group_is_tolerated(fixture_csv, caplog):
+    """Имя, которого нет ни в одной колонке главного заголовка, — переименование.
+
+    11 сентября 2026 колледж поправил имя группы в главном заголовке и не
+    тронул его в повторных. Колонка та же, пары те же — падать не из-за чего,
+    но в журнале об этом должно быть сказано.
+    """
+    rows = read_csv(fixture_csv)
+    groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
+    by_column = {g.column: g.name for g in groups}
+    untouched = parse_sheet(read_csv(fixture_csv), "фикстура", FIXTURE)
+
+    header = _columnar_header(rows)
+    if header is None:
+        pytest.skip("в фикстуре нет повторного заголовка «столбиком»")
+    _, columns, names_row = header
+    target = next(c for c in columns if c in by_column and c < len(names_row))
+    names_row[target] = by_column[target] + "-НСК"
+
+    with caplog.at_level("WARNING", logger="whensclass.parser.groups"):
+        snapshot = parse_sheet(rows, "фикстура", FIXTURE)
+
+    assert snapshot.schedule == untouched.schedule, "пары должны остаться прежними"
+    assert {g.id for g in snapshot.groups} == {g.id for g in untouched.groups}
+    assert any("переименован" in r.message for r in caplog.records)
+
+
+def test_repeated_header_with_unknown_column_stops_the_parse(fixture_csv):
+    """Группа в колонке, которой нет в главном заголовке, — тоже сдвиг."""
+    rows = read_csv(fixture_csv)
+    groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
+    known = {g.column for g in groups}
+
+    header = _columnar_header(rows)
+    if header is None:
+        pytest.skip("в фикстуре нет повторного заголовка «столбиком»")
+    i, columns, names_row = header
+    # Приписываем блок справа от последней группы: заголовок его объявляет,
+    # а главный заголовок про него не знает.
+    col = max(known) + 4
+    for r in (rows[i], rows[i + 1], names_row):
+        r.extend([""] * (col + 1 - len(r)))
+    rows[i][col] = "Дисциплина"
+    rows[i + 1][col] = "Преподаватель"
+    names_row[col] = "НОВАЯ-999"
+
+    with pytest.raises(SourceFormatChanged, match="нет в главном заголовке"):
         parse_sheet(rows, "фикстура", FIXTURE)

@@ -11,10 +11,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 
 from ..domain.ids import group_id
 from ..domain.models import GroupRef, SourceFormatChanged
+
+log = logging.getLogger(__name__)
 
 _HEADER_PREFIX = "Дисциплина Преподаватель "
 _ROOM_MARK = "Ауд."
@@ -134,12 +137,22 @@ def _check_columnar(
     чужие пары, статус остаётся «ok», и заметить это можно только глазами.
 
     Поэтому имена групп из третьей строки заголовка сверяются с картой колонок.
-    Разошлись — считаем формат изменившимся: упасть и остаться на прежнем
-    снимке лучше, чем отправить человека не в ту аудиторию.
+    Сдвиг узнаётся по имени, которое по главному заголовку живёт в другой
+    колонке, — или по колонке, которой в главном заголовке нет вовсе. Тогда
+    считаем формат изменившимся: упасть и остаться на прежнем снимке лучше,
+    чем отправить человека не в ту аудиторию.
+
+    А имя, которого нет ни в одной колонке главного заголовка, — не сдвиг, а
+    переименование. 11 сентября 2026 колледж поправил имя одной группы в
+    главном заголовке и не тронул его в двух повторных — и из-за одной ячейки
+    187 групп два дня сидели без расписания. Колонка та же, пары под ней те
+    же: про такое пишем в журнал и идём дальше, веря главному заголовку.
     """
     by_column: dict[int, set[str]] = {}
+    column_of: dict[str, int] = {}
     for group in groups:
         by_column.setdefault(group.column, set()).add(group.id)
+        column_of[group.id] = group.column
 
     for col in sorted(cells):
         declared = split_group_names((names_row[col] if col < len(names_row) else "") or "")
@@ -152,8 +165,19 @@ def _check_columnar(
                 f"повторный заголовок в строке {row_index} объявляет группу "
                 f"{declared} в колонке {col}, которой нет в главном заголовке"
             )
-        if {group_id(name) for name in declared} != known:
+        ids = {group_id(name) for name in declared}
+        if ids == known:
+            continue
+        strangers = sorted(gid for gid in ids if gid in column_of and column_of[gid] != col)
+        if strangers:
             raise SourceFormatChanged(
                 f"повторный заголовок в строке {row_index}: в колонке {col} "
-                f"стоит {declared}, а по главному заголовку там {sorted(known)}"
+                f"стоит {declared}, а по главному заголовку {strangers[0]!r} "
+                f"живёт в колонке {column_of[strangers[0]]}, здесь же {sorted(known)}"
             )
+        log.warning(
+            "повторный заголовок в строке %d: в колонке %d стоит %s, а по главному "
+            "заголовку там %s — такого имени нет больше нигде, считаю "
+            "переименованием и верю главному заголовку",
+            row_index, col, declared, sorted(known),
+        )
