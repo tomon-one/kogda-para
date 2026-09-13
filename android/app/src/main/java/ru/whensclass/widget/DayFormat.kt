@@ -1,5 +1,6 @@
 package ru.whensclass.widget
 
+import ru.whensclass.data.LessonDto
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -144,6 +145,16 @@ fun kindName(kind: String?): String? = when (kind?.trim()?.lowercase()) {
     "курс.р." -> "Курсовая"
     else -> kind
 }
+
+/**
+ * «онлайн» или «онлайн · 12»: у онлайн-пары бывает номер комнаты.
+ *
+ * С 14 сентября 2026 колледж раздаёт нумерованные онлайн-комнаты, как
+ * кабинеты. Сервер кладёт номер в `r` при `o: 1`; здесь он не кабинет, и
+ * «каб.» к нему не приписывается.
+ */
+fun onlineLabel(lesson: LessonDto): String =
+    lesson.room?.trim()?.takeIf { it.isNotEmpty() }?.let { "онлайн · $it" } ?: "онлайн"
 
 /**
  * Подпись аудитории.

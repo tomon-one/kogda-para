@@ -87,11 +87,13 @@ import ru.whensclass.data.GroupDto
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.ScheduleStore
+import ru.whensclass.data.sheetLink
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
 import ru.whensclass.widget.formatDurationLong
 import ru.whensclass.widget.formatFetchedAt
 import ru.whensclass.widget.kindName
+import ru.whensclass.widget.onlineLabel
 import ru.whensclass.widget.roomLabel
 import ru.whensclass.widget.lessonTime
 import ru.whensclass.widget.plural
@@ -234,7 +236,9 @@ fun TodayScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (serverBroken) ServerBroken(sourceUrl)
+            // В таблицу — к своей колонке и сегодняшнему дню, если сервер
+            // рассказал, где они; иначе просто в книгу.
+            if (serverBroken) ServerBroken(sheetLink(schedule, today, sourceUrl))
             ScheduleTabs(
                 current = tab,
                 teacherMode = teacherMode,
@@ -312,7 +316,7 @@ fun TodayScreen(
                 text = "Колледж выкладывает его на неделю-полторы вперёд. " +
                     "Но если пары сегодня идут, значит расписание застряло " +
                     "у нас — тогда смотрите первоисточник.",
-                sourceUrl = sourceUrl,
+                sourceUrl = sheetLink(schedule, today, sourceUrl),
             )
             return@Column
         }
@@ -769,7 +773,7 @@ private fun LessonRow(
                 // строку целиком.
                 val shrink = Modifier.weight(1f, fill = false)
                 if (lesson.isOnline) {
-                    Place("Онлайн", modifier = shrink)
+                    Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, modifier = shrink)
                 } else {
                     // Ни кабинета, ни ссылки — так и говорим: пустая строка
                     // читается как «не загрузилось», хотя в таблице там пусто.
@@ -869,7 +873,7 @@ private fun ServerBroken(sourceUrl: String?) {
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Text(
-                "Расписание застряло",
+                "Сбой на нашем сервере",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.error,

@@ -175,6 +175,7 @@ object LessonAlarms {
         kindName(alarm.lesson.kind)?.let { append(", ${it.lowercase()}") }
         if (alarm.lesson.isOnline) {
             append(". Занятие онлайн")
+            alarm.lesson.room?.trim()?.takeIf { it.isNotEmpty() }?.let { append(", комната $it") }
         } else {
             roomLabel(alarm.lesson.room)?.let { append(". $it") }
         }

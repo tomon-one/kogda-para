@@ -167,7 +167,11 @@ class ScheduleRepository(
         val extra = runCatching {
             api.schedule(second, from = weekStart(), days = DAYS)
         }.getOrNull() ?: return Merged(mine, whole = false)
-        return Merged(mergeSecondGroup(mine, extra), whole = true)
+        // Соседку переименовали: сервер ответил под новым id. Записать его
+        // прямо здесь нельзя — сверка «не сменил ли человек выбор, пока шёл
+        // запрос» сочла бы это чужим ответом. Отдаём наверх, запишется после.
+        val renamed = extra.takeIf { it.groupId != second }?.let { it.groupId to it.groupName }
+        return Merged(mergeSecondGroup(mine, extra), whole = true, secondRenamed = renamed)
     }
 
     /**
@@ -178,7 +182,12 @@ class ScheduleRepository(
      * прежним полным снимком нельзя: разница выглядит как отмена, и человеку
      * уходило уведомление «убрали 3 пару» на пару, которая никуда не делась.
      */
-    private data class Merged(val schedule: ScheduleDto, val whole: Boolean)
+    private data class Merged(
+        val schedule: ScheduleDto,
+        val whole: Boolean,
+        /** Новые id и имя соседней подгруппы, если её переименовали. */
+        val secondRenamed: Pair<String, String>? = null,
+    )
 
     suspend fun groups(): List<GroupDto> = withContext(Dispatchers.IO) {
         val cached = store.groupsJson.first()
@@ -292,6 +301,15 @@ class ScheduleRepository(
             // начатый до её смены, приносил склейку с прежней соседкой и
             // записывал её поверх новой.
             if (subject() != asked) return@withContext RefreshResult.AlreadyFresh
+
+            // Ответ пришёл под другим id: группу или преподавателя переименовали
+            // в таблице, и сервер ответил по памяти о старом имени. Переписываем
+            // выбор у себя — после сверки, иначе она сочла бы его чужим.
+            if (fresh.groupId != subject) {
+                if (teacherMode) store.adoptTeacher(fresh.groupId, fresh.groupName)
+                else store.adoptGroup(fresh.groupId, fresh.groupName)
+            }
+            merged.secondRenamed?.let { (id, name) -> store.adoptSecondGroup(id, name) }
 
             val previous = schedule.first()
             store.putSchedule(json.encodeToString(full), full.generatedAt)

@@ -38,6 +38,7 @@ import java.time.temporal.ChronoUnit
 import ru.whensclass.R
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.sheetLink
 import ru.whensclass.ui.MainActivity
 
 /**
@@ -102,7 +103,9 @@ fun ScheduleWidgetContent(
             schedule == null -> Hint("Расписание ещё не загружено", colors)
             today == null -> {
                 val missing = missingDay(schedule, day, fetchedAt, serverBroken)
-                Hint(missing.text, colors, if (missing.toSource) sourceUrl else null)
+                // К своей колонке и к этому дню, а не в книгу целиком.
+                val link = sheetLink(schedule, day, sourceUrl)
+                Hint(missing.text, colors, if (missing.toSource) link else null)
             }
             today.lessons.isEmpty() -> Hint("Пар нет", colors)
             else -> Lessons(
@@ -539,7 +542,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
     val parts = buildList {
         if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
         kindName(lesson.kind)?.let { add(it) }
-        add(if (lesson.isOnline) "онлайн" else roomLabel(lesson.room) ?: "не указано")
+        add(if (lesson.isOnline) onlineLabel(lesson) else roomLabel(lesson.room) ?: "не указано")
         // В расписании преподавателя вместо его имени — группы, которым читается
         // пара: сам он и так знает, кто ведёт.
         (lesson.groups ?: lesson.teachers.firstOrNull()?.let(::surnameOnly))?.let { add(it) }

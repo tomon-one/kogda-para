@@ -3,6 +3,7 @@ package ru.whensclass.widget
 import java.time.LocalDate
 import java.time.LocalTime
 import org.junit.Assert.assertEquals
+import ru.whensclass.data.LessonDto
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -126,5 +127,15 @@ class DayFormatTest {
         assertEquals("20 мин", formatDurationShort(20))
         assertEquals("3 ч", formatDurationShort(180))
         assertEquals("3 ч 5 мин", formatDurationShort(185))
+    }
+
+    @Test
+    fun `онлайн-комната с номером называется без «каб»`() {
+        val plain = LessonDto(number = 1, subject = "Информатика", online = 1)
+        assertEquals("онлайн", onlineLabel(plain))
+        val numbered = plain.copy(room = "12")
+        assertEquals("онлайн · 12", onlineLabel(numbered))
+        // «каб.» — про кабинеты, а комната внутри онлайна не кабинет.
+        assertTrue(!onlineLabel(numbered).contains("каб"))
     }
 }
