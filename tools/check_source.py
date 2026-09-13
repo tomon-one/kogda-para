@@ -46,8 +46,8 @@ def main() -> int:
         return 2
 
     try:
-        text, _ = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
-        snapshot = parse_csv(text or "", title or f"gid {gid}")
+        text = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
+        snapshot = parse_csv(text, title or f"gid {gid}")
     except SourceFormatChanged as exc:
         print(f"БЕДА: формат таблицы изменился — {exc}")
         print("Сверьтесь с docs/source-format.md: там записано, как было.")

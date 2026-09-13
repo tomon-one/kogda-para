@@ -5,8 +5,12 @@
 выбранных групп, поэтому фикстура весит десятки килобайт, но содержит те же
 особенности: повторный заголовок, отмены, вебинары, составные колонки.
 
-    python tools/make_fixture.py --src %TEMP%/sheet.csv \
+    python tools/make_fixture.py --src /tmp/sheet.csv \
         --out server/tests/fixtures/2026-09-02.csv.gz
+
+Источник — сырой экспорт (`export?format=csv&gid=`), не gviz: с 14 сентября
+2026 служба читает только его. Фикстура остаётся в сырой форме, чтобы тесты
+проходили через тот же адаптер шапки, что и служба.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "server" / "src"))
 
+from whensclass.parser.csv_schedule import collapse_export  # noqa: E402
 from whensclass.parser.groups import build_column_map  # noqa: E402
 
 # Группы, ради которых фикстура и существует: своя, составная колонка,
@@ -30,7 +35,8 @@ BLOCK = 4
 
 
 def pick_columns(rows: list[list[str]]) -> list[int]:
-    groups = build_column_map(rows)
+    # Карта колонок — по собранной шапке, а режем сырые строки.
+    groups = build_column_map(collapse_export(rows))
     by_name = {g.name: g for g in groups}
 
     wanted: list[int] = []
