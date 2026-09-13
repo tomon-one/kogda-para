@@ -35,13 +35,13 @@ def setup_lookup(monkeypatch, sheets, behaviour):
     """
     monkeypatch.setattr(si, "list_sheets", lambda: sheets)
 
-    def fetch(gid=None, title=None, etag=None):
+    def fetch(gid=None, title=None):
         outcome = behaviour[title]
         if outcome is None:
-            return None, None
+            return ""
         if isinstance(outcome, type) and issubclass(outcome, Exception):
             raise outcome("подстроено тестом")
-        return title, None
+        return title
 
     def parse(text, title):
         outcome = behaviour[title]

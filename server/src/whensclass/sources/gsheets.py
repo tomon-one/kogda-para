@@ -11,7 +11,6 @@ import logging
 import re
 import zipfile
 from dataclasses import dataclass
-from urllib.parse import quote
 
 import httpx
 
@@ -52,27 +51,31 @@ def _client() -> httpx.Client:
     )
 
 
-def fetch_sheet_csv(
-    gid: str | None = None, title: str | None = None, etag: str | None = None
-) -> tuple[str | None, str | None]:
-    """Забирает лист в виде CSV.
+def fetch_sheet_csv(gid: str | None = None, title: str | None = None) -> str:
+    """Забирает лист сырым CSV — `export?format=csv&gid=`.
 
-    Возвращает (текст, etag). Текст None, если Google ответил 304 — значит
-    таблица не менялась и перечитывать её незачем.
+    Только по gid. До 14 сентября 2026 лист брался через gviz (`/gviz/tq`),
+    и тот умел по имени — но gviz это не выгрузка, а «визуализация»: он
+    типизирует колонку по большинству значений и выбрасывает текст из
+    «числовых» — из колонок аудиторий пропадали ссылки на вебинар, «онлайн»,
+    «55/1», спортзалы: 945 ячеек в 62 колонках из 171 при status ok. Ещё он
+    схлопывает шапку и выбрасывает пустые строки, так что номера строк врут.
+    Сырой экспорт отдаёт ячейки как есть; шапку «столбиком» собирает
+    `csv_schedule.collapse_export`. По несуществующему gid — 400, не первая
+    вкладка кодом 200, как было у gviz по неизвестному имени.
+
+    ETag экспорт не отдаёт: узнавать «не изменилось» приходится по хешу.
     """
-    params = {"tqx": "out:csv"}
-    if title:
-        params["sheet"] = title
-    else:
-        params["gid"] = gid or ""
-
-    headers = {"If-None-Match": etag} if etag else {}
+    if not gid:
+        raise ValueError(
+            f"лист {title!r} без gid не прочитать: сырой экспорт знает только gid "
+            "(нужен ключ Sheets API или WHENSCLASS_SHEET_GID)"
+        )
     with _client() as client:
-        response = client.get(f"{_base()}/gviz/tq", params=params, headers=headers)
-    if response.status_code == 304:
-        return None, etag
+        response = client.get(f"{_base()}/export", params={"format": "csv", "gid": gid})
     response.raise_for_status()
-    return response.text, response.headers.get("ETag")
+    # Экспорт приходит с BOM.
+    return response.text.lstrip("\ufeff")
 
 
 def list_sheets_via_xlsx() -> list[SheetInfo]:
@@ -127,27 +130,6 @@ def list_sheets_via_api(key: str) -> list[SheetInfo]:
             )
         )
     return out
-
-
-def fetch_first_column_via_api(key: str, title: str, rows: int = 1000) -> list[str]:
-    """Колонка A листа через Sheets API — с настоящими номерами строк.
-
-    Пустые ячейки внутри диапазона приходят пустыми строками, так что индекс
-    в списке плюс один — это номер строки в Sheets. Хвост из пустых ячеек
-    API отбрасывает, но он нам и не нужен.
-    """
-    # Имя листа в A1-нотации берётся в одинарные кавычки, а кавычка внутри
-    # имени удваивается.
-    quoted = "'" + title.replace("'", "''") + "'"
-    url = (
-        f"https://sheets.googleapis.com/v4/spreadsheets/{settings.spreadsheet_id}"
-        f"/values/{quote(f'{quoted}!A1:A{rows}', safe='')}"
-    )
-    with _client() as client:
-        response = client.get(url, params={"key": key, "majorDimension": "COLUMNS"})
-    response.raise_for_status()
-    columns = response.json().get("values") or [[]]
-    return [str(cell) for cell in columns[0]]
 
 
 def _unescape(value: str) -> str:

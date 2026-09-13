@@ -1,9 +1,10 @@
 """Поиск листа, покрывающего нужную дату.
 
-Лист в книге живёт примерно две недели, потом появляется новый — с новым gid и
-новым именем. Имя при этом врёт: лист «расписание групп 01.-05.09» содержит
-02.09–12.09. Поэтому имя годится только чтобы упорядочить кандидатов, а
-решение принимается по содержимому.
+Лист в книге живёт две-три недели и растёт на месте: «расписание групп
+01.-05.09» стал «…01.-19.09» с тем же gid. Имя при этом врёт про даты, поэтому
+годится только чтобы упорядочить кандидатов, а решение принимается по
+содержимому. Читается лист только по gid — значит, список листов нужен из
+Sheets API: без ключа gid нет, и служба честно уходит в stale.
 """
 
 from __future__ import annotations
@@ -69,6 +70,12 @@ class SheetIndex:
             "probed": dt.date.today().isoformat(),
         }
         self.save()
+
+    def forget(self, title: str) -> None:
+        """Лист удалили или пересоздали — запись о нём больше не правда."""
+        if title in self.known:
+            del self.known[title]
+            self.save()
 
     def nearest(self, day: dt.date) -> tuple[str, str | None] | None:
         """Ближайший по датам лист, когда день не покрыт ни одним.
@@ -258,17 +265,17 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
     unread: list[str] = []
 
     for sheet in candidates(list_sheets(), day):
-        if sheet.gid is None and sheet.title_may_be_truncated:
-            # Имя ровно в 31 символ — признак того, что xlsx его обрезал. По
-            # обрезанному имени gviz отдаёт не наш лист, а первую вкладку книги,
-            # причём с кодом 200: отличить успех от промаха нельзя.
-            log.info("имя листа %r обрезано, пропускаю: gviz по нему врёт", sheet.title)
+        if sheet.gid is None:
+            # Без gid лист не прочитать: сырой экспорт знает только gid, а
+            # список без gid бывает лишь из xlsx — когда ключа Sheets API нет
+            # или он протух. Молчать нельзя: это «мы не посмотрели».
+            log.info("у листа %r нет gid — без ключа Sheets API его не прочитать", sheet.title)
             if _LOOKS_LIKE_GROUPS.search(sheet.title):
                 unread.append(sheet.title)
             continue
         try:
-            text, _ = gsheets.fetch_sheet_csv(gid=sheet.gid, title=sheet.title)
-            if text is None:
+            text = gsheets.fetch_sheet_csv(gid=sheet.gid, title=sheet.title)
+            if not text.strip():
                 if _LOOKS_LIKE_GROUPS.search(sheet.title):
                     unread.append(sheet.title)
                 continue

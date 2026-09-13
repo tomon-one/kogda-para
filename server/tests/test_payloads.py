@@ -85,14 +85,29 @@ def test_online_without_a_link_still_says_online(snapshot):
     test_cells.py, а сборка ответа не проверялась ничем: ключ можно было
     выбросить целиком, и весь набор остался бы зелёным.
     """
+    import dataclasses
+
+    from whensclass.domain.models import Snapshot
+
+    # В фикстуре до 14 сентября 2026 у БП-926/1 11 сентября стояли четыре
+    # онлайн-пары «без ссылки» — на деле ссылки там были, их выбрасывал gviz.
+    # Пары без ссылки в листе есть (слово «онлайн» в колонке аудитории), но
+    # не у групп фикстуры, поэтому здесь они сделаны из настоящих.
     group = next(g for g in snapshot.groups if g.name == "БП-926/1")
-    body = schedule_payload(snapshot, group.id, dt.date(2026, 9, 11), 1, GENERATED)
+    day = dt.date(2026, 9, 11)
+    bare = Snapshot(sheet_title=snapshot.sheet_title, groups=list(snapshot.groups),
+                    dates=list(snapshot.dates))
+    bare.schedule = {group.id: {day: [
+        dataclasses.replace(x, url=None, room=None, online=True)
+        for x in snapshot.schedule[group.id][day]
+    ]}}
+    body = schedule_payload(bare, group.id, day, 1, GENERATED)
 
     lessons = body["days"][0]["l"]
     assert lessons, "в фикстуре у этой группы 11 сентября четыре онлайн-пары"
     for lesson in lessons:
         assert lesson["o"] == 1
-        assert "u" not in lesson, "ссылку к этим парам колледж не давал"
+        assert "u" not in lesson, "ссылки у этих пар нет"
         assert "r" not in lesson, "вместо аудитории в ячейке стояло слово «онлайн»"
 
 

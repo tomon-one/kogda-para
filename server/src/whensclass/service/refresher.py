@@ -9,15 +9,18 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import logging
 import pathlib
 import threading
 import zoneinfo
 
+import httpx
+
 from ..config import settings
-from ..domain.models import SheetPlace, SourceFormatChanged
-from ..parser.csv_schedule import date_rows, parse_csv
+from ..domain.models import SourceFormatChanged
+from ..parser.csv_schedule import parse_export
 from ..sources import gsheets, sheet_index
 from . import alerts
 from .renames import RenameBook
@@ -52,7 +55,9 @@ class Refresher:
         self.last_error: str | None = None
         self._alerted = False
         self._load_failing()
-        self._source_etags: dict[str, str | None] = {}
+        # Хеш текста каждого листа с прошлого удачного разбора: экспорт не
+        # отдаёт ETag, «не изменилось» узнаём сами.
+        self._source_hashes: dict[str, str] = {}
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
         self._seen_titles: set[str] | None = None
@@ -68,7 +73,7 @@ class Refresher:
         with self._lock:
             return self._refresh(today or _today(), force)
 
-    def _refresh(self, today: dt.date, force: bool) -> bool:
+    def _refresh(self, today: dt.date, force: bool, retried: bool = False) -> bool:
         self.checked_at = dt.datetime.now(dt.timezone.utc)
         try:
             if self._sheets is None or force:
@@ -76,30 +81,37 @@ class Refresher:
                     today, settings.window_days, self.state_dir, deep=force
                 )
 
-            snapshot = None
+            texts: list[tuple[str, str | None, str, str]] = []
             for title, gid in self._sheets:
-                text, etag = gsheets.fetch_sheet_csv(
-                    gid=gid,
-                    title=title or None,
-                    etag=None if force else self._source_etags.get(title),
-                )
-                if text is None:
-                    # Google ответил 304: этот лист не менялся. Но снимок
-                    # собирается из всех листов окна, и без прежнего содержимого
-                    # он получился бы только из изменившегося: покрытие
-                    # схлопнулось бы на одну неделю, а сегодняшний день пропал.
-                    # Поэтому перечитываем его без условного запроса.
-                    text, etag = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
-                    if text is None:
-                        continue
-                self._source_etags[title] = etag
-                current = parse_csv(text, title or f"gid {gid}")
-                current.places = self._places(title, gid)
-                snapshot = current if snapshot is None else snapshot.merged_with(current)
+                try:
+                    text = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
+                except httpx.HTTPStatusError as exc:
+                    if 400 <= exc.response.status_code < 500 and not retried:
+                        # Лист удалили или пересоздали: gid из памяти мёртв.
+                        # Забываем его и ищем заново в том же заходе — иначе
+                        # stale держался бы до конца запомненного покрытия.
+                        log.warning(
+                            "лист %r по gid %s не отдаётся (%s) — забываю и ищу заново",
+                            title, gid, exc.response.status_code,
+                        )
+                        sheet_index.SheetIndex(self.state_dir).forget(title)
+                        self._sheets = None
+                        return self._refresh(today, force=True, retried=True)
+                    raise
+                texts.append((title, gid, text, hashlib.sha256(text.encode("utf-8")).hexdigest()))
 
-            if snapshot is None:
+            if not force and all(self._source_hashes.get(t) == h for t, _, _, h in texts):
                 # Не изменился ни один лист — перерисовывать нечего.
                 self.status = "ok"
+                self._recovered()
+                return False
+
+            snapshot = None
+            for title, gid, text, _ in texts:
+                current = parse_export(text, title or f"gid {gid}", gid)
+                snapshot = current if snapshot is None else snapshot.merged_with(current)
+            if snapshot is None:
+                self._fail(f"не нашёл лист на {today}: набор листов пуст", kind="sheet")
                 return False
         except SourceFormatChanged as exc:
             # Самый опасный случай: таблицу переделали. Держим прежнее.
@@ -131,6 +143,7 @@ class Refresher:
         previous = self.store.snapshot
         previous_teachers = self.store.teachers
         self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
+        self._source_hashes = {title: digest for title, _, _, digest in texts}
         self.status = "ok"
         self._recovered()
         if previous is not None and previous_teachers is not None:
@@ -145,24 +158,6 @@ class Refresher:
             snapshot.sheet_title, len(snapshot.groups), snapshot.total_lessons(),
         )
         return True
-
-    def _places(self, title: str, gid: str | None) -> dict[dt.date, SheetPlace]:
-        """Где в листе лежит каждый день — для ссылки «открыть таблицу».
-
-        Номера строк есть только у Sheets API (см. `date_rows`); без ключа или
-        без ответа ссылка откроет лист и колонку, но не подведёт к дню. Это
-        удобство, а не расписание: ронять из-за него обновление нельзя.
-        """
-        if not settings.sheets_api_key or not title or gid is None:
-            return {}
-        try:
-            column = gsheets.fetch_first_column_via_api(settings.sheets_api_key, title)
-        except Exception as exc:
-            log.warning(
-                "строки дней листа %r не прочитались: %s", title, sheet_index._hide_key(exc)
-            )
-            return {}
-        return {day: SheetPlace(gid=gid, row=row) for day, row in date_rows(column).items()}
 
     def look_for_new_sheet(self) -> bool:
         """Не появился ли в книге лист, которого мы ещё не видели.

@@ -59,6 +59,12 @@ async def lifespan(app: FastAPI):
     directory = state_dir()
     directory.mkdir(parents=True, exist_ok=True)
 
+    if settings.sheet_title and not settings.sheet_gid:
+        log.error(
+            "WHENSCLASS_SHEET_TITLE задан без WHENSCLASS_SHEET_GID: с 14 сентября 2026 "
+            "лист читается только по gid, по имени служба его не найдёт"
+        )
+
     store = SnapshotStore(directory)
     refresher = Refresher(store, directory)
     app.state.store = store

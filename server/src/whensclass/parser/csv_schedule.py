@@ -1,8 +1,10 @@
 """Обход листа расписания: строки таблицы -> Snapshot.
 
-Принимает уже разобранные строки, а не текст CSV: тот же код читает и лист,
-скачанный через gviz, и лист, вынутый из xlsx (когда имя листа обрезано и
-обратиться к нему по имени нельзя).
+Принимает уже разобранные строки, а не текст CSV. Разбор построен на форме,
+которую давал gviz: шапка одной строкой «Дисциплина Преподаватель <группа>».
+С 14 сентября 2026 лист берётся сырым экспортом, где шапка — три строки
+столбиком; `collapse_export` приводит её к прежней форме, и обход остаётся
+тем же.
 """
 
 from __future__ import annotations
@@ -15,9 +17,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
-from ..domain.models import Lesson, Snapshot, SourceFormatChanged
+from ..domain.models import Lesson, SheetPlace, Snapshot, SourceFormatChanged
 from .cells import parse_lesson
-from .groups import build_column_map, find_header_rows
+from .groups import _HEADER_PREFIX, MIN_GROUPS, build_column_map, find_header_rows
 
 log = logging.getLogger(__name__)
 
@@ -172,19 +174,76 @@ def _validate(snapshot: Snapshot, seen_order: list[date], limits: Limits) -> Non
         )
 
 
+def collapse_export(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> list[list[str]]:
+    """Сырой экспорт -> форма, на которой построен разбор.
+
+    В сыром листе шапка стоит столбиком: строка «Дисциплина», под ней
+    «Преподаватель», под ней имена групп; выше — пустые строки с рамками.
+    gviz склеивал эти строки в одну — «Дисциплина Преподаватель БП-1126»,
+    «Ауд.», «№» — и выбрасывал пустые строки посреди листа. Делаем то же
+    сами, и только это: остальное разбор читает как читал. Повторные
+    заголовки внутри листа не трогаем — они и раньше приходили столбиком.
+
+    Лист, уже собранный (форма gviz, фикстуры), возвращается как есть:
+    признак — строка с «Дисциплина Преподаватель …» раньше первой
+    столбиковой шапки.
+    """
+    for i, row in enumerate(rows):
+        if sum(1 for c in row if c.strip().startswith(_HEADER_PREFIX)) >= min_groups:
+            return rows
+        below = rows[i + 1] if i + 1 < len(rows) else []
+        if (
+            sum(1 for c in row if c.strip() == "Дисциплина") >= min_groups
+            and sum(1 for c in below if c.strip() == "Преподаватель") >= min_groups
+        ):
+            head = rows[: i + 3]
+            width = max(len(r) for r in head)
+            merged = [
+                " ".join(
+                    part
+                    for part in ((r[col] if col < len(r) else "").strip() for r in head)
+                    if part
+                )
+                for col in range(width)
+            ]
+            # Пустые строки — только шум: строка под парой отдана
+            # преподавателям, и пустая между ними отняла бы их у всех групп.
+            body = [r for r in rows[i + 3:] if any(c.strip() for c in r)]
+            return [merged] + body
+    return rows
+
+
 def parse_csv(text: str, sheet_title: str, limits: Limits = FULL_SHEET) -> Snapshot:
-    return parse_sheet(read_csv(text), sheet_title, limits)
+    return parse_sheet(collapse_export(read_csv(text), limits.min_groups), sheet_title, limits)
+
+
+def parse_export(
+    text: str, sheet_title: str, gid: str | None, limits: Limits = FULL_SHEET
+) -> Snapshot:
+    """То же, что `parse_csv`, но помнит, в каких строках листа стоят дни.
+
+    Номера строк — до схлопывания и выбрасывания пустых: в сыром экспорте
+    они совпадают с тем, что видит человек в Sheets (проверено по Sheets API
+    14 сентября 2026: 6, 18, 30, 43, 64, …, 139).
+    """
+    rows = read_csv(text)
+    places = {
+        day: SheetPlace(gid=gid, row=row)
+        for day, row in date_rows([r[0] if r else "" for r in rows]).items()
+    }
+    snapshot = parse_sheet(collapse_export(rows, limits.min_groups), sheet_title, limits)
+    snapshot.places = places
+    return snapshot
 
 
 def date_rows(first_column: list[str]) -> dict[date, int]:
-    """Номера строк дней по колонке A листа, как их видит человек в Sheets.
+    """Номера строк дней по колонке A сырого листа, как их видит человек в Sheets.
 
-    Из CSV, который отдаёт gviz, номера строк не достать: он схлопывает
-    шапку в одну строку и выбрасывает пустые строки посреди листа — на
-    13.09.2026 сырых строк 210, в CSV 199, и сдвиг растёт вниз по листу
-    с четырёх до одиннадцати. Колонку A целиком отдаёт Sheets API, и там
-    номера настоящие. Нужны они ссылке «открыть таблицу»: `range=EQ139`
-    подводит к ячейке, а не к верху листа.
+    Из CSV от gviz номера строк было не достать: он схлопывал шапку в одну
+    строку и выбрасывал пустые строки посреди листа — на 13.09.2026 сырых
+    строк 210, в CSV 199, и сдвиг рос вниз по листу с четырёх до одиннадцати.
+    В сыром экспорте строки настоящие. Нужны они ссылке «открыть таблицу»:
+    `range=EQ139` подводит к ячейке, а не к верху листа.
     """
     rows: dict[date, int] = {}
     for index, cell in enumerate(first_column):
