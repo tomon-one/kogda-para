@@ -50,11 +50,33 @@ def renamed_teacher(snapshot: Snapshot, old_name: str, new_name: str) -> Snapsho
     return out
 
 
+def settle(book, before, after, times=None):
+    """Записывает переход и держит новый состав столько обновлений, сколько надо книге."""
+    from whensclass.service.renames import CONFIRMATIONS
+
+    ib, ia = build_index(before), build_index(after)
+    book.record(before, after, ib, ia)
+    for _ in range((CONFIRMATIONS if times is None else times) - 1):
+        book.record(after, after, ia, ia)
+
+
 def test_group_rename_is_recognised_by_its_lessons(snapshot):
     """Имя другое, колонка та же — значит, пары те же. Это и есть переименование."""
-    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2 (новая)")
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
     found = detect(group_traces(snapshot), group_traces(after))
-    assert found == {"isp-924-2": "isp-924-2-novaya"}
+    assert found == {"isp-924-2": "isp-924-2a"}
+
+
+def test_rename_survives_links_added_the_same_hour(snapshot):
+    """Ссылки и аудитории меняются сами по себе; порог считается без них."""
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
+    new_id = group_id("ИСП-924/2а")
+    after.schedule[new_id] = {
+        day: [dataclasses.replace(x, url="https://my.mts-link.ru/j/1/2", online=True)
+              for x in lessons]
+        for day, lessons in after.schedule[new_id].items()
+    }
+    assert detect(group_traces(snapshot), group_traces(after)) == {"isp-924-2": "isp-924-2a"}
 
 
 def test_new_group_with_other_lessons_is_not_a_rename(snapshot):
@@ -79,6 +101,42 @@ def test_split_into_two_is_not_a_rename(snapshot):
     assert old_id not in after.schedule
 
 
+def test_split_with_one_subgroup_so_far_is_not_a_rename(snapshot):
+    """Живой случай 13.09: /1 совпала с прежней колонкой целиком, /2 — новая.
+
+    Половина людей теперь в /2, и ответить им расписанием /1 — чужое
+    расписание при «ok». Одного хвоста достаточно: второй заведут завтра.
+    """
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2/1")
+    second = GroupRef(name="ИСП-924/2/2", id=group_id("ИСП-924/2/2"), column=9999)
+    after.groups.append(second)
+    first = after.schedule[group_id("ИСП-924/2/1")]
+    only_day = max(day for day, lessons in first.items() if lessons)
+    after.schedule[second.id] = {only_day: first[only_day]}
+    assert detect(group_traces(snapshot), group_traces(after)) == {}
+
+
+def test_leaders_by_subjects_and_by_rooms_must_agree(snapshot):
+    """По предметам ближе один, по аудиториям другой — так выглядят подгруппы."""
+    old_id = group_id("ИСП-924/2")
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
+    a = group_id("ИСП-924/2а")
+    b = GroupRef(name="ИСП-924/2б", id=group_id("ИСП-924/2б"), column=9999)
+    after.groups.append(b)
+    # «а» — все предметы прежние, но все аудитории другие; «б» — на одну пару
+    # меньше, зато остальные совпадают целиком.
+    after.schedule[b.id] = {
+        day: list(lessons) for day, lessons in snapshot.schedule[old_id].items()
+    }
+    first_day = sorted(after.schedule[b.id])[0]
+    after.schedule[b.id][first_day] = after.schedule[b.id][first_day][1:]
+    after.schedule[a] = {
+        day: [dataclasses.replace(x, room="999") for x in lessons]
+        for day, lessons in after.schedule[a].items()
+    }
+    assert detect(group_traces(snapshot), group_traces(after)) == {}
+
+
 def test_unchanged_snapshot_has_no_renames(snapshot):
     assert detect(group_traces(snapshot), group_traces(snapshot)) == {}
 
@@ -95,39 +153,70 @@ def test_teacher_typo_fix_is_a_rename(snapshot):
     assert found == {teacher_id(name): teacher_id(fixed)}
 
 
-def test_book_answers_by_old_id_and_survives_restart(tmp_path, snapshot):
-    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2 (новая)")
+def test_book_waits_for_confirmations_then_answers_and_survives_restart(tmp_path, snapshot):
+    from whensclass.service.renames import CONFIRMATIONS
+
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
     book = RenameBook(tmp_path)
-    book.record(snapshot, after, build_index(snapshot), build_index(after))
-    assert book.group("isp-924-2") == "isp-924-2-novaya"
+    settle(book, snapshot, after, times=CONFIRMATIONS - 1)
+    # Ещё рано: опечатку в заголовке колледж чинит через двадцать минут, а
+    # телефон, получив новый id, перепишет выбор навсегда.
+    assert book.group("isp-924-2") is None
+    book.record(after, after, build_index(after), build_index(after))
+    assert book.group("isp-924-2") == "isp-924-2a"
     assert book.teacher("нет-такого") is None
 
     reloaded = RenameBook(tmp_path)
-    assert reloaded.group("isp-924-2") == "isp-924-2-novaya"
+    assert reloaded.group("isp-924-2") == "isp-924-2a"
     data = json.loads((tmp_path / "renames.json").read_text("utf-8"))
-    assert data["groups"] == {"isp-924-2": "isp-924-2-novaya"}
+    assert data["groups"] == {"isp-924-2": "isp-924-2a"}
+    assert data["pending_groups"] == {}
+
+
+def test_transient_rename_never_reaches_the_book(tmp_path, snapshot):
+    """Имя вернули через одно обновление — кандидат забыт, книга пуста."""
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
+    book = RenameBook(tmp_path)
+    book.record(snapshot, after, build_index(snapshot), build_index(after))
+    book.record(after, snapshot, build_index(after), build_index(snapshot))
+    assert book.group("isp-924-2") is None
+    assert "isp-924-2" not in book.pending_groups
 
 
 def test_chain_is_flattened(tmp_path, snapshot):
     """A -> B, потом B -> C: по A отвечаем C сразу, а не через два шага."""
-    second = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2 (новая)")
-    third = renamed_group(second, "ИСП-924/2 (новая)", "ИСП-924/2 (новейшая)")
+    second = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
+    third = renamed_group(second, "ИСП-924/2а", "ИСП-924/2б")
     book = RenameBook(tmp_path)
-    book.record(snapshot, second, build_index(snapshot), build_index(second))
-    book.record(second, third, build_index(second), build_index(third))
-    assert book.group("isp-924-2") == "isp-924-2-noveyshaya"
-    assert book.group("isp-924-2-novaya") == "isp-924-2-noveyshaya"
+    settle(book, snapshot, second)
+    settle(book, second, third)
+    assert book.group("isp-924-2") == "isp-924-2b"
+    assert book.group("isp-924-2a") == "isp-924-2b"
 
 
 def test_old_name_coming_back_cancels_the_alias(tmp_path, snapshot):
     """Вернули прежнее имя — это снова настоящая группа, подменять её нельзя."""
-    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2 (новая)")
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
     book = RenameBook(tmp_path)
-    book.record(snapshot, after, build_index(snapshot), build_index(after))
+    settle(book, snapshot, after)
     assert book.group("isp-924-2") is not None
-    book.record(after, snapshot, build_index(after), build_index(snapshot))
+    settle(book, after, snapshot)
     assert book.group("isp-924-2") is None
-    assert book.group("isp-924-2-novaya") == "isp-924-2"
+    assert book.group("isp-924-2a") == "isp-924-2"
+
+
+def test_split_in_two_steps_removes_the_alias(tmp_path, snapshot):
+    """Сегодня колонку переименовали в /1, завтра завели /2: запись снимается."""
+    first = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
+    book = RenameBook(tmp_path)
+    settle(book, snapshot, first)
+    assert book.group("isp-924-2") == "isp-924-2a"
+    second = GroupRef(name="ИСП-924/2-2", id=group_id("ИСП-924/2-2"), column=9999)
+    later = Snapshot(sheet_title=first.sheet_title, groups=first.groups + [second],
+                     dates=list(first.dates), schedule=dict(first.schedule))
+    later.schedule[second.id] = {}
+    book.record(first, later, build_index(first), build_index(later))
+    assert book.group("isp-924-2") is None
 
 
 def test_places_survive_the_disk(tmp_path, fixture_csv):
