@@ -11,6 +11,7 @@ import logging
 import re
 import zipfile
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import httpx
 
@@ -126,6 +127,27 @@ def list_sheets_via_api(key: str) -> list[SheetInfo]:
             )
         )
     return out
+
+
+def fetch_first_column_via_api(key: str, title: str, rows: int = 1000) -> list[str]:
+    """Колонка A листа через Sheets API — с настоящими номерами строк.
+
+    Пустые ячейки внутри диапазона приходят пустыми строками, так что индекс
+    в списке плюс один — это номер строки в Sheets. Хвост из пустых ячеек
+    API отбрасывает, но он нам и не нужен.
+    """
+    # Имя листа в A1-нотации берётся в одинарные кавычки, а кавычка внутри
+    # имени удваивается.
+    quoted = "'" + title.replace("'", "''") + "'"
+    url = (
+        f"https://sheets.googleapis.com/v4/spreadsheets/{settings.spreadsheet_id}"
+        f"/values/{quote(f'{quoted}!A1:A{rows}', safe='')}"
+    )
+    with _client() as client:
+        response = client.get(url, params={"key": key, "majorDimension": "COLUMNS"})
+    response.raise_for_status()
+    columns = response.json().get("values") or [[]]
+    return [str(cell) for cell in columns[0]]
 
 
 def _unescape(value: str) -> str:

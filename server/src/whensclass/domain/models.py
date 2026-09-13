@@ -30,6 +30,19 @@ class GroupRef:
 
 
 @dataclass(frozen=True)
+class SheetPlace:
+    """Где в книге лежит день: лист и строка с датой.
+
+    Нужно ссылке «открыть таблицу»: по `#gid=...&range=ZK130` Google Sheets
+    открывает нужный лист и подводит к ячейке, а человеку не приходится
+    искать свою колонку среди семисот.
+    """
+
+    gid: str | None
+    row: int   # как в интерфейсе Sheets: с единицы
+
+
+@dataclass(frozen=True)
 class Lesson:
     number: int
     subject: str
@@ -53,6 +66,8 @@ class Snapshot:
     # id группы -> дата -> пары, отсортированные по номеру
     schedule: dict[str, dict[date, list[Lesson]]] = field(default_factory=dict)
     dates: list[date] = field(default_factory=list)
+    # дата -> где она в книге. Пусто у снимков, записанных до появления поля.
+    places: dict[date, SheetPlace] = field(default_factory=dict)
 
     @property
     def coverage(self) -> tuple[date, date] | None:
@@ -79,6 +94,7 @@ class Snapshot:
             combined.schedule[gid] = by_date
 
         combined.dates = sorted(set(self.dates) | set(other.dates))
+        combined.places = {**other.places, **self.places}
         return combined
 
     def total_lessons(self) -> int:

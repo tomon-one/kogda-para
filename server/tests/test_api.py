@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from whensclass.api.routes import router
+from whensclass.domain.models import SheetPlace
 from whensclass.parser.csv_schedule import FIXTURE, parse_csv
 
 
@@ -16,19 +17,65 @@ class FakeStore:
         self.generated = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
 
 
+class FakeRenames:
+    """Книга переименований: одна группа и один преподаватель под старыми id."""
+
+    groups = {"isp-924-2-old": "isp-924-2"}
+    teachers: dict[str, str] = {}
+
+    def group(self, gid):
+        return self.groups.get(gid)
+
+    def teacher(self, tid):
+        return self.teachers.get(tid)
+
+
 class FakeRefresher:
     status = "ok"
     checked_at = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
+    renames = FakeRenames()
 
 
 @pytest.fixture(scope="module")
 def client(fixture_csv):
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
+    # Строки дней служба берёт из Sheets API; здесь они выдуманы, но лист тот.
+    snapshot.places = {
+        day: SheetPlace(gid="656498718", row=6 + 12 * i) for i, day in enumerate(snapshot.dates)
+    }
     app = FastAPI()
     app.include_router(router)
     app.state.store = FakeStore(snapshot)
     app.state.refresher = FakeRefresher()
     return TestClient(app)
+
+
+def test_renamed_group_answers_under_its_old_id(client):
+    """Старый id отвечает расписанием новой группы, а в ответе — её новый id.
+
+    По нему приложение перепишет выбор у себя и перестанет зависеть от памяти
+    сервера. Без книги переименований старый id — это 404 и пустой виджет
+    у всей группы.
+    """
+    fresh = client.get("/v1/schedule/isp-924-2?from=2026-09-07&days=3").json()
+    old = client.get("/v1/schedule/isp-924-2-old?from=2026-09-07&days=3")
+    assert old.status_code == 200
+    assert old.json() == fresh
+    assert old.json()["g"] == "isp-924-2"
+
+
+def test_schedule_points_into_the_sheet(client):
+    """Ссылка «открыть таблицу» ведёт на лист, а колонка и строка — к ячейке."""
+    body = client.get("/v1/schedule/isp-924-2?from=2026-09-07&days=3").json()
+    assert body["src_url"].endswith("#gid=656498718")
+    assert body["col"] == "S"
+    assert all(isinstance(day["row"], int) and day["row"] > 1 for day in body["days"])
+
+
+def test_meta_points_at_the_sheet_of_today(client):
+    body = client.get("/v1/meta").json()
+    # Сегодня в фикстуру не попадает, берётся ближайший день — с того же листа.
+    assert body["src_url"].endswith("#gid=656498718")
 
 
 def test_groups(client):

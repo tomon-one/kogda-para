@@ -10,10 +10,48 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 from ..config import settings
-from ..domain.models import Lesson, Snapshot
+from ..domain.models import Lesson, SheetPlace, Snapshot
 from ..domain.teachers import TeacherIndex
 
 API_VERSION = 1
+
+
+def a1_column(column: int) -> str:
+    """Номер колонки с нуля -> буквы, как в Sheets: 0 -> A, 26 -> AA, 664 -> YO."""
+    letters = ""
+    n = column + 1
+    while n:
+        n, rem = divmod(n - 1, 26)
+        letters = chr(65 + rem) + letters
+    return letters
+
+
+def sheet_url(gid: str | None = None) -> str:
+    """Адрес таблицы колледжа — с листом, если известно, на каком мы.
+
+    Адрес отсюда, а не из APK: переедет таблица — переживём правкой
+    настроек, а не сборкой. Приложение дописывает к нему `&range=<колонка><строка>`
+    из `col` и `row` того же ответа, и Sheets подводит к ячейке.
+    """
+    base = f"https://docs.google.com/spreadsheets/d/{settings.spreadsheet_id}/edit"
+    return f"{base}#gid={gid}" if gid else base
+
+
+def _place_days(
+    snapshot: Snapshot, start: date, days: int
+) -> tuple[str | None, dict[date, SheetPlace]]:
+    """Лист окна и строки его дней.
+
+    Окно может перешагнуть границу листа, а `range` в ссылке относится к
+    одному листу: строки отдаём только для дней с того листа, на который
+    ведёт ссылка, — с первого покрытого дня окна.
+    """
+    places = snapshot.places
+    window = [start + timedelta(days=offset) for offset in range(days)]
+    gid = next((places[d].gid for d in window if d in places and places[d].gid), None)
+    if gid is None:
+        return None, {}
+    return gid, {d: places[d] for d in window if d in places and places[d].gid == gid}
 
 
 def _lesson(lesson: Lesson) -> dict:
@@ -64,6 +102,7 @@ def teacher_payload(
 
     by_date = index.days(teacher_id)
     covered = set(snapshot.dates)
+    gid, placed = _place_days(snapshot, start, days)
 
     out_days = []
     for offset in range(days):
@@ -77,8 +116,14 @@ def teacher_payload(
             item["gr"] = entry.group_name
             # Преподаватель тут очевиден, его имя только занимает место.
             item.pop("t", None)
+            if entry.column is not None:
+                # У преподавателя каждая пара в своей колонке — колонке группы.
+                item["col"] = a1_column(entry.column)
             lessons.append(item)
-        out_days.append({"d": day.isoformat(), "l": lessons})
+        out_day = {"d": day.isoformat(), "l": lessons}
+        if day in placed:
+            out_day["row"] = placed[day].row
+        out_days.append(out_day)
 
     payload = {
         "v": API_VERSION,
@@ -89,6 +134,8 @@ def teacher_payload(
         "src": snapshot.sheet_title,
         "days": out_days,
     }
+    if gid:
+        payload["src_url"] = sheet_url(gid)
     coverage = snapshot.coverage
     if coverage:
         payload["cov"] = [coverage[0].isoformat(), coverage[1].isoformat()]
@@ -120,6 +167,7 @@ def schedule_payload(
 
     by_date = snapshot.schedule.get(group_id, {})
     covered = set(snapshot.dates)
+    gid, placed = _place_days(snapshot, start, days)
 
     out_days = []
     for offset in range(days):
@@ -128,10 +176,13 @@ def schedule_payload(
             # Дня нет в ответе вовсе — виджет отличит «пар нет» от
             # «расписание ещё не опубликовано».
             continue
-        out_days.append({
+        out_day = {
             "d": day.isoformat(),
             "l": [_lesson(x) for x in by_date.get(day, [])],
-        })
+        }
+        if day in placed:
+            out_day["row"] = placed[day].row
+        out_days.append(out_day)
 
     payload = {
         "v": API_VERSION,
@@ -139,8 +190,13 @@ def schedule_payload(
         "gn": group.name,
         "gen": _iso(generated),
         "src": snapshot.sheet_title,
+        # Колонка группы в листе: вместе с `row` дня даёт ячейку, к которой
+        # ссылка «открыть таблицу» подводит человека.
+        "col": a1_column(group.column),
         "days": out_days,
     }
+    if gid:
+        payload["src_url"] = sheet_url(gid)
     coverage = snapshot.coverage
     if coverage:
         payload["cov"] = [coverage[0].isoformat(), coverage[1].isoformat()]
@@ -150,20 +206,27 @@ def schedule_payload(
 
 
 def meta_payload(
-    snapshot: Snapshot, generated: datetime, status: str, checked: datetime | None
+    snapshot: Snapshot,
+    generated: datetime,
+    status: str,
+    checked: datetime | None,
+    today: date | None = None,
 ) -> dict:
+    # Куда идти, когда мы подвели: на лист, где лежит сегодняшний день, а
+    # без него — просто в книгу. Ближайший известный день годится тоже:
+    # в воскресенье это завтрашний понедельник.
+    place = None
+    if today is not None and snapshot.places:
+        place = snapshot.places.get(today) or min(
+            snapshot.places.items(), key=lambda item: abs((item[0] - today).days)
+        )[1]
     out = {
         "v": API_VERSION,
         "gen": _iso(generated),
         "src": snapshot.sheet_title,
         "groups": len(snapshot.groups),
         "status": status,
-        # Куда идти, когда мы подвели. Адрес отсюда, а не из APK:
-        # переедет таблица — переживём правкой настроек, а не сборкой.
-        "src_url": (
-            "https://docs.google.com/spreadsheets/d/"
-            f"{settings.spreadsheet_id}/edit"
-        ),
+        "src_url": sheet_url(place.gid if place else None),
     }
     coverage = snapshot.coverage
     if coverage:

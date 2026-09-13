@@ -174,3 +174,21 @@ def _validate(snapshot: Snapshot, seen_order: list[date], limits: Limits) -> Non
 
 def parse_csv(text: str, sheet_title: str, limits: Limits = FULL_SHEET) -> Snapshot:
     return parse_sheet(read_csv(text), sheet_title, limits)
+
+
+def date_rows(first_column: list[str]) -> dict[date, int]:
+    """Номера строк дней по колонке A листа, как их видит человек в Sheets.
+
+    Из CSV, который отдаёт gviz, номера строк не достать: он схлопывает
+    шапку в одну строку и выбрасывает пустые строки посреди листа — на
+    13.09.2026 сырых строк 210, в CSV 199, и сдвиг растёт вниз по листу
+    с четырёх до одиннадцати. Колонку A целиком отдаёт Sheets API, и там
+    номера настоящие. Нужны они ссылке «открыть таблицу»: `range=EQ139`
+    подводит к ячейке, а не к верху листа.
+    """
+    rows: dict[date, int] = {}
+    for index, cell in enumerate(first_column):
+        found = _parse_date(cell)
+        if found is not None and found not in rows:
+            rows[found] = index + 1
+    return rows

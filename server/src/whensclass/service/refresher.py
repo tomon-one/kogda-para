@@ -15,10 +15,11 @@ import threading
 import zoneinfo
 
 from ..config import settings
-from ..domain.models import SourceFormatChanged
-from ..parser.csv_schedule import parse_csv
+from ..domain.models import SheetPlace, SourceFormatChanged
+from ..parser.csv_schedule import date_rows, parse_csv
 from ..sources import gsheets, sheet_index
 from . import alerts
+from .renames import RenameBook
 from ..storage.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
@@ -40,6 +41,8 @@ class Refresher:
         self.state_dir = state_dir
         self.status = "empty"          # empty | ok | stale
         self.checked_at: dt.datetime | None = None
+        # Кого как переименовали: по старому id отвечаем расписанием нового.
+        self.renames = RenameBook(state_dir)
         self._source_etags: dict[str, str | None] = {}
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
@@ -82,6 +85,7 @@ class Refresher:
                         continue
                 self._source_etags[title] = etag
                 current = parse_csv(text, title or f"gid {gid}")
+                current.places = self._places(title, gid)
                 snapshot = current if snapshot is None else snapshot.merged_with(current)
 
             if snapshot is None:
@@ -110,13 +114,40 @@ class Refresher:
             )
             self._sheets = None
 
+        previous = self.store.snapshot
+        previous_teachers = self.store.teachers
         self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
         self.status = "ok"
+        if previous is not None and previous_teachers is not None:
+            try:
+                self.renames.record(previous, snapshot, previous_teachers, self.store.teachers)
+            except Exception as exc:
+                # Книга — удобство поверх расписания, ронять из-за неё
+                # обновление нельзя.
+                log.warning("книга переименований не обновилась: %s", exc)
         log.info(
             "снимок обновлён: лист %r, %d групп, %d пар",
             snapshot.sheet_title, len(snapshot.groups), snapshot.total_lessons(),
         )
         return True
+
+    def _places(self, title: str, gid: str | None) -> dict[dt.date, SheetPlace]:
+        """Где в листе лежит каждый день — для ссылки «открыть таблицу».
+
+        Номера строк есть только у Sheets API (см. `date_rows`); без ключа или
+        без ответа ссылка откроет лист и колонку, но не подведёт к дню. Это
+        удобство, а не расписание: ронять из-за него обновление нельзя.
+        """
+        if not settings.sheets_api_key or not title or gid is None:
+            return {}
+        try:
+            column = gsheets.fetch_first_column_via_api(settings.sheets_api_key, title)
+        except Exception as exc:
+            log.warning(
+                "строки дней листа %r не прочитались: %s", title, sheet_index._hide_key(exc)
+            )
+            return {}
+        return {day: SheetPlace(gid=gid, row=row) for day, row in date_rows(column).items()}
 
     def look_for_new_sheet(self) -> bool:
         """Не появился ли в книге лист, которого мы ещё не видели.
