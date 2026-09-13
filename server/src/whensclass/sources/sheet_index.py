@@ -279,7 +279,7 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
                 if _LOOKS_LIKE_GROUPS.search(sheet.title):
                     unread.append(sheet.title)
                 continue
-            snapshot = parse_csv(text, sheet.title)
+            snapshot = parse_csv(text, sheet.title, around=day)
         except SourceFormatChanged as exc:
             # «Не похож на расписание групп» — обычно честный отказ: в книге
             # лежат и календарный график, и расписание аудиторий. Но если так

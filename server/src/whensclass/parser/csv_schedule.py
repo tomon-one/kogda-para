@@ -15,7 +15,7 @@ import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from ..domain.models import Lesson, SheetPlace, Snapshot, SourceFormatChanged
 from .cells import parse_lesson
@@ -24,13 +24,22 @@ from .groups import _HEADER_PREFIX, MIN_GROUPS, build_column_map, find_header_ro
 log = logging.getLogger(__name__)
 
 # Дату пишут руками, поэтому берём и «2.09.2026 среда», и «02.09.2026, среда»,
-# и запись без дня недели. День недели всё равно только сверяем, доверяя числу.
-_DATE_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*,?\s*(\S+)?")
+# и «07/09/2026», и «понедельник 07.09.2026», и запись без дня недели. День
+# недели всё равно только сверяем, доверяя числу.
+_DATE_RE = re.compile(r"(\d{1,2})[./](\d{1,2})[./](\d{2,4})")
 
-# Ячейка, которая начинается с чисел через точку, но датой не разобралась,
-# — это не «нет даты», а сломанная дата. Молчать про такое нельзя.
-_LOOKS_LIKE_DATE = re.compile(r"^\s*\d{1,2}\.\d{1,2}\.")
+# Ячейка с двумя числами через точку, дробь или дефис — это дата, которую
+# не смогли прочитать, а не «нет даты». Молчать про такое нельзя: раньше
+# день молча приклеивался к предыдущему.
+_LOOKS_LIKE_DATE = re.compile(r"\d{1,2}\s*[.,/-]\s*\d{1,2}")
 _LESSON_NO_RE = re.compile(r"^([1-9])$")
+# Строка под парой несёт время звонка в колонке номера: «9-00-10.30».
+_TIME_RE = re.compile(r"^\d{1,2}[.:-]\d{2}\s*[-–]\s*\d{1,2}[.:-]\d{2}$")
+# Дальше этого лист смотреть не должен: опечатка «2027» в одной дате иначе
+# делала бы лист покрывающим год вперёд. И между соседними днями одного
+# листа не бывает больше двух недель — даже с каникулами.
+MAX_DAYS_AHEAD = 60
+MAX_GAP_DAYS = 14
 
 _WEEKDAYS = (
     "понедельник", "вторник", "среда",
@@ -58,10 +67,14 @@ def read_csv(text: str) -> list[list[str]]:
 
 def _parse_date(cell: str) -> date | None:
     """'02.09.2026 среда' -> date. День недели служит только сверкой."""
-    m = _DATE_RE.match((cell or "").replace("\xa0", " ").strip())
+    text = (cell or "").replace("\xa0", " ").strip()
+    m = _DATE_RE.search(text)
     if not m:
         return None
-    day, month, year, weekday = m.groups()
+    day, month, year = m.groups()
+    # День недели — любое слово рядом с датой, до или после неё.
+    words = [w.strip(" ,.;") for w in (text[: m.start()] + " " + text[m.end():]).split()]
+    weekday = next((w for w in words if w.lower() in _WEEKDAYS), None)
     number = int(year)
     if number < 100:
         # «02.09.26» тоже встречается: век дописываем сами.
@@ -89,8 +102,12 @@ def _cell(row: list[str], col: int) -> str:
 
 
 def parse_sheet(
-    rows: Iterable[list[str]], sheet_title: str, limits: Limits = FULL_SHEET
+    rows: Iterable[list[str]],
+    sheet_title: str,
+    limits: Limits = FULL_SHEET,
+    around: date | None = None,
 ) -> Snapshot:
+    """`around` — сегодняшний день: дальше MAX_DAYS_AHEAD от него дат не ждём."""
     rows = [list(r) for r in rows]
     groups = build_column_map(rows, limits.min_groups)
     skip = find_header_rows(rows, groups, limits.min_groups)
@@ -106,30 +123,57 @@ def parse_sheet(
     # попадала, и проверка «даты идут по возрастанию» её не видела.
     date_order: list[date] = []
 
+    # Номера пар каждого дня: обязаны идти 1, 2, 3… без пропусков и
+    # повторов. Повтор даты (скопированный блок) и номер не по шаблону
+    # («3 пара», пропущенная строка) ловятся здесь же.
+    numbers_by_date: dict[date, list[int]] = {}
+
     for i, row in enumerate(rows):
         if i in skip:
             continue
 
         cell = _cell(row, 0)
         found = _parse_date(cell)
-        if found is None and _LOOKS_LIKE_DATE.match(cell):
-            # Раньше такая ячейка просто не узнавалась: current оставался на
-            # прошлом дне, и весь новый день дописывался к предыдущему — с
-            # повторяющимися номерами пар и без единой жалобы.
-            raise SourceFormatChanged(f"дата в строке {i} не разобралась: {cell!r}")
+        if found is None and cell.strip():
+            if _LOOKS_LIKE_DATE.search(cell):
+                # Раньше такая ячейка просто не узнавалась: current оставался
+                # на прошлом дне, и весь новый день дописывался к предыдущему —
+                # с повторяющимися номерами пар и без единой жалобы.
+                raise SourceFormatChanged(f"дата в строке {i} не разобралась: {cell!r}")
+            # Слово без чисел — «понедельник» над датой, «неделя 3»: не дата.
+            log.info("в колонке дат строки %d не дата: %r — пропускаю", i, cell.strip())
         if found is not None:
+            if around is not None and found > around + timedelta(days=MAX_DAYS_AHEAD):
+                raise SourceFormatChanged(
+                    f"дата {found} в строке {i} дальше {MAX_DAYS_AHEAD} дней от {around}"
+                )
             if found != current:
                 date_order.append(found)
             current = found
             if current not in seen_dates:
                 seen_dates.append(current)
 
-        m = _LESSON_NO_RE.match(_cell(row, 1).strip())
+        number_cell = _cell(row, 1).strip()
+        m = _LESSON_NO_RE.match(number_cell)
         if not m:
+            if number_cell and not _TIME_RE.match(number_cell):
+                # В колонке номеров бывают только номера и время звонка.
+                # «1-2», «кл. час», «3 пара» — новый способ записи, и что
+                # с ним делать, должен решить человек, а не пропуск.
+                raise SourceFormatChanged(
+                    f"в колонке номеров пар строки {i} стоит {number_cell!r}"
+                )
             continue
         if current is None:
             raise SourceFormatChanged(f"пара в строке {i} раньше первой даты")
         number = int(m.group(1))
+        expected = len(numbers_by_date.setdefault(current, [])) + 1
+        if number != expected:
+            raise SourceFormatChanged(
+                f"номера пар {current} идут {numbers_by_date[current] + [number]}: "
+                f"ждал {expected}"
+            )
+        numbers_by_date[current].append(number)
 
         # Строка под парой отдана преподавателям — но только если это
         # действительно она, а не начало следующей пары.
@@ -167,6 +211,11 @@ def _validate(snapshot: Snapshot, seen_order: list[date], limits: Limits) -> Non
         )
     if any(b <= a for a, b in zip(seen_order, seen_order[1:])):
         raise SourceFormatChanged(f"даты в листе идут не по возрастанию: {seen_order}")
+    gaps = [(a, b) for a, b in zip(seen_order, seen_order[1:]) if (b - a).days > MAX_GAP_DAYS]
+    if gaps:
+        # Опечатка в месяце у одной даты: остальные проверки её пропустят,
+        # а `covering` растянет лист на месяц.
+        raise SourceFormatChanged(f"между {gaps[0][0]} и {gaps[0][1]} больше {MAX_GAP_DAYS} дней")
     total = snapshot.total_lessons()
     if total < limits.min_lessons:
         raise SourceFormatChanged(
@@ -213,12 +262,20 @@ def collapse_export(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> list
     return rows
 
 
-def parse_csv(text: str, sheet_title: str, limits: Limits = FULL_SHEET) -> Snapshot:
-    return parse_sheet(collapse_export(read_csv(text), limits.min_groups), sheet_title, limits)
+def parse_csv(
+    text: str, sheet_title: str, limits: Limits = FULL_SHEET, around: date | None = None
+) -> Snapshot:
+    return parse_sheet(
+        collapse_export(read_csv(text), limits.min_groups), sheet_title, limits, around=around
+    )
 
 
 def parse_export(
-    text: str, sheet_title: str, gid: str | None, limits: Limits = FULL_SHEET
+    text: str,
+    sheet_title: str,
+    gid: str | None,
+    limits: Limits = FULL_SHEET,
+    around: date | None = None,
 ) -> Snapshot:
     """То же, что `parse_csv`, но помнит, в каких строках листа стоят дни.
 
@@ -231,7 +288,9 @@ def parse_export(
         day: SheetPlace(gid=gid, row=row)
         for day, row in date_rows([r[0] if r else "" for r in rows]).items()
     }
-    snapshot = parse_sheet(collapse_export(rows, limits.min_groups), sheet_title, limits)
+    snapshot = parse_sheet(
+        collapse_export(rows, limits.min_groups), sheet_title, limits, around=around
+    )
     snapshot.places = places
     return snapshot
 
