@@ -879,8 +879,8 @@ private fun ServerBroken(sourceUrl: String?) {
                 color = MaterialTheme.colorScheme.error,
             )
             Text(
-                "Сбой у нас, а не у колледжа: сервер не смог прочитать таблицу и " +
-                    "показывает последнее, что успел забрать. Пары могли поменяться.",
+                "Не удалось прочитать таблицу, приложение показывает последнее, " +
+                    "что пришло. Пары могли поменяться.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
