@@ -14,6 +14,15 @@ import ru.whensclass.BuildConfig
  * If-None-Match и разворачивает ответ 304 в тело из кэша. Поэтому обновление,
  * при котором расписание не изменилось, стоит нам почти ничего.
  */
+/**
+ * Сервер ответил кодом, а не расписанием.
+ *
+ * Отдельный класс, а не текст в IOException: 404 на группу — это «группы в
+ * таблице больше нет», и приложение должно сказать человеку выбрать заново,
+ * а не молча держать прежнее, как при отвалившейся сети.
+ */
+class HttpFailure(val code: Int, path: String) : IOException("сервер ответил $code на $path")
+
 class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildConfig.BASE_URL) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -79,7 +88,7 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw IOException("сервер ответил ${response.code} на $path")
+                throw HttpFailure(response.code, path)
             }
             return body
         }

@@ -60,6 +60,7 @@ fun ScheduleWidgetContent(
     done: Boolean = false,
     failed: Boolean = false,
     serverBroken: Boolean = false,
+    gone: Boolean = false,
     sourceUrl: String? = null,
     modifier: GlanceModifier = GlanceModifier,
 ) {
@@ -92,6 +93,7 @@ fun ScheduleWidgetContent(
             done,
             failed,
             serverBroken,
+            gone,
             fit,
             colors,
         )
@@ -158,6 +160,7 @@ private fun Header(
     done: Boolean,
     failed: Boolean,
     serverBroken: Boolean,
+    gone: Boolean,
     fit: Fit,
     colors: Palette,
 ) {
@@ -215,6 +218,9 @@ private fun Header(
                         busy -> " · обновляю…"
                         failed -> " · не вышло"
                         done -> " · обновлено"
+                        // Группы в таблице больше нет: нажатие ведёт в
+                        // приложение, где плашка и кнопка «выбрать заново».
+                        gone -> " · нет в таблице"
                         // Сбой на сервере надо показывать и тогда, когда пары
                         // на экране есть: снимок в этот момент прежний, а не
                         // сегодняшний. Раньше про сбой говорила только надпись
@@ -227,12 +233,14 @@ private fun Header(
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || serverBroken || isStale(fetchedAt) -> colors.error
+                            failed || serverBroken || gone || isStale(fetchedAt) -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },
                     ),
-                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+                    modifier = GlanceModifier.clickable(
+                        if (gone) openApp else actionRunCallback<RefreshAction>(),
+                    ),
                 )
                 // Отдельной строкой, а не хвостом времени: внутри одного текста
                 // значок вставал по базовой линии букв и висел выше цифр. Размер

@@ -86,6 +86,7 @@ class WeekWidget : GlanceAppWidget() {
                     currentState(ScheduleWidget.KEY_DONE) == true,
                     currentState(ScheduleWidget.KEY_FAILED) == true,
                     state?.serverBroken == true,
+                    state?.gone == true,
                     colors,
                 )
                 Spacer(GlanceModifier.height(6.dp))
@@ -124,6 +125,7 @@ private fun Header(
     done: Boolean,
     failed: Boolean,
     serverBroken: Boolean,
+    gone: Boolean,
     colors: Palette,
 ) {
     val context = LocalContext.current
@@ -169,6 +171,7 @@ private fun Header(
                 busy -> "обновляю…"
                 failed -> "не вышло"
                 done -> "обновлено"
+                gone -> "нет в таблице"
                 // О сбое на сервере говорят все три виджета, а не только
                 // дневной: неделя на экране в этот момент прежняя.
                 serverBroken -> "сбой у нас"
@@ -178,7 +181,7 @@ private fun Header(
             style = TextStyle(
                 fontSize = 11.sp,
                 color = when {
-                    failed || serverBroken || isStale(fetchedAt) -> colors.error
+                    failed || serverBroken || gone || isStale(fetchedAt) -> colors.error
                     busy || done -> colors.accent
                     else -> colors.textDim
                 },

@@ -205,6 +205,8 @@ private fun App(
     val teacherMode by container.store.isTeacher.collectAsState(initial = false)
     val serverStatus by container.store.serverStatus.collectAsState(initial = "ok")
     val tableUrl by container.store.sourceUrl.collectAsState(initial = null)
+    val serverSince by container.store.serverSince.collectAsState(initial = null)
+    val gone by container.store.gone.collectAsState(initial = false)
     val teacherName by container.store.teacherName.collectAsState(initial = null)
     val teacherId by container.store.teacherId.collectAsState(initial = null)
     val pinnedGroups by container.store.pinnedGroups.collectAsState(initial = emptyList())
@@ -530,6 +532,13 @@ private fun App(
                         loadTally = { container.store.tally() },
                         serverBroken = serverStatus != "ok",
                         sourceUrl = tableUrl,
+                        serverSince = serverSince,
+                        gone = gone,
+                        onRepick = {
+                            pickTeacher = teacherMode
+                            pickSecond = false
+                            screen = Screen.GROUPS
+                        },
                         reloadKey = reloadKey,
                         onSettings = {
                             focusUpdate = false

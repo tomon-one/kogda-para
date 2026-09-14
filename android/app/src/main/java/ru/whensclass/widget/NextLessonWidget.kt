@@ -57,6 +57,7 @@ class NextLessonWidget : GlanceAppWidget() {
             val next = nextLesson(schedule, today)
             val lesson = next?.lesson
             val broken = state?.serverBroken == true
+            val gone = state?.gone == true
 
             Column(
                 modifier = GlanceModifier
@@ -84,10 +85,14 @@ class NextLessonWidget : GlanceAppWidget() {
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
                     Text(
-                        (if (broken) "сбой у нас" else formatFetchedShort(state?.fetchedAt ?: 0L)) + " ⟳",
+                        (when {
+                            gone -> "нет в таблице"
+                            broken -> "сбой у нас"
+                            else -> formatFetchedShort(state?.fetchedAt ?: 0L)
+                        }) + " ⟳",
                         style = TextStyle(
                             fontSize = 11.sp,
-                            color = if (broken) colors.error else colors.textDim,
+                            color = if (broken || gone) colors.error else colors.textDim,
                         ),
                         modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                     )
@@ -110,12 +115,16 @@ class NextLessonWidget : GlanceAppWidget() {
                 // прежнего снимка, и промолчать здесь значит соврать.
                 val head = lesson.groups?.let { "$when_ · $time · $it" } ?: "$when_ · $time"
                 Text(
-                    if (broken) "$head · сбой у нас" else head,
+                    when {
+                        gone -> "$head · нет в таблице"
+                        broken -> "$head · сбой у нас"
+                        else -> head
+                    },
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            broken -> colors.error
+                            broken || gone -> colors.error
                             now -> colors.accent
                             else -> colors.textDim
                         },

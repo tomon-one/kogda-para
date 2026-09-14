@@ -59,8 +59,13 @@ sealed interface RefreshResult {
     data object Updated : RefreshResult
     data object AlreadyFresh : RefreshResult
     data object NoGroup : RefreshResult
+    /** Группы (преподавателя) в таблице больше нет — пора выбрать заново. */
+    data object Gone : RefreshResult
     data class Failed(val error: Throwable) : RefreshResult
 }
+
+/** Сколько сервер должен пролежать, прежде чем телефон скажет об этом уведомлением. */
+const val STALE_NOTIFY_AFTER_MILLIS = 2L * 60 * 60 * 1000
 
 class ScheduleRepository(
     private val context: Context,
@@ -128,6 +133,33 @@ class ScheduleRepository(
             "$when_: ${change.text}"
         }
         Notifications.changes(context, "Расписание изменилось", text)
+    }
+
+    /**
+     * Сервер лежит дольше двух часов — сказать уведомлением, один раз на сбой.
+     *
+     * Плашка на экране видна только тому, кто открыл приложение; после
+     * раздачи о сбое первым узнает тот, кто пришёл на пару по позапрошлой
+     * неделе. Двухчасовая задержка отсекает чихи Google, которые сервер и
+     * сам лечит к следующему заходу.
+     */
+    private suspend fun announceStale(meta: MetaDto) {
+        if (meta.status == "ok" || meta.since == null) {
+            if (store.staleNotifiedFor() != null) store.setStaleNotifiedFor(null)
+            return
+        }
+        if (!store.notifyChangesEnabled()) return
+        if (store.staleNotifiedFor() == meta.since) return
+        val since = runCatching { java.time.Instant.parse(meta.since) }.getOrNull() ?: return
+        if (System.currentTimeMillis() - since.toEpochMilli() < STALE_NOTIFY_AFTER_MILLIS) return
+        Notifications.changes(
+            context,
+            "Сервер расписания не обновляется",
+            "Сбой у нас с ${ru.whensclass.widget.formatSince(meta.since)}. " +
+                "Приложение показывает последнее, что пришло, — пары могли поменяться. " +
+                "Таблица колледжа открывается из настроек.",
+        )
+        store.setStaleNotifiedFor(meta.since)
     }
 
     /** Сведения для отчёта об ошибке — см. [collectDiagnostics]. */
@@ -276,7 +308,10 @@ class ScheduleRepository(
             // тех случаях, ради которых состояние и нужно: при ручном
             // обновлении и когда сегодняшнего дня в данных нет.
             val meta = runCatching { api.meta() }.getOrNull()
-            meta?.let { store.putServerState(it.status, it.sourceUrl) }
+            meta?.let {
+                store.putServerState(it.status, it.sourceUrl, it.since)
+                announceStale(it)
+            }
             if (!force && !outdated && meta != null) {
                 if (meta.generatedAt == store.generatedAt.first()) {
                     // Данные те же, но проверку показать надо: иначе кажется,
@@ -286,11 +321,27 @@ class ScheduleRepository(
                     return@withContext RefreshResult.AlreadyFresh
                 }
             }
-            val fresh = if (teacherMode) {
-                api.teacher(subject, from = weekStart(), days = DAYS)
-            } else {
-                api.schedule(subject, from = weekStart(), days = DAYS)
+            val fresh = try {
+                if (teacherMode) {
+                    api.teacher(subject, from = weekStart(), days = DAYS)
+                } else {
+                    api.schedule(subject, from = weekStart(), days = DAYS)
+                }
+            } catch (error: HttpFailure) {
+                // 404 при здоровом сервере — группы в таблице больше нет:
+                // переименовали, разделили, убрали. Это не сетевой сбой, и
+                // молчать прежним расписанием здесь значит врать. Но и не с
+                // первого раза: опечатку в заголовке колледж чинит за час.
+                if (error.code == 404 && meta?.status == "ok") {
+                    val confirmed = store.noteNotFound(System.currentTimeMillis())
+                    if (confirmed) {
+                        updateWidgets()
+                        return@withContext RefreshResult.Gone
+                    }
+                }
+                throw error
             }
+            store.clearNotFound()
             val merged = if (teacherMode) Merged(fresh, whole = true) else withSecondGroup(fresh)
             val full = merged.schedule
 

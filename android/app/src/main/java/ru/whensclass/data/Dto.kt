@@ -79,4 +79,8 @@ data class MetaDto(
     @SerialName("status") val status: String = "ok",
     /** Адрес таблицы колледжа: куда идти, когда расписание застряло. */
     @SerialName("src_url") val sourceUrl: String? = null,
+    /** С какого момента сервер не обновляется — только при `status` не `ok`. */
+    @SerialName("since") val since: String? = null,
+    /** Почему — словами разборщика. */
+    @SerialName("err") val error: String? = null,
 )
