@@ -36,10 +36,12 @@ def archive(
         folder = state_dir / "history" / (gid or "no-gid")
         folder.mkdir(parents=True, exist_ok=True)
         short = digest[:8]
-        if any(folder.glob(f"*-{short}*.csv.gz")):
-            if rejected is None:
-                return None
-            # Тот же текст, но теперь отвергнут: ошибка — новость.
+        if rejected is not None and any(folder.glob(f"*-{short}-rejected.csv.gz")):
+            # Тот же текст уже отвергнут — новости нет: сбой длится днями,
+            # а заходов по полсотни в сутки.
+            return None
+        if rejected is None and any(folder.glob(f"*-{short}*.csv.gz")):
+            return None
         stamp = (now or dt.datetime.now()).strftime("%Y-%m-%d-%H%M")
         suffix = "-rejected" if rejected is not None else ""
         path = folder / f"{stamp}-{short}{suffix}.csv.gz"

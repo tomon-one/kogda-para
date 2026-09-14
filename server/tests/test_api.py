@@ -160,6 +160,8 @@ def test_health_is_503_when_stale_or_today_is_uncovered(fixture_csv, monkeypatch
     refresher.status = "ok"
     refresher.last_error = refresher.failing_since = None
     assert "since" not in client.get("/v1/meta").json()
+    # Сторожки ходят и HEAD-ом: код ответа тот же.
+    assert client.head("/healthz").status_code == 200
     # Понедельник за краем листа — 503; воскресенье за краем — норма.
     monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 14))
     assert client.get("/healthz").status_code == 503

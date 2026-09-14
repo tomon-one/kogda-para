@@ -20,7 +20,7 @@ import httpx
 
 from ..config import settings
 from ..domain.models import SourceFormatChanged
-from ..parser.csv_schedule import Limits, parse_export
+from ..parser.csv_schedule import Limits, _check_shift, parse_export, shift_seed
 from ..sources import gsheets, sheet_index
 from ..storage import history
 from . import alerts
@@ -87,7 +87,10 @@ class Refresher:
                 try:
                     text = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
                 except httpx.HTTPStatusError as exc:
-                    if 400 <= exc.response.status_code < 500 and not retried:
+                    # 400 — мёртвый gid (проверено curl), 404 — на всякий
+                    # случай. Остальные 4xx (429, 403) — Google на минуту,
+                    # это обычный сетевой сбой: индекс цел, тревога подождёт.
+                    if exc.response.status_code in (400, 404) and not retried:
                         # Лист удалили или пересоздали: gid из памяти мёртв.
                         # Забываем его и ищем заново в том же заходе — иначе
                         # stale держался бы до конца запомненного покрытия.
@@ -102,7 +105,12 @@ class Refresher:
                 texts.append((title, gid, text, hashlib.sha256(text.encode("utf-8")).hexdigest()))
 
             if not force and all(self._source_hashes.get(t) == h for t, _, _, h in texts):
-                # Не изменился ни один лист — перерисовывать нечего.
+                # Не изменился ни один лист — перерисовывать нечего. Но если
+                # сегодня уже за краем прежнего снимка, набор листов пора
+                # пересобрать — как и при разборе ниже.
+                coverage = self.store.snapshot.coverage if self.store.snapshot else None
+                if coverage and not (coverage[0] <= today <= coverage[1]):
+                    self._sheets = None
                 self.status = "ok"
                 self._recovered()
                 return False
@@ -117,6 +125,8 @@ class Refresher:
                 self._fail(f"не нашёл лист на {today}: набор листов пуст", kind="sheet")
                 return False
             _check_group_drop(self.store.snapshot, snapshot)
+            _check_shift(snapshot, seed=shift_seed(self.store.snapshot, snapshot))
+            _check_today_kept(self.store.snapshot, snapshot, today)
         except SourceFormatChanged as exc:
             # Самый опасный случай: таблицу переделали. Держим прежнее —
             # а отвергнутый лист кладём в архив вместе с причиной: разбирать
@@ -150,7 +160,21 @@ class Refresher:
 
         previous = self.store.snapshot
         previous_teachers = self.store.teachers
-        self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
+        try:
+            self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
+        except OSError as exc:
+            # Диск: в памяти снимок уже свежий, телефоны его получат, но
+            # перезапуск поднимет прежний. Хеши не запоминаем — следующий
+            # заход попробует записать снова. Сказать человеку — сразу.
+            log.error("снимок не записался на диск: %s", exc)
+            alerts.notify(
+                "disk",
+                f"Снимок не записался на диск: {type(exc).__name__}. В памяти свежее "
+                "расписание, после перезапуска поднимется прежнее.",
+                force=True,
+            )
+            self.status = "ok"
+            return True
         self._source_hashes = {title: digest for title, _, _, digest in texts}
         for _, gid, text, digest in texts:
             history.archive(self.state_dir, gid, text, digest)
@@ -306,6 +330,20 @@ def _check_group_drop(previous, current) -> None:
             f"пропало {len(lost)} групп из {len(previous.groups)}: "
             + ", ".join(lost[:10]) + ("…" if len(lost) > 10 else "")
         )
+
+
+def _check_today_kept(previous, current, today: dt.date) -> None:
+    """Прежний снимок знал сегодняшний день, новый — нет: это не обновление.
+
+    Так выглядит подмена рабочего листа соседним: gid умер (или Google
+    ответил 400), поиск не нашёл лист на сегодня и взял «ближайший» — и
+    телефоны увидели бы «пар нет» при ok там, где минуту назад были пары.
+    """
+    if previous is None or today not in previous.dates or today in current.dates:
+        return
+    raise LookupError(
+        f"новый набор листов ({current.sheet_title!r}) не покрывает {today}, прежний покрывал"
+    )
 
 
 def _limits() -> Limits:

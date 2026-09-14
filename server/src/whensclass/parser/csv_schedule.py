@@ -52,6 +52,11 @@ SHIFT_WARN_SHARE = 0.10
 SHIFT_MIN_GROUPS = 20
 SHIFT_MIN_LESSONS_TODAY = 3
 SHIFT_MIN_HISTORY = 10
+# Сдвиг не с первой пары дня (выделили диапазон не с начала) дневная проверка
+# не видит: первая пара знакома, и группа не «чужая». Поэтому ещё построчно:
+# доля групп, у которых пара с этим номером незнакома. На живом листе фон
+# по строкам ≤ 0.21, при сдвиге со 2–4-й пары 0.40–0.69.
+SHIFT_ROW_REJECT_SHARE = 0.35
 
 _WEEKDAYS = (
     "понедельник", "вторник", "среда",
@@ -240,21 +245,60 @@ def _trace(lesson: Lesson) -> tuple[str, tuple[str, ...]]:
     return " ".join(lesson.subject.lower().split()), lesson.teachers
 
 
-def _check_shift(snapshot: Snapshot) -> None:
-    """День против истории группы в том же листе — см. SHIFT_*."""
+Seed = dict[str, set[tuple[str, tuple[str, ...]]]]
+
+
+def shift_seed(previous: Snapshot | None, current: Snapshot) -> Seed:
+    """История из прошлого снимка — для первой недели листа, где своей ещё нет.
+
+    Каждый новый лист начинается без истории, и первые дни сдвиг был бы
+    невидим — а это как раз дни, которые только что набрали руками. Прошлый
+    снимок годится в историю, когда это тот же лист (даты пересекаются) или
+    следующий за ним через выходные. После каникул — нет: у половины групп
+    сменились предметы, и первый день семестра выглядел бы как сдвиг.
+    """
+    if previous is None or not previous.dates or not current.dates:
+        return {}
+    same = set(previous.dates) & set(current.dates)
+    gap = (min(current.dates) - max(previous.dates)).days
+    if not same and not 0 <= gap <= 3:
+        return {}
+    return {
+        gid: {_trace(x) for lessons in by_date.values() for x in lessons}
+        for gid, by_date in previous.schedule.items()
+    }
+
+
+def _check_shift(snapshot: Snapshot, seed: Seed | None = None) -> None:
+    """День против истории группы — в том же листе и в `seed` (см. SHIFT_*)."""
+    seed = seed or {}
     for day in snapshot.dates:
         compared = 0
         strangers: list[str] = []
+        # По строкам пары: номер -> (сравнено, незнакомых).
+        rows: dict[int, list[int]] = {}
         for gid, by_date in snapshot.schedule.items():
             today = by_date.get(day, [])
-            if len(today) < SHIFT_MIN_LESSONS_TODAY:
-                continue
-            history = {_trace(x) for d, ls in by_date.items() if d < day for x in ls}
+            history = set(seed.get(gid, ()))
+            history |= {_trace(x) for d, ls in by_date.items() if d < day for x in ls}
             if len(history) < SHIFT_MIN_HISTORY:
+                continue
+            for lesson in today:
+                cell = rows.setdefault(lesson.number, [0, 0])
+                cell[0] += 1
+                if _trace(lesson) not in history:
+                    cell[1] += 1
+            if len(today) < SHIFT_MIN_LESSONS_TODAY:
                 continue
             compared += 1
             if not ({_trace(x) for x in today} & history):
                 strangers.append(gid)
+        for number, (seen, unknown) in sorted(rows.items()):
+            if seen >= SHIFT_MIN_GROUPS and unknown / seen > SHIFT_ROW_REJECT_SHARE:
+                raise SourceFormatChanged(
+                    f"{number}-я пара {day} похожа на сдвиг колонок: у {unknown} групп "
+                    f"из {seen} незнакомый предмет"
+                )
         if compared < SHIFT_MIN_GROUPS:
             continue
         share = len(strangers) / compared

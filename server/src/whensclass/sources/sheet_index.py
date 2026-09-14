@@ -251,6 +251,11 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
     Сначала смотрит в память — обычно этого хватает и в сеть ходить не надо.
     Аварийная настройка из окружения перебивает всё.
     """
+    if settings.sheet_title and not settings.sheet_gid:
+        # Сбой настройки, не сети: сказать сразу и словами про лист.
+        raise LookupError(
+            "WHENSCLASS_SHEET_TITLE задан без WHENSCLASS_SHEET_GID — лист читается только по gid"
+        )
     if settings.sheet_title or settings.sheet_gid:
         return settings.sheet_title or "", settings.sheet_gid
 
