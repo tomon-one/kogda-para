@@ -1,6 +1,7 @@
 package ru.whensclass.ui
 
 import android.content.Intent
+import android.widget.Toast
 import android.os.Build
 import android.provider.Settings
 import android.net.Uri
@@ -94,6 +95,8 @@ fun SettingsScreen(
     onClearSecondGroup: () -> Unit,
     onUpdate: () -> Unit,
     loadDiagnostics: suspend () -> String,
+    /** Таблица колледжа — к своей колонке на сегодня. Null, пока сервер не назвал адрес. */
+    sheetUrl: () -> String?,
     onBack: () -> Unit,
 ) {
     var askOwnTime by remember { mutableStateOf(false) }
@@ -238,9 +241,26 @@ fun SettingsScreen(
             Text(
                 // Четыре срока и две машины, из которых человеку нечего выбрать:
                 // в разделе настроек это рассказ мимо дела.
-                "Обновляется примерно раз в час, а перед парой чаще.",
+                "Обновляется примерно раз в час, а перед парой чаще. " +
+                    "Берётся из общей таблицы колледжа — она всегда под рукой: " +
+                    "открывается на вашей колонке и сегодняшнем дне.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Постоянное место для ссылки. Раньше она всплывала только при
+            // сбое или пустых днях — а «на всякий случай» её хотят и в
+            // обычный день: сверить, показать, посмотреть соседей.
+            val context = LocalContext.current
+            ActionButton(
+                label = "Открыть таблицу колледжа",
+                onClick = {
+                    val url = sheetUrl()
+                    if (url == null) {
+                        Toast.makeText(context, "Адрес таблицы ещё не получен от сервера", Toast.LENGTH_SHORT).show()
+                    } else {
+                        openLink(context, url)
+                    }
+                },
             )
         }
 
