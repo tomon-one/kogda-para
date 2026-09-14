@@ -24,7 +24,7 @@ class WeekTitleTest {
     fun `один оставшийся день не превращается в диапазон`() {
         // «12–12 сент.» читается как опечатка. В субботу и в последний день
         // листа виден ровно один день.
-        val title = weekTitle(days(0))
+        val title = weekTitle(days(0), today)
 
         assertEquals(formatWeekRange(today, today), title)
         assertEquals(true, title.contains("Неделя, "))
@@ -34,20 +34,20 @@ class WeekTitleTest {
     fun `прожитые дни в заголовок не попадают`() {
         // Виджет прожитое не показывает, значит и считать по нему нельзя:
         // ровно из-за этого заголовок когда-то и соврал.
-        val title = weekTitle(days(-3, -1, 0, 2))
+        val title = weekTitle(days(-3, -1, 0, 2), today)
 
         assertEquals(formatWeekRange(today, today.plusDays(2)), title)
     }
 
     @Test
     fun `без дат остаётся просто Неделя`() {
-        assertEquals("Неделя", weekTitle(emptyList()))
-        assertEquals("Неделя", weekTitle(listOf(DayDto(date = "не дата"))))
+        assertEquals("Неделя", weekTitle(emptyList(), today))
+        assertEquals("Неделя", weekTitle(listOf(DayDto(date = "не дата")), today))
     }
 
     @Test
     fun `вся неделя позади — тоже просто Неделя`() {
-        assertEquals("Неделя", weekTitle(days(-5, -2)))
+        assertEquals("Неделя", weekTitle(days(-5, -2), today))
     }
 
     @Test

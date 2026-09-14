@@ -97,16 +97,26 @@ fun parseTime(value: String?): LocalTime? =
     value?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
 
 /**
- * Номер пары, которая идёт прямо сейчас, — по сетке звонков с сервера.
+ * Номер пары, которая идёт в момент `now`, — по сетке звонков с сервера.
  * Пока сетка неизвестна, подсвечивать нечего.
+ *
+ * Момент передаётся снаружи, а не берётся из часов здесь. В виджетах это
+ * зовётся из функций, которые Compose пропускает, пока не изменились их
+ * параметры, — и часы внутри такой функции стоят: 14 сентября 2026 недельный
+ * виджет пять часов подсвечивал кончившуюся пару. Время должно входить в
+ * параметры, тогда пропускать нечего.
  */
-fun currentLessonNumber(bells: Map<String, List<String>>, day: LocalDate): Int? {
-    if (bells.isEmpty() || day != LocalDate.now()) return null
-    val now = LocalTime.now()
+fun currentLessonNumber(
+    bells: Map<String, List<String>>,
+    day: LocalDate,
+    now: LocalDateTime,
+): Int? {
+    if (bells.isEmpty() || day != now.toLocalDate()) return null
+    val time = now.toLocalTime()
     return bells.entries.firstNotNullOfOrNull { (number, range) ->
         val start = parseTime(range.getOrNull(0))
         val end = parseTime(range.getOrNull(1))
-        if (start != null && end != null && now >= start && now <= end) {
+        if (start != null && end != null && time >= start && time <= end) {
             number.toIntOrNull()
         } else {
             null

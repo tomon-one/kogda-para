@@ -40,6 +40,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import java.time.LocalDate
+import java.time.LocalDateTime
 import ru.whensclass.AppContainer
 import ru.whensclass.R
 import ru.whensclass.data.DayDto
@@ -67,12 +68,21 @@ class WeekWidget : GlanceAppWidget() {
             val state by store.widgetStates.collectAsState(initial = first)
             val schedule = ScheduleWidget.parse(state?.scheduleJson)
             val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
+            // Часы — только здесь. Этот корень перекомпонуется на каждый
+            // updateAll (звонок, полночь) и на каждое изменение хранилища,
+            // а вложенные функции — лишь когда меняются их параметры.
+            // Разобранное расписание кэшируется по тексту, палитра одна на
+            // всех, и Week с теми же входами Compose пропускал целиком: 14
+            // сентября 2026 виджет с 15:50 до ночи подсвечивал кончившуюся
+            // пару при честном времени в шапке. Момент идёт параметром вниз.
+            val now = LocalDateTime.now()
+            val today = now.toLocalDate()
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()
                     // Нажатие по пустому месту открывает приложение —
                     // так же, как по дню или по шапке.
-                    .clickable(actionStartActivity(openDay(context, LocalDate.now())))
+                    .clickable(actionStartActivity(openDay(context, today)))
                     .background(colors.background)
                     .cornerRadius(16.dp)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
@@ -80,6 +90,7 @@ class WeekWidget : GlanceAppWidget() {
                 val days = schedule?.days.orEmpty()
                 Header(
                     days,
+                    today,
                     state?.groupName,
                     state?.fetchedAt ?: 0L,
                     currentState(ScheduleWidget.KEY_BUSY) == true,
@@ -99,7 +110,7 @@ class WeekWidget : GlanceAppWidget() {
                     // Проверяем то, что рисуется, а не то, что пришло: дни
                     // старше сегодняшнего виджет выбрасывает, и при непустом
                     // days под шапкой оставалась пустота без единого слова.
-                    weekDays(days).isEmpty() ->
+                    weekDays(days, today).isEmpty() ->
                         Hint("Расписание кончилось. Нажмите на время в шапке", colors)
                     // Долю высоты список получает здесь, из Column:
                     // без неё он в некоторых оболочках схлопывается в
@@ -107,6 +118,7 @@ class WeekWidget : GlanceAppWidget() {
                     else -> Week(
                         days,
                         schedule.bells,
+                        now,
                         colors,
                         GlanceModifier.fillMaxWidth().defaultWeight(),
                     )
@@ -119,6 +131,7 @@ class WeekWidget : GlanceAppWidget() {
 @Composable
 private fun Header(
     days: List<DayDto>,
+    today: LocalDate,
     groupName: String?,
     fetchedAt: Long,
     busy: Boolean,
@@ -129,7 +142,6 @@ private fun Header(
     colors: Palette,
 ) {
     val context = LocalContext.current
-    val today = LocalDate.now()
 
     Row(
         modifier = GlanceModifier.fillMaxWidth(),
@@ -147,7 +159,7 @@ private fun Header(
 
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
-                weekTitle(days),
+                weekTitle(days, today),
                 maxLines = 1,
                 style = TextStyle(
                     fontSize = 15.sp,
@@ -211,11 +223,15 @@ private fun Header(
 private fun Week(
     days: List<DayDto>,
     bells: Map<String, List<String>>,
+    now: LocalDateTime,
     colors: Palette,
     modifier: GlanceModifier,
 ) {
-    val week = remember(days) { weekDays(days) }
-    val current = currentLessonNumber(bells, LocalDate.now())
+    val today = now.toLocalDate()
+    // Ключ и по дате: через полночь тот же список дней делится на прожитые
+    // и предстоящие заново.
+    val week = remember(days, today) { weekDays(days, today) }
+    val current = currentLessonNumber(bells, today, now)
     val height = LocalSize.current.height
     val scale = fontScale()
     val open = remember(week, height, scale) {
@@ -280,10 +296,9 @@ private fun MoreLine(rest: Int, colors: Palette) {
 }
 
 /** «Неделя 7–12 сент.» по крайним дням расписания; без дат — просто «Неделя». */
-internal fun weekTitle(days: List<DayDto>): String {
+internal fun weekTitle(days: List<DayDto>, today: LocalDate): String {
     // Считаем по тем дням, что видны: прожитые виджет не показывает, и «7–12»
     // над списком, который начинается со вторника, сбивает с толку.
-    val today = LocalDate.now()
     val dates = days
         .mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
         .filterNot { it.isBefore(today) }
@@ -486,8 +501,7 @@ private class WeekDay(
     val lessons: List<LessonDto>,
 )
 
-private fun weekDays(days: List<DayDto>): List<WeekDay> {
-    val today = LocalDate.now()
+private fun weekDays(days: List<DayDto>, today: LocalDate): List<WeekDay> {
     return days.mapNotNull { day ->
         val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: return@mapNotNull null
         // Прожитые дни в недельном виджете не показываем: места мало, а к

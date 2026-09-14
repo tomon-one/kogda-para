@@ -16,6 +16,7 @@ import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.currentState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import java.time.LocalDate
+import java.time.LocalDateTime
 import kotlinx.serialization.json.Json
 import ru.whensclass.AppContainer
 import ru.whensclass.data.ScheduleDto
@@ -53,11 +54,19 @@ class ScheduleWidget : GlanceAppWidget() {
             // Палитра своя (см. WidgetColors), а не системная: оболочки на
             // телефонах слишком по-разному понимают динамические цвета.
             val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
+            // Часы — только здесь, и дальше параметром. Корень перекомпонуется
+            // на каждый updateAll (звонок, полночь) и на каждое изменение
+            // хранилища, а Content с теми же входами Compose пропускает — и
+            // «сегодня» с идущей парой внутри него замирали до ближайшего
+            // часового обновления. См. WeekWidget: там это стоило пяти часов
+            // подсветки кончившейся пары.
+            val now = LocalDateTime.now()
             Content(
                 schedule,
                 state?.groupName,
                 state?.fetchedAt ?: 0L,
                 colors,
+                now = now,
                 offset = currentOffset(),
                 busy = currentState(KEY_BUSY) == true,
                 done = currentState(KEY_DONE) == true,
@@ -78,6 +87,7 @@ class ScheduleWidget : GlanceAppWidget() {
         groupName: String?,
         fetchedAt: Long,
         colors: Palette,
+        now: LocalDateTime,
         offset: Int,
         busy: Boolean,
         done: Boolean,
@@ -97,7 +107,8 @@ class ScheduleWidget : GlanceAppWidget() {
             gone = gone,
             sourceUrl = sourceUrl,
             colors = colors,
-            day = LocalDate.now().plusDays(offset.toLong()),
+            now = now,
+            day = now.toLocalDate().plusDays(offset.toLong()),
             offset = offset,
             modifier = GlanceModifier,
         )

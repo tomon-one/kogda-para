@@ -97,6 +97,18 @@ def test_failure_state_survives_restart_and_recovery_reports_duration(tmp_path, 
     assert not (tmp_path / "failing.json").exists()
     url, body = sent.bodies[-1]
     assert "снова обновляется" in body["message"] and body["priority"] == 3
+    # Лежали минуты — говорим в минутах: «лежало 0.0 ч» было в учебной
+    # тревоге 14 сентября 2026.
+    assert " мин, с " in body["message"]
+
+
+def test_recovery_duration_is_human():
+    from whensclass.service.refresher import _lying
+
+    assert _lying(dt.timedelta(minutes=2)) == "2 мин"
+    assert _lying(dt.timedelta(minutes=59, seconds=59)) == "59 мин"
+    assert _lying(dt.timedelta(hours=1)) == "1,0 ч"
+    assert _lying(dt.timedelta(hours=26, minutes=30)) == "26,5 ч"
 
 
 def test_network_blip_is_silent_until_half_an_hour(tmp_path, sent, fixture_csv):

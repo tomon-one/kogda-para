@@ -270,11 +270,10 @@ class Refresher:
         if since is None:
             return
         lying = dt.datetime.now(dt.timezone.utc) - since
-        hours = lying.total_seconds() / 3600
         if self._alerted:
             alerts.notify(
                 "recovered",
-                f"Расписание снова обновляется. Лежало {hours:.1f} ч, "
+                f"Расписание снова обновляется. Лежало {_lying(lying)}, "
                 f"с {since.astimezone(_zone()):%d.%m %H:%M}.",
                 force=True, good=True,
             )
@@ -344,6 +343,15 @@ def _check_today_kept(previous, current, today: dt.date) -> None:
     raise LookupError(
         f"новый набор листов ({current.sheet_title!r}) не покрывает {today}, прежний покрывал"
     )
+
+
+def _lying(delta: dt.timedelta) -> str:
+    """Сколько лежали, по-человечески: учебная тревога 14 сентября 2026
+    длилась две минуты и отчиталась «лежало 0.0 ч»."""
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 60:
+        return f"{minutes} мин"
+    return f"{minutes / 60:.1f} ч".replace(".", ",")
 
 
 def _limits() -> Limits:
