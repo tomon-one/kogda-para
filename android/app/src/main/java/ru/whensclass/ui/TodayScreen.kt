@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -609,7 +610,9 @@ private fun DayCard(
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
     val isToday = date == today
     val past = date != null && date.isBefore(today)
-    val current = if (isToday) currentLessonNumber(bells, today) else null
+    // Момент берётся при компоновке карточки; со звонком она не перерисуется —
+    // экран открывают на секунды, и будильника под это в приложении нет.
+    val current = if (isToday) currentLessonNumber(bells, today, LocalDateTime.now()) else null
 
     Surface(
         modifier = Modifier.fillMaxWidth(),

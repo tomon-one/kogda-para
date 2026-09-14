@@ -40,14 +40,31 @@ class DayFormatTest {
 
     @Test
     fun `без сетки звонков подсвечивать нечего`() {
-        assertNull(currentLessonNumber(emptyMap(), LocalDate.now()))
+        val noon = LocalDate.of(2026, 9, 14).atTime(12, 0)
+        assertNull(currentLessonNumber(emptyMap(), noon.toLocalDate(), noon))
     }
 
     @Test
     fun `текущая пара ищется только на сегодня`() {
         val bells = mapOf("1" to listOf("00:00", "23:59"))
-        assertEquals(1, currentLessonNumber(bells, LocalDate.now()))
-        assertNull(currentLessonNumber(bells, LocalDate.now().plusDays(1)))
+        val noon = LocalDate.of(2026, 9, 14).atTime(12, 0)
+        assertEquals(1, currentLessonNumber(bells, noon.toLocalDate(), noon))
+        assertNull(currentLessonNumber(bells, noon.toLocalDate().plusDays(1), noon))
+    }
+
+    @Test
+    fun `подсветка живёт от звонка до звонка`() {
+        // 14 сентября 2026 недельный виджет с 15:50 до ночи подсвечивал
+        // четвёртую пару: момент считался внутри пропускаемой функции.
+        // Сам расчёт при этом верен — теперь момент приходит снаружи, и
+        // проверить его можно на любом часе.
+        val bells = mapOf("4" to listOf("14:20", "15:50"), "5" to listOf("16:00", "17:30"))
+        val day = LocalDate.of(2026, 9, 14)
+        assertEquals(4, currentLessonNumber(bells, day, day.atTime(14, 20)))
+        assertEquals(4, currentLessonNumber(bells, day, day.atTime(15, 50)))
+        assertNull(currentLessonNumber(bells, day, day.atTime(15, 55)))
+        assertEquals(5, currentLessonNumber(bells, day, day.atTime(16, 0)))
+        assertNull(currentLessonNumber(bells, day, day.atTime(20, 43)))
     }
 
     @Test

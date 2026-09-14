@@ -26,6 +26,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import java.time.LocalDate
+import java.time.LocalDateTime
 import ru.whensclass.AppContainer
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
@@ -53,8 +54,11 @@ class NextLessonWidget : GlanceAppWidget() {
             val state by store.widgetStates.collectAsState(initial = first)
             val schedule = ScheduleWidget.parse(state?.scheduleJson)
             val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
-            val today = LocalDate.now()
-            val next = nextLesson(schedule, today)
+            // Часы — в корне и дальше параметром, как в остальных виджетах:
+            // корень перекомпонуется на каждый updateAll, вложенное — нет.
+            val now = LocalDateTime.now()
+            val today = now.toLocalDate()
+            val next = nextLesson(schedule, now)
             val lesson = next?.lesson
             val broken = state?.serverBroken == true
             val gone = state?.gone == true
@@ -100,12 +104,12 @@ class NextLessonWidget : GlanceAppWidget() {
                 }
 
                 val bells = schedule?.bells.orEmpty()
-                val now = next.day == today && currentLessonNumber(bells, today) == lesson.number
+                val ongoing = next.day == today && currentLessonNumber(bells, today, now) == lesson.number
                 val time = lessonStart(bells, lesson.number) ?: "${lesson.number} пара"
                 // Про завтрашнюю пару тоже говорим: «пар больше нет» слишком
                 // легко прочесть как «пар нет вообще» и расслабиться.
                 val when_ = when {
-                    now -> "идёт сейчас"
+                    ongoing -> "идёт сейчас"
                     next.day == today -> "сегодня"
                     next.day == today.plusDays(1) -> "завтра"
                     else -> formatDayTitleShort(next.day)
@@ -125,7 +129,7 @@ class NextLessonWidget : GlanceAppWidget() {
                         fontSize = 11.sp,
                         color = when {
                             broken || gone -> colors.error
-                            now -> colors.accent
+                            ongoing -> colors.accent
                             else -> colors.textDim
                         },
                     ),
@@ -168,19 +172,20 @@ data class NextLesson(val day: LocalDate, val lesson: LessonDto)
  * Идущая сейчас пара; если её нет — ближайшая из оставшихся сегодня; если и
  * таких нет — первая пара следующего учебного дня.
  */
-fun nextLesson(schedule: ScheduleDto?, today: LocalDate): NextLesson? {
+fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
     if (schedule == null) return null
     val bells = schedule.bells
+    val today = now.toLocalDate()
     val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }?.lessons.orEmpty()
 
-    currentLessonNumber(bells, today)
+    currentLessonNumber(bells, today, now)
         ?.let { number -> todayLessons.firstOrNull { it.number == number } }
         ?.let { return NextLesson(today, it) }
 
-    val now = java.time.LocalTime.now()
+    val time = now.toLocalTime()
     todayLessons.firstOrNull { lesson ->
         val start = parseTime(bells[lesson.number.toString()]?.getOrNull(0))
-        start == null || start > now
+        start == null || start > time
     }?.let { return NextLesson(today, it) }
 
     // Сегодня всё — ищем ближайший день, где пары есть.

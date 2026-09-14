@@ -33,6 +33,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 import ru.whensclass.R
@@ -54,6 +55,7 @@ fun ScheduleWidgetContent(
     groupName: String?,
     fetchedAt: Long,
     colors: Palette,
+    now: LocalDateTime,
     day: LocalDate,
     offset: Int,
     busy: Boolean = false,
@@ -87,8 +89,8 @@ fun ScheduleWidgetContent(
             day,
             offset,
             fetchedAt,
-            firstOffset(schedule),
-            lastOffset(schedule),
+            firstOffset(schedule, now.toLocalDate()),
+            lastOffset(schedule, now.toLocalDate()),
             busy,
             done,
             failed,
@@ -114,6 +116,7 @@ fun ScheduleWidgetContent(
                 today.lessons,
                 schedule.bells,
                 day,
+                now,
                 fit,
                 colors,
                 modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
@@ -128,8 +131,8 @@ fun ScheduleWidgetContent(
  * Расписание приходит с понедельника, вместе с прожитыми днями, поэтому
  * считать по длине списка нельзя: выходило, что вперёд листать некуда.
  */
-private fun lastOffset(schedule: ScheduleDto?): Int =
-    offsets(schedule).maxOrNull()?.coerceIn(0, ScheduleWidget.MAX_OFFSET) ?: 0
+private fun lastOffset(schedule: ScheduleDto?, today: LocalDate): Int =
+    offsets(schedule, today).maxOrNull()?.coerceIn(0, ScheduleWidget.MAX_OFFSET) ?: 0
 
 /**
  * Насколько далеко назад есть данные.
@@ -137,11 +140,10 @@ private fun lastOffset(schedule: ScheduleDto?): Int =
  * Расписание приходит с понедельника: прожитые дни уже лежат на телефоне, и
  * запрещать их листать незачем — на экране приложения они тоже остаются.
  */
-private fun firstOffset(schedule: ScheduleDto?): Int =
-    offsets(schedule).minOrNull()?.coerceIn(-ScheduleWidget.MAX_OFFSET, 0) ?: 0
+private fun firstOffset(schedule: ScheduleDto?, today: LocalDate): Int =
+    offsets(schedule, today).minOrNull()?.coerceIn(-ScheduleWidget.MAX_OFFSET, 0) ?: 0
 
-private fun offsets(schedule: ScheduleDto?): List<Int> {
-    val today = LocalDate.now()
+private fun offsets(schedule: ScheduleDto?, today: LocalDate): List<Int> {
     return schedule?.days
         ?.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
         ?.map { ChronoUnit.DAYS.between(today, it).toInt() }
@@ -304,6 +306,7 @@ private fun Lessons(
     lessons: List<LessonDto>,
     bells: Map<String, List<String>>,
     day: LocalDate,
+    now: LocalDateTime,
     fit: Fit,
     colors: Palette,
     modifier: GlanceModifier = GlanceModifier.fillMaxWidth(),
@@ -314,7 +317,7 @@ private fun Lessons(
         Hint("Пар нет", colors)
         return
     }
-    val current = currentLessonNumber(bells, day)
+    val current = currentLessonNumber(bells, day, now)
     // Обычный список, не ленивый. Ленивый прокручивался пальцем, но жил только
     // пока жив процесс приложения: система выгружала его — и виджет чернел
     // насовсем, не оживая ни обновлением, ни запуском приложения.
@@ -346,13 +349,13 @@ private fun Lessons(
     }
 
     var fits = room(0.dp)
-    var start = windowStart(lessons, bells, day, fits)
+    var start = windowStart(lessons, bells, day, fits, now)
     val labels = (if (start > 0) 1 else 0) + (if (start + fits < lessons.size) 1 else 0)
     if (labels > 0) {
         // Больше восьми пар и так не бывает, но подписи занимают места в
         // контейнере наравне с парами, а их всего десять.
         fits = room(lineHeight * labels).coerceAtMost(MAX_CHILDREN - labels)
-        start = windowStart(lessons, bells, day, fits)
+        start = windowStart(lessons, bells, day, fits, now)
     }
 
     val shown = lessons.subList(start, minOf(lessons.size, start + fits))
@@ -443,17 +446,19 @@ internal fun windowStart(
     bells: Map<String, List<String>>,
     day: LocalDate,
     fits: Int,
+    now: LocalDateTime,
 ): Int {
     // Окно стоит там, где день граничит с «сейчас»: у будущего дня — в начале,
     // у прожитого — в конце, у сегодняшнего — на ближайшей не кончившейся паре.
-    val today = LocalDate.now()
+    // «Сейчас» приходит параметром: см. currentLessonNumber.
+    val today = now.toLocalDate()
     if (day.isAfter(today)) return 0
     if (day.isBefore(today)) return maxOf(0, lessons.size - fits)
-    val now = LocalTime.now()
+    val time = now.toLocalTime()
     val index = lessons.indexOfFirst { lesson ->
         val end = bells[lesson.number.toString()]?.getOrNull(1)
             ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
-        end == null || !now.isAfter(end)
+        end == null || !time.isAfter(end)
     }
     // Все пары кончились: остаёмся в конце дня. Раньше indexOfFirst возвращал
     // −1, условие «index <= 0» отбрасывало окно в начало, и вечером виджет
