@@ -138,4 +138,13 @@ class DayFormatTest {
         // «каб.» — про кабинеты, а комната внутри онлайна не кабинет.
         assertTrue(!onlineLabel(numbered).contains("каб"))
     }
+
+    @Test
+    fun `глагол в «прошло N пар» согласуется с числом`() {
+        assertEquals("прошла 1 пара", passedPairs(1))
+        assertEquals("прошли 2 пары", passedPairs(2))
+        assertEquals("прошло 5 пар", passedPairs(5))
+        assertEquals("прошло 11 пар", passedPairs(11))
+        assertEquals("прошла 21 пара", passedPairs(21))
+    }
 }
