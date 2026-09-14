@@ -92,6 +92,7 @@ import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
 import ru.whensclass.widget.formatDurationLong
 import ru.whensclass.widget.formatFetchedAt
+import ru.whensclass.widget.formatSince
 import ru.whensclass.widget.kindName
 import ru.whensclass.widget.onlineLabel
 import ru.whensclass.widget.roomLabel
@@ -138,6 +139,11 @@ fun TodayScreen(
     loadTally: suspend () -> ScheduleStore.Tally = { ScheduleStore.Tally(0, 0, 0) },
     serverBroken: Boolean = false,
     sourceUrl: String? = null,
+    /** С какого момента сервер лежит (ISO, UTC) — для давности на плашке. */
+    serverSince: String? = null,
+    /** Группы (преподавателя) в таблице больше нет — сервер отвечает 404. */
+    gone: Boolean = false,
+    onRepick: () -> Unit = {},
 ) {
     val today = rememberToday()
 
@@ -238,7 +244,10 @@ fun TodayScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             // В таблицу — к своей колонке и сегодняшнему дню, если сервер
             // рассказал, где они; иначе просто в книгу.
-            if (serverBroken) ServerBroken(sheetLink(schedule, today, sourceUrl))
+            if (gone) Gone(groupName, teacherMode, onRepick)
+            if (serverBroken) {
+                ServerBroken(sheetLink(schedule, today, sourceUrl), serverSince, schedule?.generatedAt)
+            }
             ScheduleTabs(
                 current = tab,
                 teacherMode = teacherMode,
@@ -862,7 +871,7 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
  * подставил бы туда чужой розовый.
  */
 @Composable
-private fun ServerBroken(sourceUrl: String?) {
+private fun ServerBroken(sourceUrl: String?, since: String?, generatedAt: String?) {
     val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -884,12 +893,67 @@ private fun ServerBroken(sourceUrl: String?) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // Давность — отдельной строкой: двое суток сбоя не должны
+            // выглядеть как минута рядом с честным «обновлено 5 минут назад».
+            since?.let {
+                Text(
+                    "Сбой с ${formatSince(it)}." +
+                        (generatedAt?.let { g -> " Расписание на экране получено ${formatReceived(g)}." } ?: ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             sourceUrl?.let { url ->
                 ActionButton(
                     label = "Открыть таблицу колледжа",
                     onClick = { openLink(context, url) },
                 )
             }
+        }
+    }
+}
+
+/** «11 сентября в 10:40» — когда сервер собрал то, что на экране. */
+private fun formatReceived(iso: String): String = runCatching {
+    java.time.LocalDateTime.ofInstant(java.time.Instant.parse(iso), java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("d MMMM 'в' HH:mm", java.util.Locale("ru")))
+}.getOrDefault(iso)
+
+/**
+ * Плашка «группы в таблице больше нет».
+ *
+ * Сервер отвечает 404 при здоровом состоянии — группу переименовали,
+ * разделили или убрали, и старый идентификатор в настройках телефона
+ * больше ни на что не указывает. Раньше это выглядело как отвалившаяся
+ * сеть: молча прежнее расписание, потом «ещё не опубликовано». Единственный
+ * честный ответ — выбрать себя заново из нынешнего списка.
+ */
+@Composable
+private fun Gone(groupName: String, teacherMode: Boolean, onRepick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                if (teacherMode) "Вас больше нет в таблице" else "Группы больше нет в таблице",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                (if (teacherMode) "Имени «$groupName» в таблице колледжа больше нет: "
+                 else "Группы «$groupName» в таблице колледжа больше нет: ") +
+                    "переименовали, разделили или убрали. На экране — последнее, " +
+                    "что было. Выберите заново из нынешнего списка.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ActionButton(label = "Выбрать заново", onClick = onRepick)
         }
     }
 }

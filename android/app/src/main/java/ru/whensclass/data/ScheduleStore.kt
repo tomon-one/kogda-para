@@ -53,10 +53,57 @@ class ScheduleStore(private val context: Context) {
     /** Адрес таблицы колледжа, как его назвал сервер. */
     val sourceUrl: Flow<String?> = context.dataStore.data.map { it[KEY_SOURCE_URL] }
 
-    suspend fun putServerState(status: String, sourceUrl: String?) {
+    /** С какого момента сервер лежит (ISO, UTC); null, когда всё в порядке. */
+    val serverSince: Flow<String?> = context.dataStore.data.map { it[KEY_SERVER_SINCE] }
+
+    suspend fun putServerState(status: String, sourceUrl: String?, since: String? = null) {
         context.dataStore.edit {
             it[KEY_SERVER_STATUS] = status
             sourceUrl?.let { url -> it[KEY_SOURCE_URL] = url }
+            if (status == "ok" || since == null) it.remove(KEY_SERVER_SINCE)
+            else it[KEY_SERVER_SINCE] = since
+        }
+    }
+
+    /** О каком сбое (по его `since`) телефон уже сказал уведомлением. */
+    suspend fun staleNotifiedFor(): String? = context.dataStore.data.first()[KEY_STALE_NOTIFIED]
+
+    suspend fun setStaleNotifiedFor(since: String?) {
+        context.dataStore.edit {
+            if (since == null) it.remove(KEY_STALE_NOTIFIED) else it[KEY_STALE_NOTIFIED] = since
+        }
+    }
+
+    /**
+     * Группы (или преподавателя) в таблице больше нет: сервер ответил 404 при
+     * здоровом состоянии.
+     *
+     * Верим не первому ответу: опечатку в заголовке колледж чинит через
+     * двадцать минут, и выбивать из-за неё всех на перевыбор — лишнее. 404
+     * должен повториться не раньше чем через час после первого.
+     */
+    val gone: Flow<Boolean> = context.dataStore.data.map { it[KEY_GONE] == "1" }
+
+    /** Отмечает 404. True, если пора говорить человеку. */
+    suspend fun noteNotFound(nowMillis: Long): Boolean {
+        var confirmed = false
+        context.dataStore.edit {
+            val first = it[KEY_GONE_SINCE]?.toLongOrNull()
+            when {
+                first == null -> it[KEY_GONE_SINCE] = nowMillis.toString()
+                nowMillis - first >= GONE_CONFIRM_MILLIS -> {
+                    it[KEY_GONE] = "1"
+                    confirmed = true
+                }
+            }
+        }
+        return confirmed
+    }
+
+    suspend fun clearNotFound() {
+        context.dataStore.edit {
+            it.remove(KEY_GONE_SINCE)
+            it.remove(KEY_GONE)
         }
     }
 
@@ -190,6 +237,8 @@ class ScheduleStore(private val context: Context) {
 
     suspend fun selectTeacher(id: String, name: String) {
         context.dataStore.edit {
+            it.remove(KEY_GONE_SINCE)
+            it.remove(KEY_GONE)
             it[KEY_TEACHER_ID] = id
             it[KEY_TEACHER_NAME] = name
             it.remove(KEY_SCHEDULE)
@@ -239,6 +288,7 @@ class ScheduleStore(private val context: Context) {
             scheduleJson = prefs[KEY_SCHEDULE],
             serverBroken = (prefs[KEY_SERVER_STATUS] ?: "ok") != "ok",
             sourceUrl = prefs[KEY_SOURCE_URL],
+            gone = prefs[KEY_GONE] == "1",
             fetchedAt = prefs[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L,
             theme = prefs[KEY_THEME] ?: "system",
         )
@@ -256,6 +306,8 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit {
             it[KEY_GROUP_ID] = id
             it[KEY_GROUP_NAME] = name
+            it.remove(KEY_GONE_SINCE)
+            it.remove(KEY_GONE)
             if (unchanged) return@edit
             // Расписание прошлой группы показывать нельзя ни секунды.
             it.remove(KEY_SCHEDULE)
@@ -406,12 +458,19 @@ class ScheduleStore(private val context: Context) {
         val serverBroken: Boolean = false,
         /** Адрес таблицы колледжа: куда уйти, когда дня у нас нет. */
         val sourceUrl: String? = null,
+        /** Группы в таблице больше нет — пора выбрать заново. */
+        val gone: Boolean = false,
         val fetchedAt: Long,
         val theme: String,
     )
 
     private companion object {
         val KEY_GROUP_ID = stringPreferencesKey("group_id")
+        val KEY_SERVER_SINCE = stringPreferencesKey("server_since")
+        val KEY_STALE_NOTIFIED = stringPreferencesKey("stale_notified")
+        val KEY_GONE_SINCE = stringPreferencesKey("gone_since")
+        val KEY_GONE = stringPreferencesKey("gone")
+        const val GONE_CONFIRM_MILLIS = 60L * 60 * 1000
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")
         val KEY_SCHEDULE = stringPreferencesKey("schedule_json")
         val KEY_GROUPS = stringPreferencesKey("groups_json")

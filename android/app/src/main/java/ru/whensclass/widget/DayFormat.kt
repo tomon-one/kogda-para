@@ -225,6 +225,26 @@ fun plural(n: Int, one: String, few: String, many: String): String {
     return "$n $word"
 }
 
+/**
+ * «11 сентября, 11:00 — уже 2 дня»: с какого момента сервер лежит.
+ *
+ * Двое суток сбоя не должны выглядеть как минута: рядом с «сбой у нас»
+ * стояло честное «обновлено 5 минут назад», и по нему выходило, что всё
+ * свежее. Время сервера приходит в UTC, показываем по телефону.
+ */
+fun formatSince(iso: String, now: Instant = Instant.now()): String {
+    val since = runCatching { Instant.parse(iso) }.getOrNull() ?: return iso
+    val local = LocalDateTime.ofInstant(since, ZoneId.systemDefault())
+    val when_ = local.format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale("ru")))
+    val minutes = Duration.between(since, now).toMinutes().coerceAtLeast(0)
+    val ago = when {
+        minutes < 60 -> plural(minutes.toInt().coerceAtLeast(1), "минуту", "минуты", "минут")
+        minutes < 48 * 60 -> plural((minutes / 60).toInt(), "час", "часа", "часов")
+        else -> plural((minutes / 60 / 24).toInt(), "день", "дня", "дней")
+    }
+    return "$when_ — уже $ago"
+}
+
 /** «6 пар», «2 пары», «1 пара» — счёт занятий по-русски. */
 fun pairsCount(count: Int): String = plural(count, "пара", "пары", "пар")
 

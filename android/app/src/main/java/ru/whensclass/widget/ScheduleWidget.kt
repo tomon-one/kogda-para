@@ -63,6 +63,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 done = currentState(KEY_DONE) == true,
                 failed = currentState(KEY_FAILED) == true,
                 serverBroken = state?.serverBroken == true,
+                gone = state?.gone == true,
                 sourceUrl = state?.sourceUrl,
             )
         }
@@ -82,6 +83,7 @@ class ScheduleWidget : GlanceAppWidget() {
         done: Boolean,
         failed: Boolean,
         serverBroken: Boolean,
+        gone: Boolean,
         sourceUrl: String?,
     ) {
         ScheduleWidgetContent(
@@ -92,6 +94,7 @@ class ScheduleWidget : GlanceAppWidget() {
             done = done,
             failed = failed,
             serverBroken = serverBroken,
+            gone = gone,
             sourceUrl = sourceUrl,
             colors = colors,
             day = LocalDate.now().plusDays(offset.toLong()),

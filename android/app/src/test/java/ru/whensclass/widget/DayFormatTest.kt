@@ -147,4 +147,15 @@ class DayFormatTest {
         assertEquals("прошло 11 пар", passedPairs(11))
         assertEquals("прошла 21 пара", passedPairs(21))
     }
+
+    @Test
+    fun `давность сбоя — по-русски и по местному времени`() {
+        val since = java.time.Instant.parse("2026-09-11T04:00:00Z")
+        val local = java.time.LocalDateTime.ofInstant(since, java.time.ZoneId.systemDefault())
+        val prefix = local.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM, HH:mm", java.util.Locale("ru")))
+        assertEquals("$prefix — уже 40 минут", formatSince("2026-09-11T04:00:00Z", since.plusSeconds(40 * 60)))
+        assertEquals("$prefix — уже 3 часа", formatSince("2026-09-11T04:00:00Z", since.plusSeconds(3 * 3600 + 5)))
+        assertEquals("$prefix — уже 2 дня", formatSince("2026-09-11T04:00:00Z", since.plusSeconds(50 * 3600)))
+        assertEquals("не дата", formatSince("не дата"))
+    }
 }
