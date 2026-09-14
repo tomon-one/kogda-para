@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -210,7 +211,11 @@ fun TodayScreen(
                     }
                 },
                 actions = {
-                    RefreshButton(refreshing = refreshing, onRefresh = onRefresh)
+                    RefreshButton(
+                        refreshing = refreshing,
+                        broken = serverBroken || gone,
+                        onRefresh = onRefresh,
+                    )
                     IconButton(onClick = if (hasUpdate) onUpdateBadge else onSettings) {
                         // Точка над шестерёнкой: вышла новая сборка. Нажатие
                         // открывает настройки сразу на разделе обновления.
@@ -349,7 +354,7 @@ fun TodayScreen(
  * изменилось.
  */
 @Composable
-private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
+private fun RefreshButton(refreshing: Boolean, broken: Boolean, onRefresh: () -> Unit) {
     val angle = remember { Animatable(0f) }
     var done by remember { mutableStateOf(false) }
     var spinning by remember { mutableStateOf(false) }
@@ -378,7 +383,12 @@ private fun RefreshButton(refreshing: Boolean, onRefresh: () -> Unit) {
         // Без Crossfade: он держит в дереве оба значка и заводит вторую анимацию
         // поверх первой. На первых запусках, пока код ещё не прогрет, это и
         // давало рывки у самой заметной анимации приложения.
-        if (done) {
+        if (done && broken) {
+            // Запрос прошёл, но сервер отдал прежнее расписание: галочка
+            // здесь обещала бы свежесть, которой нет (учебная тревога
+            // 14 сентября). Подробности — на плашке под шапкой.
+            Icon(Icons.Default.Close, contentDescription = "Сервер не смог обновить расписание")
+        } else if (done) {
             Icon(Icons.Default.Check, contentDescription = "Расписание обновлено")
         } else {
             Icon(

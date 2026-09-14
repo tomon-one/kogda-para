@@ -91,7 +91,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     Text(
                         (when {
                             gone -> "нет в таблице"
-                            broken -> "сбой у нас"
+                            broken -> "сбой"
                             else -> formatFetchedShort(state?.fetchedAt ?: 0L)
                         }) + " ⟳",
                         style = TextStyle(
@@ -121,7 +121,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 Text(
                     when {
                         gone -> "$head · нет в таблице"
-                        broken -> "$head · сбой у нас"
+                        broken -> "$head · сбой"
                         else -> head
                     },
                     maxLines = 1,
