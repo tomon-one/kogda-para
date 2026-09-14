@@ -148,7 +148,7 @@ def synthetic_sheet(groups=25, days=10, per_day=4):
         snapshot.groups.append(ref)
         snapshot.schedule[ref.id] = {
             day: [
-                Lesson(number=n + 1, subject=f"Предмет {g}-{(n + i) % 12}",
+                Lesson(number=n + 1, subject=f"Предмет {g}-{(4 * i + n) % 12}",
                        teachers=(f"Преподаватель {g}",))
                 for n in range(per_day)
             ]
@@ -174,7 +174,7 @@ def test_shift_below_last_repeated_header_is_caught_by_content():
         for day in shifted.schedule[gid]:
             if day >= cutoff:
                 shifted.schedule[gid][day] = list(honest.schedule[neighbour][day])
-    with pytest.raises(SourceFormatChanged, match="похож на сдвиг"):
+    with pytest.raises(SourceFormatChanged, match="сдвиг колонок"):
         _check_shift(shifted)
 
     # Один курс ушёл на практику — не сдвиг: чужих меньше четверти.
@@ -241,4 +241,70 @@ def test_room_mark_without_dot_is_tolerated(fixture_csv):
     rows[0][5] = "Каб."
     with pytest.raises(SourceFormatChanged, match="ожидалась"):
         build_column_map(rows, FIXTURE.min_groups)
+
+
+def test_shift_from_the_second_lesson_is_caught_by_rows():
+    """Выделили диапазон не с начала дня: первая пара своя, остальные — соседа."""
+    import copy
+
+    from whensclass.parser.csv_schedule import _check_shift
+
+    honest = synthetic_sheet()
+    ids = [g.id for g in honest.groups]
+    shifted = copy.deepcopy(honest)
+    day = honest.dates[8]
+    for i, gid in enumerate(ids):
+        neighbour = ids[(i + 1) % len(ids)]
+        mine, theirs = honest.schedule[gid][day], honest.schedule[neighbour][day]
+        shifted.schedule[gid][day] = mine[:1] + theirs[1:]
+    with pytest.raises(SourceFormatChanged, match="-я пара"):
+        _check_shift(shifted)
+
+
+def test_first_week_of_a_sheet_is_checked_against_the_previous_snapshot():
+    """У нового листа своей истории нет — берём прошлый снимок, если это тот же лист."""
+    import copy
+
+    from whensclass.domain.models import Snapshot
+    from whensclass.parser.csv_schedule import _check_shift, shift_seed
+
+    previous = synthetic_sheet(days=10)
+    ids = [g.id for g in previous.groups]
+    # Тот же лист, перечитанный: первые три дня, сдвинутые на группу.
+    fresh = Snapshot(sheet_title=previous.sheet_title, groups=list(previous.groups),
+                     dates=previous.dates[:3])
+    for i, gid in enumerate(ids):
+        neighbour = ids[(i + 1) % len(ids)]
+        fresh.schedule[gid] = {d: list(previous.schedule[neighbour][d]) for d in fresh.dates}
+    _check_shift(fresh), "без истории сдвиг невидим — это и есть дыра"
+    with pytest.raises(SourceFormatChanged, match="сдвиг"):
+        _check_shift(fresh, seed=shift_seed(previous, fresh))
+
+    # Следующий лист через выходные — тоже история; после каникул — нет.
+    after_weekend = copy.deepcopy(fresh)
+    after_weekend.dates = [previous.dates[-1] + dt.timedelta(days=2 + k) for k in range(3)]
+    after_weekend.schedule = {gid: dict(zip(after_weekend.dates, bd.values()))
+                              for gid, bd in fresh.schedule.items()}
+    assert shift_seed(previous, after_weekend)
+    after_holidays = copy.deepcopy(after_weekend)
+    after_holidays.dates = [d + dt.timedelta(days=20) for d in after_weekend.dates]
+    after_holidays.schedule = {gid: dict(zip(after_holidays.dates, bd.values()))
+                               for gid, bd in after_weekend.schedule.items()}
+    assert shift_seed(previous, after_holidays) == {}
+
+
+def test_today_dropping_out_of_the_snapshot_is_not_an_update():
+    """gid умер, поиск взял соседний лист: сегодня в нём нет — это подмена, не обновление."""
+    from whensclass.domain.models import Snapshot
+    from whensclass.service.refresher import _check_today_kept
+
+    previous = synthetic_sheet(days=5)
+    today = previous.dates[2]
+    other = Snapshot(sheet_title="соседний", groups=list(previous.groups),
+                     dates=[d + dt.timedelta(days=30) for d in previous.dates])
+    with pytest.raises(LookupError, match="не покрывает"):
+        _check_today_kept(previous, other, today)
+    _check_today_kept(previous, previous, today)
+    # Воскресенья нет ни там, ни там — не повод.
+    _check_today_kept(previous, other, previous.dates[-1] + dt.timedelta(days=1))
 

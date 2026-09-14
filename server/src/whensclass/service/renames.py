@@ -19,6 +19,7 @@ id исчез, новый появился, и пары нового за общ
 
 from __future__ import annotations
 
+import collections
 import datetime as dt
 import difflib
 import json
@@ -79,6 +80,34 @@ def teacher_traces(index: TeacherIndex) -> dict[str, Trace]:
     return out
 
 
+def _is_offspring(old_id: str, new_id: str) -> bool:
+    """Подгруппа старого имени: хвост «/1» или пометка «(1)» в середине.
+
+    «КВД-926» -> «КВД-926/1» и «КС-926» -> «КС(1)-926» — разделение. А лишняя
+    буква («…ГД.Д.ОФ…») или буква в хвосте («ИСП-924/2а») — переименование.
+    """
+    if new_id.startswith(old_id + "-"):
+        return True
+    old_tokens = collections.Counter(old_id.split("-"))
+    new_tokens = collections.Counter(new_id.split("-"))
+    # Считаем с кратностью: у «КС(2)-926/2» две двойки, у «КС-926/2» — одна.
+    extra = new_tokens - old_tokens
+    missing = old_tokens - new_tokens
+    return bool(extra) and not missing and all(t.isdigit() for t in extra)
+
+
+def _same_surname(old_name: str, new_name: str) -> bool:
+    """Переименование преподавателя — опечатка или инициалы; фамилия остаётся.
+
+    Другая фамилия — другой человек, которого вписали в те же ячейки на время
+    больничного. Отвечать по старому id его расписанием — чужое при ok.
+    """
+    def surname(name: str) -> str:
+        return (name.split() or [""])[0].casefold().replace("ё", "е")
+
+    return surname(old_name) == surname(new_name)
+
+
 def detect(old: dict[str, Trace], new: dict[str, Trace]) -> dict[str, str]:
     """Кто в кого переименован: старый id -> новый."""
     vanished = sorted(set(old) - set(new))
@@ -88,7 +117,7 @@ def detect(old: dict[str, Trace], new: dict[str, Trace]) -> dict[str, str]:
 
     renames: dict[str, str] = {}
     for old_id in vanished:
-        offspring = [new_id for new_id in appeared if new_id.startswith(old_id + "-")]
+        offspring = [new_id for new_id in appeared if _is_offspring(old_id, new_id)]
         if offspring:
             # Имя с хвостом — подгруппа: 13 сентября 2026 КВД-926 стала
             # КВД-926/1 и КВД-926/2. Колонка /1 совпадает с прежней целиком,
@@ -206,6 +235,15 @@ class RenameBook:
             if previous_teachers.names.keys() != current_teachers.names.keys()
             else {}
         )
+        for old_id, new_id in list(found_teachers.items()):
+            old_name = previous_teachers.names.get(old_id, old_id)
+            new_name = current_teachers.names.get(new_id, new_id)
+            if not _same_surname(old_name, new_name):
+                log.info(
+                    "преподаватель %r исчез, его пары у %r — фамилия другая, это замена",
+                    old_name, new_name,
+                )
+                del found_teachers[old_id]
         with self._lock:
             changed = self._update(
                 self.groups, self.pending_groups, found_groups, alive=set(new_groups),
@@ -270,7 +308,7 @@ class RenameBook:
             # Появилась подгруппа старого имени (кроме той, на которую
             # отвечаем) — разделение прошло в два захода, и запись стала
             # чужим расписанием для половины людей. Убираем.
-            if any(a.startswith(old_id + "-") and a != target for a in alive):
+            if any(_is_offspring(old_id, a) and a != target for a in alive):
                 log.warning("%s %s -> %s: появились подгруппы, запись снята", what, old_id, target)
                 del book[old_id]
                 changed = True

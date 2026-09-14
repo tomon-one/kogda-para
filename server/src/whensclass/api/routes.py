@@ -52,7 +52,7 @@ def _state(request: Request):
     return request.app.state.store, request.app.state.refresher
 
 
-@router.get("/healthz")
+@router.api_route("/healthz", methods=["GET", "HEAD"])
 def healthz(request: Request) -> Response:
     """200 — расписание есть и оно про сегодня; иначе 503 с причиной.
 

@@ -242,3 +242,41 @@ def test_date_rows_follow_the_sheet_not_the_csv():
               "", "", "03.09.2026 четверг", "", "02.09.2026 среда"]
     assert date_rows(column) == {dt.date(2026, 9, 2): 6, dt.date(2026, 9, 3): 11}
 
+
+def test_subgroup_marked_in_the_middle_of_the_name_is_a_split(snapshot):
+    """«КС-926» -> «КС(1)-926»: пометка в середине, а не хвост, но это подгруппа."""
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП(1)-924/2")
+    assert detect(group_traces(snapshot), group_traces(after)) == {}
+    # А лишняя буква в середине — переименование, как у «…ГД.Д.ОФ…».
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-Д-924/2")
+    assert detect(group_traces(snapshot), group_traces(after)) == {"isp-924-2": "isp-d-924-2"}
+
+
+def test_split_with_a_mark_in_two_steps_removes_the_alias(tmp_path, snapshot):
+    first = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
+    book = RenameBook(tmp_path)
+    settle(book, snapshot, first)
+    assert book.group("isp-924-2") == "isp-924-2a"
+    second = GroupRef(name="ИСП(2)-924/2", id=group_id("ИСП(2)-924/2"), column=9999)
+    later = Snapshot(sheet_title=first.sheet_title, groups=first.groups + [second],
+                     dates=list(first.dates), schedule=dict(first.schedule))
+    later.schedule[second.id] = {}
+    book.record(first, later, build_index(first), build_index(later))
+    assert book.group("isp-924-2") is None
+
+
+def test_teacher_replaced_by_another_person_is_not_a_rename(tmp_path, snapshot):
+    """Ушёл на больничный, в его ячейки вписали другого: фамилия другая — замена."""
+    index = build_index(snapshot)
+    tid = max(index.schedule, key=lambda t: sum(len(v) for v in index.schedule[t].values()))
+    name = index.names[tid]
+    after = renamed_teacher(snapshot, name, "Замятина Ольга Петровна")
+    book = RenameBook(tmp_path)
+    settle(book, snapshot, after)
+    assert book.teacher(tid) is None
+    # А опечатка в отчестве — переименование.
+    fixed = renamed_teacher(snapshot, name, name + "а")
+    book = RenameBook(tmp_path)
+    settle(book, snapshot, fixed)
+    assert book.teacher(tid) == teacher_id(name + "а")
+
