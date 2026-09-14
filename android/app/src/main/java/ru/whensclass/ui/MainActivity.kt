@@ -40,6 +40,7 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import ru.whensclass.AppContainer
+import ru.whensclass.data.sheetLink
 import ru.whensclass.data.AppUpdate
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
@@ -439,6 +440,7 @@ private fun App(
                         updateFailed = updateFailed,
                         updateError = updateError,
                         loadDiagnostics = { container.repository.diagnostics() },
+                        sheetUrl = { sheetLink(schedule, java.time.LocalDate.now(), tableUrl) },
                         onCheckUpdate = {
                             scope.launch {
                                 checkingUpdate = true
