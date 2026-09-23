@@ -165,11 +165,12 @@ COLUMNAR_STRANGERS_TO_REJECT = 2
 _warned: set[tuple] = set()
 
 
-def _warn_once(key: tuple, message: str, *args) -> None:
+def _warn_once(key: tuple, message: str, *args, logger: logging.Logger | None = None) -> None:
+    """Предупреждение раз на процесс; `logger` — журнал модуля, откуда оно."""
     if key in _warned:
         return
     _warned.add(key)
-    log.warning(message, *args)
+    (logger or log).warning(message, *args)
 
 
 def _check_columnar(
