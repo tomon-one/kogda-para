@@ -103,15 +103,15 @@ fun ScheduleWidgetContent(
 
         val today = schedule?.days?.firstOrNull { it.date == day.toString() }
         when {
-            groupName == null -> Hint("Откройте приложение и выберите свою группу", colors)
-            schedule == null -> Hint("Расписание ещё не загружено", colors)
+            groupName == null -> MissingHint("Откройте приложение и выберите свою группу", colors)
+            schedule == null -> MissingHint("Расписание ещё не загружено", colors)
             today == null -> {
                 val missing = missingDay(schedule, day, fetchedAt, serverBroken)
                 // К своей колонке и к этому дню, а не в книгу целиком.
                 val link = sheetLink(schedule, day, sourceUrl)
-                Hint(missing.text, colors, if (missing.toSource) link else null)
+                MissingHint(missing.text, colors, if (missing.toSource) link else null)
             }
-            today.lessons.isEmpty() -> Hint("Пар нет", colors)
+            today.lessons.isEmpty() -> MissingHint("Пар нет", colors)
             else -> Lessons(
                 today.lessons,
                 schedule.bells,
@@ -320,7 +320,7 @@ private fun Lessons(
     if (lessons.isEmpty()) {
         // Подстраховка: список без строк оставлял виджет пустым, и человек
         // видел только шапку на чёрном фоне.
-        Hint("Пар нет", colors)
+        MissingHint("Пар нет", colors)
         return
     }
     val current = currentLessonNumber(bells, day, now)
@@ -348,10 +348,13 @@ private fun Lessons(
     // потом уточнение: одного круга хватает, дальше число не меняется.
     val lineHeight = 17.dp * fontScale()
 
+    // Сколько целых пар помещается — и не больше. Раньше при месте на одну-две
+    // пары (1 ≤ left/rowHeight < 2) виджет всё равно ставил две, и вторую
+    // обрезал корпус (второй аудит, М15; остаток В31 первого аудита). Одна
+    // пара — минимум: пустой виджет хуже одной строки.
     fun room(reserved: Dp): Int {
         val left = free - reserved
-        return (if (left < rowHeight) 1 else (left / rowHeight).toInt().coerceAtLeast(2))
-            .coerceAtMost(lessons.size)
+        return (left / rowHeight).toInt().coerceAtLeast(1).coerceAtMost(lessons.size)
     }
 
     var fits = room(0.dp)
@@ -418,13 +421,15 @@ internal fun missingDay(
     day: LocalDate,
     fetchedAt: Long,
     serverBroken: Boolean,
+    /** Для недельного виджета — «на эти дни», а не «на этот день». */
+    week: Boolean = false,
 ): Missing {
     val covered = schedule.coverage.size == 2 && runCatching {
         !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
             !day.isAfter(LocalDate.parse(schedule.coverage[1]))
     }.getOrDefault(false)
     return when {
-        covered -> Missing("Выходной: пар в этот день нет")
+        covered -> Missing(if (week) "Выходной: пар в эти дни нет" else "Выходной: пар в этот день нет")
         // Сбой проверяем раньше несвежести. Данные при сбое всегда рано
         // или поздно стареют, и «нажмите на время в шапке» отправляло
         // человека жать кнопку, которая в этом случае помочь не может.
@@ -436,7 +441,11 @@ internal fun missingDay(
         // Единственное объяснение, которое приложение проверить не может:
         // ровно так же выглядит наш собственный промах с поиском листа.
         // Поэтому спорить о виновнике незачем — надо дать выход к таблице.
-        else -> Missing("Расписание на этот день ещё не опубликовано", toSource = true)
+        else -> Missing(
+            if (week) "Расписание на эти дни ещё не опубликовано"
+            else "Расписание на этот день ещё не опубликовано",
+            toSource = true,
+        )
     }
 }
 
@@ -592,7 +601,7 @@ private fun Details(lesson: LessonDto, colors: Palette) {
 }
 
 @Composable
-private fun Hint(text: String, colors: Palette, sourceUrl: String? = null) {
+internal fun MissingHint(text: String, colors: Palette, sourceUrl: String? = null) {
     Column(
         modifier = GlanceModifier
             .fillMaxWidth()

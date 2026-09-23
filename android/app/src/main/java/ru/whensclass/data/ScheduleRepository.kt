@@ -334,7 +334,12 @@ class ScheduleRepository(
             // сегодняшнего среди них может не оказаться — и виджет пустеет.
             // В этом случае перезапрашиваем, даже если сервер говорит, что у
             // него ничего не изменилось.
-            val outdated = !coversToday(schedule.first())
+            val outdated = !coversToday(schedule.first()) ||
+                // Началась новая неделя: сегодняшний понедельник уже лежал
+                // восьмым днём прошлого окна, gen на сервере тот же — и до
+                // первой правки таблицы приложение показывало один понедельник
+                // (второй аудит, М27).
+                store.windowFrom() != weekStart().toString()
             // Состояние сервера спрашиваем всегда, даже когда идём за
             // расписанием напрямую. Раньше /v1/meta пропускался ровно в
             // тех случаях, ради которых состояние и нужно: при ручном
@@ -417,7 +422,10 @@ class ScheduleRepository(
 
             val previous = schedule.first()
             val previousPartial = store.schedulePartial()
-            store.putSchedule(json.encodeToString(full), full.generatedAt, partial = !merged.whole)
+            store.putSchedule(
+                json.encodeToString(full), full.generatedAt,
+                partial = !merged.whole, windowFrom = weekStart().toString(),
+            )
             updateWidgets()
             // Об изменениях — только по сопоставимому. Обрубок без пар соседней
             // подгруппы отличается от целого так же, как отмена: сравнивать

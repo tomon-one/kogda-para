@@ -444,14 +444,23 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_WIDGET_DAY] = day }
     }
 
-    suspend fun putSchedule(body: String, generatedAt: String, partial: Boolean = false) {
+    suspend fun putSchedule(
+        body: String,
+        generatedAt: String,
+        partial: Boolean = false,
+        windowFrom: String? = null,
+    ) {
         context.dataStore.edit {
             it[KEY_SCHEDULE] = body
             it[KEY_GENERATED_AT] = generatedAt
             it[KEY_FETCHED_AT] = System.currentTimeMillis().toString()
             if (partial) it[KEY_PARTIAL] = "1" else it.remove(KEY_PARTIAL)
+            if (windowFrom != null) it[KEY_WINDOW_FROM] = windowFrom else it.remove(KEY_WINDOW_FROM)
         }
     }
+
+    /** С какого дня просили лежащее расписание (понедельник той недели). */
+    suspend fun windowFrom(): String? = context.dataStore.data.first()[KEY_WINDOW_FROM]
 
     /** Отмечает, что расписание проверяли, даже если оно не изменилось. */
     suspend fun touchChecked() {
@@ -524,6 +533,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_GONE = stringPreferencesKey("gone")
         const val GONE_CONFIRM_MILLIS = 60L * 60 * 1000
         val KEY_PARTIAL = stringPreferencesKey("schedule_partial")
+        val KEY_WINDOW_FROM = stringPreferencesKey("window_from")
         val KEY_GROUP2_GONE_SINCE = stringPreferencesKey("group2_gone_since")
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")
         val KEY_SCHEDULE = stringPreferencesKey("schedule_json")
