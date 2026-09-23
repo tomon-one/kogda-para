@@ -34,7 +34,12 @@ def _today() -> dt.date:
     return dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone)).date()
 
 JSON = "application/json; charset=utf-8"
-CACHE = "public, max-age=300, stale-while-revalidate=3600"
+# Хранить можно, отдавать без спроса — нет: каждый раз сверять ETag (304 и
+# ноль байт, если ничего не изменилось). С max-age=300 OkHttp в телефоне пять
+# минут отдавал расписание из кэша как свежее, и ручное обновление сразу после
+# нового gen в /v1/meta приносило старое с галочкой «обновлено» (второй аудит,
+# В14). Чинится здесь, а не в приложении: так и у уже установленных сборок.
+CACHE = "public, no-cache"
 
 
 def _json_response(request: Request, body: dict, cache: bool = True) -> Response:
