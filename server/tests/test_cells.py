@@ -233,3 +233,53 @@ def test_reason_after_the_subject_is_still_a_reason():
     assert lesson is not None
     assert lesson.subject == "Иностранный язык"
     assert lesson.note == "Преподаватель заболел"
+
+
+def test_two_line_cancellation_keeps_the_reason_as_a_reason():
+    """Вторая строка «Отмена Преподаватель заболел» — причина, а не хвост
+    названия (второй аудит, М3)."""
+    lesson = parse_lesson(1, "Иностранный язык (Пр)\nОтмена Преподаватель заболел", "", "")
+    assert lesson.subject == "Иностранный язык" and lesson.cancelled
+    assert lesson.note == "Преподаватель заболел"
+
+
+@pytest.mark.parametrize("room", ["55/1", "171/3", "Восход 222", "Спортзал 3", "279а"])
+def test_room_after_cancellation_stays_a_room(room):
+    """«ОТМЕНА 55/1» — отменена пара в 55/1, а не причина «55/1» (второй аудит, М3)."""
+    lesson = parse_lesson(1, "Информатика", f"ОТМЕНА {room}", "")
+    assert lesson.cancelled and lesson.room == room and lesson.note is None
+
+
+def test_reason_in_room_column_is_still_a_reason():
+    lesson = parse_lesson(1, "Информатика", "отмена, перенос на 29.10", "")
+    assert lesson.room is None and lesson.note == "перенос на 29.10"
+
+
+@pytest.mark.parametrize("cell,room", [
+    ("Онлайн.", None), ("онлайн №12", "12"), ("онлайн (12)", "12"),
+    ("дистант 3", "3"), ("ONLINE-7", "7"),
+])
+def test_online_is_recognised_however_it_is_written(cell, room):
+    """Второй аудит, М4: раньше всё это делало пару очной с аудиторией-словом."""
+    lesson = parse_lesson(1, "Информатика", cell, "")
+    assert lesson.online and lesson.room == room
+
+
+def test_online_centre_is_still_a_building():
+    assert not parse_lesson(1, "Информатика", "онлайн-центр", "").online
+
+
+@pytest.mark.parametrize("cell,people", [
+    ("Хертек Ая Андреевна Давыдова Анна Александровна",
+     ("Хертек Ая Андреевна", "Давыдова Анна Александровна")),
+    ("Мисюрова Е.С. Антонов Артем Юрьевич", ("Мисюрова Е.С.", "Антонов Артем Юрьевич")),
+    ("кураторский часМатвеев Александр Игоревич", ("Матвеев Александр Игоревич",)),
+    ("замена", ()),
+    ("Иванов Иван Иванович", ("Иванов Иван Иванович",)),
+    ("Ли", ("Ли",)),
+])
+def test_glued_and_service_texts_in_teacher_row(cell, people):
+    """Два человека без разделителя и служебная приписка давали фантомов в
+    /v1/teachers, а у настоящих пары пропадали (второй аудит, В3). Пример —
+    живой лист 23.09.2026."""
+    assert parse_lesson(1, "Информатика", "", cell).teachers == people
