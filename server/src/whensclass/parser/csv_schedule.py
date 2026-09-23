@@ -270,49 +270,60 @@ def shift_seed(previous: Snapshot | None, current: Snapshot) -> Seed:
 
 
 def _check_shift(snapshot: Snapshot, seed: Seed | None = None) -> None:
-    """День против истории группы — в том же листе и в `seed` (см. SHIFT_*)."""
+    """День против истории группы — в том же листе и в `seed` (см. SHIFT_*).
+
+    История копится по дням, а не собирается заново для каждого дня из всех
+    прошлых: так было квадратично по числу дат, а колледж дописывает недели в
+    один лист, и разбор рос быстрее самого листа (второй аудит, М36).
+    """
     seed = seed or {}
+    history = {gid: set(seed.get(gid, ())) for gid in snapshot.schedule}
     for day in snapshot.dates:
-        compared = 0
-        strangers: list[str] = []
-        # По строкам пары: номер -> (сравнено, незнакомых).
-        rows: dict[int, list[int]] = {}
+        _judge_day(snapshot, day, history)
         for gid, by_date in snapshot.schedule.items():
-            today = by_date.get(day, [])
-            history = set(seed.get(gid, ()))
-            history |= {_trace(x) for d, ls in by_date.items() if d < day for x in ls}
-            if len(history) < SHIFT_MIN_HISTORY:
-                continue
-            for lesson in today:
-                cell = rows.setdefault(lesson.number, [0, 0])
-                cell[0] += 1
-                if _trace(lesson) not in history:
-                    cell[1] += 1
-            if len(today) < SHIFT_MIN_LESSONS_TODAY:
-                continue
-            compared += 1
-            if not ({_trace(x) for x in today} & history):
-                strangers.append(gid)
-        for number, (seen, unknown) in sorted(rows.items()):
-            if seen >= SHIFT_MIN_GROUPS and unknown / seen > SHIFT_ROW_REJECT_SHARE:
-                raise SourceFormatChanged(
-                    f"{number}-я пара {day} похожа на сдвиг колонок: у {unknown} групп "
-                    f"из {seen} незнакомый предмет"
-                )
-        if compared < SHIFT_MIN_GROUPS:
+            history[gid].update(_trace(x) for x in by_date.get(day, []))
+
+
+def _judge_day(snapshot: Snapshot, day: date, history: dict[str, set]) -> None:
+    compared = 0
+    strangers: list[str] = []
+    # По строкам пары: номер -> (сравнено, незнакомых).
+    rows: dict[int, list[int]] = {}
+    for gid, by_date in snapshot.schedule.items():
+        today = by_date.get(day, [])
+        known = history[gid]
+        if len(known) < SHIFT_MIN_HISTORY:
             continue
-        share = len(strangers) / compared
-        if share > SHIFT_REJECT_SHARE:
+        for lesson in today:
+            cell = rows.setdefault(lesson.number, [0, 0])
+            cell[0] += 1
+            if _trace(lesson) not in known:
+                cell[1] += 1
+        if len(today) < SHIFT_MIN_LESSONS_TODAY:
+            continue
+        compared += 1
+        if not ({_trace(x) for x in today} & known):
+            strangers.append(gid)
+    for number, (seen, unknown) in sorted(rows.items()):
+        if seen >= SHIFT_MIN_GROUPS and unknown / seen > SHIFT_ROW_REJECT_SHARE:
             raise SourceFormatChanged(
-                f"день {day} похож на сдвиг колонок: у {len(strangers)} групп из {compared} "
-                f"ни одного знакомого предмета, например {', '.join(strangers[:3])}"
+                f"{number}-я пара {day} похожа на сдвиг колонок: у {unknown} групп "
+                f"из {seen} незнакомый предмет"
             )
-        if share > SHIFT_WARN_SHARE:
-            log.warning(
-                "день %s: у %d групп из %d ни одного знакомого предмета (%s) — "
-                "не сдвиг, но присмотреться", day, len(strangers), compared,
-                ", ".join(strangers[:3]),
-            )
+    if compared < SHIFT_MIN_GROUPS:
+        return
+    share = len(strangers) / compared
+    if share > SHIFT_REJECT_SHARE:
+        raise SourceFormatChanged(
+            f"день {day} похож на сдвиг колонок: у {len(strangers)} групп из {compared} "
+            f"ни одного знакомого предмета, например {', '.join(strangers[:3])}"
+        )
+    if share > SHIFT_WARN_SHARE:
+        log.warning(
+            "день %s: у %d групп из %d ни одного знакомого предмета (%s) — "
+            "не сдвиг, но присмотреться", day, len(strangers), compared,
+            ", ".join(strangers[:3]),
+        )
 
 
 def collapse_export(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> list[list[str]]:

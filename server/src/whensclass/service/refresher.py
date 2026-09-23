@@ -20,6 +20,7 @@ import httpx
 
 from ..config import settings
 from ..domain.models import SourceFormatChanged
+from ..domain.teachers import build_index
 from ..parser.csv_schedule import Limits, _check_shift, parse_export, shift_seed
 from ..sources import gsheets, sheet_index
 from ..storage import history
@@ -55,7 +56,22 @@ class Refresher:
         self.failing_since: dt.datetime | None = None
         self.last_error: str | None = None
         self._alerted = False
+        # Сбой из одних сетевых чихов: такой наружу не показываем, пока не
+        # пролежал FETCH_GRACE, — как и тревогу владельцу (второй аудит, М25).
+        self._fetch_only = True
+        # Тревога «диск» уже ушла: следующая — только после окна тишины
+        # (второй аудит, В16).
+        self._disk_alerted = False
         self._load_failing()
+        # Сколько заходов подряд начались и не кончились: служба умерла
+        # посреди разбора (память — MemoryMax) и перезапустилась. Перезапуск
+        # по systemd стирал бы это без следа: status ok, тревоги нет, и так
+        # по кругу (второй аудит, М36).
+        self._running_path = state_dir / "refresh.running"
+        try:
+            self._crashes = int(self._running_path.read_text("utf-8").strip() or 0)
+        except (OSError, ValueError):
+            self._crashes = 0
         # Хеш текста каждого листа с прошлого удачного разбора: экспорт не
         # отдаёт ETag, «не изменилось» узнаём сами.
         self._source_hashes: dict[str, str] = {}
@@ -72,7 +88,34 @@ class Refresher:
     def refresh(self, today: dt.date | None = None, force: bool = False) -> bool:
         """Перечитывает таблицу. True, если снимок обновился."""
         with self._lock:
-            return self._refresh(today or _today(), force)
+            if self._crashes >= CRASHES_TO_ALERT:
+                self._fail(
+                    f"служба {self._crashes} раза подряд умерла посреди захода — "
+                    "скорее всего, разбору не хватило памяти (MemoryMax)",
+                    kind="crash",
+                )
+            self._mark_running()
+            try:
+                return self._refresh(today or _today(), force)
+            except Exception as exc:
+                # Страховка на весь заход. Исключение, которое никто ниже не
+                # ждал, раньше уходило в планировщик: заход молча не
+                # случался, status оставался ok, checked свежел, тревоги не
+                # было — и так на каждом заходе (второй аудит, К2).
+                log.exception("заход обновления упал")
+                self._fail(
+                    f"служба споткнулась при обновлении: {type(exc).__name__}: "
+                    f"{sheet_index._hide_key(exc)}",
+                    kind="error",
+                    public=f"служба споткнулась при обновлении: {type(exc).__name__}",
+                )
+                return False
+            finally:
+                self._clear_running()
+
+    def restore_status(self) -> None:
+        """Состояние после перезапуска: какое было — такое и есть."""
+        self.status = self._visible_status()
 
     def _refresh(self, today: dt.date, force: bool, retried: bool = False) -> bool:
         self.checked_at = dt.datetime.now(dt.timezone.utc)
@@ -115,17 +158,11 @@ class Refresher:
                 self._recovered()
                 return False
 
-            snapshot = None
-            for title, gid, text, _ in texts:
-                current = parse_export(
-                    text, title or f"gid {gid}", gid, limits=_limits(), around=today
-                )
-                snapshot = current if snapshot is None else snapshot.merged_with(current)
-            if snapshot is None:
+            parsed = self._parse(texts, today)
+            if parsed is None:
                 self._fail(f"не нашёл лист на {today}: набор листов пуст", kind="sheet")
                 return False
-            _check_group_drop(self.store.snapshot, snapshot)
-            _check_shift(snapshot, seed=shift_seed(self.store.snapshot, snapshot))
+            snapshot, teachers = parsed
             _check_today_kept(self.store.snapshot, snapshot, today)
         except SourceFormatChanged as exc:
             # Самый опасный случай: таблицу переделали. Держим прежнее —
@@ -135,10 +172,25 @@ class Refresher:
                 history.archive(self.state_dir, gid, text, digest, rejected=str(exc))
             self._fail(f"формат таблицы изменился: {exc}", kind="format")
             return False
-        except LookupError as exc:
+        except sheet_index.SheetNotFound as exc:
+            # Лист прочитан, но отвергнут воротами «пропал сегодняшний день»:
+            # это такая же версия листа, как отвергнутая по формату, и
+            # разбирать инцидент без неё нечем (второй аудит, М20).
+            for _, gid, text, digest in texts:
+                history.archive(self.state_dir, gid, text, digest, rejected=f"не нашёл лист на {today}: {exc}")
             self._fail(f"не нашёл лист на {today}: {exc}", kind="sheet")
             return False
-        except Exception as exc:
+        except gsheets.SheetClosed as exc:
+            # Страница входа вместо CSV: таблицу закрыли. Это не формат (смотреть
+            # разборщик незачем) и не сеть (само не пройдёт) — сказать сразу и
+            # прямо (второй аудит, М7).
+            self._fail(f"таблица колледжа закрыта: {exc}", kind="closed")
+            return False
+        except (httpx.HTTPError, OSError) as exc:
+            # Сетью считается только сеть. Раньше здесь стоял голый Exception,
+            # и любая ошибка разбора выглядела «таблица не прочиталась» — с
+            # тревогой через полчаса и без архива; всё прочее теперь ловит
+            # страховка в refresh() и говорит сразу.
             # Наружу — только тип: в тексте httpx приводит адрес запроса с
             # параметрами, а /v1/meta открыт всем.
             self._fail(
@@ -159,22 +211,33 @@ class Refresher:
             self._sheets = None
 
         previous = self.store.snapshot
-        previous_teachers = self.store.teachers
         try:
-            self.store.put(snapshot, dt.datetime.now(dt.timezone.utc))
+            previous_teachers = self.store.teachers
+        except Exception as exc:
+            # Индекс прежнего снимка нужен только книге переименований.
+            log.warning("индекс преподавателей прежнего снимка не собрался: %s", exc)
+            previous_teachers = None
+        try:
+            self.store.put(snapshot, dt.datetime.now(dt.timezone.utc), teachers=teachers)
         except OSError as exc:
             # Диск: в памяти снимок уже свежий, телефоны его получат, но
             # перезапуск поднимет прежний. Хеши не запоминаем — следующий
-            # заход попробует записать снова. Сказать человеку — сразу.
+            # заход попробует записать снова. Сказать человеку — сразу, но
+            # один раз: дальше обычное окно тишины, а не полсотни сообщений
+            # в сутки (второй аудит, В16).
             log.error("снимок не записался на диск: %s", exc)
-            alerts.notify(
+            sent = alerts.notify(
                 "disk",
                 f"Снимок не записался на диск: {type(exc).__name__}. В памяти свежее "
                 "расписание, после перезапуска поднимется прежнее.",
-                force=True,
+                force=not self._disk_alerted,
             )
+            self._disk_alerted = self._disk_alerted or sent
             self.status = "ok"
             return True
+        if self._disk_alerted:
+            self._disk_alerted = False
+            alerts.forget("disk")
         self._source_hashes = {title: digest for title, _, _, digest in texts}
         for _, gid, text, digest in texts:
             history.archive(self.state_dir, gid, text, digest)
@@ -235,23 +298,61 @@ class Refresher:
         log.info("в книге появился лист: %s — ищу заново", ", ".join(sorted(fresh)))
         return self.refresh(force=True)
 
-    def _fail(self, message: str, kind: str = "error", public: str | None = None) -> None:
-        self.status = "stale" if self.store.snapshot else "empty"
-        self._sheets = None
-        log.error("%s (состояние: %s)", message, self.status)
+    def _parse(self, texts, today: dt.date):
+        """Тексты листов -> (снимок, индекс преподавателей) или None.
 
+        Индекс строится здесь, до записи снимка, а не лениво после неё: снимок,
+        на котором индекс не собирается, раньше успевал лечь на диск и
+        замораживал службу — даже перезапуск поднимал его снова (К2).
+        ValueError разборщика — это тоже формат: лист отвергнут, а не «сеть»
+        с тревогой через полчаса и без архива (В26).
+        """
+        try:
+            snapshot = None
+            for title, gid, text, _ in texts:
+                current = parse_export(
+                    text, title or f"gid {gid}", gid, limits=_limits(), around=today
+                )
+                snapshot = current if snapshot is None else snapshot.merged_with(current)
+            if snapshot is None:
+                return None
+            _check_group_drop(self.store.snapshot, snapshot)
+            _check_shift(snapshot, seed=shift_seed(self.store.snapshot, snapshot))
+            teachers = build_index(snapshot)
+        except ValueError as exc:
+            raise SourceFormatChanged(f"разбор споткнулся о значение: {exc}") from exc
+        return snapshot, teachers
+
+    def _visible_status(self, now: dt.datetime | None = None) -> str:
+        if self.store.snapshot is None:
+            return "empty"
+        if self.failing_since is None:
+            return "ok"
+        now = now or dt.datetime.now(dt.timezone.utc)
+        if self._fetch_only and now - self.failing_since < FETCH_GRACE:
+            # Чих Google: владельцу о нём не говорят полчаса, и телефонам
+            # незачем полчаса показывать «сбой на нашем сервере» (М25).
+            return "ok"
+        return "stale"
+
+    def _fail(self, message: str, kind: str = "error", public: str | None = None) -> None:
         now = dt.datetime.now(dt.timezone.utc)
         first = self.failing_since is None
         if first:
             self.failing_since = now
             self._alerted = False
+            self._fetch_only = True
+        self._fetch_only = self._fetch_only and kind == "fetch"
         self.last_error = public or message
+        self.status = self._visible_status(now)
+        self._sheets = None
+        log.error("%s (состояние: %s)", message, self.status)
 
         # Формат и поиск листа сами не чинятся — говорить сразу. Сеть и
         # Google чинятся к следующему заходу: о них — только если лежим
         # дольше получаса, иначе каждый чих Google будит человека дважды.
-        lying = (now - self.failing_since).total_seconds()
-        if kind != "fetch" or lying >= 30 * 60:
+        lying = now - self.failing_since
+        if kind != "fetch" or lying >= FETCH_GRACE:
             sent = alerts.notify(
                 kind,
                 f"{message}. Состояние: {self.status}, "
@@ -261,7 +362,8 @@ class Refresher:
                    f" Лежим с {self.failing_since.astimezone(_zone()):%d.%m %H:%M}."),
                 force=not self._alerted,
             )
-            self._alerted = self._alerted or sent
+            if sent:
+                self._alerted, self._alerted_at, self._alerted_kind = True, now, kind
         self._save_failing(kind)
 
     def _recovered(self) -> None:
@@ -277,9 +379,11 @@ class Refresher:
                 f"с {since.astimezone(_zone()):%d.%m %H:%M}.",
                 force=True, good=True,
             )
-        for kind in ("format", "sheet", "fetch", "error"):
+        for kind in FAIL_KINDS:
             alerts.forget(kind)
         self.failing_since, self.last_error, self._alerted = None, None, False
+        self._alerted_at = self._alerted_kind = None
+        self._fetch_only = True
         self._save_failing(None)
 
     def _save_failing(self, kind: str | None) -> None:
@@ -292,20 +396,54 @@ class Refresher:
                 "since": self.failing_since.isoformat(),
                 "error": self.last_error,
                 "kind": kind,
+                "fetch_only": self._fetch_only,
                 "alerted": self._alerted,
+                # Когда и о чём ушла последняя тревога: окно тишины живёт в
+                # памяти, и перезапуск посреди сбоя повторял её сразу (М23).
+                "alerted_at": self._alerted_at.isoformat() if self._alerted_at else None,
+                "alerted_kind": self._alerted_kind,
             }, ensure_ascii=False), "utf-8")
             tmp.replace(self._failing_path)
         except OSError as exc:
             log.warning("состояние сбоя не записалось: %s", exc)
 
     def _load_failing(self) -> None:
+        self._alerted_at: dt.datetime | None = None
+        self._alerted_kind: str | None = None
         try:
             data = json.loads(self._failing_path.read_text("utf-8"))
             self.failing_since = dt.datetime.fromisoformat(data["since"])
             self.last_error = data.get("error")
             self._alerted = bool(data.get("alerted"))
+            # Старые файлы без признака — сбой не сетевой: показывать как был.
+            self._fetch_only = bool(data.get("fetch_only", False))
+            if data.get("alerted_at") and data.get("alerted_kind"):
+                self._alerted_at = dt.datetime.fromisoformat(data["alerted_at"])
+                self._alerted_kind = data["alerted_kind"]
+                alerts.remember(self._alerted_kind, self._alerted_at)
         except (OSError, ValueError, KeyError, TypeError):
             self.failing_since, self.last_error, self._alerted = None, None, False
+
+    def _mark_running(self) -> None:
+        try:
+            self._running_path.write_text(str(self._crashes + 1), "utf-8")
+        except OSError as exc:
+            log.warning("отметка захода не записалась: %s", exc)
+
+    def _clear_running(self) -> None:
+        self._crashes = 0
+        try:
+            self._running_path.unlink(missing_ok=True)
+        except OSError as exc:
+            log.warning("отметка захода не снялась: %s", exc)
+
+
+# Сколько сетевой сбой держим за чих: ни тревоги, ни stale наружу (М25).
+FETCH_GRACE = dt.timedelta(minutes=30)
+# После скольких заходов подряд, умерших посреди разбора, — тревога (М36).
+CRASHES_TO_ALERT = 2
+# Виды тревог о сбое: все забываются, когда обновление снова удалось.
+FAIL_KINDS = ("format", "sheet", "fetch", "error", "closed", "crash")
 
 
 # Набор групп упал больше чем на треть между двумя снимками одного и того же
@@ -340,7 +478,7 @@ def _check_today_kept(previous, current, today: dt.date) -> None:
     """
     if previous is None or today not in previous.dates or today in current.dates:
         return
-    raise LookupError(
+    raise sheet_index.SheetNotFound(
         f"новый набор листов ({current.sheet_title!r}) не покрывает {today}, прежний покрывал"
     )
 

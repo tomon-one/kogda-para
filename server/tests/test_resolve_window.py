@@ -52,7 +52,7 @@ def resolves(monkeypatch):
                 if dt.date.fromisoformat(first) <= day <= dt.date.fromisoformat(last):
                     return (title, None)
             if fallback is None:
-                raise LookupError(f"нет листа на {day}")
+                raise si.SheetNotFound(f"нет листа на {day}")
             return (fallback, None)
 
         monkeypatch.setattr(si, "resolve_for", fake)

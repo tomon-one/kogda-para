@@ -45,11 +45,14 @@ class SnapshotStore:
             self._teachers = build_index(self._snapshot)
         return self._teachers
 
-    def put(self, snapshot: Snapshot, generated: dt.datetime) -> None:
+    def put(
+        self, snapshot: Snapshot, generated: dt.datetime, teachers: TeacherIndex | None = None
+    ) -> None:
+        """`teachers` — индекс, уже собранный по этому снимку: его не строят заново."""
         with self._lock:
             self._snapshot = snapshot
             self._generated = generated
-            self._teachers = None
+            self._teachers = teachers
             self._write(snapshot, generated)
 
     def load(self) -> bool:

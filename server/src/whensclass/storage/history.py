@@ -40,7 +40,10 @@ def archive(
             # Тот же текст уже отвергнут — новости нет: сбой длится днями,
             # а заходов по полсотни в сутки.
             return None
-        if rejected is None and any(folder.glob(f"*-{short}*.csv.gz")):
+        # Для принятого — точное имя без хвоста: шаблон с «*» совпадал и с
+        # отвергнутой копией того же текста, и лист, принятый после отказа,
+        # в архив не попадал (второй аудит, М24).
+        if rejected is None and any(folder.glob(f"*-{short}.csv.gz")):
             return None
         stamp = (now or dt.datetime.now()).strftime("%Y-%m-%d-%H%M")
         suffix = "-rejected" if rejected is not None else ""
@@ -50,18 +53,26 @@ def archive(
         path.write_bytes(gzip.compress(text.encode("utf-8")))
         if rejected is not None:
             path.with_suffix("").with_suffix(".txt").write_text(rejected + "\n", "utf-8")
-        _prune(folder)
+        _prune(folder.parent)
         return path
     except OSError as exc:
         log.warning("архив листа не записался: %s", exc)
         return None
 
 
-def _prune(folder: pathlib.Path) -> None:
+def _prune(root: pathlib.Path) -> None:
+    """Удаляет старше KEEP_DAYS во всех каталогах архива, а не только в текущем.
+
+    Каталоги прежних листов раньше не чистились никогда: писали только в
+    каталог нынешнего gid, и чистка шла только там (второй аудит, М21).
+    """
     deadline = time.time() - KEEP_DAYS * 86400
-    for path in folder.iterdir():
-        try:
-            if path.is_file() and path.stat().st_mtime < deadline:
-                path.unlink()
-        except OSError:
-            pass
+    for folder in root.iterdir():
+        if not folder.is_dir():
+            continue
+        for path in folder.iterdir():
+            try:
+                if path.is_file() and path.stat().st_mtime < deadline:
+                    path.unlink()
+            except OSError:
+                pass

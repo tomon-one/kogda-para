@@ -18,6 +18,7 @@ import re
 from ..config import settings
 from ..domain.models import SourceFormatChanged
 from ..parser.csv_schedule import parse_csv
+from ..service import alerts
 from . import gsheets
 from .gsheets import SheetInfo
 
@@ -32,6 +33,15 @@ _NOT_SCHEDULE = re.compile(r"индивидуальн|преподавател|�
 # но прочитать его не вышло»).
 _LOOKS_LIKE_GROUPS = re.compile(r"групп", re.IGNORECASE)
 _NUMBERS = re.compile(r"\d{1,2}")
+
+
+class SheetNotFound(LookupError):
+    """Листа на нужный день нет или до него не добраться.
+
+    Свой класс, а не голый LookupError: тот ловил заодно любой KeyError и
+    IndexError из кода обновления, и ошибка в коде выглядела как «колледж
+    ещё не выложил» (второй аудит, к В26/К2).
+    """
 
 
 class SheetIndex:
@@ -136,6 +146,13 @@ class SheetIndex:
         return None
 
 
+def _api_error(exc: Exception) -> str:
+    """Что сказать о сбое API наружу: код ответа или тип, без адреса и ключа."""
+    response = getattr(exc, "response", None)
+    code = getattr(response, "status_code", None)
+    return f"ответ {code}" if code else type(exc).__name__
+
+
 def _hide_key(error: object) -> str:
     """Прячет ключ API в тексте ошибки.
 
@@ -154,17 +171,37 @@ def _hide_key(error: object) -> str:
 _XLSX_COOLDOWN = dt.timedelta(hours=6)
 _last_xlsx: dt.datetime | None = None
 _cached_sheets: list[SheetInfo] = []
+# Сколько раз подряд Sheets API не ответил. Мёртвый ключ (отозван, квота)
+# раньше был виден только как WARNING раз в полчаса, а тревога приходила,
+# лишь когда кончалось покрытие запомненного листа — в воскресенье ночью
+# (второй аудит, М26). Один отказ — чих, два подряд (полчаса) — тревога.
+_api_failures = 0
+API_FAILURES_TO_ALERT = 2
 
 
 def list_sheets() -> list[SheetInfo]:
     """Список листов: через API, если есть ключ, иначе через выгрузку xlsx."""
-    global _last_xlsx, _cached_sheets
+    global _last_xlsx, _cached_sheets, _api_failures
 
     if settings.sheets_api_key:
         try:
-            return gsheets.list_sheets_via_api(settings.sheets_api_key)
+            sheets = gsheets.list_sheets_via_api(settings.sheets_api_key)
         except Exception as exc:  # ключ протух, квота, сеть
+            _api_failures += 1
             log.warning("Sheets API не ответил (%s), иду через xlsx", _hide_key(exc))
+            if _api_failures >= API_FAILURES_TO_ALERT:
+                alerts.notify(
+                    "key",
+                    f"Sheets API не отвечает {_api_failures} раз подряд "
+                    f"({_api_error(exc)}). Без него gid листов не узнать: пока "
+                    "служба живёт запомненным листом, а когда его покрытие кончится, "
+                    "уйдёт в stale. Проверить ключ — docs/deploy.md, «Ключ Sheets API».",
+                )
+        else:
+            if _api_failures >= API_FAILURES_TO_ALERT:
+                alerts.forget("key")
+            _api_failures = 0
+            return sheets
 
     now = dt.datetime.now(dt.timezone.utc)
     if _cached_sheets and _last_xlsx and now - _last_xlsx < _XLSX_COOLDOWN:
@@ -227,7 +264,7 @@ def resolve_window(
             return sheets
         try:
             following = resolve_for(covered_to + dt.timedelta(days=1), state_dir)
-        except LookupError:
+        except SheetNotFound:
             log.info("следующий лист ещё не опубликован, отдаём что есть")
             return sheets
     if following and following[0] != first[0]:
@@ -253,7 +290,7 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
     """
     if settings.sheet_title and not settings.sheet_gid:
         # Сбой настройки, не сети: сказать сразу и словами про лист.
-        raise LookupError(
+        raise SheetNotFound(
             "WHENSCLASS_SHEET_TITLE задан без WHENSCLASS_SHEET_GID — лист читается только по gid"
         )
     if settings.sheet_title or settings.sheet_gid:
@@ -320,7 +357,7 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
     # ещё не выложил» — а проверить это утверждение мы как раз и не смогли.
     # Пусть лучше служба уйдёт в stale и скажет, что беда у нас.
     if unread:
-        raise LookupError(
+        raise SheetNotFound(
             f"лист на {day.isoformat()} не нашёлся, а до "
             + ", ".join(repr(title) for title in unread)
             + " добраться не вышло"
@@ -334,4 +371,4 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
         )
         return fallback
 
-    raise LookupError(f"не нашёл лист, покрывающий {day.isoformat()}")
+    raise SheetNotFound(f"не нашёл лист, покрывающий {day.isoformat()}")
