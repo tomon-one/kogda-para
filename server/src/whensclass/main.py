@@ -133,6 +133,12 @@ app = FastAPI(
     description="Расписание НГОК компактным JSON для виджета на телефоне",
     version="0.1.0",
     lifespan=lifespan,
+    # Автодокументация наружу не нужна: контракт — docs/api.md, а /docs и
+    # /openapi.json отвечали всем и расписывали поверхность службы (факты
+    # сервера перед присестом 1B второго аудита).
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 # Ответы небольшие, но телефон часто сидит на мобильном интернете.
 app.add_middleware(GZipMiddleware, minimum_size=500)
