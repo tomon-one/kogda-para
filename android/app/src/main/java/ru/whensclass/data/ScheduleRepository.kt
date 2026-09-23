@@ -38,7 +38,7 @@ const val DAYS = 8
  * обратное. Теперь воскресенье такой же день недели, как остальные, а завтрашний
  * понедельник виден за счёт восьмого дня.
  */
-fun weekStart(today: java.time.LocalDate = java.time.LocalDate.now()): java.time.LocalDate =
+fun weekStart(today: java.time.LocalDate = ru.whensclass.widget.collegeToday()): java.time.LocalDate =
     today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
 
 /**
@@ -66,6 +66,17 @@ sealed interface RefreshResult {
 
 /** Сколько сервер должен пролежать, прежде чем телефон скажет об этом уведомлением. */
 const val STALE_NOTIFY_AFTER_MILLIS = 2L * 60 * 60 * 1000
+
+/**
+ * Сколько сервер может не отвечать вовсе при живой сети телефона, прежде чем это
+ * сбой, а не чих. Раньше «сервер недоступен» (упал процесс, nginx, домен) не
+ * давал ни плашки, ни «сбой» на виджетах, ни уведомления: всё держалось на
+ * ответе /v1/meta, а ответа-то и нет (второй аудит, В15).
+ */
+const val UNREACHABLE_BROKEN_AFTER_MILLIS = 30L * 60 * 1000
+
+/** Состояние, которое телефон ставит сам, когда сервер не отвечает. */
+const val STATUS_UNREACHABLE = "unreachable"
 
 class ScheduleRepository(
     private val context: Context,
@@ -111,7 +122,7 @@ class ScheduleRepository(
     /** Есть ли сегодняшний день в том, что лежит на телефоне. */
     private fun coversToday(saved: ScheduleDto?): Boolean {
         if (saved == null) return false
-        val today = java.time.LocalDate.now().toString()
+        val today = ru.whensclass.widget.collegeToday().toString()
         return saved.days.any { it.date == today }
     }
 
@@ -123,7 +134,7 @@ class ScheduleRepository(
      */
     private suspend fun announceChanges(old: ScheduleDto?, fresh: ScheduleDto) {
         if (!store.notifyChangesEnabled()) return
-        val today = java.time.LocalDate.now()
+        val today = ru.whensclass.widget.collegeToday()
         val soon = setOf(today.toString(), today.plusDays(1).toString())
         val changes = ScheduleDiff.compare(old, fresh).filter { it.day in soon }
         if (changes.isEmpty()) return
@@ -143,24 +154,32 @@ class ScheduleRepository(
      * неделе. Двухчасовая задержка отсекает чихи Google, которые сервер и
      * сам лечит к следующему заходу.
      */
-    private suspend fun announceStale(meta: MetaDto) {
-        if (meta.status == "ok" || meta.since == null) {
+    private suspend fun announceStale(status: String?, sinceIso: String?) {
+        if (status == "ok" || sinceIso == null) {
             if (store.staleNotifiedFor() != null) store.setStaleNotifiedFor(null)
             return
         }
         if (!store.notifyChangesEnabled()) return
-        if (store.staleNotifiedFor() == meta.since) return
-        val since = runCatching { java.time.Instant.parse(meta.since) }.getOrNull() ?: return
+        if (store.staleNotifiedFor() == sinceIso) return
+        val since = runCatching { java.time.Instant.parse(sinceIso) }.getOrNull() ?: return
         if (System.currentTimeMillis() - since.toEpochMilli() < STALE_NOTIFY_AFTER_MILLIS) return
-        Notifications.changes(
+        val silent = status == STATUS_UNREACHABLE
+        Notifications.serverDown(
             context,
-            "Сервер расписания не обновляется",
-            "Сбой у нас с ${ru.whensclass.widget.formatSince(meta.since)}. " +
+            if (silent) "Сервер расписания не отвечает" else "Сервер расписания не обновляется",
+            "Сбой у нас с ${ru.whensclass.widget.formatSince(sinceIso)}. " +
                 "Приложение показывает последнее, что пришло, — пары могли поменяться. " +
                 "Таблица колледжа открывается из настроек.",
         )
-        store.setStaleNotifiedFor(meta.since)
+        store.setStaleNotifiedFor(sinceIso)
     }
+
+    /** Есть ли у телефона проверенный выход в интернет — тогда молчание сервера наше. */
+    private fun networkUp(): Boolean = runCatching {
+        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
+        manager.getNetworkCapabilities(manager.activeNetwork)
+            ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+    }.getOrDefault(false)
 
     /** Сведения для отчёта об ошибке — см. [collectDiagnostics]. */
     suspend fun diagnostics(): String =
@@ -170,9 +189,7 @@ class ScheduleRepository(
     suspend fun redrawWidgets() = updateWidgets()
 
     private suspend fun updateWidgets() {
-        ScheduleWidget().updateAll(context)
-        WeekWidget().updateAll(context)
-        NextLessonWidget().updateAll(context)
+        ru.whensclass.widget.redrawWidgets(context)
         // Считаем только тогда, когда виджет и правда стоит на экране.
         // Перерисовка пустого места ответом не была: счётчик обещает, что
         // столько раз расписание показали вместо таблицы.
@@ -194,11 +211,24 @@ class ScheduleRepository(
      * Не достучались до неё — показываем своё расписание как есть: без пары
      * соседей человек всё же обойдётся, а без своих пар — нет.
      */
-    private suspend fun withSecondGroup(mine: ScheduleDto): Merged {
+    private suspend fun withSecondGroup(mine: ScheduleDto, serverOk: Boolean): Merged {
         val second = store.currentSecondGroupId() ?: return Merged(mine, whole = true)
-        val extra = runCatching {
+        val extra = try {
             api.schedule(second, from = weekStart(), days = DAYS)
-        }.getOrNull() ?: return Merged(mine, whole = false)
+        } catch (error: HttpFailure) {
+            // 404 при здоровом сервере — соседки больше нет в таблице. Раньше
+            // это было неотличимо от сети: пары соседки молча пропадали, а
+            // обрубок навсегда выключал уведомления (второй аудит, В17).
+            if (error.code == 404 && serverOk &&
+                store.noteSecondNotFound(System.currentTimeMillis())
+            ) {
+                return Merged(mine, whole = true, secondGone = store.secondGroupName.first() ?: second)
+            }
+            return Merged(mine, whole = false)
+        } catch (error: Exception) {
+            return Merged(mine, whole = false)
+        }
+        store.clearSecondNotFound()
         // Соседку переименовали: сервер ответил под новым id. Записать его
         // прямо здесь нельзя — сверка «не сменил ли человек выбор, пока шёл
         // запрос» сочла бы это чужим ответом. Отдаём наверх, запишется после.
@@ -219,6 +249,8 @@ class ScheduleRepository(
         val whole: Boolean,
         /** Новые id и имя соседней подгруппы, если её переименовали. */
         val secondRenamed: Pair<String, String>? = null,
+        /** Имя соседней подгруппы, которой больше нет в таблице (подтверждено). */
+        val secondGone: String? = null,
     )
 
     suspend fun groups(): List<GroupDto> = withContext(Dispatchers.IO) {
@@ -308,9 +340,17 @@ class ScheduleRepository(
             // тех случаях, ради которых состояние и нужно: при ручном
             // обновлении и когда сегодняшнего дня в данных нет.
             val meta = runCatching { api.meta() }.getOrNull()
-            meta?.let {
-                store.putServerState(it.status, it.sourceUrl, it.since)
-                announceStale(it)
+            if (meta != null) {
+                store.clearUnreachable()
+                store.putServerState(meta.status, meta.sourceUrl, meta.since)
+                announceStale(meta.status, meta.since)
+            } else if (networkUp()) {
+                val now = java.time.Instant.now()
+                val since = store.noteUnreachable(now)
+                if (now.toEpochMilli() - since.toEpochMilli() >= UNREACHABLE_BROKEN_AFTER_MILLIS) {
+                    store.putServerState(STATUS_UNREACHABLE, null, since.toString())
+                    announceStale(STATUS_UNREACHABLE, since.toString())
+                }
             }
             if (!force && !outdated && meta != null) {
                 if (meta.generatedAt == store.generatedAt.first()) {
@@ -342,7 +382,11 @@ class ScheduleRepository(
                 throw error
             }
             store.clearNotFound()
-            val merged = if (teacherMode) Merged(fresh, whole = true) else withSecondGroup(fresh)
+            val merged = if (teacherMode) {
+                Merged(fresh, whole = true)
+            } else {
+                withSecondGroup(fresh, serverOk = meta?.status == "ok")
+            }
             val full = merged.schedule
 
             // Пока шёл запрос, человек мог сменить группу, роль или подгруппу.
@@ -361,13 +405,31 @@ class ScheduleRepository(
                 else store.adoptGroup(fresh.groupId, fresh.groupName)
             }
             merged.secondRenamed?.let { (id, name) -> store.adoptSecondGroup(id, name) }
+            merged.secondGone?.let { name ->
+                store.forgetSecondGroup()
+                Notifications.changes(
+                    context,
+                    "Подгруппы $name больше нет в таблице",
+                    "Её пары больше не показываются рядом с вашими. Если подгруппу " +
+                        "переименовали — выберите её заново в настройках.",
+                )
+            }
 
             val previous = schedule.first()
-            store.putSchedule(json.encodeToString(full), full.generatedAt)
+            val previousPartial = store.schedulePartial()
+            store.putSchedule(json.encodeToString(full), full.generatedAt, partial = !merged.whole)
             updateWidgets()
-            // Об изменениях говорим только по целому снимку: обрубок без пар
-            // соседней подгруппы отличается от прежнего так же, как отмена.
-            if (merged.whole) announceChanges(previous, full)
+            // Об изменениях — только по сопоставимому. Обрубок без пар соседней
+            // подгруппы отличается от целого так же, как отмена: сравнивать
+            // целое с обрубком нельзя. Раньше обрубок записывался, а следующее
+            // целое объявляло давние пары соседки «добавившимися» (второй аудит,
+            // В10). Если прежнее — обрубок, сравниваем свои пары со своими: так
+            // и при долгой пропаже соседки об отменах говорим (В17).
+            when {
+                merged.secondGone != null -> Unit // соседку сняли: разница — её пары
+                previousPartial -> announceChanges(previous, fresh)
+                merged.whole -> announceChanges(previous, full)
+            }
             LessonAlarms.reschedule(context)
             // И будильник к звонку: он считается по сетке из снимка, а при
             // первом запуске её ещё нет. Взведённый в WhensClassApp по пустой

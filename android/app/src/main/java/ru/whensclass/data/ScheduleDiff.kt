@@ -76,8 +76,27 @@ object ScheduleDiff {
                 previous.isOnline && !lesson.isOnline ->
                     changes.add(Change(day, "$number пара снова очная"))
 
+                // Замена преподавателя при том же предмете — это и есть
+                // «замена», ради которой уведомления включают; раньше её не
+                // замечали вовсе (второй аудит, В11). Пустой новый список —
+                // не замена: преподавателей часто вписывают позже.
+                lesson.teachers.isNotEmpty() && previous.teachers != lesson.teachers ->
+                    changes.add(
+                        Change(day, "у $number пары другой преподаватель: ${lesson.teachers.joinToString(", ")}")
+                    )
+
                 previous.url == null && lesson.url != null ->
                     changes.add(Change(day, "у $number пары появилась ссылка"))
+
+                // Подменённая ссылка — тоже новость: по ней идут на занятие
+                // (второй аудит, М37).
+                previous.url != null && lesson.url != null && previous.url != lesson.url ->
+                    changes.add(Change(day, "у $number пары сменилась ссылка"))
+
+                // Номер онлайн-комнаты — не аудитория: «переехала в 12» звало
+                // бы в кабинет 12 (второй аудит, М22).
+                previous.room != lesson.room && lesson.room != null && lesson.isOnline ->
+                    changes.add(Change(day, "у $number пары онлайн-комната ${lesson.room}"))
 
                 previous.room != lesson.room && lesson.room != null ->
                     changes.add(Change(day, "$number пара переехала в ${lesson.room}"))

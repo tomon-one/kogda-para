@@ -66,6 +66,24 @@ class ScheduleStore(private val context: Context) {
     }
 
     /** О каком сбое (по его `since`) телефон уже сказал уведомлением. */
+    /**
+     * С какого момента сервер не отвечает вовсе, хотя сеть у телефона есть.
+     * Запоминается первый раз и держится, пока сервер не ответит.
+     */
+    suspend fun noteUnreachable(now: java.time.Instant): java.time.Instant {
+        var first = now
+        context.dataStore.edit { prefs ->
+            val known = prefs[KEY_UNREACHABLE_SINCE]
+                ?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            if (known != null) first = known else prefs[KEY_UNREACHABLE_SINCE] = now.toString()
+        }
+        return first
+    }
+
+    suspend fun clearUnreachable() {
+        context.dataStore.edit { it.remove(KEY_UNREACHABLE_SINCE) }
+    }
+
     suspend fun staleNotifiedFor(): String? = context.dataStore.data.first()[KEY_STALE_NOTIFIED]
 
     suspend fun setStaleNotifiedFor(since: String?) {
@@ -385,7 +403,39 @@ class ScheduleStore(private val context: Context) {
     private fun dropSchedule(prefs: MutablePreferences) {
         prefs.remove(KEY_SCHEDULE)
         prefs.remove(KEY_GENERATED_AT)
+        prefs.remove(KEY_PARTIAL)
     }
+
+    /**
+     * Соседней подгруппы больше нет в таблице: сервер отвечает на неё 404 при
+     * здоровом состоянии. Подтверждается тем же часом, что и пропажа своей
+     * группы: опечатку в заголовке колледж чинит быстрее. true — подтверждено.
+     */
+    suspend fun noteSecondNotFound(nowMillis: Long): Boolean {
+        var confirmed = false
+        context.dataStore.edit {
+            val first = it[KEY_GROUP2_GONE_SINCE]?.toLongOrNull()
+            if (first == null) it[KEY_GROUP2_GONE_SINCE] = nowMillis.toString()
+            else if (nowMillis - first >= GONE_CONFIRM_MILLIS) confirmed = true
+        }
+        return confirmed
+    }
+
+    suspend fun clearSecondNotFound() {
+        context.dataStore.edit { it.remove(KEY_GROUP2_GONE_SINCE) }
+    }
+
+    /** Снять соседнюю подгруппу, не стирая расписания: оно сейчас же перепишется. */
+    suspend fun forgetSecondGroup() {
+        context.dataStore.edit {
+            it.remove(KEY_GROUP2_ID)
+            it.remove(KEY_GROUP2_NAME)
+            it.remove(KEY_GROUP2_GONE_SINCE)
+        }
+    }
+
+    /** Лежит ли на телефоне расписание без пар соседней подгруппы (не дошли до неё). */
+    suspend fun schedulePartial(): Boolean = context.dataStore.data.first()[KEY_PARTIAL] == "1"
 
     /** Дата последней перерисовки виджетов: по ней узнаём смену суток. */
     suspend fun lastWidgetDay(): String? = context.dataStore.data.first()[KEY_WIDGET_DAY]
@@ -394,11 +444,12 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_WIDGET_DAY] = day }
     }
 
-    suspend fun putSchedule(body: String, generatedAt: String) {
+    suspend fun putSchedule(body: String, generatedAt: String, partial: Boolean = false) {
         context.dataStore.edit {
             it[KEY_SCHEDULE] = body
             it[KEY_GENERATED_AT] = generatedAt
             it[KEY_FETCHED_AT] = System.currentTimeMillis().toString()
+            if (partial) it[KEY_PARTIAL] = "1" else it.remove(KEY_PARTIAL)
         }
     }
 
@@ -468,9 +519,12 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUP_ID = stringPreferencesKey("group_id")
         val KEY_SERVER_SINCE = stringPreferencesKey("server_since")
         val KEY_STALE_NOTIFIED = stringPreferencesKey("stale_notified")
+        val KEY_UNREACHABLE_SINCE = stringPreferencesKey("unreachable_since")
         val KEY_GONE_SINCE = stringPreferencesKey("gone_since")
         val KEY_GONE = stringPreferencesKey("gone")
         const val GONE_CONFIRM_MILLIS = 60L * 60 * 1000
+        val KEY_PARTIAL = stringPreferencesKey("schedule_partial")
+        val KEY_GROUP2_GONE_SINCE = stringPreferencesKey("group2_gone_since")
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")
         val KEY_SCHEDULE = stringPreferencesKey("schedule_json")
         val KEY_GROUPS = stringPreferencesKey("groups_json")

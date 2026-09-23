@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
+import androidx.glance.currentState
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
@@ -21,6 +22,7 @@ import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
@@ -40,6 +42,8 @@ import ru.whensclass.ui.MainActivity
  */
 class NextLessonWidget : GlanceAppWidget() {
 
+    // Явно, как у двух других: сюда пишутся «обновляю…» и KEY_TICK.
+    override val stateDefinition = PreferencesGlanceStateDefinition
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -56,7 +60,7 @@ class NextLessonWidget : GlanceAppWidget() {
             val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
             // Часы — в корне и дальше параметром, как в остальных виджетах:
             // корень перекомпонуется на каждый updateAll, вложенное — нет.
-            val now = LocalDateTime.now()
+            val now = moment(currentState(ScheduleWidget.KEY_TICK))
             val today = now.toLocalDate()
             val next = nextLesson(schedule, now)
             val lesson = next?.lesson
@@ -88,15 +92,27 @@ class NextLessonWidget : GlanceAppWidget() {
                         else "Дальше пар нет",
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
+                    // Отклик на ⟳ — как в шапках двух других виджетов: раньше
+                    // маленький виджет нажатие не замечал ничем (второй аудит, М17).
+                    val busy = currentState(ScheduleWidget.KEY_BUSY) == true
+                    val failed = currentState(ScheduleWidget.KEY_FAILED) == true
+                    val done = currentState(ScheduleWidget.KEY_DONE) == true
                     Text(
-                        (when {
-                            gone -> "нет в таблице"
-                            broken -> "сбой"
-                            else -> formatFetchedShort(state?.fetchedAt ?: 0L)
-                        }) + " ⟳",
+                        when {
+                            busy -> "обновляю…"
+                            failed -> "не вышло ⟳"
+                            gone -> "нет в таблице ⟳"
+                            broken -> "сбой ⟳"
+                            done -> "обновлено"
+                            else -> formatFetchedShort(state?.fetchedAt ?: 0L) + " ⟳"
+                        },
                         style = TextStyle(
                             fontSize = 11.sp,
-                            color = if (broken || gone) colors.error else colors.textDim,
+                            color = when {
+                                failed || broken || gone -> colors.error
+                                busy || done -> colors.accent
+                                else -> colors.textDim
+                            },
                         ),
                         modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
                     )

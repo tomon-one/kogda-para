@@ -39,6 +39,8 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
+import androidx.compose.ui.graphics.Color
 import java.time.LocalDate
 import java.time.LocalDateTime
 import ru.whensclass.AppContainer
@@ -75,7 +77,7 @@ class WeekWidget : GlanceAppWidget() {
             // всех, и Week с теми же входами Compose пропускал целиком: 14
             // сентября 2026 виджет с 15:50 до ночи подсвечивал кончившуюся
             // пару при честном времени в шапке. Момент идёт параметром вниз.
-            val now = LocalDateTime.now()
+            val now = moment(currentState(ScheduleWidget.KEY_TICK))
             val today = now.toLocalDate()
             Column(
                 modifier = GlanceModifier
@@ -279,6 +281,9 @@ private fun Week(
     }
 }
 
+/** Фон строки, которая не идёт сейчас: задаётся явно, см. [LessonLine]. */
+private val NO_SURFACE = ColorProvider(Color.Transparent)
+
 /**
  * Сколько детей вмещает контейнер Glance. Разметка виджета собирается заранее,
  * и всё сверх десятого пропадает молча — ни ошибки, ни пустого места.
@@ -436,15 +441,16 @@ private fun LessonLine(
         // иначе подсветка съезжает вниз и задевает соседнюю строку.
         // Подложка идущей пары кладётся первой, поэтому накрывает строку
         // целиком вместе с отступом под ней, а не только высоту букв.
+        //
+        // Фон задаётся всегда, у остальных строк — прозрачный. Раньше его
+        // навешивали условно, и у строки, переставшей быть идущей, модификатора
+        // фона не было вовсе: в RemoteViews не уходило ни одной команды про
+        // фон, лончер накатывал их на прежние вьюхи — и подложка оставалась. К
+        // вечеру были выделены все пары дня (копилка, 16 сентября 2026).
         modifier = GlanceModifier
             .fillMaxWidth()
-            .then(
-                if (isNow) {
-                    GlanceModifier.background(colors.nowSurface).cornerRadius(6.dp)
-                } else {
-                    GlanceModifier
-                }
-            )
+            .background(if (isNow) colors.nowSurface else NO_SURFACE)
+            .cornerRadius(6.dp)
             .padding(horizontal = 4.dp)
             .padding(bottom = 2.dp)
             .clickable(actionStartActivity(openDay(context, date))),

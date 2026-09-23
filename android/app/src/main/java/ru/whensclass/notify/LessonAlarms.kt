@@ -53,7 +53,7 @@ object LessonAlarms {
     }
 
     /** Что и когда напомнить. Вынесено отдельно, чтобы можно было проверить. */
-    fun plan(schedule: ScheduleDto, minutes: Int, now: LocalDateTime = LocalDateTime.now()):
+    fun plan(schedule: ScheduleDto, minutes: Int, now: LocalDateTime = ru.whensclass.widget.collegeNow()):
         List<Alarm> {
         val out = mutableListOf<Alarm>()
         for (day in schedule.days) {
@@ -114,7 +114,7 @@ object LessonAlarms {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val millis = alarm.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val millis = alarm.at.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant().toEpochMilli()
         if (exactAllowed(context)) {
             manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
         } else {
@@ -160,7 +160,7 @@ object LessonAlarms {
     fun title(
         subject: String,
         start: LocalDateTime,
-        now: LocalDateTime = LocalDateTime.now(),
+        now: LocalDateTime = ru.whensclass.widget.collegeNow(),
     ): String {
         val left = Math.round(Duration.between(now, start).seconds / 60.0).toInt()
         return when {

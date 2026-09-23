@@ -3,6 +3,7 @@ package ru.whensclass.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -10,35 +11,43 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.delay
+import ru.whensclass.widget.collegeNow
+import ru.whensclass.widget.nextTick
+
+/** Сколько раз экран возвращался на передний план — растёт в MainActivity.onResume. */
+object ScreenClock {
+    var resumes by mutableIntStateOf(0)
+}
 
 /**
- * Какое сегодня число — с пересчётом в полночь.
+ * Который сейчас час — с пересчётом на каждом звонке, в полночь и при каждом
+ * возвращении на экран. Время — колледжа (см. COLLEGE_ZONE).
  *
- * `remember { LocalDate.now() }` считает дату один раз за жизнь композиции, а
- * живёт она столько же, сколько процесс приложения. Человек, свернувший
- * приложение вечером и открывший назавтра, видел вчерашний день как
- * сегодняшний: красная полоса стояла не на той строке, прожитое не тускнело,
- * а идущая пара не подсвечивалась вовсе — подсветка включается только внутри
- * сегодняшнего дня.
- *
- * Виджеты этим не болели: они пересобираются целиком на каждую перерисовку.
- *
- * Ожидание считается до ближайшей полуночи, а не тикает каждую минуту: телефон
- * будить незачем. Если процесс всё это время был заморожен и срок вышел
- * раньше, чем нас разбудили, следующий круг сразу поставит верную дату.
+ * `remember { LocalDate.now() }` считал дату один раз за жизнь композиции, и
+ * свернувший приложение вечером видел назавтра вчерашний день как сегодняшний.
+ * Потом ожидание полуночи делал delay — но он идёт на монотонных часах,
+ * которые в глубоком сне стоят: утром экран всё ещё считал «сегодня» вчера
+ * (второй аудит, В20). Поэтому пересчёт ещё и на ON_RESUME. А подсветка идущей
+ * пары считалась при компоновке карточки и со звонком не двигалась, пока экран
+ * открыт (дефект 7 в handoff): теперь ожидание — до ближайшего звонка, а не
+ * только до полуночи.
  */
 @Composable
-fun rememberToday(): LocalDate {
-    var today by remember { mutableStateOf(LocalDate.now()) }
+fun rememberNow(bells: Map<String, List<String>> = emptyMap()): LocalDateTime {
+    var now by remember { mutableStateOf(collegeNow()) }
+    val resumes = ScreenClock.resumes
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(bells, resumes) {
         while (true) {
-            val now = LocalDateTime.now()
-            today = now.toLocalDate()
-            val midnight = now.toLocalDate().plusDays(1).atStartOfDay()
-            delay(ChronoUnit.MILLIS.between(now, midnight).coerceAtLeast(1_000L))
+            val current = collegeNow()
+            now = current
+            delay(ChronoUnit.MILLIS.between(current, nextTick(bells, current)).coerceAtLeast(1_000L))
         }
     }
 
-    return today
+    return now
 }
+
+/** Какое сегодня число — см. [rememberNow]. */
+@Composable
+fun rememberToday(): LocalDate = rememberNow().toLocalDate()

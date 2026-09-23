@@ -136,6 +136,8 @@ fun TodayScreen(
     onSettings: () -> Unit,
     onUpdateBadge: () -> Unit,
     onRefresh: () -> Unit,
+    /** Последнее ручное обновление не удалось — крестик вместо галочки. */
+    refreshFailed: Boolean = false,
     refreshError: String? = null,
     onErrorShown: () -> Unit = {},
     loadTally: suspend () -> ScheduleStore.Tally = { ScheduleStore.Tally(0, 0, 0) },
@@ -147,7 +149,10 @@ fun TodayScreen(
     gone: Boolean = false,
     onRepick: () -> Unit = {},
 ) {
-    val today = rememberToday()
+    // Часы со звонками: и «сегодня», и давность сбоя на плашке пересчитываются
+    // сами (второй аудит, В20, М30).
+    val now = rememberNow(schedule?.bells.orEmpty())
+    val today = now.toLocalDate()
 
     // Преподаватель открывает приложение на своём разделе.
     var tab by remember(teacherMode) {
@@ -213,7 +218,7 @@ fun TodayScreen(
                 actions = {
                     RefreshButton(
                         refreshing = refreshing,
-                        broken = serverBroken || gone,
+                        broken = serverBroken || gone || refreshFailed,
                         onRefresh = onRefresh,
                     )
                     IconButton(onClick = if (hasUpdate) onUpdateBadge else onSettings) {
@@ -252,7 +257,7 @@ fun TodayScreen(
             // рассказал, где они; иначе просто в книгу.
             if (gone) Gone(groupName, teacherMode, onRepick)
             if (serverBroken) {
-                ServerBroken(sheetLink(schedule, today, sourceUrl), serverSince, schedule?.generatedAt)
+                ServerBroken(sheetLink(schedule, today, sourceUrl), serverSince, schedule?.generatedAt, now)
             }
             ScheduleTabs(
                 current = tab,
@@ -292,6 +297,12 @@ fun TodayScreen(
                 }
 
                 Tab.TEACHERS -> {
+                    // Своё расписание преподавателя объясняется так же, как у
+                    // студента. Раньше ветка выходила раньше этих проверок, и
+                    // при days=[] преподаватель видел пустой экран, а при
+                    // schedule==null — чужие фамилии вместо своего (второй
+                    // аудит, В13).
+                    if (teacherMode && explainMissing(schedule, today, sourceUrl)) return@Column
                     TeacherScreen(
                         teachers = teachers,
                         loadSchedule = loadTeacherSchedule,
@@ -313,28 +324,8 @@ fun TodayScreen(
                 else -> Unit
             }
 
-        if (schedule == null) {
-            Explanation(
-                title = "Расписание ещё не загружено",
-                text = "Проверьте интернет и нажмите обновление вверху. " +
-                    "Если не помогает, напишите @toomonn.",
-            )
-            return@Column
-        }
-
-        if (schedule.days.isEmpty()) {
-            // Сервер ответил, но дней в ответе нет: так бывает в воскресенье,
-            // когда следующий лист ещё не выложен. Раньше проверка была только
-            // на «расписания нет вовсе», и экран оставался пустым без слов.
-            Explanation(
-                title = "На эти дни расписания нет",
-                text = "Колледж выкладывает его на неделю-полторы вперёд. " +
-                    "Но если пары сегодня идут, значит расписание застряло " +
-                    "у нас — тогда смотрите первоисточник.",
-                sourceUrl = sheetLink(schedule, today, sourceUrl),
-            )
-            return@Column
-        }
+        if (explainMissing(schedule, today, sourceUrl)) return@Column
+        schedule ?: return@Column
 
         ScheduleDays(
             schedule = schedule,
@@ -535,6 +526,7 @@ fun ScheduleDays(
     modifier: Modifier = Modifier,
     startDay: String? = null,
 ) {
+    val now = rememberNow(schedule.bells)
     val days = remember(schedule) { daysWithGaps(schedule) }
 
     // Открываемся на сегодняшнем дне: неделя показывается с понедельника, и без
@@ -565,7 +557,7 @@ fun ScheduleDays(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(days, key = { it.date }) { day ->
-            DayCard(day, schedule.bells, today)
+            DayCard(day, schedule.bells, now)
         }
     }
 }
@@ -615,14 +607,16 @@ internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
 private fun DayCard(
     day: DayDto,
     bells: Map<String, List<String>>,
-    today: LocalDate,
+    now: LocalDateTime,
 ) {
+    val today = now.toLocalDate()
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
     val isToday = date == today
     val past = date != null && date.isBefore(today)
-    // Момент берётся при компоновке карточки; со звонком она не перерисуется —
-    // экран открывают на секунды, и будильника под это в приложении нет.
-    val current = if (isToday) currentLessonNumber(bells, today, LocalDateTime.now()) else null
+    // Момент — параметром от часов со звонками (rememberNow в ScheduleDays):
+    // раньше он брался при компоновке карточки, и подсветка со звонком не
+    // двигалась, пока экран открыт (дефект 7 в handoff).
+    val current = if (isToday) currentLessonNumber(bells, today, now) else null
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -884,7 +878,7 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
  * подставил бы туда чужой розовый.
  */
 @Composable
-private fun ServerBroken(sourceUrl: String?, since: String?, generatedAt: String?) {
+private fun ServerBroken(sourceUrl: String?, since: String?, generatedAt: String?, now: LocalDateTime) {
     val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -910,7 +904,7 @@ private fun ServerBroken(sourceUrl: String?, since: String?, generatedAt: String
             // выглядеть как минута рядом с честным «обновлено 5 минут назад».
             since?.let {
                 Text(
-                    "Сбой с ${formatSince(it)}." +
+                    "Сбой с ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}." +
                         (generatedAt?.let { g -> " Расписание на экране получено ${formatReceived(g)}." } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
@@ -1120,3 +1114,33 @@ internal fun openLink(context: android.content.Context, url: String) {
 
 private fun copyLink(context: android.content.Context, url: String) =
     copyToClipboard(context, "Ссылка на занятие", url, "Ссылка скопирована")
+
+
+/**
+ * Объяснение вместо пустого экрана, когда своего расписания нет. true — объяснили.
+ */
+@Composable
+private fun explainMissing(schedule: ScheduleDto?, today: java.time.LocalDate, sourceUrl: String?): Boolean {
+    if (schedule == null) {
+        Explanation(
+            title = "Расписание ещё не загружено",
+            text = "Проверьте интернет и нажмите обновление вверху. " +
+                "Если не помогает, напишите @toomonn.",
+        )
+        return true
+    }
+    if (schedule.days.isEmpty()) {
+        // Сервер ответил, но дней в ответе нет: так бывает в воскресенье,
+        // когда следующий лист ещё не выложен. Раньше проверка была только
+        // на «расписания нет вовсе», и экран оставался пустым без слов.
+        Explanation(
+            title = "На эти дни расписания нет",
+            text = "Колледж выкладывает его на неделю-полторы вперёд. " +
+                "Но если пары сегодня идут, значит расписание застряло " +
+                "у нас — тогда смотрите первоисточник.",
+            sourceUrl = sheetLink(schedule, today, sourceUrl),
+        )
+        return true
+    }
+    return false
+}

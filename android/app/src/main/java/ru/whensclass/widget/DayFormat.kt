@@ -14,9 +14,36 @@ private val RU = Locale("ru")
 private val DAY_FORMAT = DateTimeFormatter.ofPattern("d MMMM, EEEE", RU)
 private val SHORT_DAY = DateTimeFormatter.ofPattern("d MMMM", RU)
 
+/**
+ * Пояс колледжа. Сетка звонков и дни листа — по Новосибирску, и сравнивать их
+ * надо с тамошним «сейчас», а не с часами телефона: у студента в другом поясе
+ * (онлайн-пары) подсветка и напоминания приходили не в те часы (второй аудит,
+ * М31). Моменты вроде «обновлено в 17:00» показываются по телефону — это время
+ * на часах человека.
+ */
+val COLLEGE_ZONE: ZoneId = ZoneId.of("Asia/Novosibirsk")
+
+fun collegeNow(): LocalDateTime = LocalDateTime.now(COLLEGE_ZONE)
+
+fun collegeToday(): LocalDate = LocalDate.now(COLLEGE_ZONE)
+
+/**
+ * Ближайший момент, когда содержимое меняется само: звонок (начало или конец
+ * пары) сегодня позже `now` — или полночь с минутой.
+ */
+fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime): LocalDateTime {
+    val midnight = now.toLocalDate().plusDays(1).atTime(LocalTime.of(0, 1))
+    val bell = bells.values.flatten()
+        .mapNotNull { runCatching { LocalTime.parse(it) }.getOrNull() }
+        .map { now.toLocalDate().atTime(it) }
+        .filter { it.isAfter(now) }
+        .minOrNull()
+    return listOfNotNull(bell, midnight).min()
+}
+
 /** Короткая подпись дня для виджета: «сегодня, 7 сентября», «пт, 11 сентября». */
 fun formatDayTitleShort(day: LocalDate): String {
-    val today = LocalDate.now()
+    val today = collegeToday()
     return when (day) {
         today -> "сегодня, " + day.format(SHORT_DAY)
         today.plusDays(1) -> "завтра, " + day.format(SHORT_DAY)
@@ -50,7 +77,7 @@ fun formatWeekRange(from: LocalDate, to: LocalDate): String {
 }
 
 fun formatDayTitle(day: LocalDate): String {
-    val today = LocalDate.now()
+    val today = collegeToday()
     // «Послезавтра» человек и так посчитает по дате, а вот «вчера» помогает:
     // прошедшие дни остаются в списке, и их надо отличать с одного взгляда.
     val prefix = when (day) {

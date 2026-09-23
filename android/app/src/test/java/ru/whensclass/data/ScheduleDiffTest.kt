@@ -120,4 +120,35 @@ class ScheduleDiffTest {
         )
         assertEquals(emptyList<ScheduleDiff.Change>(), ScheduleDiff.compare(other, schedule()))
     }
+
+    @Test
+    fun `замена преподавателя при том же предмете — новость`() {
+        val was = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Иванов И. И.")))
+        val now = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Петров П. П.")))
+        assertEquals(
+            listOf("у 2 пары другой преподаватель: Петров П. П."),
+            ScheduleDiff.compare(was, now).map { it.text },
+        )
+    }
+
+    @Test
+    fun `пустой преподаватель — не замена, его просто ещё не вписали`() {
+        val was = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Иванов И. И.")))
+        val now = schedule(LessonDto(number = 2, subject = "Физика"))
+        assertEquals(emptyList<ScheduleDiff.Change>(), ScheduleDiff.compare(was, now))
+    }
+
+    @Test
+    fun `сменилась ссылка на вебинар`() {
+        val was = schedule(lesson(1, "Информатика", url = "https://my.mts-link.ru/j/1"))
+        val now = schedule(lesson(1, "Информатика", url = "https://evil.example/j/1"))
+        assertEquals(listOf("у 1 пары сменилась ссылка"), ScheduleDiff.compare(was, now).map { it.text })
+    }
+
+    @Test
+    fun `номер онлайн-комнаты — не переезд в кабинет`() {
+        val was = schedule(lesson(3, "Информатика", room = "5", online = true))
+        val now = schedule(lesson(3, "Информатика", room = "12", online = true))
+        assertEquals(listOf("у 3 пары онлайн-комната 12"), ScheduleDiff.compare(was, now).map { it.text })
+    }
 }

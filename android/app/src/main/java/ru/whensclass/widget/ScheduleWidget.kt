@@ -3,6 +3,7 @@ package ru.whensclass.widget
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,7 +61,7 @@ class ScheduleWidget : GlanceAppWidget() {
             // «сегодня» с идущей парой внутри него замирали до ближайшего
             // часового обновления. См. WeekWidget: там это стоило пяти часов
             // подсветки кончившейся пары.
-            val now = LocalDateTime.now()
+            val now = moment(currentState(KEY_TICK))
             Content(
                 schedule,
                 state?.groupName,
@@ -124,7 +125,7 @@ class ScheduleWidget : GlanceAppWidget() {
      */
     suspend fun newDay(context: Context): Boolean {
         val store = AppContainer.get(context).store
-        val today = java.time.LocalDate.now().toString()
+        val today = collegeToday().toString()
         if (store.lastWidgetDay() == today) return false
         store.setLastWidgetDay(today)
         return true
@@ -147,6 +148,9 @@ class ScheduleWidget : GlanceAppWidget() {
         val KEY_BUSY = booleanPreferencesKey("busy")
         val KEY_DONE = booleanPreferencesKey("done")
         val KEY_FAILED = booleanPreferencesKey("failed")
+
+        /** Меняется при каждой перерисовке — см. [redrawWidgets]. */
+        val KEY_TICK = longPreferencesKey("tick")
 
         /** Дальше недели листать нечего: ровно столько храним на телефоне. */
         const val MAX_OFFSET = 6

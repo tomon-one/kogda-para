@@ -7,7 +7,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -46,13 +45,20 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 .enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP, request)
         }
 
-        /** Обновить прямо сейчас: открыли приложение, сменили группу, нажали кнопку. */
+        /**
+         * Обновить прямо сейчас: открыли приложение, сменили группу, нажали кнопку.
+         *
+         * Без setExpedited. Срочная работа на Android 8–11 требует
+         * getForegroundInfo, а его у нас нет: WorkManager 2.11 валил такую
+         * работу до doWork, и обновление при открытии, при установке виджета
+         * и ночью не выполнялось вовсе (второй аудит, В28). Обычная разовая
+         * работа с сетью и так запускается почти сразу.
+         */
         fun now(context: Context) {
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(
                     Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
                 )
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(ONE_SHOT, ExistingWorkPolicy.REPLACE, request)
