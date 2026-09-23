@@ -43,6 +43,12 @@ _ROOM_RE = re.compile(r"^\d{1,4}[а-яА-Я]?$")
 # Служебная заглушка колледжа вместо имени: не человек, в списке ей не место.
 _VACANCY_RE = re.compile(r"^вакансия\b", re.IGNORECASE)
 
+# Имя без единой буквы — тоже не человек: прочерк, вопрос, точка как заглушка
+# («-», «?», «Иванов И. И., .»). Такое имя давало пустой идентификатор, индекс
+# преподавателей падал на каждом обращении, а снимок замерзал для всех групп
+# при status ok (второй аудит, К2).
+_HAS_LETTER = re.compile(r"[^\W\d_]")
+
 # Онлайн-пару чаще всего помечают словом в колонке аудитории, а ссылку
 # дают позже или вовсе в чате группы: на 8 сентября таких пар в листе
 # 266, а со ссылкой — единицы. Значит «онлайн» это не название
@@ -149,9 +155,17 @@ def split_teachers(text: str) -> tuple[str, ...]:
         for name in re.split(r"[/,]", line):
             # Точку не трогаем: она часть инициалов — «Иванов И. И.».
             cleaned = " ".join(name.split()).strip(" ,;")
-            if cleaned and not _VACANCY_RE.match(cleaned):
-                names.append(cleaned)
+            if not cleaned or _VACANCY_RE.match(cleaned):
+                continue
+            if not _HAS_LETTER.search(cleaned):
+                log.warning("в строке преподавателей %r вместо имени — пропускаю", cleaned)
+                continue
+            names.append(cleaned)
     return tuple(names)
+
+
+# Название пары, когда в ячейке предмета ничего нет, а пара есть.
+PLACEHOLDER = "Занятие"
 
 
 def parse_lesson(
@@ -164,10 +178,16 @@ def parse_lesson(
     subject, cancel_a, note = _extract_cancellation(normalize(subject_raw), tail="note")
     room_text, cancel_b, room_note = _extract_cancellation(normalize(room_raw), tail="keep")
     note = note or room_note
-    teacher_text = normalize(teacher_raw)
+    teachers = split_teachers(normalize(teacher_raw))
+    cancelled = cancel_a or cancel_b
 
-    if not subject and not room_text and not teacher_text:
-        return None
+    if not subject and not room_text and not teachers:
+        if not cancelled:
+            return None
+        # В ячейке написано только «отмена». Молча выбросить её — значит
+        # показать окно там, где у группы стояла пара и её отменили: человек
+        # не узнает, что пара была (второй аудит, М1).
+        return Lesson(number=number, subject=PLACEHOLDER, cancelled=True, note=note)
 
     subject, kind = _split_kind(subject.replace("\n", " ").strip())
 
@@ -199,12 +219,12 @@ def parse_lesson(
             url = found.group(0)
             subject = " ".join(subject.replace(found.group(0), " ").split())
 
-    if not subject and url:
-        # В ячейке не было ничего, кроме ссылки. Пустое название выглядит
-        # поломкой, а выдумывать предмет нельзя — говорим то, что знаем точно.
-        subject = "Занятие онлайн"
-
-    teachers = split_teachers(teacher_text)
+    if not subject:
+        # Пустое название выглядит поломкой, а выдумывать предмет нельзя —
+        # говорим то, что знаем точно. Раньше заглушка была только для пары
+        # со ссылкой, а пара с преподавателем и аудиторией уходила с s:""
+        # (второй аудит, М5).
+        subject = "Занятие онлайн" if url else PLACEHOLDER
 
     return Lesson(
         number=number,
@@ -214,6 +234,6 @@ def parse_lesson(
         room=room,
         url=url,
         online=online or url is not None,
-        cancelled=cancel_a or cancel_b,
+        cancelled=cancelled,
         note=note,
     )

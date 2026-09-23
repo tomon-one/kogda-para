@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import time
 
@@ -81,6 +82,18 @@ def notify(kind: str, text: str, force: bool = False, good: bool = False) -> boo
     _last_sent[kind] = now
     log.info("отправлено оповещение (%s)", kind)
     return True
+
+
+def remember(kind: str, at: dt.datetime) -> None:
+    """Тревога этого вида уже уходила в `at` — окно тишины считать от неё.
+
+    Окно живёт в памяти процесса, а служба перезапускается при каждой
+    выкладке: перезапуск посреди сбоя сразу повторял тревогу (второй аудит,
+    М23). Время последней тревоги лежит в failing.json и поднимается отсюда.
+    """
+    ago = (dt.datetime.now(dt.timezone.utc) - at).total_seconds()
+    if 0 <= ago < _QUIET_SECONDS:
+        _last_sent[kind] = time.monotonic() - ago
 
 
 def forget(kind: str) -> None:

@@ -27,6 +27,15 @@ _SHEET_TAG_RE = re.compile(
 XLSX_TITLE_LIMIT = 31
 
 
+class SheetClosed(Exception):
+    """Вместо CSV пришла веб-страница: таблицу закрыли или она просит входа.
+
+    Раньше такая страница шла в разборщик, тот не находил заголовка, и
+    владельца отправляли смотреть «формат таблицы», а HTML ложился в архив
+    как отвергнутый лист (второй аудит, М7).
+    """
+
+
 @dataclass(frozen=True)
 class SheetInfo:
     title: str
@@ -74,8 +83,12 @@ def fetch_sheet_csv(gid: str | None = None, title: str | None = None) -> str:
     with _client() as client:
         response = client.get(f"{_base()}/export", params={"format": "csv", "gid": gid})
     response.raise_for_status()
+    kind = response.headers.get("content-type", "")
     # Экспорт приходит с BOM.
-    return response.text.lstrip("\ufeff")
+    text = response.text.lstrip("\ufeff")
+    if "html" in kind.lower() or text.lstrip()[:15].lower().startswith(("<!doctype", "<html")):
+        raise SheetClosed(f"по gid {gid} пришла страница {kind or 'без типа'}, а не CSV")
+    return text
 
 
 def list_sheets_via_xlsx() -> list[SheetInfo]:

@@ -8,10 +8,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from dataclasses import dataclass, field
 
 from .ids import group_id
 from .models import Lesson, Snapshot
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -72,7 +75,14 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
                     name = teacher.strip()
                     if not name:
                         continue
-                    tid = teacher_id(name)
+                    try:
+                        tid = teacher_id(name)
+                    except ValueError:
+                        # Разбор ячеек такое уже отсеивает, но индекс — последняя
+                        # линия: одно такое имя роняло его целиком, /v1/teachers
+                        # отвечал 500, а снимок замерзал (второй аудит, К2).
+                        log.warning("у преподавателя %r нет идентификатора — пропускаю", name)
+                        continue
                     index.names.setdefault(tid, name)
                     key = (tid, day, lesson.number)
                     merged.setdefault(key, []).append(group.name)

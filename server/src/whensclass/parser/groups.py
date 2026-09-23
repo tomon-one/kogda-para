@@ -28,9 +28,25 @@ MIN_GROUPS = 100
 
 
 def split_group_names(tail: str) -> list[str]:
-    """'ДП-923 и ДП-1124' -> обе группы: одна колонка обслуживает две."""
+    """'ДП-923 и ДП-1124' -> обе группы: одна колонка обслуживает две.
+
+    Имя, из которого не выходит идентификатора («-», «?», «…»), — это не
+    группа, а незаполненная ячейка: колонка считается безымянной. Раньше
+    такое имя роняло разбор ValueError, и отказ листа выглядел сетевым
+    сбоем — «таблица не прочиталась», без архива и с тревогой через
+    полчаса (второй аудит, В26).
+    """
     parts = [p.strip() for p in _SPLIT_RE.split(tail.strip())]
-    return [p for p in parts if p]
+    return [p for p in parts if p and _has_id(p)]
+
+
+def _has_id(name: str) -> bool:
+    try:
+        group_id(name)
+    except ValueError:
+        log.warning("вместо имени группы %r — считаю колонку безымянной", name)
+        return False
+    return True
 
 
 def _row_columns(row: list[str]) -> dict[int, list[str]]:

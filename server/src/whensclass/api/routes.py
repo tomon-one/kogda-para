@@ -52,6 +52,24 @@ def _state(request: Request):
     return request.app.state.store, request.app.state.refresher
 
 
+# Дальше года от сегодняшнего дня спрашивать незачем: приложение просит неделю
+# от понедельника. А без границы ?from=9999-12-31 падал на переполнении даты с
+# ответом 500 и трассировкой на 88 строк в общий журнал машины — любой
+# прохожий мог забить journald соседям (второй аудит, В27).
+MAX_FROM_DAYS = 366
+
+
+def _bad_from(start: dt.date | None) -> Response | None:
+    if start is None or abs((start - _today()).days) <= MAX_FROM_DAYS:
+        return None
+    return Response(
+        status_code=422,
+        content=json.dumps({"error": f"from дальше {MAX_FROM_DAYS} дней от сегодня"},
+                           ensure_ascii=False),
+        media_type=JSON,
+    )
+
+
 @router.api_route("/healthz", methods=["GET", "HEAD"])
 def healthz(request: Request) -> Response:
     """200 — расписание есть и оно про сегодня; иначе 503 с причиной.
@@ -149,6 +167,8 @@ def teacher(
     days: int = Query(settings.default_days, ge=1, le=14),
 ) -> Response:
     store, refresher = _state(request)
+    if (bad := _bad_from(start)) is not None:
+        return bad
     if store.snapshot is None or store.teachers is None:
         return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
                         media_type=JSON)
@@ -185,6 +205,8 @@ def schedule(
     days: int = Query(settings.default_days, ge=1, le=14),
 ) -> Response:
     store, refresher = _state(request)
+    if (bad := _bad_from(start)) is not None:
+        return bad
     if store.snapshot is None:
         return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
                         media_type=JSON)
