@@ -1051,10 +1051,13 @@ private fun OnlineLink(url: String) {
         // Куда ведёт кнопка. Полный адрес занимал строку и всё равно обрывался
         // после домена, но совсем без него проверить ссылку нечем: она приходит
         // из таблицы, которую заполняют руками.
+        // Хост не с площадки вебинаров колледжа — предупреждаем прямо: ссылку
+        // мог вписать кто угодно, кто правит таблицу (второй аудит, М37).
+        val known = remember(url) { ru.whensclass.data.isKnownWebinar(url) }
         Text(
-            linkTail(url),
+            if (known) linkTail(url) else "чужой адрес: " + linkTail(url),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (known) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

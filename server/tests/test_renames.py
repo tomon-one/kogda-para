@@ -344,3 +344,22 @@ def test_border_without_rename_records_nothing(tmp_path, snapshot):
     book = RenameBook(tmp_path)
     book.record(both, new_sheet, build_index(both), build_index(new_sheet))
     assert book.pending_groups == {} and book.groups == {}
+
+
+def test_teacher_rename_on_the_border_of_two_sheets(tmp_path, snapshot):
+    """Преподавателю поправили опечатку в имени только в новом листе: на стыке
+    книга этого не видела — как и у групп (второй аудит, В6)."""
+    first, last = dt.date(2026, 9, 2), dt.date(2026, 9, 5)
+    old_sheet = _week(snapshot, first, last, gid="старый")
+    index = build_index(old_sheet)
+    # Самый загруженный: у кого меньше трёх пар за неделю, того не узнать и в
+    # обычном переименовании (MIN_SHARED).
+    busiest = max(index.names, key=lambda tid: sum(len(v) for v in index.days(tid).values()))
+    teacher = index.names[busiest]
+    surname = teacher.split()[0]
+    fixed = surname + " Исправленное Имя"
+    new_sheet = _week(renamed_teacher(snapshot, teacher, fixed), first, last, shift_days=7, gid="новый")
+    both = old_sheet.merged_with(new_sheet)
+    book = RenameBook(tmp_path)
+    book.record(both, new_sheet, build_index(both), build_index(new_sheet))
+    assert book.pending_teachers[teacher_id(teacher)]["to"] == teacher_id(fixed)

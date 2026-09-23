@@ -208,6 +208,51 @@ def _across_sheets(previous: Snapshot, current: Snapshot, vanished: set[str]) ->
     return found
 
 
+def _teachers_across_sheets(
+    previous: Snapshot,
+    previous_teachers: TeacherIndex,
+    current_teachers: TeacherIndex,
+    vanished: set[str],
+) -> dict[str, str]:
+    """То же, что _across_sheets, для преподавателей (второй аудит, В6).
+
+    Индекс преподавателей листов не знает, но снимок знает, с какого листа
+    какой день (`places`). «Родные» дни исчезнувшего — дни его листа;
+    кандидаты — те, у кого в эти дни пар не было: новое написание имени живёт
+    только в новом листе. Сравнение — по недельному узору, фамилия — та же
+    (проверяется там же, где у обычного переименования).
+    """
+    if not vanished or len(previous.sheet_columns) < 2 or not previous.places:
+        return {}
+    sheet_of = {day: place.gid for day, place in previous.places.items()}
+    homes = {sheet_of.get(day) for tid in vanished for day in previous_teachers.days(tid)} - {None}
+    if not homes:
+        return {}
+    home_days = {day for day, gid in sheet_of.items() if gid in homes}
+    candidates = {
+        tid for tid in current_teachers.names
+        if not set(previous_teachers.days(tid)) & home_days
+    }
+    if not candidates:
+        return {}
+
+    def weekly(index: TeacherIndex, ids: set[str]) -> dict[str, Trace]:
+        out: dict[str, Trace] = {}
+        for tid in ids:
+            stable = frozenset(
+                (day.weekday(), entry.lesson.number, entry.lesson.subject)
+                for day, entries in index.days(tid).items()
+                for entry in entries
+            )
+            out[tid] = (stable, stable)
+        return out
+
+    found = detect(weekly(previous_teachers, vanished), weekly(current_teachers, candidates))
+    for old_id, new_id in found.items():
+        log.info("на стыке листов преподаватель %r, похоже, стал %r (по недельному узору)", old_id, new_id)
+    return found
+
+
 class RenameBook:
     """Что во что переименовано — для групп и преподавателей отдельно."""
 
@@ -298,6 +343,12 @@ class RenameBook:
             detect(teacher_traces(previous_teachers), teacher_traces(current_teachers))
             if previous_teachers.names.keys() != current_teachers.names.keys()
             else {}
+        )
+        leftover_teachers = (
+            set(previous_teachers.names) - set(current_teachers.names) - set(found_teachers)
+        )
+        found_teachers.update(
+            _teachers_across_sheets(previous, previous_teachers, current_teachers, leftover_teachers)
         )
         for old_id, new_id in list(found_teachers.items()):
             old_name = previous_teachers.names.get(old_id, old_id)
