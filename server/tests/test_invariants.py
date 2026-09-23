@@ -378,3 +378,25 @@ def test_subgroups_sharing_lessons_are_not_a_shift():
         for day in honest.dates:
             honest.schedule[b][day] = list(honest.schedule[a][day])
     _check_shift(honest)
+
+
+def test_new_day_without_a_date_is_named_as_such(fixture_csv):
+    """Запятая вместо даты: день молча прилипал к предыдущему, а отказ говорил
+    про номера пар соседнего дня (20 сентября 2026, задача 10 в handoff)."""
+    rows = rows_of(fixture_csv)
+    rows[date_rows(rows)[1]][0] = ","
+    with pytest.raises(SourceFormatChanged, match="начинается новый день"):
+        parse_sheet(rows, "фикстура", FIXTURE)
+
+
+def test_messages_point_to_the_sheet_row(fixture_csv):
+    """Номер строки в тексте отказа — как в Sheets, а не после схлопывания шапки."""
+    from whensclass.parser.csv_schedule import collapse_with_rows
+
+    raw = read_csv(fixture_csv)
+    rows, numbers = collapse_with_rows(raw, FIXTURE.min_groups)
+    target = date_rows(rows)[1]
+    assert raw[numbers[target] - 1] is rows[target], "номер ведёт в ту же строку сырого листа"
+    rows[target][0] = "03.13.2026 четверг"
+    with pytest.raises(SourceFormatChanged, match=f"строке {numbers[target]} листа"):
+        parse_sheet(rows, "фикстура", FIXTURE, sheet_rows=numbers)
