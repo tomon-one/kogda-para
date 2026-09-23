@@ -280,3 +280,67 @@ def test_teacher_replaced_by_another_person_is_not_a_rename(tmp_path, snapshot):
     settle(book, snapshot, fixed)
     assert book.teacher(tid) == teacher_id(name + "а")
 
+
+
+def test_quiet_sheet_confirms_by_time(tmp_path, snapshot, monkeypatch):
+    """Лист не меняется — не разбирается, и «три обновления подряд» ждали ночи,
+    а приложение через час говорило «группы больше нет» (второй аудит, В7)."""
+    from whensclass.service import renames
+
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
+    book = RenameBook(tmp_path)
+    book.record(snapshot, after, build_index(snapshot), build_index(after))
+    book.tick()
+    assert book.group("isp-924-2") is None, "сразу — рано"
+    later = renames._now() + renames.CONFIRM_AFTER
+    monkeypatch.setattr(renames, "_now", lambda: later)
+    book.tick()
+    assert book.group("isp-924-2") == "isp-924-2a"
+
+
+def _week(snapshot, first, last, shift_days=0, rename=None, gid="лист"):
+    from whensclass.domain.models import SheetPlace
+
+    out = Snapshot(sheet_title=gid)
+    old_id = new_id = None
+    if rename:
+        old_id, new_id = group_id(rename[0]), group_id(rename[1])
+    out.groups = [
+        GroupRef(name=rename[1], id=new_id, column=g.column) if g.id == old_id else g
+        for g in snapshot.groups
+    ]
+    shift = dt.timedelta(days=shift_days)
+    out.schedule = {
+        (new_id if g == old_id else g): {
+            day + shift: lessons for day, lessons in by_date.items() if first <= day <= last
+        }
+        for g, by_date in snapshot.schedule.items()
+    }
+    out.dates = [d + shift for d in snapshot.dates if first <= d <= last]
+    out.places = {d: SheetPlace(gid=gid, row=1) for d in out.dates}
+    out.sheet_columns = {gid: {g.id: g.column for g in out.groups}}
+    return out
+
+
+def test_rename_on_the_border_of_two_sheets(tmp_path, snapshot):
+    """Старый лист с «ИСП-924/2», новый — с «ИСП-924/2а». Пока оба в окне, оба
+    id живут в снимке; ушёл старый — старый id исчез, а новый «не появился»:
+    книга не видела такого никогда (второй аудит, В6)."""
+    first, last = dt.date(2026, 9, 2), dt.date(2026, 9, 5)
+    old_sheet = _week(snapshot, first, last, gid="старый")
+    new_sheet = _week(snapshot, first, last, shift_days=7,
+                      rename=("ИСП-924/2", "ИСП-924/2а"), gid="новый")
+    both = old_sheet.merged_with(new_sheet)
+    book = RenameBook(tmp_path)
+    book.record(both, new_sheet, build_index(both), build_index(new_sheet))
+    assert book.pending_groups["isp-924-2"]["to"] == "isp-924-2a"
+
+
+def test_border_without_rename_records_nothing(tmp_path, snapshot):
+    first, last = dt.date(2026, 9, 2), dt.date(2026, 9, 5)
+    old_sheet = _week(snapshot, first, last, gid="старый")
+    new_sheet = _week(snapshot, first, last, shift_days=7, gid="новый")
+    both = old_sheet.merged_with(new_sheet)
+    book = RenameBook(tmp_path)
+    book.record(both, new_sheet, build_index(both), build_index(new_sheet))
+    assert book.pending_groups == {} and book.groups == {}

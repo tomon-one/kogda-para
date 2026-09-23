@@ -156,6 +156,12 @@ class Refresher:
                     self._sheets = None
                 self.status = "ok"
                 self._recovered()
+                # Лист тот же — и состав id тот же: переименование, которое
+                # ждёт подтверждения, дождалось его временем (второй аудит, В7).
+                try:
+                    self.renames.tick()
+                except Exception as exc:
+                    log.warning("книга переименований не подтвердилась: %s", exc)
                 return False
 
             parsed = self._parse(texts, today)
