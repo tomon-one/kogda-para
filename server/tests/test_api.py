@@ -240,3 +240,11 @@ def test_teacher_without_lessons_this_sheet_is_not_gone(tmp_path, fixture_csv):
     assert response.json()["gn"] == name
     assert all(day["l"] == [] for day in response.json()["days"])
     assert client.get("/v1/teacher/nikogda-ne-bylo?from=2026-09-07").status_code == 404
+
+
+def test_schedule_is_revalidated_every_time(client):
+    """max-age=300 давал телефону пять минут отдавать кэш как свежий (второй
+    аудит, В14): хранить можно, отдавать без сверки ETag — нет."""
+    response = client.get("/v1/schedule/isp-924-2?from=2026-09-07&days=3")
+    assert "no-cache" in response.headers["cache-control"]
+    assert "max-age" not in response.headers["cache-control"]
