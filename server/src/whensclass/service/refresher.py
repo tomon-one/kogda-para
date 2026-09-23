@@ -505,6 +505,7 @@ def _limits() -> Limits:
         min_groups=settings.min_groups,
         min_dates=settings.min_dates,
         min_lessons=settings.min_lessons,
+        max_gap_days=settings.max_gap_days,
     )
 
 

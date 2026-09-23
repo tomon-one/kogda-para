@@ -91,7 +91,7 @@ def test_date_far_ahead_is_rejected_only_when_today_is_known(fixture_csv):
     rows[last][0] = rows[last][0].replace("2026", "2027")
     with pytest.raises(SourceFormatChanged, match="дальше 60 дней"):
         parse_sheet(rows, "фикстура", FIXTURE, around=dt.date(2026, 9, 8))
-    with pytest.raises(SourceFormatChanged, match="больше 14 дней"):
+    with pytest.raises(SourceFormatChanged, match="больше 25 дней"):
         parse_sheet(rows, "фикстура", FIXTURE)
 
 
@@ -99,7 +99,7 @@ def test_gap_of_a_month_between_days_is_rejected(fixture_csv):
     rows = rows_of(fixture_csv)
     last = date_rows(rows)[-1]
     rows[last][0] = rows[last][0].replace(".09.", ".10.")
-    with pytest.raises(SourceFormatChanged, match="больше 14 дней"):
+    with pytest.raises(SourceFormatChanged, match="больше 25 дней"):
         parse_sheet(rows, "фикстура", FIXTURE)
 
 
@@ -400,3 +400,20 @@ def test_messages_point_to_the_sheet_row(fixture_csv):
     rows[target][0] = "03.13.2026 четверг"
     with pytest.raises(SourceFormatChanged, match=f"строке {numbers[target]} листа"):
         parse_sheet(rows, "фикстура", FIXTURE, sheet_rows=numbers)
+
+
+def test_winter_holidays_inside_a_sheet_are_not_a_typo(fixture_csv):
+    """26.12 → 11.01 — шестнадцать дней: прежний порог в две недели отвергал
+    такой лист целиком (второй аудит, М6). Месяц — по-прежнему опечатка."""
+    rows = rows_of(fixture_csv)
+    later = date_rows(rows)[5:]
+    for i in later:
+        day = _parse_cell_date(rows[i][0])
+        rows[i][0] = (day + dt.timedelta(days=16)).strftime("%d.%m.%Y")
+    parse_sheet(rows, "фикстура", FIXTURE)
+
+
+def _parse_cell_date(cell):
+    from whensclass.parser.csv_schedule import _parse_date
+
+    return _parse_date(cell)
