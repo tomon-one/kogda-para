@@ -39,3 +39,6 @@ Thumbs.db
 CLAUDE.md
 handoff.md
 current.md
+
+# Личные разрешения Claude Code — у каждого свои, в репозиторий не идут.
+.claude/settings.local.json
