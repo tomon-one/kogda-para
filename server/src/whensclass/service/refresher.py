@@ -313,11 +313,19 @@ class Refresher:
                 current = parse_export(
                     text, title or f"gid {gid}", gid, limits=_limits(), around=today
                 )
+                # Сдвиг ищется по порядку колонок, а он у каждого листа свой:
+                # проверять лист отдельно, до склейки. Историю даёт прежний
+                # снимок и — для следующего листа — только что разобранный
+                # текущий (второй аудит, М9).
+                seed = shift_seed(self.store.snapshot, current)
+                if snapshot is not None:
+                    for group, traces in shift_seed(snapshot, current).items():
+                        seed.setdefault(group, set()).update(traces)
+                _check_shift(current, seed=seed)
                 snapshot = current if snapshot is None else snapshot.merged_with(current)
             if snapshot is None:
                 return None
             _check_group_drop(self.store.snapshot, snapshot)
-            _check_shift(snapshot, seed=shift_seed(self.store.snapshot, snapshot))
             teachers = build_index(snapshot)
         except ValueError as exc:
             raise SourceFormatChanged(f"разбор споткнулся о значение: {exc}") from exc
