@@ -248,3 +248,12 @@ def test_schedule_is_revalidated_every_time(client):
     response = client.get("/v1/schedule/isp-924-2?from=2026-09-07&days=3")
     assert "no-cache" in response.headers["cache-control"]
     assert "max-age" not in response.headers["cache-control"]
+
+
+def test_autodocs_are_not_served():
+    """/docs и /openapi.json отвечали всем — службе они ни к чему."""
+    from whensclass.main import app as real_app
+
+    client = TestClient(real_app)  # без with: служба не стартует, нужны только маршруты
+    assert client.get("/docs").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
