@@ -308,3 +308,73 @@ def test_today_dropping_out_of_the_snapshot_is_not_an_update():
     # Воскресенья нет ни там, ни там — не повод.
     _check_today_kept(previous, other, previous.dates[-1] + dt.timedelta(days=1))
 
+
+
+def test_shift_of_a_window_of_groups_is_caught_by_neighbours():
+    """Сдвиг хвоста листа на часть групп — не на всю ширину (второй аудит, К1).
+
+    Прежняя доля «незнакомых» его не видела: соседи — часто подгруппы с общими
+    лекциями, и 40–65 сдвинутых групп из 189 проходили.
+    """
+    import copy
+
+    from whensclass.parser.csv_schedule import SHIFT_RUN_REJECT, _check_shift
+
+    honest = synthetic_sheet()
+    ids = [g.id for g in honest.groups]
+    window = ids[8:8 + SHIFT_RUN_REJECT + 2]
+    shifted = copy.deepcopy(honest)
+    for day in honest.dates[7:]:
+        for gid in window:
+            neighbour = ids[ids.index(gid) + 1]
+            shifted.schedule[gid][day] = list(honest.schedule[neighbour][day])
+    with pytest.raises(SourceFormatChanged, match="групп подряд"):
+        _check_shift(shifted)
+
+
+def test_honest_edits_are_not_a_shift():
+    """Законные правки колледжа — не сдвиг (второй аудит, В5): прежний детектор
+    отвергал их как «сдвиг колонок», и весь лист уходил в stale."""
+    import copy
+
+    from whensclass.parser.csv_schedule import _check_shift
+
+    honest = synthetic_sheet()
+    ids = [g.id for g in honest.groups]
+    day = honest.dates[8]
+
+    no_teachers = copy.deepcopy(honest)
+    for gid in ids:
+        no_teachers.schedule[gid][day] = [
+            dataclasses_replace(x, teachers=()) for x in no_teachers.schedule[gid][day]
+        ]
+    _check_shift(no_teachers)
+
+    health_day = copy.deepcopy(honest)
+    for gid in ids:
+        health_day.schedule[gid][day] = [
+            dataclasses_replace(x, subject="День здоровья", teachers=())
+            for x in health_day.schedule[gid][day]
+        ]
+    _check_shift(health_day)
+
+    class_hour = copy.deepcopy(honest)
+    for gid in ids[:18]:
+        first, *rest = class_hour.schedule[gid][day]
+        class_hour.schedule[gid][day] = [
+            dataclasses_replace(first, subject="Кураторский час", teachers=("Куратор",)), *rest
+        ]
+    _check_shift(class_hour)
+
+
+def test_subgroups_sharing_lessons_are_not_a_shift():
+    """Подгруппы с общими парами: пара соседа, которую знает и своя история, —
+    не голос за сдвиг. На живом листе это давало честные серии до 4."""
+    from whensclass.parser.csv_schedule import _check_shift
+
+    honest = synthetic_sheet()
+    for i in range(0, len(honest.groups) - 1, 2):
+        a, b = honest.groups[i].id, honest.groups[i + 1].id
+        for day in honest.dates:
+            honest.schedule[b][day] = list(honest.schedule[a][day])
+    _check_shift(honest)

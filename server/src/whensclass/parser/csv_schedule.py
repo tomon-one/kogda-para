@@ -41,22 +41,32 @@ _TIME_RE = re.compile(r"^\d{1,2}[.:-]\d{2}\s*[-–]\s*\d{1,2}[.:-]\d{2}$")
 MAX_DAYS_AHEAD = 60
 MAX_GAP_DAYS = 14
 # Сдвиг блока строк, под которым нет повторного заголовка, не видит ни одна
-# сверка колонок: каждая группа молча получает пары соседа. Зато его видно
-# по содержимому: у группы день, в котором ни один предмет с преподавателем
-# не встречался в её же прошлых днях этого листа. На живом листе 13.09.2026
-# таких групп в худший день 4 %, при сдвиге с 14.09 — 37 % в первый же день
-# (меньше половины, потому что соседние колонки — часто подгруппы с общими
-# лекциями). Порог посередине.
-SHIFT_REJECT_SHARE = 0.25
-SHIFT_WARN_SHARE = 0.10
+# сверка колонок: каждая группа молча получает пары соседа. Видно его по
+# содержимому, и признак — именно «пары соседа», а не «незнакомые пары».
+# В строке пары идём по группам в порядке колонок: группа «голосует» за сдвиг
+# на k колонок, если её пару знает история соседа через k колонок, а её
+# собственная — нет; группа, чью пару знает только своя история, серию рвёт.
+# Отказ — если серия набрала SHIFT_RUN_REJECT голосов за один и тот же k.
+#
+# До 23 сентября 2026 отказ давала доля групп с незнакомыми парами, и она
+# ошибалась в обе стороны (второй аудит, К1, В3, В5): сдвиг хвоста листа на
+# 40–65 групп проходил, потому что соседи — часто подгруппы с общими
+# лекциями, а у 74 групп из 189 история была «короткой» и не сравнивалась;
+# зато неделя практики у курса, классный час у 70 групп, День здоровья или
+# ещё не проставленные преподаватели отвергали лист как сдвиг. Признак соседа
+# на живом листе 23.09.2026: сдвиги из находок — серии 17–63 голоса; законные
+# правки — 0–1; все 194 честные версии листа за 13–23.09 — не больше 4
+# (подгруппы ГД-926/1–4 с общими парами на второй день листа). Порог — вдвое
+# выше честного максимума и вдвое ниже самой короткой атаки.
+SHIFT_RUN_REJECT = 8
+SHIFT_OFFSETS = (-2, -1, 1, 2)
+# Прежняя доля незнакомых — теперь только запись в журнал: законные правки
+# задевают её так же, как сдвиг.
+SHIFT_WARN_SHARE = 0.25
+SHIFT_ROW_WARN_SHARE = 0.35
 SHIFT_MIN_GROUPS = 20
 SHIFT_MIN_LESSONS_TODAY = 3
 SHIFT_MIN_HISTORY = 10
-# Сдвиг не с первой пары дня (выделили диапазон не с начала) дневная проверка
-# не видит: первая пара знакома, и группа не «чужая». Поэтому ещё построчно:
-# доля групп, у которых пара с этим номером незнакома. На живом листе фон
-# по строкам ≤ 0.21, при сдвиге со 2–4-й пары 0.40–0.69.
-SHIFT_ROW_REJECT_SHARE = 0.35
 
 _WEEKDAYS = (
     "понедельник", "вторник", "среда",
@@ -270,24 +280,66 @@ def shift_seed(previous: Snapshot | None, current: Snapshot) -> Seed:
 
 
 def _check_shift(snapshot: Snapshot, seed: Seed | None = None) -> None:
-    """День против истории группы — в том же листе и в `seed` (см. SHIFT_*).
+    """День против истории групп — в том же листе и в `seed` (см. SHIFT_*).
 
     История копится по дням, а не собирается заново для каждого дня из всех
     прошлых: так было квадратично по числу дат, а колледж дописывает недели в
-    один лист, и разбор рос быстрее самого листа (второй аудит, М36).
+    один лист (второй аудит, М36). Порядок колонок — этого снимка, поэтому
+    склеенный снимок двух листов сюда не годится: проверять каждый лист
+    отдельно (М9).
     """
     seed = seed or {}
+    first: dict[int, str] = {}
+    for group in snapshot.groups:
+        first.setdefault(group.column, group.id)
+    order = [first[c] for c in sorted(first)]
+    names = {g.id: g.name for g in snapshot.groups}
     history = {gid: set(seed.get(gid, ())) for gid in snapshot.schedule}
     for day in snapshot.dates:
-        _judge_day(snapshot, day, history)
+        _judge_neighbours(snapshot, day, history, order, names)
+        _warn_strangers(snapshot, day, history)
         for gid, by_date in snapshot.schedule.items():
             history[gid].update(_trace(x) for x in by_date.get(day, []))
 
 
-def _judge_day(snapshot: Snapshot, day: date, history: dict[str, set]) -> None:
+def _judge_neighbours(
+    snapshot: Snapshot, day: date, history: dict[str, set], order: list[str], names: dict[str, str]
+) -> None:
+    """Отказ, если в строке пары подряд идущие группы получили пары соседа."""
+    lessons = {
+        gid: {x.number: x for x in snapshot.schedule.get(gid, {}).get(day, [])} for gid in order
+    }
+    for number in sorted({n for by_number in lessons.values() for n in by_number}):
+        for k in SHIFT_OFFSETS:
+            votes, start = 0, None
+            for i, gid in enumerate(order):
+                lesson = lessons[gid].get(number)
+                if lesson is None:
+                    continue
+                trace = _trace(lesson)
+                own = trace in history[gid]
+                j = i + k
+                theirs = 0 <= j < len(order) and trace in history[order[j]]
+                if theirs and not own:
+                    votes += 1
+                    start = start or gid
+                    if votes >= SHIFT_RUN_REJECT:
+                        side = "правее" if k > 0 else "левее"
+                        raise SourceFormatChanged(
+                            f"{number}-я пара {day} похожа на сдвиг колонок: у {votes} групп "
+                            f"подряд, начиная с {names.get(start, start)}, пары соседа на "
+                            f"{abs(k)} {'колонку' if abs(k) == 1 else 'колонки'} {side}"
+                        )
+                elif own and not theirs:
+                    votes, start = 0, None
+
+
+def _warn_strangers(snapshot: Snapshot, day: date, history: dict[str, set]) -> None:
+    """Много незнакомых пар — не отказ, а запись в журнал: так выглядит и
+    неделя практики, и классный час, и сдвиг, которого признак соседа не
+    увидел (например, в первые дни листа без истории)."""
     compared = 0
     strangers: list[str] = []
-    # По строкам пары: номер -> (сравнено, незнакомых).
     rows: dict[int, list[int]] = {}
     for gid, by_date in snapshot.schedule.items():
         today = by_date.get(day, [])
@@ -305,23 +357,15 @@ def _judge_day(snapshot: Snapshot, day: date, history: dict[str, set]) -> None:
         if not ({_trace(x) for x in today} & known):
             strangers.append(gid)
     for number, (seen, unknown) in sorted(rows.items()):
-        if seen >= SHIFT_MIN_GROUPS and unknown / seen > SHIFT_ROW_REJECT_SHARE:
-            raise SourceFormatChanged(
-                f"{number}-я пара {day} похожа на сдвиг колонок: у {unknown} групп "
-                f"из {seen} незнакомый предмет"
+        if seen >= SHIFT_MIN_GROUPS and unknown / seen > SHIFT_ROW_WARN_SHARE:
+            log.warning(
+                "%d-я пара %s: у %d групп из %d незнакомый предмет — не сдвиг по соседям, "
+                "но присмотреться", number, day, unknown, seen,
             )
-    if compared < SHIFT_MIN_GROUPS:
-        return
-    share = len(strangers) / compared
-    if share > SHIFT_REJECT_SHARE:
-        raise SourceFormatChanged(
-            f"день {day} похож на сдвиг колонок: у {len(strangers)} групп из {compared} "
-            f"ни одного знакомого предмета, например {', '.join(strangers[:3])}"
-        )
-    if share > SHIFT_WARN_SHARE:
+    if compared >= SHIFT_MIN_GROUPS and len(strangers) / compared > SHIFT_WARN_SHARE:
         log.warning(
             "день %s: у %d групп из %d ни одного знакомого предмета (%s) — "
-            "не сдвиг, но присмотреться", day, len(strangers), compared,
+            "не сдвиг по соседям, но присмотреться", day, len(strangers), compared,
             ", ".join(strangers[:3]),
         )
 
