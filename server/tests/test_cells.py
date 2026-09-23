@@ -283,3 +283,12 @@ def test_glued_and_service_texts_in_teacher_row(cell, people):
     /v1/teachers, а у настоящих пары пропадали (второй аудит, В3). Пример —
     живой лист 23.09.2026."""
     assert parse_lesson(1, "Информатика", "", cell).teachers == people
+
+
+def test_same_sheet_trouble_is_logged_once(caplog):
+    """Неувязка листа — состояние, а не событие: раньше она писалась в журнал
+    на каждом разборе, каждые двадцать минут."""
+    with caplog.at_level("WARNING"):
+        for _ in range(3):
+            parse_lesson(1, "Информатика", "", "замена")
+    assert caplog.text.count("нет имени") == 1
