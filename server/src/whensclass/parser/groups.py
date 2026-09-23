@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 
 from ..domain.ids import group_id
 from ..domain.models import GroupRef, SourceFormatChanged
@@ -112,7 +113,10 @@ def build_column_map(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> lis
 
 
 def find_header_rows(
-    rows: list[list[str]], groups: list[GroupRef], min_groups: int = MIN_GROUPS
+    rows: list[list[str]],
+    groups: list[GroupRef],
+    min_groups: int = MIN_GROUPS,
+    where: Callable[[int], str] = lambda i: f"строке {i}",
 ) -> set[int]:
     """Индексы строк, которые надо пропустить при обходе.
 
@@ -130,7 +134,7 @@ def find_header_rows(
             skip.add(i)
             if len(columns) >= min_groups and set(columns) != expected:
                 raise SourceFormatChanged(
-                    f"повторный заголовок в строке {i} задаёт другие колонки"
+                    f"повторный заголовок в {where(i)} задаёт другие колонки"
                 )
             continue
 
@@ -144,14 +148,32 @@ def find_header_rows(
             if c < len(below)
         ):
             # Заголовок «столбиком»: Дисциплина / Преподаватель / имя группы.
-            _check_columnar(i, cells, rows[i + 2] if i + 2 < len(rows) else [], groups)
+            _check_columnar(where(i), cells, rows[i + 2] if i + 2 < len(rows) else [], groups)
             skip.update({i, i + 1, i + 2})
 
     return skip
 
 
+# Сколько имён повторного заголовка должны стоять не в своих колонках, чтобы
+# это был сдвиг. Сдвиг переставляет все имена правее вставки, а одно чужое
+# имя — опечатка: «ИСП-924/1» вместо «ИСП-924/2» (второй аудит, В8).
+COLUMNAR_STRANGERS_TO_REJECT = 2
+
+# Что уже сказано в журнал: терпимая неувязка повторного заголовка — это
+# состояние листа, а не событие, и писалась на каждом разборе дважды, по 80
+# строк в день.
+_warned: set[tuple] = set()
+
+
+def _warn_once(key: tuple, message: str, *args) -> None:
+    if key in _warned:
+        return
+    _warned.add(key)
+    log.warning(message, *args)
+
+
 def _check_columnar(
-    row_index: int, cells: set[int], names_row: list[str], groups: list[GroupRef]
+    where: str, cells: set[int], names_row: list[str], groups: list[GroupRef]
 ) -> None:
     """Сверяет колонки повторного заголовка с главным.
 
@@ -162,16 +184,21 @@ def _check_columnar(
     чужие пары, статус остаётся «ok», и заметить это можно только глазами.
 
     Поэтому имена групп из третьей строки заголовка сверяются с картой колонок.
-    Сдвиг узнаётся по имени, которое по главному заголовку живёт в другой
-    колонке, — или по колонке, которой в главном заголовке нет вовсе. Тогда
-    считаем формат изменившимся: упасть и остаться на прежнем снимке лучше,
-    чем отправить человека не в ту аудиторию.
+    Сдвиг узнаётся по именам, которые по главному заголовку живут в других
+    колонках, — и не по одному: сдвиг переставляет все имена правее вставки,
+    а одно чужое имя — опечатка (В8). Тогда считаем формат изменившимся:
+    упасть и остаться на прежнем снимке лучше, чем отправить человека не в ту
+    аудиторию.
 
     А имя, которого нет ни в одной колонке главного заголовка, — не сдвиг, а
     переименование. 11 сентября 2026 колледж поправил имя одной группы в
     главном заголовке и не тронул его в двух повторных — и из-за одной ячейки
     187 групп два дня сидели без расписания. Колонка та же, пары под ней те
-    же: про такое пишем в журнал и идём дальше, веря главному заголовку.
+    же: про такое пишем в журнал и идём дальше, веря главному заголовку. То же
+    — для колонки, которой в главном заголовке нет вовсе, если её имени там
+    нет нигде: это опечатка в главном заголовке («Преподаватели», стёртое
+    имя), блок пропущен как безымянный — отвергать из-за неё весь лист
+    нельзя (В4).
     """
     by_column: dict[int, set[str]] = {}
     column_of: dict[str, int] = {}
@@ -179,30 +206,48 @@ def _check_columnar(
         by_column.setdefault(group.column, set()).add(group.id)
         column_of[group.id] = group.column
 
+    strangers: list[tuple[int, list[str], str, set[str] | None]] = []
     for col in sorted(cells):
         declared = split_group_names((names_row[col] if col < len(names_row) else "") or "")
         if not declared:
             # Имя не написали — сверять нечего, это не повод падать.
             continue
-        known = by_column.get(col)
-        if known is None:
-            raise SourceFormatChanged(
-                f"повторный заголовок в строке {row_index} объявляет группу "
-                f"{declared} в колонке {col}, которой нет в главном заголовке"
-            )
         ids = {group_id(name) for name in declared}
+        known = by_column.get(col)
+        elsewhere = sorted(gid for gid in ids if gid in column_of and column_of[gid] != col)
+        if elsewhere:
+            strangers.append((col, declared, elsewhere[0], known))
+            continue
+        if known is None:
+            _warn_once(
+                ("gap", col, tuple(declared)),
+                "повторный заголовок: в колонке %d стоит %s, а в главном заголовке этой "
+                "колонки нет и такого имени нет нигде — считаю блок безымянным",
+                col, declared,
+            )
+            continue
         if ids == known:
             continue
-        strangers = sorted(gid for gid in ids if gid in column_of and column_of[gid] != col)
-        if strangers:
-            raise SourceFormatChanged(
-                f"повторный заголовок в строке {row_index}: в колонке {col} "
-                f"стоит {declared}, а по главному заголовку {strangers[0]!r} "
-                f"живёт в колонке {column_of[strangers[0]]}, здесь же {sorted(known)}"
-            )
-        log.warning(
-            "повторный заголовок в строке %d: в колонке %d стоит %s, а по главному "
-            "заголовку там %s — такого имени нет больше нигде, считаю "
-            "переименованием и верю главному заголовку",
-            row_index, col, declared, sorted(known),
+        _warn_once(
+            ("rename", col, tuple(declared)),
+            "повторный заголовок: в колонке %d стоит %s, а по главному заголовку там "
+            "%s — такого имени нет больше нигде, считаю переименованием и верю "
+            "главному заголовку",
+            col, declared, sorted(known),
+        )
+
+    if len(strangers) >= COLUMNAR_STRANGERS_TO_REJECT:
+        col, declared, gid, known = strangers[0]
+        here = f"здесь же {sorted(known)}" if known else "здесь в главном заголовке пусто"
+        raise SourceFormatChanged(
+            f"повторный заголовок в {where}: в колонке {col} стоит {declared}, а по "
+            f"главному заголовку {gid!r} живёт в колонке {column_of[gid]}, {here}; "
+            f"таких колонок {len(strangers)}"
+        )
+    for col, declared, gid, known in strangers:
+        _warn_once(
+            ("stranger", col, tuple(declared)),
+            "повторный заголовок: в колонке %d стоит %s, а по главному заголовку %r "
+            "живёт в колонке %d — одно такое имя считаю опечаткой, не сдвигом",
+            col, declared, gid, column_of[gid],
         )

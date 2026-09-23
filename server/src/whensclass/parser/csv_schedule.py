@@ -133,11 +133,24 @@ def parse_sheet(
     sheet_title: str,
     limits: Limits = FULL_SHEET,
     around: date | None = None,
+    sheet_rows: list[int] | None = None,
 ) -> Snapshot:
-    """`around` — сегодняшний день: дальше MAX_DAYS_AHEAD от него дат не ждём."""
+    """`around` — сегодняшний день: дальше MAX_DAYS_AHEAD от него дат не ждём.
+
+    `sheet_rows[i]` — номер строки листа, как его видит человек в Sheets, для
+    строки `i` после схлопывания шапки. С ним сообщения разбора ведут в ту
+    строку, что открывается в таблице: 20 сентября 2026 журнал писал «строка
+    202», а в Sheets это была 214-я (раздел 7 docs/hardening-2026-09-14.md).
+    """
     rows = [list(r) for r in rows]
+
+    def where(i: int) -> str:
+        if sheet_rows is not None and i < len(sheet_rows):
+            return f"строке {sheet_rows[i]} листа"
+        return f"строке {i}"
+
     groups = build_column_map(rows, limits.min_groups)
-    skip = find_header_rows(rows, groups, limits.min_groups)
+    skip = find_header_rows(rows, groups, limits.min_groups, where=where)
 
     snapshot = Snapshot(sheet_title=sheet_title, groups=groups)
     for group in groups:
@@ -166,13 +179,13 @@ def parse_sheet(
                 # Раньше такая ячейка просто не узнавалась: current оставался
                 # на прошлом дне, и весь новый день дописывался к предыдущему —
                 # с повторяющимися номерами пар и без единой жалобы.
-                raise SourceFormatChanged(f"дата в строке {i} не разобралась: {cell!r}")
+                raise SourceFormatChanged(f"дата в {where(i)} не разобралась: {cell!r}")
             # Слово без чисел — «понедельник» над датой, «неделя 3»: не дата.
-            log.info("в колонке дат строки %d не дата: %r — пропускаю", i, cell.strip())
+            log.info("в колонке дат в %s не дата: %r — пропускаю", where(i), cell.strip())
         if found is not None:
             if around is not None and found > around + timedelta(days=MAX_DAYS_AHEAD):
                 raise SourceFormatChanged(
-                    f"дата {found} в строке {i} дальше {MAX_DAYS_AHEAD} дней от {around}"
+                    f"дата {found} в {where(i)} дальше {MAX_DAYS_AHEAD} дней от {around}"
                 )
             if found != current:
                 date_order.append(found)
@@ -188,12 +201,22 @@ def parse_sheet(
                 # «1-2», «кл. час», «3 пара» — новый способ записи, и что
                 # с ним делать, должен решить человек, а не пропуск.
                 raise SourceFormatChanged(
-                    f"в колонке номеров пар строки {i} стоит {number_cell!r}"
+                    f"в колонке номеров пар в {where(i)} стоит {number_cell!r}"
                 )
             continue
         if current is None:
-            raise SourceFormatChanged(f"пара в строке {i} раньше первой даты")
+            raise SourceFormatChanged(f"пара в {where(i)} раньше первой даты")
         number = int(m.group(1))
+        if number == 1 and found is None and numbers_by_date.get(current):
+            # С первой пары начинается новый день, а даты у него нет. Раньше
+            # такой день молча дописывался к предыдущему, и отказ приходил
+            # окольно — через номера пар соседнего дня: 20 сентября 2026 вместо
+            # «21.09.2026 понедельник» стояла запятая, а err говорил про
+            # субботу (раздел 7 docs/hardening-2026-09-14.md, задача 10).
+            raise SourceFormatChanged(
+                f"в {where(i)} начинается новый день (1-я пара), а даты нет: "
+                f"{cell.strip()!r} — после {current}"
+            )
         expected = len(numbers_by_date.setdefault(current, [])) + 1
         if number != expected:
             raise SourceFormatChanged(
@@ -371,7 +394,14 @@ def _warn_strangers(snapshot: Snapshot, day: date, history: dict[str, set]) -> N
 
 
 def collapse_export(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> list[list[str]]:
-    """Сырой экспорт -> форма, на которой построен разбор.
+    """Сырой экспорт -> форма, на которой построен разбор. См. `collapse_with_rows`."""
+    return collapse_with_rows(rows, min_groups)[0]
+
+
+def collapse_with_rows(
+    rows: list[list[str]], min_groups: int = MIN_GROUPS
+) -> tuple[list[list[str]], list[int]]:
+    """Сырой экспорт -> (форма, на которой построен разбор; номера строк листа).
 
     В сыром листе шапка стоит столбиком: строка «Дисциплина», под ней
     «Преподаватель», под ней имена групп; выше — пустые строки с рамками.
@@ -383,10 +413,13 @@ def collapse_export(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> list
     Лист, уже собранный (форма gviz, фикстуры), возвращается как есть:
     признак — строка с «Дисциплина Преподаватель …» раньше первой
     столбиковой шапки.
+
+    Второе значение — номер строки листа (как в Sheets, с единицы) для каждой
+    строки результата: по нему сообщения разбора ведут в настоящую строку.
     """
     for i, row in enumerate(rows):
         if sum(1 for c in row if c.strip().startswith(_HEADER_PREFIX)) >= min_groups:
-            return rows
+            return rows, list(range(1, len(rows) + 1))
         below = rows[i + 1] if i + 1 < len(rows) else []
         if (
             sum(1 for c in row if c.strip() == "Дисциплина") >= min_groups
@@ -404,17 +437,18 @@ def collapse_export(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> list
             ]
             # Пустые строки — только шум: строка под парой отдана
             # преподавателям, и пустая между ними отняла бы их у всех групп.
-            body = [r for r in rows[i + 3:] if any(c.strip() for c in r)]
-            return [merged] + body
-    return rows
+            kept = [
+                (n, r) for n, r in enumerate(rows[i + 3:], start=i + 4) if any(c.strip() for c in r)
+            ]
+            return [merged] + [r for _, r in kept], [i + 3] + [n for n, _ in kept]
+    return rows, list(range(1, len(rows) + 1))
 
 
 def parse_csv(
     text: str, sheet_title: str, limits: Limits = FULL_SHEET, around: date | None = None
 ) -> Snapshot:
-    return parse_sheet(
-        collapse_export(read_csv(text), limits.min_groups), sheet_title, limits, around=around
-    )
+    rows, numbers = collapse_with_rows(read_csv(text), limits.min_groups)
+    return parse_sheet(rows, sheet_title, limits, around=around, sheet_rows=numbers)
 
 
 def parse_export(
@@ -435,9 +469,8 @@ def parse_export(
         day: SheetPlace(gid=gid, row=row)
         for day, row in date_rows([r[0] if r else "" for r in rows]).items()
     }
-    snapshot = parse_sheet(
-        collapse_export(rows, limits.min_groups), sheet_title, limits, around=around
-    )
+    collapsed, numbers = collapse_with_rows(rows, limits.min_groups)
+    snapshot = parse_sheet(collapsed, sheet_title, limits, around=around, sheet_rows=numbers)
     snapshot.places = places
     return snapshot
 

@@ -213,13 +213,31 @@ def test_repeated_header_with_shifted_columns_stops_the_parse(fixture_csv):
     if header is None:
         pytest.skip("в фикстуре нет повторного заголовка «столбиком»")
     _, columns, names_row = header
-    # Ставим в колонку имя соседней группы — ровно то, что делает сдвиг
-    # блока: под заголовком оказываются пары другой группы.
-    target = next(c for c in columns if c in by_column and c < len(names_row))
-    names_row[target] = next(name for c, name in by_column.items() if c != target)
+    # Сдвиг блока переставляет все имена правее вставки: в каждой колонке
+    # оказывается имя соседа слева.
+    ordered = sorted(c for c in columns if c in by_column and c < len(names_row))
+    for left, right in zip(ordered, ordered[1:]):
+        names_row[right] = by_column[left]
 
     with pytest.raises(SourceFormatChanged, match="повторный заголовок"):
         parse_sheet(rows, "фикстура", FIXTURE)
+
+
+def test_single_neighbour_name_in_repeated_header_is_a_typo(fixture_csv, caplog):
+    """Одно чужое имя — опечатка «ИСП-924/1» вместо «ИСП-924/2», а не сдвиг:
+    сдвиг переставляет все имена (второй аудит, В8)."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
+    by_column = {g.column: g.name for g in groups}
+    header = _columnar_header(rows)
+    if header is None:
+        pytest.skip("в фикстуре нет повторного заголовка «столбиком»")
+    _, columns, names_row = header
+    target = next(c for c in columns if c in by_column and c < len(names_row))
+    names_row[target] = next(name for c, name in by_column.items() if c != target)
+    with caplog.at_level("WARNING"):
+        parse_sheet(rows, "фикстура", FIXTURE)
+    assert "опечаткой" in caplog.text
 
 
 def test_repeated_header_with_renamed_group_is_tolerated(fixture_csv, caplog):
@@ -249,8 +267,12 @@ def test_repeated_header_with_renamed_group_is_tolerated(fixture_csv, caplog):
     assert any("переименован" in r.message for r in caplog.records)
 
 
-def test_repeated_header_with_unknown_column_stops_the_parse(fixture_csv):
-    """Группа в колонке, которой нет в главном заголовке, — тоже сдвиг."""
+def test_repeated_header_with_unknown_column_is_a_broken_main_header(fixture_csv, caplog):
+    """Колонка, которой нет в главном заголовке, с именем, которого там нет нигде, —
+    опечатка в главном заголовке («Преподаватели», стёртое имя): блок пропущен
+    как безымянный, а весь лист из-за одной ячейки не отвергается (второй
+    аудит, В4). Имя, которое главный заголовок знает в другой колонке, — дело
+    другое: см. сдвиг выше."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
     known = {g.column for g in groups}
@@ -268,8 +290,9 @@ def test_repeated_header_with_unknown_column_stops_the_parse(fixture_csv):
     rows[i + 1][col] = "Преподаватель"
     names_row[col] = "НОВАЯ-999"
 
-    with pytest.raises(SourceFormatChanged, match="нет в главном заголовке"):
+    with caplog.at_level("WARNING"):
         parse_sheet(rows, "фикстура", FIXTURE)
+    assert "считаю блок безымянным" in caplog.text
 
 
 def test_export_header_is_collapsed_like_gviz_did(fixture_csv):
