@@ -36,10 +36,8 @@ _LESSON_NO_RE = re.compile(r"^([1-9])$")
 # Строка под парой несёт время звонка в колонке номера: «9-00-10.30».
 _TIME_RE = re.compile(r"^\d{1,2}[.:-]\d{2}\s*[-–]\s*\d{1,2}[.:-]\d{2}$")
 # Дальше этого лист смотреть не должен: опечатка «2027» в одной дате иначе
-# делала бы лист покрывающим год вперёд. И между соседними днями одного
-# листа не бывает больше двух недель — даже с каникулами.
+# делала бы лист покрывающим год вперёд.
 MAX_DAYS_AHEAD = 60
-MAX_GAP_DAYS = 14
 # Сдвиг блока строк, под которым нет повторного заголовка, не видит ни одна
 # сверка колонок: каждая группа молча получает пары соседа. Видно его по
 # содержимому, и признак — именно «пары соседа», а не «незнакомые пары».
@@ -80,6 +78,11 @@ class Limits:
     min_groups: int = 100
     min_dates: int = 5
     min_lessons: int = 500
+    # Разрыв между соседними днями одного листа. Опечатка в месяце у одной
+    # даты (14.10 вместо 14.09) даёт разрыв в месяц и растянула бы лист; а
+    # зимние каникулы внутри листа (26.12 → 11.01) — шестнадцать дней, и с
+    # прежним порогом в две недели лист отвергался целиком (второй аудит, М6).
+    max_gap_days: int = 25
 
 
 FULL_SHEET = Limits()
@@ -261,11 +264,15 @@ def _validate(snapshot: Snapshot, seen_order: list[date], limits: Limits) -> Non
         )
     if any(b <= a for a, b in zip(seen_order, seen_order[1:])):
         raise SourceFormatChanged(f"даты в листе идут не по возрастанию: {seen_order}")
-    gaps = [(a, b) for a, b in zip(seen_order, seen_order[1:]) if (b - a).days > MAX_GAP_DAYS]
+    gaps = [
+        (a, b) for a, b in zip(seen_order, seen_order[1:]) if (b - a).days > limits.max_gap_days
+    ]
     if gaps:
         # Опечатка в месяце у одной даты: остальные проверки её пропустят,
         # а `covering` растянет лист на месяц.
-        raise SourceFormatChanged(f"между {gaps[0][0]} и {gaps[0][1]} больше {MAX_GAP_DAYS} дней")
+        raise SourceFormatChanged(
+            f"между {gaps[0][0]} и {gaps[0][1]} больше {limits.max_gap_days} дней"
+        )
     total = snapshot.total_lessons()
     if total < limits.min_lessons:
         raise SourceFormatChanged(

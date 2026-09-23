@@ -47,7 +47,7 @@ def resolves(monkeypatch):
         # он не падает, а берёт ближайший известный лист, предпочитая будущий.
         # Между листами всегда воскресенье, так что этот путь — не редкость,
         # а обычный способ найти следующий лист.
-        def fake(day, state_dir):
+        def fake(day, state_dir, deep=False):
             for title, first, last in mapping:
                 if dt.date.fromisoformat(first) <= day <= dt.date.fromisoformat(last):
                     return (title, None)

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     min_groups: int = 100
     min_dates: int = 5
     min_lessons: int = 500
+    max_gap_days: int = 25
 
     refresh_minutes: int = 20
     # За сколько минут до звонка сходить за расписанием ещё раз: пары меняют

@@ -43,7 +43,7 @@ def setup_lookup(monkeypatch, sheets, behaviour):
             raise outcome("подстроено тестом")
         return title
 
-    def parse(text, title, around=None):
+    def parse(text, title, limits=None, around=None):
         outcome = behaviour[title]
         if isinstance(outcome, type) and issubclass(outcome, Exception):
             raise outcome("подстроено тестом")
@@ -166,3 +166,48 @@ def test_covering_sheet_wins_over_earlier_trouble(tmp_path, monkeypatch):
     title, _ = si.resolve_for(DAY, tmp_path)
 
     assert title == "расписание групп 14.-19.09"
+
+
+def test_miss_is_remembered_and_not_rescanned_every_refresh(tmp_path, monkeypatch):
+    """За краем покрытия служба каждые 20 минут заново качала и разбирала всех
+    кандидатов (второй аудит, М29): теперь «листа нет» помнится два часа, а
+    глубокий поиск (ночью и при новом имени в книге) идёт мимо этой памяти."""
+    setup_lookup(monkeypatch, visible("расписание групп 01.-05.09"),
+                 {"расписание групп 01.-05.09": ("2026-09-01", "2026-09-05")})
+    fetched = []
+    real = si.gsheets.fetch_sheet_csv
+    monkeypatch.setattr(si.gsheets, "fetch_sheet_csv",
+                        lambda gid=None, title=None: fetched.append(title) or real(gid, title))
+
+    si.resolve_for(DAY, tmp_path)  # ближайший известный — прошлый лист
+    assert len(fetched) == 1
+    si.resolve_for(DAY, tmp_path)
+    assert len(fetched) == 1, "второй заход в пределах двух часов — без скачивания"
+    si.resolve_for(DAY, tmp_path, deep=True)
+    assert len(fetched) == 2, "глубокий поиск идёт в сеть всегда"
+
+
+def test_unreadable_candidate_is_not_remembered_as_a_miss(tmp_path, monkeypatch):
+    """«Не добрались» — не то же, что «листа нет»: такое повторяем на каждом заходе."""
+    setup_lookup(monkeypatch, visible("расписание групп 14.-19.09"),
+                 {"расписание групп 14.-19.09": RuntimeError})
+    for _ in range(2):
+        with pytest.raises(si.SheetNotFound, match="добраться не вышло"):
+            si.resolve_for(DAY, tmp_path)
+
+
+def test_new_sheet_with_two_dates_is_found(tmp_path, monkeypatch, fixture_csv):
+    """Новый лист, где заполнены только понедельник и вторник, — наш лист:
+    поиск узнаёт его по заголовку групп, а не по объёму (второй аудит, В21)."""
+    from whensclass.parser.csv_schedule import FIXTURE, collapse_export, read_csv
+
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    third = [i for i, r in enumerate(rows) if r and r[0].strip()[:2].isdigit()][2]
+    import csv, io
+    out = io.StringIO()
+    csv.writer(out).writerows(rows[:third])
+    monkeypatch.setattr(si.settings, "min_groups", FIXTURE.min_groups)
+    monkeypatch.setattr(si, "list_sheets", lambda: visible("расписание групп 02.-03.09"))
+    monkeypatch.setattr(si.gsheets, "fetch_sheet_csv", lambda gid=None, title=None: out.getvalue())
+    title, gid = si.resolve_for(dt.date(2026, 9, 3), tmp_path)
+    assert title == "расписание групп 02.-03.09" and gid == "1"

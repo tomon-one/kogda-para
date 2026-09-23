@@ -40,7 +40,9 @@ def main() -> int:
     state = pathlib.Path(args.state_dir)
 
     try:
-        title, gid = sheet_index.resolve_for(today, state)
+        # Глубоко: память службы «листа нет» канарейке не указ — раз в сутки
+        # можно и сходить посмотреть.
+        title, gid = sheet_index.resolve_for(today, state, deep=True)
     except LookupError as exc:
         print(f"БЕДА: не нашёл лист на {today}: {exc}")
         return 2

@@ -17,7 +17,7 @@ import re
 
 from ..config import settings
 from ..domain.models import SourceFormatChanged
-from ..parser.csv_schedule import parse_csv
+from ..parser.csv_schedule import Limits, parse_csv
 from ..service import alerts
 from . import gsheets
 from .gsheets import SheetInfo
@@ -242,7 +242,7 @@ def resolve_window(
     С `deep=False` соседний лист берём только из памяти: искать его в сети —
     это выгрузка всей книги, и делать её каждые двадцать минут незачем.
     """
-    first = resolve_for(start, state_dir)
+    first = resolve_for(start, state_dir, deep=deep)
     sheets = [first]
 
     if settings.sheet_title or settings.sheet_gid:
@@ -282,11 +282,73 @@ def _covered_to(index: SheetIndex, title: str) -> dt.date | None:
         return None
 
 
-def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]:
+# Сколько помнить, что на день листа нет. Пока сегодняшний день за краем
+# покрытия, набор листов пересобирается на каждом заходе, и без этой памяти
+# служба каждые двадцать минут заново качала и разбирала всех кандидатов
+# (второй аудит, М29). Новый лист всё равно найдётся сразу: слежка за книгой
+# (раз в полчаса, с ключом) при новом имени ищет глубоко, мимо этой памяти, и
+# так же — ночной поиск.
+MISS_TTL = dt.timedelta(hours=2)
+
+
+def _candidate_limits() -> Limits:
+    """Пороги, по которым поиск узнаёт наш лист среди кандидатов.
+
+    Узнаёт по заголовку групп — это отличает расписание групп от графиков.
+    Объём здесь не спрашиваем: новый лист, в который вписали одну-две даты,
+    иначе считался «не похожим на расписание», поиск уходил в «добраться не
+    вышло», а рычаг WHENSCLASS_MIN_DATES сюда не доходил (второй аудит, В21).
+    Судит объём тот же разбор в обновлении — со своими порогами из настроек и
+    с честным «нашёл всего 2 дня» в err.
+    """
+    return Limits(
+        min_groups=settings.min_groups, min_dates=1, min_lessons=1,
+        max_gap_days=settings.max_gap_days,
+    )
+
+
+def _misses_path(state_dir: pathlib.Path) -> pathlib.Path:
+    return state_dir / "sheet_misses.json"
+
+
+def _recent_miss(state_dir: pathlib.Path, day: dt.date) -> bool:
+    try:
+        misses = json.loads(_misses_path(state_dir).read_text("utf-8"))
+        at = dt.datetime.fromisoformat(misses[day.isoformat()])
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return dt.datetime.now(dt.timezone.utc) - at < MISS_TTL
+
+
+def _remember_miss(state_dir: pathlib.Path, day: dt.date) -> None:
+    now = dt.datetime.now(dt.timezone.utc)
+    try:
+        misses = json.loads(_misses_path(state_dir).read_text("utf-8"))
+    except (OSError, ValueError):
+        misses = {}
+    # Старое не копим: нужна память на часы, а не на семестр.
+    misses = {
+        k: v for k, v in misses.items()
+        if isinstance(v, str) and now - dt.datetime.fromisoformat(v) < MISS_TTL
+    }
+    misses[day.isoformat()] = now.isoformat()
+    try:
+        path = _misses_path(state_dir)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(misses), "utf-8")
+        tmp.replace(path)
+    except OSError as exc:
+        log.warning("память о ненайденном листе не записалась: %s", exc)
+
+
+def resolve_for(
+    day: dt.date, state_dir: pathlib.Path, deep: bool = False
+) -> tuple[str, str | None]:
     """Возвращает (название листа, gid) для даты.
 
     Сначала смотрит в память — обычно этого хватает и в сеть ходить не надо.
-    Аварийная настройка из окружения перебивает всё.
+    Аварийная настройка из окружения перебивает всё. `deep` — искать в сети,
+    даже если недавно уже искали и не нашли.
     """
     if settings.sheet_title and not settings.sheet_gid:
         # Сбой настройки, не сети: сказать сразу и словами про лист.
@@ -300,6 +362,8 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
     remembered = index.covering(day)
     if remembered:
         return remembered
+    if not deep and _recent_miss(state_dir, day):
+        return _fallback(index, day)
 
     # Листы, до содержимого которых мы так и не добрались. Если день в итоге
     # окажется не покрыт, разница принципиальная: «колледж ещё не выложил» —
@@ -321,7 +385,7 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
                 if _LOOKS_LIKE_GROUPS.search(sheet.title):
                     unread.append(sheet.title)
                 continue
-            snapshot = parse_csv(text, sheet.title, around=day)
+            snapshot = parse_csv(text, sheet.title, limits=_candidate_limits(), around=day)
         except SourceFormatChanged as exc:
             # «Не похож на расписание групп» — обычно честный отказ: в книге
             # лежат и календарный график, и расписание аудиторий. Но если так
@@ -363,6 +427,11 @@ def resolve_for(day: dt.date, state_dir: pathlib.Path) -> tuple[str, str | None]
             + " добраться не вышло"
         )
 
+    _remember_miss(state_dir, day)
+    return _fallback(index, day)
+
+
+def _fallback(index: SheetIndex, day: dt.date) -> tuple[str, str | None]:
     fallback = index.nearest(day)
     if fallback:
         log.info(
