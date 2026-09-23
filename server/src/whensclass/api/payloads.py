@@ -94,9 +94,14 @@ def teacher_payload(
     days: int,
     generated: datetime,
     bells: dict[str, list[str]] | None = None,
+    known_name: str | None = None,
 ) -> dict | None:
-    """Расписание преподавателя. None, если такого в таблице нет."""
-    name = index.names.get(teacher_id)
+    """Расписание преподавателя. None, если такого в таблице нет.
+
+    `known_name` — имя преподавателя, которого в этом снимке нет, но который
+    был в прошлых: ему отвечаем днями без пар, а не 404.
+    """
+    name = index.names.get(teacher_id) or known_name
     if name is None:
         return None
 
@@ -190,9 +195,9 @@ def schedule_payload(
         "gn": group.name,
         "gen": _iso(generated),
         "src": snapshot.sheet_title,
-        # Колонка группы в листе: вместе с `row` дня даёт ячейку, к которой
-        # ссылка «открыть таблицу» подводит человека.
-        "col": a1_column(group.column),
+        # Колонка группы в листе, на который ведёт ссылка: вместе с `row` дня
+        # даёт ячейку, к которой ссылка «открыть таблицу» подводит человека.
+        "col": a1_column(snapshot.column_of(group, gid=gid)),
         "days": out_days,
     }
     if gid:

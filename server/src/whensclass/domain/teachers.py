@@ -57,12 +57,19 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
     Склеиваем по времени, а не по названию предмета: у разных групп одна и та
     же пара записана по-разному — «Физическая культура» и «Физическая культура
     / Адаптивная физическая культура». Из названий берём подробное.
+
+    Но только пары в одном состоянии — аудитория, ссылка, онлайн, отмена. Раньше
+    склеивалось всё в одном слоте, и всем группам раздавалось состояние одной:
+    отменили пару у одной группы — отменена у всех, у одной другая аудитория —
+    у всех та же (второй аудит, В1). Разное остаётся отдельными записями, со
+    своими группами и колонкой.
     """
     index = TeacherIndex()
-    # (id, дата, номер пары) -> список групп
-    merged: dict[tuple[str, dt.date, int], list[str]] = {}
-    best: dict[tuple[str, dt.date, int], Lesson] = {}
-    columns: dict[tuple[str, dt.date, int], int] = {}
+    # (id, дата, номер пары, состояние) -> список групп
+    Key = tuple[str, dt.date, int, tuple]
+    merged: dict[Key, list[str]] = {}
+    best: dict[Key, Lesson] = {}
+    columns: dict[Key, int] = {}
 
     by_id = {g.id: g for g in snapshot.groups}
     for gid, by_date in snapshot.schedule.items():
@@ -84,15 +91,19 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
                         log.warning("у преподавателя %r нет идентификатора — пропускаю", name)
                         continue
                     index.names.setdefault(tid, name)
-                    key = (tid, day, lesson.number)
+                    state = (
+                        lesson.room, lesson.url, lesson.online or bool(lesson.url),
+                        lesson.cancelled,
+                    )
+                    key = (tid, day, lesson.number, state)
                     merged.setdefault(key, []).append(group.name)
-                    columns.setdefault(key, group.column)
+                    columns.setdefault(key, snapshot.column_of(group, day))
                     known = best.get(key)
                     if known is None or len(lesson.subject) > len(known.subject):
                         best[key] = lesson
 
     for key, groups in merged.items():
-        tid, day, _number = key
+        tid, day, _number, _state = key
         entry = TeacherLesson(
             lesson=best[key],
             group_name=", ".join(sorted(set(groups))),

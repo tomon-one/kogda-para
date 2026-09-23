@@ -68,6 +68,22 @@ class Snapshot:
     dates: list[date] = field(default_factory=list)
     # дата -> где она в книге. Пусто у снимков, записанных до появления поля.
     places: dict[date, SheetPlace] = field(default_factory=dict)
+    # gid листа -> id группы -> её колонка в этом листе. У склеенного снимка
+    # двух листов раскладка своя у каждого, а в `groups` — колонки первого.
+    sheet_columns: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    def column_of(
+        self, group: GroupRef, day: date | None = None, gid: str | None = None
+    ) -> int:
+        """Колонка группы в листе, где лежит `day` (или в листе `gid`).
+
+        Раньше всегда бралась колонка первого листа, и ссылка к ячейке на днях
+        второго листа вела в чужую колонку, если раскладка сменилась (второй
+        аудит, М28).
+        """
+        if gid is None and day is not None and day in self.places:
+            gid = self.places[day].gid
+        return self.sheet_columns.get(gid or "", {}).get(group.id, group.column)
 
     @property
     def coverage(self) -> tuple[date, date] | None:
@@ -95,6 +111,7 @@ class Snapshot:
 
         combined.dates = sorted(set(self.dates) | set(other.dates))
         combined.places = {**other.places, **self.places}
+        combined.sheet_columns = {**other.sheet_columns, **self.sheet_columns}
         return combined
 
     def total_lessons(self) -> int:
