@@ -1,0 +1,24 @@
+# /etc/systemd/system/whensclass-canary.service — ставит владелец.
+# Канарейка раз в сутки: не переделали ли таблицу (tools/check_source.py).
+# Раньше — строка crontab root без env: без темы ntfy и ключа Sheets API
+# (дефект 9), и от root, без ужесточения службы, по каталогу, куда пишет
+# служба (второй аудит, М32). Теперь от whensclass, с тем же env и теми же
+# ограничениями, что у службы; вывод — в journald.
+[Unit]
+Description=WhensClass canary: does the college sheet still parse
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=whensclass
+Group=whensclass
+WorkingDirectory=/opt/whensclass
+EnvironmentFile=/etc/whensclass/env
+ExecStart=/opt/whensclass/.venv/bin/python tools/check_source.py --quiet --state-dir /var/lib/whensclass
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ReadWritePaths=/var/lib/whensclass
+ReadOnlyPaths=/var/lib/whensclass/apk
