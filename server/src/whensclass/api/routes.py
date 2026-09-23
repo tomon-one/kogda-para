@@ -26,6 +26,8 @@ from .payloads import (
     teachers_payload,
 )
 
+# GET и HEAD: nginx пропускает оба, а сторожа по коду ответа ходят HEAD-ом —
+# на @router.get служба отвечала им 405.
 router = APIRouter()
 
 
@@ -106,7 +108,7 @@ def healthz(request: Request) -> Response:
     )
 
 
-@router.get("/v1/app")
+@router.api_route("/v1/app", methods=["GET", "HEAD"])
 def app_release(request: Request) -> Response:
     """Последняя выложенная сборка приложения — чтобы оно знало об обновлении."""
     release = latest_release(state_dir())
@@ -133,7 +135,7 @@ def app_release(request: Request) -> Response:
     return _json_response(request, body, cache=False)
 
 
-@router.get("/v1/meta")
+@router.api_route("/v1/meta", methods=["GET", "HEAD"])
 def meta(request: Request) -> Response:
     store, refresher = _state(request)
     if store.snapshot is None:
@@ -145,7 +147,7 @@ def meta(request: Request) -> Response:
     return _json_response(request, body, cache=False)
 
 
-@router.get("/v1/groups")
+@router.api_route("/v1/groups", methods=["GET", "HEAD"])
 def groups(request: Request) -> Response:
     store, _ = _state(request)
     if store.snapshot is None:
@@ -154,7 +156,7 @@ def groups(request: Request) -> Response:
     return _json_response(request, groups_payload(store.snapshot, store.generated))
 
 
-@router.get("/v1/teachers")
+@router.api_route("/v1/teachers", methods=["GET", "HEAD"])
 def teachers(request: Request) -> Response:
     """Список преподавателей — собирается из расписания групп."""
     store, _ = _state(request)
@@ -164,7 +166,7 @@ def teachers(request: Request) -> Response:
     return _json_response(request, teachers_payload(store.teachers, store.generated))
 
 
-@router.get("/v1/teacher/{teacher_id}")
+@router.api_route("/v1/teacher/{teacher_id}", methods=["GET", "HEAD"])
 def teacher(
     request: Request,
     teacher_id: str,
@@ -210,7 +212,7 @@ def teacher(
     return _json_response(request, body)
 
 
-@router.get("/v1/schedule/{group_id}")
+@router.api_route("/v1/schedule/{group_id}", methods=["GET", "HEAD"])
 def schedule(
     request: Request,
     group_id: str,

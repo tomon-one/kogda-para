@@ -11,6 +11,7 @@ import logging
 import re
 
 from ..domain.models import Lesson
+from .groups import _warn_once  # неувязка листа — состояние, а не событие: в журнал раз
 
 log = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ def _split_kind(subject: str) -> tuple[str, str | None]:
     kind = _KNOWN_KINDS.get(raw.casefold())
     if kind is None:
         # Новый вид занятия не должен ронять весь день — запоминаем как есть.
-        log.warning("незнакомый тип занятия %r в %r", raw, subject)
+        _warn_once(("тип", raw, subject), "незнакомый тип занятия %r в %r", raw, subject)
         kind = raw
     return subject[: m.start()].strip(), kind
 
@@ -177,7 +178,10 @@ def split_teachers(text: str) -> tuple[str, ...]:
             if not cleaned or _VACANCY_RE.match(cleaned):
                 continue
             if not _HAS_LETTER.search(cleaned):
-                log.warning("в строке преподавателей %r вместо имени — пропускаю", cleaned)
+                _warn_once(
+                    ("не имя", cleaned),
+                    "в строке преподавателей %r вместо имени — пропускаю", cleaned,
+                )
                 continue
             names.extend(_people(cleaned))
     return tuple(names)
@@ -199,11 +203,14 @@ def _people(text: str) -> list[str]:
     if len(found) >= 2 or (found and found[0] != text):
         rest = _FIO_RE.sub(" ", text).strip(" ,;.")
         if rest:
-            log.warning("в строке преподавателей %r кроме имён — %r: пропускаю приписку", text, rest)
+            _warn_once(
+                ("приписка", text, rest),
+                "в строке преподавателей %r кроме имён — %r: пропускаю приписку", text, rest,
+            )
         return [" ".join(name.split()) for name in found]
     if found or text[:1].isupper():
         return [text]
-    log.warning("в строке преподавателей %r нет имени — пропускаю", text)
+    _warn_once(("нет имени", text), "в строке преподавателей %r нет имени — пропускаю", text)
     return []
 
 
