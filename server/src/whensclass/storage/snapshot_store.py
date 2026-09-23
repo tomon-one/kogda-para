@@ -19,10 +19,20 @@ from ..domain.teachers import TeacherIndex, build_index
 log = logging.getLogger(__name__)
 
 
+# Сколько помнить преподавателя, у которого пропали пары. Преподаватель в
+# отпуске или без часов на этой неделе — не «исчезнувший»: раньше он получал
+# 404 при ok, а приложение через час говорило «Вас больше нет в таблице,
+# выберите заново» — хотя в списке для перевыбора его тоже не было (второй
+# аудит, В18). Через два месяца без единой пары — уже 404.
+SEEN_KEEP_DAYS = 60
+
+
 class SnapshotStore:
     def __init__(self, state_dir: pathlib.Path):
         self.path = state_dir / "snapshot.json"
         self.previous = state_dir / "snapshot.prev.json"
+        self.seen_path = state_dir / "teachers_seen.json"
+        self._seen: dict[str, dict] | None = None
         self._lock = threading.Lock()
         self._snapshot: Snapshot | None = None
         self._generated: dt.datetime | None = None
@@ -54,6 +64,35 @@ class SnapshotStore:
             self._generated = generated
             self._teachers = teachers
             self._write(snapshot, generated)
+            self._remember_teachers(generated.date())
+
+    def known_teacher(self, teacher_id: str) -> str | None:
+        """Имя преподавателя, если он был хоть в одном снимке за SEEN_KEEP_DAYS."""
+        entry = self._load_seen().get(teacher_id)
+        return entry.get("name") if isinstance(entry, dict) else None
+
+    def _load_seen(self) -> dict[str, dict]:
+        if self._seen is None:
+            try:
+                self._seen = json.loads(self.seen_path.read_text("utf-8"))
+            except (OSError, ValueError):
+                self._seen = {}
+        return self._seen
+
+    def _remember_teachers(self, today: dt.date) -> None:
+        seen = dict(self._load_seen())
+        for tid, name in self.teachers.names.items():
+            seen[tid] = {"name": name, "seen": today.isoformat()}
+        cutoff = (today - dt.timedelta(days=SEEN_KEEP_DAYS)).isoformat()
+        seen = {k: v for k, v in seen.items() if isinstance(v, dict) and v.get("seen", "") >= cutoff}
+        self._seen = seen
+        try:
+            tmp = self.seen_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(seen, ensure_ascii=False), "utf-8")
+            tmp.replace(self.seen_path)
+        except OSError as exc:
+            # Удобство, а не снимок: из-за него запись снимка не считается неудачной.
+            log.warning("список знакомых преподавателей не записался: %s", exc)
 
     def load(self) -> bool:
         """Поднимает снимок с диска. False, если его нет или он испорчен."""
@@ -95,6 +134,7 @@ def _to_dict(snapshot: Snapshot) -> dict:
             day.isoformat(): {"gid": place.gid, "row": place.row}
             for day, place in snapshot.places.items()
         },
+        "sheet_columns": snapshot.sheet_columns,
         "schedule": {
             gid: {
                 day.isoformat(): [_lesson_to_dict(x) for x in lessons]
@@ -130,6 +170,11 @@ def _from_dict(data: dict) -> Snapshot:
     snapshot.places = {
         dt.date.fromisoformat(day): SheetPlace(gid=place.get("gid"), row=int(place["row"]))
         for day, place in data.get("places", {}).items()
+    }
+    # Снимки до 23 сентября 2026 — без колонок по листам: тогда колонка из groups.
+    snapshot.sheet_columns = {
+        gid: {group: int(column) for group, column in columns.items()}
+        for gid, columns in data.get("sheet_columns", {}).items()
     }
     snapshot.schedule = {
         gid: {

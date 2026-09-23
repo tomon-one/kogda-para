@@ -191,6 +191,14 @@ def teacher(
         renamed = refresher.renames.teacher(teacher_id)
         if renamed:
             body = build(renamed)
+    if body is None and (name := store.known_teacher(teacher_id)):
+        # В этом листе у преподавателя нет пар, но он был в прошлых — отпуск,
+        # неделя без часов. Это «пар нет», а не «вас больше нет в таблице»
+        # (второй аудит, В18).
+        body = teacher_payload(
+            store.snapshot, store.teachers, teacher_id, start or _today(), days,
+            store.generated, bells=load_bells() or None, known_name=name,
+        )
     if body is None:
         return Response(status_code=404, content='{"error":"преподаватель не найден"}',
                         media_type=JSON)

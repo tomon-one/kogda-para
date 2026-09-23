@@ -479,6 +479,8 @@ def parse_export(
     collapsed, numbers = collapse_with_rows(rows, limits.min_groups)
     snapshot = parse_sheet(collapsed, sheet_title, limits, around=around, sheet_rows=numbers)
     snapshot.places = places
+    if gid:
+        snapshot.sheet_columns = {gid: {g.id: g.column for g in snapshot.groups}}
     return snapshot
 
 

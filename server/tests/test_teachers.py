@@ -71,3 +71,63 @@ def test_teachers_list_sorted_by_name(index):
     body = teachers_payload(index, GENERATED)
     names = [t["name"] for t in body["teachers"]]
     assert names == sorted(names)
+
+
+def _two_groups(first, second):
+    from whensclass.domain.models import GroupRef, Snapshot
+
+    day = dt.date(2026, 9, 8)
+    snapshot = Snapshot(sheet_title="лист", dates=[day])
+    for name, column, lesson in (("А-1", 2, first), ("А-2", 6, second)):
+        ref = GroupRef(name=name, id=name.lower(), column=column)
+        snapshot.groups.append(ref)
+        snapshot.schedule[ref.id] = {day: [lesson]}
+    return snapshot, day
+
+
+def test_same_slot_in_different_states_stays_apart():
+    """Отменили пару у одной группы — у другой она идёт. Раньше склейка по
+    времени раздавала обеим состояние одной (второй аудит, В1)."""
+    from whensclass.domain.models import Lesson
+
+    kept = Lesson(number=2, subject="Физкультура", teachers=("Иванов И. И.",), room="Спортзал")
+    cancelled = Lesson(number=2, subject="Физкультура", teachers=("Иванов И. И.",),
+                       room="Спортзал", cancelled=True)
+    snapshot, day = _two_groups(kept, cancelled)
+    entries = build_index(snapshot).days(teacher_id("Иванов И. И."))[day]
+    assert sorted((e.group_name, e.lesson.cancelled) for e in entries) == [("А-1", False), ("А-2", True)]
+    assert {e.column for e in entries} == {2, 6}
+
+
+def test_same_lesson_for_two_groups_is_still_one_entry():
+    from whensclass.domain.models import Lesson
+
+    one = Lesson(number=2, subject="Физкультура", teachers=("Иванов И. И.",), room="Спортзал")
+    longer = Lesson(number=2, subject="Физкультура / Адаптивная физкультура",
+                    teachers=("Иванов И. И.",), room="Спортзал")
+    snapshot, day = _two_groups(one, longer)
+    [entry] = build_index(snapshot).days(teacher_id("Иванов И. И."))[day]
+    assert entry.group_name == "А-1, А-2" and entry.lesson.subject.startswith("Физкультура / ")
+
+
+def test_column_follows_the_sheet_of_the_day():
+    """У склеенного снимка двух листов колонка группы — из того листа, на
+    который ведёт ссылка, а не из первого (второй аудит, М28)."""
+    from whensclass.api.payloads import schedule_payload
+    from whensclass.domain.models import GroupRef, Lesson, SheetPlace, Snapshot
+
+    ref = GroupRef(name="А-1", id="a-1", column=2)
+    first = Snapshot(sheet_title="первый", groups=[ref], dates=[dt.date(2026, 9, 12)])
+    first.schedule = {"a-1": {dt.date(2026, 9, 12): [Lesson(number=1, subject="Х")]}}
+    first.places = {dt.date(2026, 9, 12): SheetPlace(gid="1", row=5)}
+    first.sheet_columns = {"1": {"a-1": 2}}
+    second = Snapshot(sheet_title="второй", groups=[GroupRef(name="А-1", id="a-1", column=10)],
+                      dates=[dt.date(2026, 9, 14)])
+    second.schedule = {"a-1": {dt.date(2026, 9, 14): [Lesson(number=1, subject="У")]}}
+    second.places = {dt.date(2026, 9, 14): SheetPlace(gid="2", row=5)}
+    second.sheet_columns = {"2": {"a-1": 10}}
+    merged = first.merged_with(second)
+    generated = dt.datetime(2026, 9, 12, tzinfo=dt.timezone.utc)
+    assert schedule_payload(merged, "a-1", dt.date(2026, 9, 12), 1, generated)["col"] == "C"
+    body = schedule_payload(merged, "a-1", dt.date(2026, 9, 14), 1, generated)
+    assert body["col"] == "K" and body["src_url"].endswith("#gid=2")

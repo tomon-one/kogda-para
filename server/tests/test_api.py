@@ -12,9 +12,13 @@ from whensclass.parser.csv_schedule import FIXTURE, parse_csv
 
 
 class FakeStore:
-    def __init__(self, snapshot):
+    def __init__(self, snapshot, known=None):
         self.snapshot = snapshot
         self.generated = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
+        self.known = known or {}
+
+    def known_teacher(self, teacher_id):
+        return self.known.get(teacher_id)
 
 
 class FakeRenames:
@@ -204,3 +208,35 @@ def test_release_url_is_https(client, monkeypatch):
     body = client.get("/v1/app").json()
     assert body["url"].startswith("https://"), body["url"]
     assert body["url"].endswith("/download/kogda-para-1.apk")
+
+
+def test_teacher_without_lessons_this_sheet_is_not_gone(tmp_path, fixture_csv):
+    """Преподаватель, у которого в новом листе нет пар, — «пар нет», а не 404 и
+    «вас больше нет в таблице» (второй аудит, В18)."""
+    import dataclasses
+
+    from whensclass.storage.snapshot_store import SnapshotStore
+
+    store = SnapshotStore(tmp_path)
+    before = parse_csv(fixture_csv, "лист", FIXTURE)
+    store.put(before, dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc))
+    tid, name = next(iter(store.teachers.names.items()))
+    after = parse_csv(fixture_csv, "лист", FIXTURE)
+    after.schedule = {
+        gid: {day: [dataclasses.replace(x, teachers=tuple(t for t in x.teachers if t != name))
+                    for x in lessons] for day, lessons in by_date.items()}
+        for gid, by_date in after.schedule.items()
+    }
+    store.put(after, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    assert tid not in store.teachers.names
+
+    app = FastAPI()
+    app.include_router(router)
+    app.state.store = store
+    app.state.refresher = FakeRefresher()
+    client = TestClient(app)
+    response = client.get(f"/v1/teacher/{tid}?from=2026-09-07&days=3")
+    assert response.status_code == 200
+    assert response.json()["gn"] == name
+    assert all(day["l"] == [] for day in response.json()["days"])
+    assert client.get("/v1/teacher/nikogda-ne-bylo?from=2026-09-07").status_code == 404
