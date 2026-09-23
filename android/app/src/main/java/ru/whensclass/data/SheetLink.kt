@@ -24,9 +24,26 @@ fun sheetLink(schedule: ScheduleDto?, day: LocalDate?, fallback: String?): Strin
     val column = schedule.column ?: dayDto?.lessons?.firstNotNullOfOrNull { it.column }
     val row = dayDto?.row
     return when {
-        column != null && row != null -> "$base&range=$column$row"
+        // Диапазон вправо-вниз, а не одна ячейка: приложение Google Таблиц на
+        // Android подводит к ячейке, но оставляет её у правого верхнего края,
+        // почти за кадром (дефект 6 в handoff, проверено 14 сентября 2026).
+        // Ячейка дня становится левым верхним углом выделения. ПРЕДПОЛОЖЕНИЕ:
+        // что так она окажется в кадре, на телефоне ещё не проверено.
+        column != null && row != null -> "$base&range=$column$row:${shiftColumn(column, 4)}${row + 5}"
         column != null -> "$base&range=${column}1"
         row != null -> "$base&range=A$row"
         else -> base
     }
+}
+
+/** Буквы колонки, сдвинутые на `by`: «EQ» + 4 -> «EU», «Z» + 1 -> «AA». */
+internal fun shiftColumn(letters: String, by: Int): String {
+    var number = letters.uppercase().fold(0) { acc, ch -> acc * 26 + (ch - 'A' + 1) } + by
+    val out = StringBuilder()
+    while (number > 0) {
+        val rem = (number - 1) % 26
+        out.insert(0, 'A' + rem)
+        number = (number - 1) / 26
+    }
+    return out.toString()
 }

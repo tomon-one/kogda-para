@@ -180,6 +180,11 @@ object LessonAlarms {
             roomLabel(alarm.lesson.room)?.let { append(". $it") }
         }
         alarm.lesson.teachers.firstOrNull()?.let { append(". $it") }
+        // Чья пара: у подгруппы — соседки, у преподавателя — каким группам он
+        // идёт читать. На экране и в виджетах подпись есть, а в напоминании её
+        // не было, и пара соседней подгруппы приходила как своя (второй аудит,
+        // М16).
+        alarm.lesson.groups?.trim()?.takeIf { it.isNotEmpty() }?.let { append(". $it") }
     }
 
     const val EXTRA_SUBJECT = "subject"

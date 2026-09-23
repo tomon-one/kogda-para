@@ -2,6 +2,7 @@ package ru.whensclass.notify
 
 import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.whensclass.data.LessonDto
 
@@ -86,5 +87,13 @@ class LessonTextTest {
         )
 
         assertEquals("4 пара. Первый П. П.", text)
+    }
+
+    @Test
+    fun `пара другой группы подписана группой`() {
+        val text = LessonAlarms.text(
+            alarm(LessonDto(number = 3, subject = "Физика", room = "272", groups = "ИСП-924/2")),
+        )
+        assertTrue(text, text.endsWith("ИСП-924/2"))
     }
 }

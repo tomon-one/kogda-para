@@ -78,8 +78,12 @@ private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
             // кнопками он всё же упирается в край.
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    "Пришлите это вместе с жалобой. Личного здесь нет: " +
-                        "версия, группа и то, что приложению ответил сервер.",
+                    // Раньше обещало «личного нет», а в отчёте модель телефона,
+                    // версия Android, пояс и у преподавателя — ФИО (второй
+                    // аудит, М39).
+                    "Пришлите это вместе с жалобой. Здесь версия приложения, " +
+                        "модель телефона, ваша группа или имя и то, что ответил " +
+                        "сервер, — посмотрите перед отправкой.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

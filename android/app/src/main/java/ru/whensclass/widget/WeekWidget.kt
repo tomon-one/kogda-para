@@ -47,6 +47,7 @@ import ru.whensclass.AppContainer
 import ru.whensclass.R
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.LessonDto
+import ru.whensclass.data.sheetLink
 
 /**
  * Виджет на неделю целиком.
@@ -112,8 +113,21 @@ class WeekWidget : GlanceAppWidget() {
                     // Проверяем то, что рисуется, а не то, что пришло: дни
                     // старше сегодняшнего виджет выбрасывает, и при непустом
                     // days под шапкой оставалась пустота без единого слова.
-                    weekDays(days, today).isEmpty() ->
-                        Hint("Расписание кончилось. Нажмите на время в шапке", colors)
+                    // Пустая неделя — как пустой день у дневного виджета: сбой,
+                    // устаревшие данные или «не опубликовано» с выходом к таблице.
+                    // Раньше всегда «нажмите на время в шапке», хотя при сбое и
+                    // при неопубликованном листе обновление не поможет (второй
+                    // аудит, М19).
+                    weekDays(days, today).isEmpty() -> {
+                        val missing = missingDay(
+                            schedule, today, state?.fetchedAt ?: 0L,
+                            state?.serverBroken == true, week = true,
+                        )
+                        MissingHint(
+                            missing.text, colors,
+                            if (missing.toSource) sheetLink(schedule, today, state?.sourceUrl) else null,
+                        )
+                    }
                     // Долю высоты список получает здесь, из Column:
                     // без неё он в некоторых оболочках схлопывается в
                     // ноль, и под шапкой остаётся пустота.
@@ -233,12 +247,19 @@ private fun Week(
     val today = now.toLocalDate()
     // Ключ и по дате: через полночь тот же список дней делится на прожитые
     // и предстоящие заново.
-    val week = remember(days, today) { weekDays(days, today) }
+    val all = remember(days, today) { weekDays(days, today) }
     val current = currentLessonNumber(bells, today, now)
     val height = LocalSize.current.height
     val scale = fontScale()
-    val open = remember(week, height, scale) {
-        openCount(week, height - HEADER_SPACE * scale, scale)
+    // Даже строки-сводки помещаются не всегда: семь дней или крупный шрифт —
+    // и последний день обрезал корпус, хотя обещано «день не пропадает никогда»
+    // (второй аудит, М14). Тогда хвост недели — одной строкой «и ещё N дней».
+    val slots = ((height - HEADER_SPACE * scale) / (SUMMARY_ROW * scale)).toInt().coerceAtLeast(1)
+    val week = if (all.size > slots) all.take(slots - 1) else all
+    val folded = all.drop(week.size)
+    val open = remember(week, height, scale, folded.size) {
+        val tail = if (folded.isEmpty()) 0.dp else SUMMARY_ROW * scale
+        openCount(week, height - HEADER_SPACE * scale - tail, scale)
     }
 
     // Каждый день — свой контейнер. Плоским списком дни рисоваться не могут:
@@ -278,7 +299,22 @@ private fun Week(
                 DaySummary(day, bells, colors)
             }
         }
+        folded.firstOrNull()?.let { first -> MoreDays(first.date, folded.size, colors) }
     }
+}
+
+/** «И ещё 2 дня» — хвост недели, на который не хватило даже строк-сводок. */
+@Composable
+private fun MoreDays(first: LocalDate, count: Int, colors: Palette) {
+    val context = LocalContext.current
+    Text(
+        "и ещё " + plural(count, "день", "дня", "дней"),
+        maxLines = 1,
+        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+        modifier = GlanceModifier
+            .padding(top = 3.dp, start = 4.dp)
+            .clickable(actionStartActivity(openDay(context, first))),
+    )
 }
 
 /** Фон строки, которая не идёт сейчас: задаётся явно, см. [LessonLine]. */
