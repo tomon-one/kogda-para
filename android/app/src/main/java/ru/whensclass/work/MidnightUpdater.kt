@@ -39,26 +39,17 @@ object MidnightUpdater {
      * Если её нет, остаётся полночь — ждать больше нечего.
      */
     suspend fun nextMoment(context: Context): LocalDateTime {
-        val midnight = LocalDate.now().plusDays(1).atTime(LocalTime.of(0, 1))
         val bells = runCatching {
             val state = AppContainer.get(context).store.widgetState()
             ScheduleWidget.parse(state.scheduleJson)?.bells
         }.getOrNull().orEmpty()
-
-        val now = LocalDateTime.now()
-        val today = LocalDate.now()
-        val bell = bells.values.flatten()
-            .mapNotNull { runCatching { LocalTime.parse(it) }.getOrNull() }
-            .map { today.atTime(it) }
-            .filter { it.isAfter(now) }
-            .minOrNull()
-        return listOfNotNull(bell, midnight).min()
+        return ru.whensclass.widget.nextTick(bells, ru.whensclass.widget.collegeNow())
     }
 
     suspend fun schedule(context: Context) {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         val at = nextMoment(context)
-            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            .atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant().toEpochMilli()
         // Точное время, если разрешено: смысл будильника в том, чтобы подсветка
         // появлялась вместе со звонком, а не когда система сочтёт удобным.
         if (LessonAlarms.exactAllowed(context)) {

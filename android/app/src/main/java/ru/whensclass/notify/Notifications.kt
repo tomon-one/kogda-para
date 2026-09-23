@@ -31,6 +31,10 @@ object Notifications {
     private const val ID_LESSON = 1
     private const val ID_CHANGES = 2
     private const val ID_UPDATE = 3
+    // Своё для «сервер лежит»: с общим ID_CHANGES новое уведомление об
+    // изменениях перезаписывало непрочитанное о сбое и наоборот (второй
+    // аудит, М12).
+    private const val ID_SERVER = 4
 
     fun ensureChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -82,10 +86,17 @@ object Notifications {
         show(context, CHANNEL_CHANGES, ID_CHANGES, title, text, day = null)
     }
 
-    /** Нажатие открывает настройки на кнопке установки — идти искать не надо. */
-    fun newVersion(context: Context, title: String, text: String) {
-        show(context, CHANNEL_UPDATE, ID_UPDATE, title, text, day = null, update = true)
+    /** Сервер лежит дольше двух часов — канал тот же, что у изменений, id свой. */
+    fun serverDown(context: Context, title: String, text: String) {
+        show(context, CHANNEL_CHANGES, ID_SERVER, title, text, day = null)
     }
+
+    /**
+     * Нажатие открывает настройки на кнопке установки — идти искать не надо.
+     * true — уведомление ушло в систему; false — уведомления запрещены.
+     */
+    fun newVersion(context: Context, title: String, text: String): Boolean =
+        show(context, CHANNEL_UPDATE, ID_UPDATE, title, text, day = null, update = true)
 
     private fun show(
         context: Context,
@@ -95,8 +106,8 @@ object Notifications {
         text: String,
         day: String?,
         update: Boolean = false,
-    ) {
-        if (!allowed(context)) return
+    ): Boolean {
+        if (!allowed(context)) return false
         ensureChannels(context)
 
         val intent = Intent(context, MainActivity::class.java)
@@ -120,6 +131,6 @@ object Notifications {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .build()
 
-        runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
+        return runCatching { NotificationManagerCompat.from(context).notify(id, notification) }.isSuccess
     }
 }

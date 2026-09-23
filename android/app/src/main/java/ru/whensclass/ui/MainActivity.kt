@@ -71,6 +71,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Часы экрана пересчитываются при каждом возвращении: см. rememberNow.
+        ScreenClock.resumes++
         // «Приложение забирает расписание при каждом открытии» — обещание из
         // настроек. Оба захода за расписанием висели на onCreate, поэтому
         // возврат из фона (список недавних, значок на экране) ничего не
@@ -231,6 +233,12 @@ private fun App(
     // Почему обновление не вышло. Раньше кнопка ставила галочку «Расписание
     // обновлено» в любом случае, даже когда связи не было и данные прежние.
     var refreshError by remember { mutableStateOf<String?>(null) }
+    // Последнее ручное обновление не удалось: кнопка покажет крестик, а не
+    // галочку. Раньше результат refresh() здесь выбрасывался, refreshError не
+    // присваивался нигде, и при отвалившейся сети загоралась «Расписание
+    // обновлено» (второй аудит, В12; починка М18 первого аудита не была
+    // доведена).
+    var refreshFailed by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
     var focusUpdate by remember { mutableStateOf(openUpdate) }
     // Списки держим здесь, а не во вкладке: во вкладке они перезагружались
@@ -265,7 +273,9 @@ private fun App(
             reloadKey++
             // Напрямую, без WorkManager: он вправе отложить задачу на минуты,
             // а человек только что нажал кнопку и ждёт ответа сейчас.
-            container.repository.refresh(force = true)
+            val result = container.repository.refresh(force = true)
+            refreshFailed = result is RefreshResult.Failed
+            if (result is RefreshResult.Failed) refreshError = refreshFailure(result.error)
             refreshing = false
         }
     }
@@ -442,7 +452,7 @@ private fun App(
                         updateFailed = updateFailed,
                         updateError = updateError,
                         loadDiagnostics = { container.repository.diagnostics() },
-                        sheetUrl = { sheetLink(schedule, java.time.LocalDate.now(), tableUrl) },
+                        sheetUrl = { sheetLink(schedule, ru.whensclass.widget.collegeToday(), tableUrl) },
                         onCheckUpdate = {
                             scope.launch {
                                 checkingUpdate = true
@@ -527,6 +537,7 @@ private fun App(
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,
                         refreshing = refreshing,
+                        refreshFailed = refreshFailed,
                         refreshError = refreshError,
                         onErrorShown = { refreshError = null },
                         loadTally = { container.store.tally() },
@@ -554,4 +565,14 @@ private fun App(
             }
         }
     }
+}
+
+
+/** Почему ручное обновление не удалось — словами для плашки. */
+private fun refreshFailure(error: Throwable): String = when (error) {
+    is ru.whensclass.data.HttpFailure -> when (error.code) {
+        429, 503 -> "Сервер занят, попробуйте через минуту"
+        else -> "Не удалось обновить: сервер ответил ${error.code}"
+    }
+    else -> "Не удалось обновить: нет связи с сервером"
 }
