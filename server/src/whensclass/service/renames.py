@@ -11,8 +11,8 @@
 нового. Признак переименования — не похожесть имён, а совпадение пар: старый
 id исчез, новый появился, и пары нового за общие даты — те же, что были у
 старого. У переименованной группы колонка та же, так что совпадение полное;
-у нового курса, занявшего колонку, — никакого. Похожесть имён только
-разводит кандидатов между собой.
+у нового курса, занявшего колонку, — никакого. Два равных кандидата — не
+переименование: не гадаем, по старому id — 404.
 
 Книга лежит в `renames.json` рядом со снимком и переживает перезапуск.
 """
@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import collections
 import datetime as dt
-import difflib
 import json
 import logging
 import pathlib
@@ -52,6 +51,12 @@ MIN_SHARE = 0.8
 # начнёт отвечать по новой записи: телефон, получив новый id, перепишет
 # выбор навсегда, а опечатку в заголовке колледж чинит через двадцать минут.
 CONFIRMATIONS = 3
+# Или столько времени, пока лист не меняется. Неизменившийся лист не
+# разбирается, и «три обновления подряд» на тихом листе ждали до двух ночных
+# переиндексаций — а приложение через час 404 говорило «группы больше нет»
+# (второй аудит, В7). Состав id на неизменном листе не меняется по
+# определению, так что время здесь — такое же подтверждение.
+CONFIRM_AFTER = dt.timedelta(minutes=40)
 
 
 def group_traces(snapshot: Snapshot) -> dict[str, Trace]:
@@ -63,6 +68,24 @@ def group_traces(snapshot: Snapshot) -> dict[str, Trace]:
             for x in lessons:
                 stable.add((day, x.number, x.subject, x.teachers))
                 full.add((day, x.number, x.subject, x.teachers, x.room, x.url, x.online, x.cancelled))
+        out[gid] = (frozenset(stable), frozenset(full))
+    return out
+
+
+def weekly_traces(snapshot: Snapshot, ids: set[str]) -> dict[str, Trace]:
+    """Следы по дню недели, а не по дате — чтобы сравнить группу со стыка листов.
+
+    Старый и новый лист общих дат не имеют: по датам переименование на стыке
+    не узнать никогда (второй аудит, В6). А недельный узор пар у одной и той же
+    группы в соседние недели почти тот же.
+    """
+    out: dict[str, Trace] = {}
+    for gid in ids:
+        stable, full = set(), set()
+        for day, lessons in snapshot.schedule.get(gid, {}).items():
+            for x in lessons:
+                stable.add((day.weekday(), x.number, x.subject, x.teachers))
+                full.add((day.weekday(), x.number, x.subject, x.teachers, x.room, x.online))
         out[gid] = (frozenset(stable), frozenset(full))
     return out
 
@@ -129,21 +152,22 @@ def detect(old: dict[str, Trace], new: dict[str, Trace]) -> dict[str, str]:
         stable_old, full_old = old[old_id]
         if len(stable_old) < MIN_SHARED:
             continue
-        scored: list[tuple[tuple[int, int, float], str]] = []
+        scored: list[tuple[tuple[int, int], str]] = []
         for new_id in appeared:
             stable_new, full_new = new[new_id]
             shared = len(stable_old & stable_new)
             if shared < MIN_SHARED or shared < MIN_SHARE * len(stable_old):
                 continue
-            # Из нескольких кандидатов с теми же парами (колонка на две
-            # группы) берём того, чьё имя ближе к прежнему.
-            similarity = difflib.SequenceMatcher(None, old_id, new_id).ratio()
-            scored.append(((shared, len(full_old & full_new), similarity), new_id))
+            scored.append(((shared, len(full_old & full_new)), new_id))
         if not scored:
             continue
         scored.sort(reverse=True)
         (best, winner), rest = scored[0], scored[1:]
-        if rest and rest[0][0][:2] == best[:2]:
+        # Похожесть имён здесь не судья: колонка на две группы («ДП-923 и
+        # ДП-1124») даёт двух кандидатов с одинаковыми парами, и угадывать,
+        # кто из них «прежний», — это раздать чужое расписание (второй
+        # аудит, М8: комментарий обещал выбор по имени, код его не делал).
+        if rest and rest[0][0] == best:
             # Два кандидата неотличимы и по устойчивому, и по полному ключу.
             log.info(
                 "%r исчез, а на его место претендуют %s поровну — не гадаю",
@@ -159,6 +183,29 @@ def detect(old: dict[str, Trace], new: dict[str, Trace]) -> dict[str, str]:
             continue
         renames[old_id] = winner
     return renames
+
+
+def _across_sheets(previous: Snapshot, current: Snapshot, vanished: set[str]) -> dict[str, str]:
+    """Переименование на стыке листов: старый id жил только в уходящем листе.
+
+    Пока оба листа в окне, старый и новый id живут в снимке вместе; когда
+    уходит старый лист, старый id исчезает, а новый «не появился» — он уже был
+    (второй аудит, В6). Кандидаты — группы, которых не было в листе старого
+    id, сравнение — по недельному узору пар.
+    """
+    if not vanished or len(previous.sheet_columns) < 2:
+        return {}
+    homes = [set(ids) for ids in previous.sheet_columns.values() if vanished & set(ids)]
+    if not homes:
+        return {}
+    home_ids = set().union(*homes)
+    candidates = {g.id for g in current.groups} - home_ids
+    if not candidates:
+        return {}
+    found = detect(weekly_traces(previous, vanished), weekly_traces(current, candidates))
+    for old_id, new_id in found.items():
+        log.info("на стыке листов %r, похоже, стала %r (по недельному узору пар)", old_id, new_id)
+    return found
 
 
 class RenameBook:
@@ -206,6 +253,21 @@ class RenameBook:
         )
         tmp.replace(self.path)
 
+    def tick(self) -> None:
+        """Лист не менялся — время идёт: подтвердить то, что ждёт дольше CONFIRM_AFTER."""
+        with self._lock:
+            changed = False
+            for book, pending, what in (
+                (self.groups, self.pending_groups, "группа"),
+                (self.teachers, self.pending_teachers, "преподаватель"),
+            ):
+                for old_id, entry in list(pending.items()):
+                    if _confirmed(entry):
+                        _promote(book, pending, old_id, what)
+                        changed = True
+            if changed:
+                self._save()
+
     def group(self, gid: str) -> str | None:
         """Новый id группы, если старый переименован."""
         return self.groups.get(gid)
@@ -230,6 +292,8 @@ class RenameBook:
             if old_groups.keys() != new_groups.keys()
             else {}
         )
+        leftover = set(old_groups) - set(new_groups) - set(found_groups)
+        found_groups.update(_across_sheets(previous, current, leftover))
         found_teachers = (
             detect(teacher_traces(previous_teachers), teacher_traces(current_teachers))
             if previous_teachers.names.keys() != current_teachers.names.keys()
@@ -269,12 +333,13 @@ class RenameBook:
         changed = False
         for old_id, new_id in found.items():
             log.warning(
-                "%s %r (%s), похоже, теперь %r (%s): подожду %d обновлений, потом по "
-                "старому id буду отвечать расписанием нового",
+                "%s %r (%s), похоже, теперь %r (%s): подожду %d обновлений или %d минут, "
+                "потом по старому id буду отвечать расписанием нового",
                 what, names[0].get(old_id, old_id), old_id,
                 names[1].get(new_id, new_id), new_id, CONFIRMATIONS,
+                CONFIRM_AFTER.total_seconds() // 60,
             )
-            pending[old_id] = {"to": new_id, "seen": 1}
+            pending[old_id] = {"to": new_id, "seen": 1, "since": _now().isoformat()}
             changed = True
 
         # Кандидат держится, пока старого id нет, а новый есть. Вернулся
@@ -288,15 +353,8 @@ class RenameBook:
                 continue
             entry["seen"] += 1
             changed = True
-            if entry["seen"] >= CONFIRMATIONS:
-                del pending[old_id]
-                log.warning("%s %s -> %s: подтверждено, отвечаю", what, old_id, entry["to"])
-                book[old_id] = entry["to"]
-                # Цепочку не храним: A -> B -> C сворачивается в A -> C, иначе
-                # ответ по A придётся искать в два шага, а по три — никогда.
-                for key, value in list(book.items()):
-                    if value == old_id:
-                        book[key] = entry["to"]
+            if _confirmed(entry):
+                _promote(book, pending, old_id, what)
 
         for old_id, target in list(book.items()):
             # Старое имя вернулось в таблицу — значит, это снова настоящая
@@ -313,3 +371,29 @@ class RenameBook:
                 del book[old_id]
                 changed = True
         return changed
+
+
+def _now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def _confirmed(entry: dict) -> bool:
+    if entry.get("seen", 0) >= CONFIRMATIONS:
+        return True
+    try:
+        since = dt.datetime.fromisoformat(entry["since"])
+    except (KeyError, TypeError, ValueError):
+        # Записи до 23 сентября 2026 без времени — только по счёту.
+        return False
+    return _now() - since >= CONFIRM_AFTER
+
+
+def _promote(book: dict[str, str], pending: dict[str, dict], old_id: str, what: str) -> None:
+    entry = pending.pop(old_id)
+    log.warning("%s %s -> %s: подтверждено, отвечаю", what, old_id, entry["to"])
+    book[old_id] = entry["to"]
+    # Цепочку не храним: A -> B -> C сворачивается в A -> C, иначе ответ по A
+    # придётся искать в два шага, а по три — никогда.
+    for key, value in list(book.items()):
+        if value == old_id:
+            book[key] = entry["to"]
