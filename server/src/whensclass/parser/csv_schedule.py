@@ -165,6 +165,9 @@ def parse_sheet(
     # нарушение порядка. Дата, встреченная второй раз, в seen_dates не
     # попадала, и проверка «даты идут по возрастанию» её не видела.
     date_order: list[date] = []
+    # Где в листе стоит каждая дата из date_order — чтобы отказ называл
+    # строку, а не пересказывал весь столбец дат.
+    date_where: list[str] = []
 
     # Номера пар каждого дня: обязаны идти 1, 2, 3… без пропусков и
     # повторов. Повтор даты (скопированный блок) и номер не по шаблону
@@ -192,6 +195,7 @@ def parse_sheet(
                 )
             if found != current:
                 date_order.append(found)
+                date_where.append(where(i))
             current = found
             if current not in seen_dates:
                 seen_dates.append(current)
@@ -252,18 +256,33 @@ def parse_sheet(
             lessons.sort(key=lambda x: x.number)
 
     snapshot.dates = sorted(seen_dates)
-    _validate(snapshot, date_order, limits)
+    _validate(snapshot, date_order, limits, date_where)
     return snapshot
 
 
-def _validate(snapshot: Snapshot, seen_order: list[date], limits: Limits) -> None:
+def _validate(
+    snapshot: Snapshot,
+    seen_order: list[date],
+    limits: Limits,
+    where: list[str] | None = None,
+) -> None:
     """Проверяет, что разобранное похоже на расписание, а не на обломки."""
     if len(snapshot.dates) < limits.min_dates:
         raise SourceFormatChanged(
             f"нашёл всего {len(snapshot.dates)} дней, ожидал не меньше {limits.min_dates}"
         )
-    if any(b <= a for a, b in zip(seen_order, seen_order[1:])):
-        raise SourceFormatChanged(f"даты в листе идут не по возрастанию: {seen_order}")
+    for k, (a, b) in enumerate(zip(seen_order, seen_order[1:])):
+        if b <= a:
+            # Первое нарушение, со строкой листа. Раньше в тревогу уходил
+            # весь столбец дат списком из тридцати datetime.date(…), и
+            # искать в нём сломанное место приходилось глазами (24 сентября
+            # 2026: колледж собирал новую неделю из скопированных блоков, и
+            # под 05.10 осталась дата 26.09 от копии).
+            place = f" в {where[k + 1]}" if where and k + 1 < len(where) else ""
+            raise SourceFormatChanged(
+                f"даты в листе идут не по возрастанию: {b:%d.%m.%Y}{place} "
+                f"стоит после {a:%d.%m.%Y}"
+            )
     gaps = [
         (a, b) for a, b in zip(seen_order, seen_order[1:]) if (b - a).days > limits.max_gap_days
     ]

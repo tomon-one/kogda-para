@@ -189,6 +189,7 @@ def teacher(
             days,
             store.generated,
             bells=load_bells() or None,
+            today=_today(),
         )
 
     body = build(teacher_id)
@@ -205,6 +206,7 @@ def teacher(
         body = teacher_payload(
             store.snapshot, store.teachers, teacher_id, start or _today(), days,
             store.generated, bells=load_bells() or None, known_name=name,
+            today=_today(),
         )
     if body is None:
         return Response(status_code=404, content='{"error":"преподаватель не найден"}',
@@ -234,6 +236,7 @@ def schedule(
             days,
             store.generated,
             bells=load_bells() or None,
+            today=_today(),
         )
 
     body = build(group_id)
