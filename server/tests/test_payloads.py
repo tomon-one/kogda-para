@@ -120,3 +120,66 @@ def test_offline_lesson_has_no_online_mark(snapshot):
     assert offline, "в окне должны быть пары с аудиторией"
     for lesson in offline:
         assert "o" not in lesson
+
+
+def _filling(filled: dict[dt.date, int], groups: int = 10) -> "Snapshot":
+    """Лист, где в день `d` пары вписаны у `filled[d]` групп из `groups`."""
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+
+    refs = [GroupRef(name=f"Г-{n}", id=f"g-{n}", column=2 + 4 * n) for n in range(groups)]
+    snap = Snapshot(sheet_title="лист", groups=refs, dates=sorted(filled))
+    for n, ref in enumerate(refs):
+        snap.schedule[ref.id] = {
+            day: [Lesson(number=1, subject="Математика")] for day, count in filled.items() if n < count
+        }
+    return snap
+
+
+# Понедельник 21.09 — суббота 03.10: неделя выложена, следующая только начата.
+WEEK = [dt.date(2026, 9, 21) + dt.timedelta(days=d) for d in range(6)]
+NEXT = [dt.date(2026, 9, 28) + dt.timedelta(days=d) for d in range(6)]
+THURSDAY = dt.date(2026, 9, 24)
+
+
+def test_unfilled_next_week_is_not_published():
+    """24 сентября 2026: колледж вписал следующую неделю у двух групп из
+    десяти, а остальным служба отдавала понедельник как «пар нет». Хвост,
+    который колледж только начал, — «ещё не опубликовано», а не выходной."""
+    from whensclass.api.payloads import meta_payload
+
+    snap = _filling({**{d: 10 for d in WEEK}, **{d: 2 for d in NEXT}})
+    empty = schedule_payload(snap, "g-5", dt.date(2026, 9, 21), 8, GENERATED, today=THURSDAY)
+    assert [d["d"] for d in empty["days"]] == [d.isoformat() for d in WEEK]
+    assert empty["cov"] == ["2026-09-21", "2026-09-26"]
+    meta = meta_payload(snap, GENERATED, "ok", None, today=THURSDAY)
+    assert meta["cov"] == ["2026-09-21", "2026-09-26"]
+
+    # У кого пары уже вписаны — видит их и за краем выложенного.
+    filled = schedule_payload(snap, "g-0", dt.date(2026, 9, 21), 8, GENERATED, today=THURSDAY)
+    assert filled["days"][-1] == {"d": "2026-09-28", "l": [{"n": 1, "s": "Математика"}]}
+
+
+def test_filled_week_is_published_and_holiday_inside_stays_free():
+    """Дописанная неделя выложена целиком; пустой день посреди неё —
+    праздник — остаётся «пар нет», а не «ещё не опубликовано»."""
+    filling = {**{d: 10 for d in WEEK}, **{d: 9 for d in NEXT}}
+    filling[NEXT[2]] = 0
+    snap = _filling(filling)
+    body = schedule_payload(snap, "g-9", dt.date(2026, 9, 28), 6, GENERATED, today=THURSDAY)
+    assert body["cov"] == ["2026-09-21", "2026-10-03"]
+    assert {"d": "2026-09-30", "l": []} in body["days"]
+
+
+def test_today_and_past_are_never_cut():
+    """Сегодня недописано — всё равно выложено: за краем сегодняшнего дня
+    виджет сказал бы «не опубликовано» про идущие пары."""
+    snap = _filling({**{d: 10 for d in WEEK[:3]}, **{d: 1 for d in WEEK[3:]}})
+    body = schedule_payload(snap, "g-5", dt.date(2026, 9, 21), 6, GENERATED, today=THURSDAY)
+    assert body["cov"] == ["2026-09-21", "2026-09-24"]
+
+
+def test_without_today_coverage_is_the_whole_sheet(snapshot):
+    """Без `today` покрытие прежнее — весь лист (золотой файл, старые вызовы)."""
+    group = next(g for g in snapshot.groups if g.name == "ИСП-924/2")
+    body = schedule_payload(snapshot, group.id, START, 3, GENERATED)
+    assert body["cov"] == [snapshot.dates[0].isoformat(), snapshot.dates[-1].isoformat()]

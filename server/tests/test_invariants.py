@@ -417,3 +417,26 @@ def _parse_cell_date(cell):
     from whensclass.parser.csv_schedule import _parse_date
 
     return _parse_date(cell)
+
+
+def test_dates_out_of_order_name_the_row(fixture_csv):
+    """Отказ по порядку дат называет дату и строку листа, а не весь столбец
+    дат списком datetime.date(…) — так он выглядел 24 сентября 2026."""
+    import csv
+    import io
+
+    from whensclass.parser.csv_schedule import FIXTURE, parse_export
+
+    rows = list(csv.reader(io.StringIO(fixture_csv)))
+    dated = [i for i, r in enumerate(rows) if r and r[0].strip()[:2].isdigit()]
+    # Дата раньше предыдущей, но новая: повтор уже встреченной ловит
+    # проверка номеров пар, а здесь нужен именно порядок.
+    last = dated[-1]
+    rows[last][0] = "01.09.2026 вторник"
+    out = io.StringIO()
+    csv.writer(out).writerows(rows)
+    with pytest.raises(SourceFormatChanged) as err:
+        parse_export(out.getvalue(), "лист", "1", limits=FIXTURE)
+    message = str(err.value)
+    assert f"в строке {last + 1} листа" in message
+    assert "datetime" not in message

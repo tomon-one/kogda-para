@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
 from ..config import settings
@@ -35,6 +36,53 @@ def sheet_url(gid: str | None = None) -> str:
     """
     base = f"https://docs.google.com/spreadsheets/d/{settings.spreadsheet_id}/edit"
     return f"{base}#gid={gid}" if gid else base
+
+
+# День после сегодняшнего, где пары есть меньше чем у половины групп против
+# самого полного дня листа, колледж ещё не дописал. Будни — 0,85–1,0 от самого
+# полного, субботы — 0,65–0,94 (архив 2–26 сентября 2026); недописанный
+# понедельник 28.09 на 24 сентября — 0,03. Опора — весь лист, а не тот же
+# день недели: в листе из одной недели каждый день недели один, и он сам себе
+# опора.
+FILLED_SHARE = 0.5
+
+
+def published(snapshot: Snapshot, today: date | None) -> list[date]:
+    """Дни листа, которые колледж уже выложил, а не только начал.
+
+    Новую неделю колледж пишет в лист постепенно: сначала даты, потом пары
+    по группам. Раньше такой день сразу попадал в `cov`, и группы, до которых
+    колледж ещё не дошёл, получали «пар нет» вместо «ещё не опубликовано»:
+    18 сентября 2026 в 19:20–21:20 так выглядела вся неделя 21–26.09, а
+    24 сентября — понедельник 28.09 (пары у 20 групп из 189), уже в окне
+    приложения. Человек в пятницу читает «в понедельник пар нет» и не идёт.
+
+    Отрезается только хвост: цепочка недописанных дней в конце листа, после
+    сегодняшнего. Пустой день посреди выложенной недели — праздник — так и
+    остаётся «пар нет»; сегодня и прошлое не отрезаются никогда. Ошибка в
+    другую сторону безопасна: праздник в самом конце листа покажется «ещё не
+    опубликовано».
+    """
+    dates = sorted(snapshot.dates)
+    if today is None:
+        return dates
+    busy: Counter[date] = Counter()
+    for by_date in snapshot.schedule.values():
+        for day, lessons in by_date.items():
+            if lessons:
+                busy[day] += 1
+    fullest = max((busy[day] for day in dates), default=0)
+    end = len(dates)
+    while end:
+        day = dates[end - 1]
+        if day <= today or busy[day] >= FILLED_SHARE * fullest:
+            break
+        end -= 1
+    return dates[:end]
+
+
+def _cov(dates: list[date]) -> list[str] | None:
+    return [dates[0].isoformat(), dates[-1].isoformat()] if dates else None
 
 
 def _place_days(
@@ -95,6 +143,7 @@ def teacher_payload(
     generated: datetime,
     bells: dict[str, list[str]] | None = None,
     known_name: str | None = None,
+    today: date | None = None,
 ) -> dict | None:
     """Расписание преподавателя. None, если такого в таблице нет.
 
@@ -106,13 +155,15 @@ def teacher_payload(
         return None
 
     by_date = index.days(teacher_id)
-    covered = set(snapshot.dates)
+    shown = published(snapshot, today)
+    covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
 
     out_days = []
     for offset in range(days):
         day = start + timedelta(days=offset)
-        if day not in covered:
+        # За краем выложенного — только дни, где пары уже вписаны.
+        if day not in covered and not by_date.get(day):
             continue
         lessons = []
         for entry in by_date.get(day, []):
@@ -141,9 +192,8 @@ def teacher_payload(
     }
     if gid:
         payload["src_url"] = sheet_url(gid)
-    coverage = snapshot.coverage
-    if coverage:
-        payload["cov"] = [coverage[0].isoformat(), coverage[1].isoformat()]
+    if cov := _cov(shown):
+        payload["cov"] = cov
     if bells:
         payload["bells"] = bells
     return payload
@@ -164,22 +214,30 @@ def schedule_payload(
     days: int,
     generated: datetime,
     bells: dict[str, list[str]] | None = None,
+    today: date | None = None,
 ) -> dict | None:
-    """Тело для виджета. None, если такой группы в листе нет."""
+    """Тело для виджета. None, если такой группы в листе нет.
+
+    `today` — сегодня по часам колледжа: от него считается недописанный
+    хвост листа (`published`). Без него покрытие — весь лист.
+    """
     group = next((g for g in snapshot.groups if g.id == group_id), None)
     if group is None:
         return None
 
     by_date = snapshot.schedule.get(group_id, {})
-    covered = set(snapshot.dates)
+    shown = published(snapshot, today)
+    covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
 
     out_days = []
     for offset in range(days):
         day = start + timedelta(days=offset)
-        if day not in covered:
+        if day not in covered and not by_date.get(day):
             # Дня нет в ответе вовсе — виджет отличит «пар нет» от
-            # «расписание ещё не опубликовано».
+            # «расписание ещё не опубликовано». За краем выложенного
+            # (`published`) день приходит, только если пары группы в нём
+            # уже вписаны.
             continue
         out_day = {
             "d": day.isoformat(),
@@ -202,9 +260,8 @@ def schedule_payload(
     }
     if gid:
         payload["src_url"] = sheet_url(gid)
-    coverage = snapshot.coverage
-    if coverage:
-        payload["cov"] = [coverage[0].isoformat(), coverage[1].isoformat()]
+    if cov := _cov(shown):
+        payload["cov"] = cov
     if bells:
         payload["bells"] = bells
     return payload
@@ -235,9 +292,8 @@ def meta_payload(
         "status": status,
         "src_url": sheet_url(place.gid if place else None),
     }
-    coverage = snapshot.coverage
-    if coverage:
-        out["cov"] = [coverage[0].isoformat(), coverage[1].isoformat()]
+    if cov := _cov(published(snapshot, today)):
+        out["cov"] = cov
     if checked:
         out["checked"] = _iso(checked)
     if status != "ok":
