@@ -71,6 +71,10 @@ class MainActivity : ComponentActivity() {
     // настройках телефона, поэтому перечитываем при каждом возвращении.
     private val notifications = mutableStateOf(true)
 
+    // Что телефон делает с приложением помимо его настроек: каналы, фон,
+    // пояс, разрешение на установку. Тоже меняется снаружи.
+    private val phone = mutableStateOf(ru.whensclass.notify.PhoneState())
+
     // Первый onResume идёт сразу за onCreate, где расписание уже запрошено:
     // второй запрос подряд там ни к чему.
     private var started = false
@@ -86,6 +90,7 @@ class MainActivity : ComponentActivity() {
         if (started) SyncWorker.now(this)
         started = true
         notifications.value = Notifications.allowed(this)
+        phone.value = ru.whensclass.notify.PhoneState.read(this)
         val allowed = LessonAlarms.exactAllowed(this)
         if (allowed != exactAlarms.value) {
             exactAlarms.value = allowed
@@ -121,6 +126,7 @@ class MainActivity : ComponentActivity() {
                 openUpdate = update,
                 exactAlarms = exactAlarms.value,
                 notifications = notifications.value,
+                phone = phone.value,
             )
         }
     }
@@ -177,6 +183,7 @@ private fun App(
     openUpdate: Boolean = false,
     exactAlarms: Boolean = false,
     notifications: Boolean = true,
+    phone: ru.whensclass.notify.PhoneState = ru.whensclass.notify.PhoneState(),
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -492,6 +499,7 @@ private fun App(
                         notifyUpdates = notifyUpdates,
                         exactAlarms = exactAlarms,
                         notifications = notifications,
+                        phone = phone,
                         onNotifyBefore = { minutes ->
                             scope.launch {
                                 container.store.setNotifyBefore(minutes)

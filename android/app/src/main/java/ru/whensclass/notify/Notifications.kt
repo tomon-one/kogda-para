@@ -98,10 +98,34 @@ object Notifications {
         show(context, CHANNEL_CHANGES, ID_SUBGROUP, title, text, day = null)
     }
 
-    /** Сервер лежит дольше двух часов — канал тот же, что у изменений, id свой. */
-    fun serverDown(context: Context, title: String, text: String) {
-        show(context, CHANNEL_CHANGES, ID_SERVER, title, text, day = null)
+    /**
+     * Сервер лежит дольше двух часов — канал тот же, что у изменений, id свой.
+     * true — показано: засчитывать сбой объявленным можно только тогда, иначе
+     * после выдачи разрешения посреди сбоя уведомление не приходило никогда
+     * (третий аудит, М32 прогона 1).
+     */
+    fun serverDown(context: Context, title: String, text: String): Boolean =
+        show(context, CHANNEL_CHANGES, ID_SERVER, title, text, day = null) && !channelOff(context, CHANNEL_CHANGES)
+
+    /**
+     * Сервер починился — снять «не обновляется»: оно висело в шторке рядом со
+     * свежими данными сколько угодно (М8 прогона 2).
+     */
+    fun serverBack(context: Context) {
+        runCatching { NotificationManagerCompat.from(context).cancel(ID_SERVER) }
     }
+
+    /** Висит ли непрочитанное «Расписание изменилось». */
+    fun changesShown(context: Context): Boolean = runCatching {
+        context.getSystemService(NotificationManager::class.java)
+            ?.activeNotifications?.any { it.id == ID_CHANGES } == true
+    }.getOrDefault(false)
+
+    /** Канал выключен в настройках телефона: notify() туда система молча отбрасывает. */
+    fun channelOff(context: Context, channel: String): Boolean = runCatching {
+        context.getSystemService(NotificationManager::class.java)
+            ?.getNotificationChannel(channel)?.importance == NotificationManager.IMPORTANCE_NONE
+    }.getOrDefault(false)
 
     /**
      * Нажатие открывает настройки на кнопке установки — идти искать не надо.

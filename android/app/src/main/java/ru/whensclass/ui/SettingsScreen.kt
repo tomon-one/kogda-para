@@ -81,6 +81,8 @@ fun SettingsScreen(
     notifyUpdates: Boolean,
     exactAlarms: Boolean,
     notifications: Boolean,
+    /** Что телефон делает с приложением помимо его настроек. */
+    phone: ru.whensclass.notify.PhoneState = ru.whensclass.notify.PhoneState(),
     onNotifyBefore: (Int) -> Unit,
     onNotifyEnabled: (Boolean) -> Unit,
     onNotifyChanges: (Boolean) -> Unit,
@@ -183,7 +185,11 @@ fun SettingsScreen(
 
         Section("Уведомления") {
             NotificationsDenied(notifications)
+            PhoneLimits(phone)
             SwitchRow("Напоминать о паре", notifyEnabled, onNotifyEnabled)
+            if (notifyEnabled && notifications && phone.lessonChannelOff) {
+                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_LESSON, "Напоминания о паре")
+            }
             if (notifyEnabled) {
                 // Обещание должно совпадать с поведением: напоминаем не о
                 // каждой паре, и человек вправе знать об этом до того, как
@@ -227,6 +233,9 @@ fun SettingsScreen(
             ExactAlarms(exactAlarms, notifyEnabled)
 
             SwitchRow("Сообщать об изменениях", notifyChanges, onNotifyChanges)
+            if (notifyChanges && notifications && phone.changesChannelOff) {
+                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES, "Сообщения об изменениях")
+            }
             Text(
                 // Тот же выключатель гасит и уведомление о лежащем сервере —
                 // об этом молчали (второй аудит, М10).
@@ -339,6 +348,20 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (!phone.canInstall) {
+                    // Заранее: иначе системный запрет «установка из этого
+                    // источника» для самой «Когда пара?» выглядел подозрительно,
+                    // и осторожный человек отказывал (третий аудит, М70
+                    // прогона 2).
+                    Text(
+                        "В первый раз Android попросит разрешить «Когда пара?» установку " +
+                            "приложений: так она ставит обновление самой себе. Другие " +
+                            "приложения она не ставит.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
                 ActionButton(
                     label = if (installing) "Скачиваю…" else "Обновить приложение",
                     onClick = onUpdate,
@@ -618,6 +641,82 @@ private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
  * его нет. Спрашиваем разрешение при первом запуске, но отказ надо пережить —
  * значит нужен путь назад.
  */
+/**
+ * Канал выключен в настройках телефона — отдельно от приложения целиком:
+ * «Больше не показывать» на уведомлении гасит только его, и выключатель
+ * здесь стоял «вкл» при молчащих уведомлениях (третий аудит, М23 прогона 2).
+ */
+@Composable
+private fun ChannelOff(channel: String, what: String) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+        Text(
+            "$what выключены в настройках телефона — не придёт ни одно.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        ActionButton(
+            label = "Включить",
+            onClick = {
+                runCatching {
+                    context.startActivity(
+                        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            .putExtra(Settings.EXTRA_CHANNEL_ID, channel)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            },
+        )
+    }
+}
+
+/**
+ * Ограничения телефона, которых приложение не выбирало: фон, экономия
+ * трафика, часовой пояс. Раньше о них молчали, и при «всё включено»
+ * напоминания и отмены не приходили (третий аудит, В8 и М12 прогона 2).
+ */
+@Composable
+private fun PhoneLimits(phone: ru.whensclass.notify.PhoneState) {
+    val context = LocalContext.current
+    if (phone.backgroundLimits.isNotEmpty()) {
+        Column(modifier = Modifier.padding(bottom = 8.dp)) {
+            Text(
+                "Телефон ограничивает приложение",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                phone.backgroundLimits.joinToString("; ").replaceFirstChar { it.uppercase() } + ". " +
+                    "Напоминания, часовое обновление и сообщения об отменах могут не приходить.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ActionButton(
+                label = "Открыть настройки приложения",
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:${context.packageName}"),
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                },
+            )
+        }
+    }
+    phone.zoneWarning?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+}
+
 @Composable
 private fun NotificationsDenied(allowed: Boolean) {
     if (allowed) return

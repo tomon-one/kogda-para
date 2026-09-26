@@ -77,6 +77,17 @@ internal suspend fun collectDiagnostics(
     lines += "Сервер: ${store.serverStatus.first()}"
     lines += widgets(context)
     lines += reminders(context, store)
+    // То, что телефон делает с приложением сам: раньше отчёт показывал
+    // «всё включено», а настоящей причины в нём не было (третий аудит, В8,
+    // М12, М23 прогона 2).
+    val phone = ru.whensclass.notify.PhoneState.read(context)
+    val off = listOfNotNull(
+        "«Скоро пара»".takeIf { phone.lessonChannelOff },
+        "«Изменения»".takeIf { phone.changesChannelOff },
+    )
+    if (off.isNotEmpty()) lines += "Каналы выключены в телефоне: ${off.joinToString(", ")}"
+    lines += "Фон: " + phone.backgroundLimits.joinToString("; ").ifEmpty { "ограничений не видно" }
+    if (phone.zoneWarning != null) lines += "Пояс: выставлен вручную и не колледжа"
     lines += "Телефон: ${LocalDateTime.now().format(STAMP)}, $zone"
 
     return lines.joinToString("\n")

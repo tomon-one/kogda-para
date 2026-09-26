@@ -71,6 +71,20 @@ internal suspend fun <T : Any> writeIfStillAsked(
     write: suspend () -> T,
 ): T? = if (current() == asked) write() else null
 
+/**
+ * Строки уведомления об изменениях: непрочитанные прежние и новые, без
+ * прошедших дней и повторов, не больше [MAX_CHANGE_LINES] последних.
+ */
+internal fun mergeChanges(
+    pending: List<Pair<String, String>>,
+    fresh: List<Pair<String, String>>,
+    today: java.time.LocalDate,
+): List<Pair<String, String>> =
+    (pending + fresh).filter { it.first >= today.toString() }.distinct().takeLast(MAX_CHANGE_LINES)
+
+/** Больше строк шторка всё равно не покажет развёрнутой. */
+internal const val MAX_CHANGE_LINES = 8
+
 /** Что случилось при обновлении — приложению есть что показать, виджету нет. */
 sealed interface RefreshResult {
     data object Updated : RefreshResult
@@ -158,15 +172,22 @@ class ScheduleRepository(
             .filter { it.day in soon }
         if (changes.isEmpty()) return
 
+        // Непрочитанное прежнее не затираем: новое с тем же id заменяло его, и
+        // отмена, пришедшая утром, к вечеру пропадала (третий аудит, В19
+        // прогона 2). Прочитанное или смахнутое — начинаем заново.
+        val pending = if (Notifications.changesShown(context)) store.pendingChanges() else emptyList()
+        val lines = mergeChanges(pending, changes.map { it.day to it.text }, today)
+        store.putPendingChanges(lines)
+
         // День — словами и датой, а не «Завтра»: уведомление висит в шторке до
         // утра, и наутро «Завтра: добавилась пара» читалось как новость о
         // послезавтра. Снимается само к концу последнего дня, о котором
         // говорит (третий аудит, М71 прогона 2).
-        val text = changes.joinToString("\n") { change ->
-            val date = java.time.LocalDate.parse(change.day)
-            "${ru.whensclass.widget.formatDayTitleShort(date)}: ${change.text}"
+        val text = lines.joinToString("\n") { (day, change) ->
+            val date = java.time.LocalDate.parse(day)
+            "${ru.whensclass.widget.formatDayTitleShort(date)}: $change"
         }
-        val lastDay = changes.maxOf { java.time.LocalDate.parse(it.day) }
+        val lastDay = lines.maxOf { java.time.LocalDate.parse(it.first) }
         val until = lastDay.plusDays(1).atStartOfDay(ru.whensclass.widget.COLLEGE_ZONE)
             .toInstant().toEpochMilli()
         Notifications.changes(context, "Расписание изменилось", text, until)
@@ -182,7 +203,10 @@ class ScheduleRepository(
      */
     private suspend fun announceStale(status: String?, sinceIso: String?) {
         if (status == "ok" || sinceIso == null) {
-            if (store.staleNotifiedFor() != null) store.setStaleNotifiedFor(null)
+            if (store.staleNotifiedFor() != null) {
+                store.setStaleNotifiedFor(null)
+                Notifications.serverBack(context)
+            }
             return
         }
         if (!store.notifyChangesEnabled()) return
@@ -190,14 +214,14 @@ class ScheduleRepository(
         val since = runCatching { java.time.Instant.parse(sinceIso) }.getOrNull() ?: return
         if (System.currentTimeMillis() - since.toEpochMilli() < STALE_NOTIFY_AFTER_MILLIS) return
         val silent = status == STATUS_UNREACHABLE
-        Notifications.serverDown(
+        val shown = Notifications.serverDown(
             context,
             if (silent) "Сервер расписания не отвечает" else "Сервер расписания не обновляется",
             "Сбой у нас с ${ru.whensclass.widget.formatSince(sinceIso)}. " +
                 "Приложение показывает последнее, что пришло, — пары могли поменяться. " +
                 "Таблица колледжа открывается из настроек.",
         )
-        store.setStaleNotifiedFor(sinceIso)
+        if (shown) store.setStaleNotifiedFor(sinceIso)
     }
 
     /** Есть ли у телефона проверенный выход в интернет — тогда молчание сервера наше. */
