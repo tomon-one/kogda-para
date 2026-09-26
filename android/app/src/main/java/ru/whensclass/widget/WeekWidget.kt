@@ -48,6 +48,7 @@ import ru.whensclass.R
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.sheetLink
+import ru.whensclass.ui.daysWithGaps
 
 /**
  * Виджет на неделю целиком.
@@ -90,13 +91,16 @@ class WeekWidget : GlanceAppWidget() {
                     .cornerRadius(16.dp)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
-                val days = schedule?.days.orEmpty()
+                // С дырами, как на экране: воскресенье и будень без строки
+                // внутри покрытия — «выходной», а не пропуск без слова (третий
+                // аудит, М68 прогона 2).
+                val days = schedule?.let { daysWithGaps(it) }.orEmpty()
                 Header(
                     days,
                     today,
                     state?.groupName,
                     state?.fetchedAt ?: 0L,
-                    currentState(ScheduleWidget.KEY_BUSY) == true,
+                    refreshing(),
                     currentState(ScheduleWidget.KEY_DONE) == true,
                     currentState(ScheduleWidget.KEY_FAILED) == true,
                     state?.serverBroken == true,
@@ -270,7 +274,7 @@ private fun Week(
                 Column(modifier = GlanceModifier.fillMaxWidth()) {
                     DayTitle(day, colors)
                     if (day.lessons.isEmpty()) {
-                        EmptyLine(colors)
+                        EmptyLine(colors, day.absent)
                     } else {
                         // Заголовок дня уже занял одного ребёнка, и если пар
                         // окажется больше девяти, всё сверх десятого молча
@@ -431,7 +435,7 @@ private fun DaySummary(day: WeekDay, bells: Map<String, List<String>>, colors: P
         )
         Text(
             if (day.lessons.isEmpty()) {
-                "  пар нет"
+                if (day.absent) "  выходной" else "  пар нет"
             } else {
                 "  " + pairsCount(day.lessons.size) + (span(day, bells)?.let { " · $it" } ?: "")
             },
@@ -452,9 +456,9 @@ private fun span(day: WeekDay, bells: Map<String, List<String>>): String? {
 }
 
 @Composable
-private fun EmptyLine(colors: Palette) {
+private fun EmptyLine(colors: Palette, absent: Boolean = false) {
     Text(
-        "пар нет",
+        if (absent) "выходной" else "пар нет",
         maxLines = 1,
         style = TextStyle(fontSize = 11.sp, color = colors.textDim),
         modifier = GlanceModifier.padding(start = 4.dp, bottom = 2.dp),
@@ -542,6 +546,7 @@ private class WeekDay(
     val title: String,
     val isToday: Boolean,
     val lessons: List<LessonDto>,
+    val absent: Boolean = false,
 )
 
 private fun weekDays(days: List<DayDto>, today: LocalDate): List<WeekDay> {
@@ -550,6 +555,6 @@ private fun weekDays(days: List<DayDto>, today: LocalDate): List<WeekDay> {
         // Прожитые дни в недельном виджете не показываем: места мало, а к
         // пятнице понедельник занимает верх экрана и вытесняет нужное.
         if (date.isBefore(today)) return@mapNotNull null
-        WeekDay(date, formatWeekDay(date), date == today, day.lessons)
+        WeekDay(date, formatWeekDay(date), date == today, day.lessons, day.absent)
     }
 }

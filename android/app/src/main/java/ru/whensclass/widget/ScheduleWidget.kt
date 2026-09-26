@@ -69,7 +69,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 colors,
                 now = now,
                 offset = currentOffset(),
-                busy = currentState(KEY_BUSY) == true,
+                busy = refreshing(),
                 done = currentState(KEY_DONE) == true,
                 failed = currentState(KEY_FAILED) == true,
                 serverBroken = state?.serverBroken == true,
@@ -146,6 +146,7 @@ class ScheduleWidget : GlanceAppWidget() {
 
         /** Идёт ли сейчас обновление: нажатие должно отзываться сразу. */
         val KEY_BUSY = booleanPreferencesKey("busy")
+        val KEY_BUSY_AT = longPreferencesKey("busy_at")
         val KEY_DONE = booleanPreferencesKey("done")
         val KEY_FAILED = booleanPreferencesKey("failed")
 

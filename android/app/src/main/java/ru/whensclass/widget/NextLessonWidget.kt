@@ -94,7 +94,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     )
                     // Отклик на ⟳ — как в шапках двух других виджетов: раньше
                     // маленький виджет нажатие не замечал ничем (второй аудит, М17).
-                    val busy = currentState(ScheduleWidget.KEY_BUSY) == true
+                    val busy = refreshing()
                     val failed = currentState(ScheduleWidget.KEY_FAILED) == true
                     val done = currentState(ScheduleWidget.KEY_DONE) == true
                     Text(

@@ -24,11 +24,20 @@ class ShiftDayAction : ActionCallback {
         parameters: ActionParameters,
     ) {
         val step = parameters[KEY_STEP] ?: return
+        // Границы — те же, что гасят стрелки: дни, что лежат на телефоне. Раньше
+        // ±MAX_OFFSET, и быстрое второе нажатие, пришедшее раньше перерисовки,
+        // уводило за край окна — будень следующей недели назывался «выходным»
+        // (третий аудит, М13 прогона 2).
+        val schedule = ScheduleWidget.parse(
+            runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()?.scheduleJson
+        )
+        val today = collegeToday()
+        val low = firstOffset(schedule, today)
+        val high = maxOf(low, lastOffset(schedule, today))
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
             val current = prefs[ScheduleWidget.KEY_DAY_OFFSET] ?: 0
             // Назад — в прожитые дни недели: они уже лежат на телефоне.
-            val next = (current + step)
-                .coerceIn(-ScheduleWidget.MAX_OFFSET, ScheduleWidget.MAX_OFFSET)
+            val next = (current + step).coerceIn(low, high)
             prefs.toMutablePreferences().apply { this[ScheduleWidget.KEY_DAY_OFFSET] = next }
         }
         ScheduleWidget().update(context, glanceId)
@@ -38,6 +47,19 @@ class ShiftDayAction : ActionCallback {
         val KEY_STEP = ActionParameters.Key<Int>("step")
     }
 }
+
+/**
+ * Идёт ли нажатое обновление. Отметка старше [BUSY_LIMIT_MS] — след нажатия,
+ * процесс которого умер (М31 прогона 1): её не показываем.
+ */
+@androidx.compose.runtime.Composable
+internal fun refreshing(): Boolean {
+    val busy = androidx.glance.currentState(ScheduleWidget.KEY_BUSY) == true
+    val at = androidx.glance.currentState(ScheduleWidget.KEY_BUSY_AT) ?: 0L
+    return busy && System.currentTimeMillis() - at < BUSY_LIMIT_MS
+}
+
+private const val BUSY_LIMIT_MS = 90_000L
 
 /**
  * Обновление по нажатию на виджете.
@@ -51,8 +73,13 @@ class RefreshAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
+        val repository = AppContainer.get(context).repository
+        // Обновление уже идёт (другое нажатие, часовой заход, открытие): второе
+        // не запускаем и чужие отметки не трогаем — раньше одно нажатие писало
+        // «обновлено», пока другое ещё шло (третий аудит, М15 прогона 2).
+        if (repository.refreshing) return
         mark(context, glanceId, busy = true, done = false, failed = false)
-        val result = AppContainer.get(context).repository.refresh(force = true)
+        val result = repository.refresh(force = true)
         // «Обновлено» на пару секунд: время в шапке меняется, только когда
         // расписание и правда другое, а нажавшему нужен ответ в любом случае.
         // Но ответ должен быть честным: раньше «обновлено» загоралось и после
@@ -74,6 +101,10 @@ class RefreshAction : ActionCallback {
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
             prefs.toMutablePreferences().apply {
                 this[ScheduleWidget.KEY_BUSY] = busy
+                // Момент начала: процесс может умереть посреди нажатия, и
+                // «обновляю…» висело навсегда, пряча «сбой» (третий аудит,
+                // М31 прогона 1). Старше минуты — не считается.
+                if (busy) this[ScheduleWidget.KEY_BUSY_AT] = System.currentTimeMillis()
                 this[ScheduleWidget.KEY_DONE] = done
                 this[ScheduleWidget.KEY_FAILED] = failed
             }

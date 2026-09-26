@@ -596,7 +596,8 @@ internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
         val existing = have[date]
         when {
             existing != null -> out += existing
-            !day.isBefore(cover[0]) && !day.isAfter(cover[1]) -> out += DayDto(date = date)
+            !day.isBefore(cover[0]) && !day.isAfter(cover[1]) ->
+                out += DayDto(date = date, absent = true)
         }
         day = day.plusDays(1)
     }
@@ -630,7 +631,7 @@ private fun DayCard(
 
             if (day.lessons.isEmpty()) {
                 Text(
-                    freeDay(day.date),
+                    if (day.absent) absentDay(day.date) else freeDay(day.date),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
@@ -673,6 +674,17 @@ private fun freeDay(date: String): String {
     // так устроено, и слово выбрано соответствующее.
     return if (day.dayOfWeek == DayOfWeek.SUNDAY) "Выходной"
     else FREE[day.dayOfYear % FREE.size]
+}
+
+/**
+ * День, которого в ответе нет, а по листу он есть: воскресенье или будень без
+ * строки (праздник). Не «пар нет. Это не ошибка» — это утверждало бы, что
+ * колледж выложил день пустым, — а то же, что пишет виджет (третий аудит, М26
+ * прогона 1).
+ */
+private fun absentDay(date: String): String {
+    val day = runCatching { LocalDate.parse(date) }.getOrNull()
+    return if (day?.dayOfWeek == DayOfWeek.SUNDAY) "Выходной" else "Выходной: пар в этот день нет"
 }
 
 /** Про будни, у которых пар не оказалось. Редкая новость, и хорошая. */

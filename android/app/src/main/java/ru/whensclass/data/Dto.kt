@@ -29,6 +29,12 @@ data class DayDto(
     @SerialName("l") val lessons: List<LessonDto> = emptyList(),
     /** Строка листа, где стоит дата этого дня, — чтобы ссылка подвела к ней. */
     @SerialName("row") val row: Int? = null,
+    /**
+     * Дня нет в ответе, а по листу он есть — воскресенье или будень без
+     * строки: его вставляет [ru.whensclass.ui.daysWithGaps]. Это «выходной», а
+     * не «колледж выложил день пустым» (третий аудит, М26 прогона 1).
+     */
+    @kotlinx.serialization.Transient val absent: Boolean = false,
 )
 
 @Serializable

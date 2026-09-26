@@ -40,6 +40,9 @@ class DaysWithGapsTest {
 
         assertEquals(listOf("2026-09-05", "2026-09-06", "2026-09-07"), dates(filled))
         assertEquals(emptyList<LessonDto>(), filled[1].lessons)
+        // Вставленный день помечен: экран пишет «Выходной», а не «Пар нет. Это
+        // не ошибка» — дня в листе нет вовсе (третий аудит, М26 прогона 1).
+        assertEquals(listOf(false, true, false), filled.map { it.absent })
     }
 
     @Test
