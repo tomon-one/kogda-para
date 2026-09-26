@@ -1,5 +1,6 @@
 package ru.whensclass.ui
 
+import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.widget.Toast
 import android.os.Build
@@ -39,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +58,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
 import ru.whensclass.data.ReleaseDto
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import kotlinx.coroutines.launch
+import ru.whensclass.widget.NextLessonWidgetReceiver
+import ru.whensclass.widget.ScheduleWidgetReceiver
 import ru.whensclass.widget.ThemeChoice
+import ru.whensclass.widget.WeekWidgetReceiver
 import ru.whensclass.widget.formatDurationShort
 
 /**
@@ -182,6 +190,8 @@ fun SettingsScreen(
                 }
             }
         }
+
+        PinWidgets()
 
         Section("Оформление") {
             ThemeOption("Как в системе", ThemeChoice.SYSTEM, theme, onTheme)
@@ -503,6 +513,44 @@ private fun OwnTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> 
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
+}
+
+/**
+ * Виджет на домашний экран одной кнопкой, без поиска в списке лончера: ради
+ * виджетов приложение и ставят. Лончер спрашивает, куда поставить. Не умеет
+ * он закреплять по просьбе приложения — раздела нет, виджет добавляют из
+ * списка, как написано в инструкции.
+ */
+@Composable
+private fun PinWidgets() {
+    val context = LocalContext.current
+    val supported = remember {
+        AppWidgetManager.getInstance(context).isRequestPinAppWidgetSupported
+    }
+    if (!supported) return
+    val scope = rememberCoroutineScope()
+    fun pin(receiver: Class<out GlanceAppWidgetReceiver>) {
+        scope.launch {
+            val asked = runCatching {
+                GlanceAppWidgetManager(context).requestPinGlanceAppWidget(receiver)
+            }.getOrDefault(false)
+            if (!asked) {
+                Toast.makeText(
+                    context,
+                    "Лончер не дал добавить виджет — добавьте его из списка виджетов",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+    Section("Виджеты") {
+        Hint("Добавить на домашний экран — лончер спросит, куда поставить.")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionButton(label = "День", onClick = { pin(ScheduleWidgetReceiver::class.java) })
+            ActionButton(label = "Неделя", onClick = { pin(WeekWidgetReceiver::class.java) })
+        }
+        ActionButton(label = "Ближайшая пара", onClick = { pin(NextLessonWidgetReceiver::class.java) })
+    }
 }
 
 /** Пояснение под выключателем. */
