@@ -383,6 +383,24 @@ def test_rename_on_the_border_seen_without_a_merged_snapshot(tmp_path, snapshot)
     assert quiet.pending_groups == {}
 
 
+def test_teacher_rename_on_the_border_seen_without_a_merged_snapshot(tmp_path, snapshot):
+    """Новый лист прочитан впервые, когда старый уже ушёл, и в нём поправлено
+    имя преподавателя. Раньше эта ветка падала на NameError, и в тот же заход
+    терялось и переименование группы."""
+    first, last = dt.date(2026, 9, 2), dt.date(2026, 9, 5)
+    old_sheet = _week(snapshot, first, last, gid="старый")
+    index = build_index(old_sheet)
+    busiest = max(index.names, key=lambda tid: sum(len(v) for v in index.days(tid).values()))
+    teacher = index.names[busiest]
+    fixed = teacher.split()[0] + " Исправленное Имя"
+    new_sheet = _week(renamed_teacher(snapshot, teacher, fixed), first, last, shift_days=7,
+                      rename=("ИСП-924/2", "ИСП-924/2а"), gid="новый")
+    book = RenameBook(tmp_path)
+    book.record(old_sheet, new_sheet, build_index(old_sheet), build_index(new_sheet))
+    assert book.pending_teachers[teacher_id(teacher)]["to"] == teacher_id(fixed)
+    assert book.pending_groups["isp-924-2"]["to"] == "isp-924-2a"
+
+
 def test_confirmation_does_not_miss_the_forty_minute_refresh(tmp_path, snapshot, monkeypatch):
     """Заход T+40 звал подтверждение на секунды
     раньше сорока минут от записи, и оно уезжало на T+60, а вечером — на ночь."""
