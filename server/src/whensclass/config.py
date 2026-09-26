@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     min_dates: int = 5
     min_lessons: int = 500
     max_gap_days: int = 25
+    max_days_ahead: int = 120
+    # Заморозка: служба не ходит в таблицу и сразу stale на прежнем снимке —
+    # когда на экранах чужие пары при ok (docs/deploy.md, «Когда что-то не
+    # так»). Прежний рычаг SPREADSHEET_ID=stop полчаса держал ok, стирал
+    # память о листе и вёл ссылку «открыть таблицу» в несуществующую книгу
+    # (третий аудит, В25 прогона 1).
+    freeze: bool = False
 
     refresh_minutes: int = 20
     # За сколько минут до звонка сходить за расписанием ещё раз: пары меняют

@@ -290,3 +290,41 @@ def test_known_teacher_without_lessons_gets_free_days_but_fixed_typo_gets_404(fi
     assert away.status_code == 200
     assert all(day["l"] == [] for day in away.json()["days"])
     assert client.get("/v1/teacher/typo-id?from=2026-09-07&days=3").status_code == 404
+
+
+def test_health_is_503_when_today_is_only_a_skeleton(fixture_csv):
+    """Третий аудит, В8 прогона 1: дата сегодня в листе есть (каркас вписан
+    заранее), а пар почти ни у кого — это не «здоров», хотя статус ok."""
+    snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
+    today = dt.date(2026, 9, 8)
+    keep = snapshot.groups[0].id
+    for gid, by_date in snapshot.schedule.items():
+        if gid != keep:
+            by_date.pop(today, None)
+    app = FastAPI()
+    app.include_router(router)
+    app.state.store = FakeStore(snapshot)
+    app.state.refresher = FakeRefresher()
+    response = TestClient(app).get("/healthz")
+    assert response.status_code == 503
+    assert "не дописан" in response.json()["reason"]
+
+
+def test_teacher_waiting_for_rename_confirmation_gets_404_not_free_days(fixture_csv):
+    """Третий аудит, В26 прогона 1: переименование, которое книга распознала,
+    40 минут ждёт подтверждения — и по старому id шли пустые дни. Телефон
+    писал их поверх своих и слал «убрали пару»."""
+    snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
+    app = FastAPI()
+    app.include_router(router)
+    store = FakeStore(snapshot, known={"otpusk-o-o": "Отпусков Олег Олегович"})
+    app.state.store = store
+
+    class Renaming(FakeRenames):
+        pending_teachers = {"otpusk-o-o": {"to": "otpuskov-o-o", "seen": 1}}
+
+    refresher = FakeRefresher()
+    refresher.renames = Renaming()
+    app.state.refresher = refresher
+    client = TestClient(app)
+    assert client.get("/v1/teacher/otpusk-o-o?from=2026-09-07&days=3").status_code == 404

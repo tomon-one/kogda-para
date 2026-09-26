@@ -402,3 +402,54 @@ def test_two_neighbour_names_in_repeated_header_are_a_shift(fixture_csv):
     names_row[ordered[2]] = by_column[ordered[1]]
     with pytest.raises(SourceFormatChanged, match="таких колонок 2"):
         parse_sheet(rows, "фикстура", FIXTURE)
+
+
+def test_neighbour_name_in_the_main_header_is_resolved_by_the_repeated_one(fixture_csv):
+    """Третий аудит, В9 прогона 1: «ИСП-924/1» над ИСП-924/2 в главном
+    заголовке давало «объявлена дважды» и отказ у всех. Теперь обе колонки
+    безымянны в главном, а имена им даёт повторный заголовок."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+    rows[0][6] = "Дисциплина Преподаватель БП-1126"
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    placed = {(g.name, g.column) for g in snap.groups}
+    assert placed == {(g.name, g.column) for g in honest.groups}
+    assert snap.schedule == honest.schedule
+
+
+def test_template_placeholder_in_one_cell_is_an_empty_slot(fixture_csv):
+    """Третий аудит, В10 прогона 1: «Дисциплина» / «Преподаватель» в клетке
+    одной группы посреди дня выкидывали три строки у всех групп, и лист
+    отвергался. Это заготовка незаполненной клетки — пары там нет."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+    group = next(g for g in honest.groups if g.name == "ИСП-924/2")
+    i = next(i for i, r in enumerate(rows) if len(r) > 1 and r[1].strip() == "2" and i > 5)
+    rows[i][group.column] = "Дисциплина"
+    rows[i + 1][group.column] = "Преподаватель"
+    rows[i][group.column + 3] = ""
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    others = [g.id for g in honest.groups if g.column != group.column]
+    assert all(snap.schedule[g] == honest.schedule[g] for g in others)
+    lessons = [x for by in snap.schedule[group.id].values() for x in by]
+    assert all(x.subject != "Дисциплина" for x in lessons)
+
+
+def test_row_inserted_before_the_bell_row_does_not_steal_the_teachers(fixture_csv):
+    """Третий аудит, В11 прогона 1: строка с припиской между строкой пары и
+    строкой времени становилась строкой преподавателей, и у всей строки пары
+    они пропадали — а у преподавателей пропадала пара."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+    group = next(g for g in honest.groups if g.name == "ИСП-924/2")
+    i = next(
+        i for i, r in enumerate(rows)
+        if len(r) > 1 and r[1].strip().isdigit() and i + 1 < len(rows)
+        and len(rows[i + 1]) > 1 and rows[i + 1][1].strip()[:1].isdigit()
+        and not rows[i + 1][1].strip().isdigit()
+    )
+    note = [""] * len(rows[i])
+    note[group.column] = "перенос с 23.09"
+    rows.insert(i + 1, note)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    assert snap.schedule == honest.schedule

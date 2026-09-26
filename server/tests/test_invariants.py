@@ -89,7 +89,7 @@ def test_date_far_ahead_is_rejected_only_when_today_is_known(fixture_csv):
     rows = rows_of(fixture_csv)
     last = date_rows(rows)[-1]
     rows[last][0] = "11.09.2027 суббота"
-    with pytest.raises(SourceFormatChanged, match="дальше 60 дней"):
+    with pytest.raises(SourceFormatChanged, match="дальше 120 дней .* а в ней уже пары"):
         parse_sheet(rows, "фикстура", FIXTURE, around=dt.date(2026, 9, 8))
     with pytest.raises(SourceFormatChanged, match="больше 25 дней"):
         parse_sheet(rows, "фикстура", FIXTURE)
@@ -461,3 +461,29 @@ def test_date_that_contradicts_its_weekday_is_rejected(fixture_csv, cell, match)
     rows[date_rows(rows)[-1]][0] = cell
     with pytest.raises(SourceFormatChanged, match=match):
         parse_sheet(rows, "фикстура", FIXTURE)
+
+
+
+def test_empty_date_skeleton_far_ahead_is_cut_not_rejected(fixture_csv):
+    """Третий аудит, В7 прогона 1: колледж вписывает каркас дат на недели
+    вперёд. Пустые даты за горизонтом — не опечатка, а будущее: их отрезаем,
+    а не роняем лист у всех."""
+    import csv
+    import dataclasses
+    import io
+
+    from whensclass.parser.csv_schedule import parse_csv
+
+    rows = read_csv(fixture_csv)
+    width = max(len(r) for r in rows)
+    extra = []
+    for day in (dt.date(2026, 9, 14), dt.date(2026, 9, 15)):
+        for number in range(1, 7):
+            first = f"{day:%d.%m.%Y}" if number == 1 else ""
+            extra.append([first, str(number)] + [""] * (width - 2))
+            extra.append(["", "8.30-10.00"] + [""] * (width - 2))
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(rows + extra)
+    near = dataclasses.replace(FIXTURE, max_days_ahead=5)
+    snapshot = parse_csv(buf.getvalue(), "фикстура", near, around=dt.date(2026, 9, 8))
+    assert snapshot.dates[-1] == dt.date(2026, 9, 12), "14 и 15.09 — за горизонтом и пусты"

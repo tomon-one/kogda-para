@@ -122,6 +122,7 @@ def test_network_blip_is_silent_until_half_an_hour(tmp_path, sent, fixture_csv):
     assert refresher.last_error == "таблица не прочиталась: ReadTimeout"
     # Полчаса спустя — уже повод.
     refresher.failing_since -= dt.timedelta(minutes=31)
+    refresher._fetch_since -= dt.timedelta(minutes=31)
     refresher._fail("таблица не прочиталась: ReadTimeout", kind="fetch",
                     public="таблица не прочиталась: ReadTimeout")
     assert len(sent.bodies) == 1

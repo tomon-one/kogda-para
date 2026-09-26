@@ -54,11 +54,18 @@ def setup_lookup(monkeypatch, sheets, behaviour):
     monkeypatch.setattr(si, "parse_csv", parse)
 
 
-class Snapshot:
-    """Ровно то, что от снимка нужно поиску: покрытие."""
+def Snapshot(first, last, filled_to=None):
+    """Лист с днями first..last; пары — у одной группы до `filled_to` (по
+    умолчанию до конца): дальше — пустой каркас дат."""
+    from whensclass.domain.models import GroupRef, Lesson
+    from whensclass.domain.models import Snapshot as Real
 
-    def __init__(self, first, last):
-        self.coverage = (first, last)
+    days = [first + dt.timedelta(days=n) for n in range((last - first).days + 1)]
+    group = GroupRef(name="А-1", id="a-1", column=2)
+    snap = Real(sheet_title="лист", groups=[group], dates=days)
+    snap.schedule = {"a-1": {d: [Lesson(number=1, subject="Х")] for d in days
+                             if d <= (filled_to or last)}}
+    return snap
 
 
 def test_all_sheets_read_and_none_covers_the_day(tmp_path, monkeypatch):
@@ -211,3 +218,24 @@ def test_new_sheet_with_two_dates_is_found(tmp_path, monkeypatch, fixture_csv):
     monkeypatch.setattr(si.gsheets, "fetch_sheet_csv", lambda gid=None, title=None: out.getvalue())
     title, gid = si.resolve_for(dt.date(2026, 9, 3), tmp_path)
     assert title == "расписание групп 02.-03.09" and gid == "1"
+
+
+def test_empty_date_skeleton_does_not_count_as_covered(tmp_path, monkeypatch):
+    """Третий аудит, В8 прогона 1: колледж вписал даты на месяц вперёд без
+    пар. Память поиска считала лист покрывающим весь месяц и новую вкладку
+    не читала бы вовсе. Покрытие листа для поиска — до последнего дописанного
+    дня."""
+    sheets = visible("расписание групп 01.-19.09")
+    setup_lookup(
+        monkeypatch, sheets, {"расписание групп 01.-19.09": ("2026-09-02", "2026-11-02")}
+    )
+    monkeypatch.setattr(
+        si, "parse_csv",
+        lambda text, title, limits=None, around=None: Snapshot(
+            dt.date(2026, 9, 2), dt.date(2026, 11, 2), filled_to=dt.date(2026, 9, 26)
+        ),
+    )
+    si.resolve_for(dt.date(2026, 9, 21), tmp_path, deep=True)
+    index = si.SheetIndex(tmp_path)
+    assert index.known["расписание групп 01.-19.09"]["to"] == "2026-09-26"
+    assert index.covering(dt.date(2026, 9, 28)) is None

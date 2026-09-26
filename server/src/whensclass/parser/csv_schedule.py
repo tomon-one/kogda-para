@@ -51,9 +51,6 @@ _LOOKS_LIKE_DATE = re.compile(r"\d{1,2}\s*[.,/-]\s*\d{1,2}")
 _LESSON_NO_RE = re.compile(r"^([1-9])$")
 # Строка под парой несёт время звонка в колонке номера: «9-00-10.30».
 _TIME_RE = re.compile(r"^\d{1,2}[.:-]\d{2}\s*[-–]\s*\d{1,2}[.:-]\d{2}$")
-# Дальше этого лист смотреть не должен: опечатка «2027» в одной дате иначе
-# делала бы лист покрывающим год вперёд.
-MAX_DAYS_AHEAD = 60
 # Сдвиг блока строк, под которым нет повторного заголовка, не видит ни одна
 # сверка колонок: каждая группа молча получает пары соседа. Видно его по
 # содержимому, и признак — именно «пары соседа», а не «незнакомые пары».
@@ -122,6 +119,12 @@ class Limits:
     # зимние каникулы внутри листа (26.12 → 11.01) — шестнадцать дней, и с
     # прежним порогом в две недели лист отвергался целиком (второй аудит, М6).
     max_gap_days: int = 25
+    # Дальше этого от сегодня дата с парами — опечатка («2027» растянула бы
+    # лист на год), а пустые даты — каркас на будущее, их просто отрезаем.
+    # 24 сентября 2026 колледж вписал каркас на 39 дней вперёд; при прежних
+    # 60 днях и отказе продление каркаса до конца ноября роняло обновление у
+    # всех (третий аудит, В7 прогона 1).
+    max_days_ahead: int = 120
 
 
 FULL_SHEET = Limits()
@@ -180,7 +183,7 @@ def parse_sheet(
     around: date | None = None,
     sheet_rows: list[int] | None = None,
 ) -> Snapshot:
-    """`around` — сегодняшний день: дальше MAX_DAYS_AHEAD от него дат не ждём.
+    """`around` — сегодняшний день: дальше `limits.max_days_ahead` от него пар не ждём.
 
     `sheet_rows[i]` — номер строки листа, как его видит человек в Sheets, для
     строки `i` после схлопывания шапки. С ним сообщения разбора ведут в ту
@@ -218,6 +221,8 @@ def parse_sheet(
     # повторов. Повтор даты (скопированный блок) и номер не по шаблону
     # («3 пара», пропущенная строка) ловятся здесь же.
     numbers_by_date: dict[date, list[int]] = {}
+    # Даты дальше горизонта и где они в листе: с парами — отказ, без — отрезаем.
+    far: dict[date, str] = {}
 
     for i, row in enumerate(rows):
         if i in skip:
@@ -240,10 +245,8 @@ def parse_sheet(
             if found.weekday() == 6:
                 # Воскресений в листах колледжа не бывает: это опечатка в числе.
                 raise SourceFormatChanged(f"дата {found:%d.%m.%Y} в {where(i)} — воскресенье")
-            if around is not None and found > around + timedelta(days=MAX_DAYS_AHEAD):
-                raise SourceFormatChanged(
-                    f"дата {found} в {where(i)} дальше {MAX_DAYS_AHEAD} дней от {around}"
-                )
+            if around is not None and found > around + timedelta(days=limits.max_days_ahead):
+                far.setdefault(found, where(i))
             if found != current:
                 date_order.append(found)
                 date_where.append(where(i))
@@ -283,14 +286,7 @@ def parse_sheet(
             )
         numbers_by_date[current].append(number)
 
-        # Строка под парой отдана преподавателям — но только если это
-        # действительно она, а не начало следующей пары.
-        teacher_row: list[str] = []
-        nxt = i + 1
-        if nxt < len(rows) and nxt not in skip:
-            candidate = rows[nxt]
-            if not _LESSON_NO_RE.match(_cell(candidate, 1).strip()):
-                teacher_row = candidate
+        teacher_row = _teacher_row(rows, i, skip, where)
 
         for group in groups:
             lesson = parse_lesson(
@@ -309,6 +305,7 @@ def parse_sheet(
         for day, lessons in by_date.items():
             lessons.sort(key=lambda x: x.number)
     _settle_replacements(snapshot)
+    _cut_far_skeleton(snapshot, far, seen_dates, limits, around)
 
     snapshot.dates = sorted(seen_dates)
     snapshot.unnamed = {col: n for col, n in unnamed.items() if n}
@@ -339,6 +336,21 @@ def _check_spill(rows: list[list[str]], groups: list[GroupRef], skip: set[int], 
             f"в {len(found)} ячейках пустых колонок блоков есть текст, первая — "
             f"{where(i)}, колонка {col}: похоже на вставку ячеек не на ширину блока"
         )
+
+
+def _cut_far_skeleton(
+    snapshot: Snapshot, far: dict[date, str], seen: list[date], limits: Limits, around
+) -> None:
+    """Даты за горизонтом: с парами — опечатка, отказ; пустые — каркас, прочь."""
+    for day, place in sorted(far.items()):
+        if any(by_date.get(day) for by_date in snapshot.schedule.values()):
+            raise SourceFormatChanged(
+                f"дата {day} в {place} дальше {limits.max_days_ahead} дней от {around}, "
+                "а в ней уже пары"
+            )
+    if far:
+        log.info("пустые даты за горизонтом (%s…%s) — каркас, отрезаю", min(far), max(far))
+        seen[:] = [d for d in seen if d not in far]
 
 
 def _topic(subject: str) -> str:
@@ -412,6 +424,34 @@ def _adopt_names(
         blocks.discard(col)
     groups.sort(key=lambda g: g.column)
     return groups, dict.fromkeys(blocks, 0)
+
+
+def _teacher_row(rows: list[list[str]], i: int, skip: set[int], where) -> list[str]:
+    """Строка преподавателей пары в строке `i`.
+
+    Это строка под парой со временем звонка в колонке номеров. Раньше бралась
+    просто следующая: вставленная между ними строка с припиской («перенос с
+    23.09» у одной группы) забирала её роль, и у всей строки пары пропадали
+    преподаватели (третий аудит, В11 прогона 1). Строки без номера и времени
+    между ними пропускаются. Времени нет вовсе — берём следующую, как раньше.
+    """
+    between: list[int] = []
+    j = i + 1
+    while j < len(rows) and j not in skip:
+        marker = _cell(rows[j], 1).strip()
+        if _LESSON_NO_RE.match(marker):
+            break
+        if _TIME_RE.match(marker):
+            if between:
+                _warn_once(
+                    ("между", where(between[0])),
+                    "между строкой пары и строкой времени в %s лишняя строка — пропускаю",
+                    where(between[0]), logger=log,
+                )
+            return rows[j]
+        between.append(j)
+        j += 1
+    return rows[between[0]] if between else []
 
 
 def _validate(

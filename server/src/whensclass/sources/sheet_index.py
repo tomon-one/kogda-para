@@ -15,6 +15,7 @@ import logging
 import pathlib
 import re
 
+from ..api.payloads import filled_until
 from ..config import settings
 from ..domain.models import SourceFormatChanged
 from ..parser.csv_schedule import Limits, parse_csv
@@ -304,6 +305,7 @@ def _candidate_limits() -> Limits:
     return Limits(
         min_groups=settings.min_groups, min_dates=1, min_lessons=1,
         max_gap_days=settings.max_gap_days,
+        max_days_ahead=settings.max_days_ahead,
     )
 
 
@@ -409,8 +411,11 @@ def resolve_for(
         coverage = snapshot.coverage
         if not coverage:
             continue
-        index.remember(sheet.title, sheet.gid, *coverage)
-        if coverage[0] <= day <= coverage[1]:
+        # До последнего дописанного дня, а не до конца каркаса дат (третий
+        # аудит, В8 прогона 1).
+        last = filled_until(snapshot) or coverage[1]
+        index.remember(sheet.title, sheet.gid, coverage[0], last)
+        if coverage[0] <= day <= last:
             return sheet.title, sheet.gid
 
     # Ни один лист не покрывает день. Это не обязательно поломка: между листами
