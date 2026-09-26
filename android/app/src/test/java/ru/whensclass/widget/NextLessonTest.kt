@@ -89,4 +89,11 @@ class NextLessonTest {
             noNextLesson(null, null, now, fresh, false),
         )
     }
+
+    @Test
+    fun `в шапке время первым — многоточие съедает дату, а не время`() {
+        assertEquals("14:20 · пн, 28 сентября", nextLessonHead("14:20", "пн, 28 сентября", false, null))
+        assertEquals("идёт сейчас · 14:20", nextLessonHead("14:20", "идёт сейчас", true, null))
+        assertEquals("09:00 · завтра · ИСП-924/2", nextLessonHead("09:00", "завтра", false, "ИСП-924/2"))
+    }
 }

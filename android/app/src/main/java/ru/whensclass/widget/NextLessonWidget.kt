@@ -159,7 +159,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     broken -> "сбой · "
                     else -> ""
                 }
-                val head = status + (lesson.groups?.let { "$when_ · $time · $it" } ?: "$when_ · $time")
+                val head = status + nextLessonHead(time, when_, ongoing, lesson.groups)
                 // Три строки не влезают в низкую клетку при крупном шрифте, и
                 // корпус срезал нижнюю — место. Тогда место — в шапку, а не
                 // долой (третий аудит, М26 прогона 2).
@@ -276,6 +276,17 @@ internal fun noNextLesson(
     val end = schedule.coverage.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     if (end == null || end.isBefore(today.plusDays(6))) return "Дальше расписание ещё не опубликовано"
     return "Дальше пар нет"
+}
+
+/**
+ * Шапка маленького виджета: время — первым. Строка одна и режется справа, и
+ * «пн, 28 сентября · 14:20» на узком виджете выходило «пн, 28 сентября ·
+ * 1…» — пропадало время, ради которого виджет и смотрят (проверка сборки 82
+ * на телефоне, 26.09). «Идёт сейчас» — всё же первым: это главное.
+ */
+internal fun nextLessonHead(time: String, whenWord: String, ongoing: Boolean, groups: String?): String {
+    val core = if (ongoing) "$whenWord · $time" else "$time · $whenWord"
+    return groups?.let { "$core · $it" } ?: core
 }
 
 /** Три строки маленького виджета — в sp, без отступов. */
