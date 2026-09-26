@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT / "server" / "src"))
 
 import datetime as dt  # noqa: E402
 
+from whensclass.config import settings  # noqa: E402
 from whensclass.domain.models import SourceFormatChanged  # noqa: E402
 from whensclass.parser.csv_schedule import _check_shift, parse_export, shift_seed  # noqa: E402
 from whensclass.service import alerts  # noqa: E402
@@ -40,11 +41,48 @@ from whensclass.service.refresher import _limits, _today  # noqa: E402
 from whensclass.sources import gsheets, sheet_index  # noqa: E402
 from whensclass.storage.snapshot_store import SnapshotStore  # noqa: E402
 
+# Сертификат, который отдаёт nginx: продлевается сам, но перезагрузку nginx
+# после продления делает хук, который ни разу не срабатывал и зависит от
+# `nginx -t` по чужим сайтам общей машины (третий аудит, М53 прогона 2). За
+# две недели до конца срока — тревога.
+CERT_WARN_DAYS = 14
+
 # Лист кончился больше недели назад, а нового нет — это каникулы, а не беда:
 # раньше канарейка всё лето каждое утро в 04:30 слала тревогу со звуком
 # (третий аудит, М88 прогона 2).
 HOLIDAY_DAYS = 7
 HOLIDAY_WINDOW = 30 * 24 * 60 * 60
+
+
+def cert_days_left(host: str) -> int:
+    """Сколько дней осталось сертификату, который отдаёт `host` на 443."""
+    import socket
+    import ssl
+
+    context = ssl.create_default_context()
+    with socket.create_connection((host, 443), timeout=15) as raw:
+        with context.wrap_socket(raw, server_hostname=host) as tls:
+            not_after = tls.getpeercert()["notAfter"]
+    expires = dt.datetime.fromtimestamp(ssl.cert_time_to_seconds(not_after), dt.timezone.utc)
+    return (expires - dt.datetime.now(dt.timezone.utc)).days
+
+
+def check_cert(quiet: bool) -> None:
+    host = settings.domain
+    try:
+        left = cert_days_left(host)
+    except Exception as exc:
+        print(f"сертификат {host} не проверился: {type(exc).__name__}: {exc}")
+        return
+    if not quiet:
+        print(f"сертификат {host}: осталось {left} дн.")
+    if left < CERT_WARN_DAYS:
+        print(f"БЕДА: сертификат {host} кончается через {left} дн.")
+        alerts.notify(
+            "canary-cert",
+            f"Когда пара?: сертификат {host} кончается через {left} дн. — продление "
+            "не дошло до nginx? docs/deploy.md, «Сертификат».",
+        )
 
 
 def main() -> int:
@@ -57,6 +95,7 @@ def main() -> int:
     today = _today()
     state = pathlib.Path(args.state_dir)
     alerts.keep_in(state / "canary-alerts.json")
+    check_cert(args.quiet)
 
     try:
         # Глубоко: память службы «листа нет» канарейке не указ — раз в сутки

@@ -30,6 +30,7 @@ def canary(monkeypatch, tmp_path, fixture_csv):
     monkeypatch.setattr(module.sheet_index, "resolve_for", lambda *a, **k: ("лист", "1"))
     monkeypatch.setattr(module.gsheets, "fetch_sheet_csv", lambda gid=None, title=None: fixture_csv)
     monkeypatch.setattr(module, "_limits", lambda: FIXTURE)
+    monkeypatch.setattr(module, "cert_days_left", lambda host: 60)
     monkeypatch.setattr("sys.argv", ["check_source.py", "--quiet", "--state-dir", str(tmp_path)])
     return module, sent
 
@@ -56,3 +57,13 @@ def test_limits_come_from_the_service_settings(canary, monkeypatch):
     module, sent = canary
     monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
     assert module.main() == 0 and sent == []
+
+
+def test_certificate_close_to_expiry_is_an_alarm(canary, monkeypatch):
+    """М53: хук перезагрузки nginx после продления ни разу не срабатывал;
+    канарейка сверяет срок сертификата, который nginx отдаёт на деле."""
+    module, sent = canary
+    monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
+    monkeypatch.setattr(module, "cert_days_left", lambda host: 10)
+    module.main()
+    assert ("canary-cert", False) in sent
