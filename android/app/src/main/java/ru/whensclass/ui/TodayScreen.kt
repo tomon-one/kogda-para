@@ -279,7 +279,7 @@ fun TodayScreen(
             if (gone) Gone(groupName, teacherMode, onRepick)
             if (serverBroken) {
                 ServerBroken(
-                    sheetLink(schedule, today, sourceUrl), serverSince, schedule?.generatedAt, now, unreachable,
+                    sheetLink(schedule, today, sourceUrl), serverSince, now, unreachable,
                 )
             }
         }
@@ -721,7 +721,7 @@ private fun DayCard(
                 // больше нечего.
                 if (day.lessons.all { it.isCancelled }) {
                     Text(
-                        "Всё отменили. Завидую",
+                        "Всё отменили. Повезло",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -986,7 +986,6 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
 private fun ServerBroken(
     sourceUrl: String?,
     since: String?,
-    generatedAt: String?,
     now: LocalDateTime,
     unreachable: Boolean = false,
 ) {
@@ -1003,13 +1002,13 @@ private fun ServerBroken(
             // тут ни при чём, и уведомление в тот же момент говорит «не
             // отвечает» (третий аудит, М13 прогона 1).
             Text(
-                if (unreachable) "Сервер расписания не отвечает" else "Сбой на нашем сервере",
+                if (unreachable) "Сервер расписания не отвечает" else "Сбой на сервере",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.error,
             )
             Text(
-                (if (unreachable) "Телефон не достучался до нашего сервера, "
+                (if (unreachable) "Телефон не достучался до сервера, "
                 else "Не удалось прочитать таблицу, ") +
                     "приложение показывает последнее, что пришло. Пары могли поменяться.",
                 style = MaterialTheme.typography.bodySmall,
@@ -1019,12 +1018,11 @@ private fun ServerBroken(
             // выглядеть как минута рядом с честным «обновлено 5 минут назад».
             since?.let {
                 Text(
-                    // gen — не «получено», а последняя правка таблицы, которую
-                    // сервер успел забрать (третий аудит, М74 прогона 2).
-                    "Сбой с ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}." +
-                        (generatedAt?.let { g ->
-                            " Последняя правка таблицы, которую сервер успел забрать, — ${formatReceived(g)}."
-                        } ?: ""),
+                    // Не «получено» и не дата правки (третий аудит, М74 прогона
+                    // 2): до сбоя сервер читал таблицу исправно, значит на
+                    // экране она — какой была к его началу.
+                    "Сбой с ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}. " +
+                        "На экране — таблица, какой она была до сбоя.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 4.dp),
@@ -1039,12 +1037,6 @@ private fun ServerBroken(
         }
     }
 }
-
-/** «11 сентября в 10:40» — когда сервер в последний раз забрал из таблицы новое. */
-private fun formatReceived(iso: String): String = runCatching {
-    java.time.LocalDateTime.ofInstant(java.time.Instant.parse(iso), java.time.ZoneId.systemDefault())
-        .format(java.time.format.DateTimeFormatter.ofPattern("d MMMM 'в' HH:mm", java.util.Locale("ru")))
-}.getOrDefault(iso)
 
 /**
  * Плашка «группы в таблице больше нет».
@@ -1075,7 +1067,7 @@ private fun Gone(groupName: String, teacherMode: Boolean, onRepick: () -> Unit) 
                 (if (teacherMode) "Имени «$groupName» в таблице колледжа больше нет: "
                  else "Группы «$groupName» в таблице колледжа больше нет: ") +
                     "переименовали, разделили или убрали. На экране — последнее, " +
-                    "что было. Выберите заново из нынешнего списка.",
+                    "что было.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1126,9 +1118,10 @@ private fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss:
                 Spacer(Modifier.height(8.dp))
                 Text(
                     // «3 раза», а не «3 раз» (третий аудит, М25 прогона 2).
+                    // Без «каждый раз это было вместо таблицы»: до сборки 82
+                    // виджеты засчитывали и технические перерисовки.
                     plural(counted.opens.toInt(), "раз", "раза", "раз") + " ответило приложение, " +
-                        "${counted.draws} — виджеты. Каждый раз это было вместо " +
-                        "таблицы колледжа.",
+                        "${counted.draws} — виджеты.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -1289,8 +1282,7 @@ internal fun explainMissing(
     if (schedule == null) {
         Explanation(
             title = "Расписание ещё не загружено",
-            text = "Проверьте интернет и нажмите обновление вверху. " +
-                "Если не помогает, напишите @toomonn.",
+            text = "Проверьте интернет и нажмите ⟳ вверху. Не помогает — напишите @toomonn.",
         )
         return true
     }
@@ -1300,9 +1292,8 @@ internal fun explainMissing(
         // на «расписания нет вовсе», и экран оставался пустым без слов.
         Explanation(
             title = "На эти дни расписания нет",
-            text = "Колледж выкладывает его на неделю-полторы вперёд. " +
-                "Но если пары сегодня идут, значит расписание застряло " +
-                "у нас — тогда смотрите первоисточник.",
+            text = "Колледж их ещё не выложил — или расписание застряло на сервере. " +
+                "Проверить можно в таблице колледжа.",
             sourceUrl = sheetLink(schedule, today, sourceUrl),
         )
         return true

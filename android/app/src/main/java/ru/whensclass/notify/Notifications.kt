@@ -53,7 +53,9 @@ object Notifications {
                 CHANNEL_CHANGES,
                 "Изменения в расписании",
                 NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply { description = "Отмены, переносы и новые пары" },
+            // Этим каналом идут и сбой сервера, и пропажа подгруппы: выключая
+            // его, человек должен знать, что выключает.
+            ).apply { description = "Отмены и замены, пропажа подгруппы, сбои сервера" },
         )
         manager.createNotificationChannel(
             NotificationChannel(

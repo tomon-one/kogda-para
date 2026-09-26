@@ -320,7 +320,7 @@ private fun App(
             is AppUpdate.Result.Failed -> updateError = result.why
             is AppUpdate.Result.Ready -> lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) {
                 runCatching { context.startActivity(result.intent) }
-                    .onFailure { updateError = "не нашёл установщик Android" }
+                    .onFailure { updateError = "установщик Android не найден" }
             }
         }
         container.updates.taken()
@@ -706,7 +706,9 @@ private fun App(
 internal fun refreshFailure(error: Throwable): String = when (error) {
     is ru.whensclass.data.HttpFailure -> when (error.code) {
         429 -> "Сервер занят, попробуйте через минуту"
-        503 -> "На сервере ещё нет расписания: служба только запустилась. Попробуйте через пару минут"
+        // Снимок служба поднимает с диска сразу при старте: 503 — только когда
+        // его нет вовсе (новый сервер, потерянные данные), «запустилась» — неправда.
+        503 -> "На сервере пока нет расписания. Не появится за несколько минут — напишите @toomonn"
         else -> "Не удалось обновить: сервер ответил ${error.code}"
     }
     else -> "Не удалось обновить: нет связи с сервером"

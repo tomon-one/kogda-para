@@ -73,9 +73,9 @@ data class PhoneState(
         internal fun zoneWarning(autoZone: Boolean, phone: ZoneId, now: Instant): String? {
             if (autoZone) return null
             if (phone.rules.getOffset(now) == COLLEGE_ZONE.rules.getOffset(now)) return null
-            return "Часовой пояс телефона — ${phone.id}, и определяется он не сам. Если часы " +
-                "выставлены вручную по новосибирскому времени, напоминания и подсветка пар " +
-                "съедут: включите в настройках телефона автоматическое время и пояс."
+            return "Пояс выставлен вручную (${phone.id}). Если часы переведены под " +
+                "Новосибирск руками, напоминания и подсветка съедут — включите " +
+                "автоматические время и пояс."
         }
     }
 }

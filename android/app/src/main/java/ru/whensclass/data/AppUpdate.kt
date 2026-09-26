@@ -203,10 +203,10 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
     private suspend fun fetchAndInstall(release: ReleaseDto): Result {
         if (release.size <= 0 || release.size > MAX_SIZE) {
-            return Result.Failed("сервер не сообщил толком размер сборки")
+            return Result.Failed("сервер не сообщил размер сборки")
         }
         if (!api.isOurs(release.url)) {
-            return Result.Failed("адрес файла — не наш сервер")
+            return Result.Failed("адрес файла — не сервер приложения")
         }
         val file = File(dir(), name(release))
         if (!ready(file, release)) {
@@ -257,7 +257,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             // установщика «удалить и поставить заново», а текст обновления с
             // сервера стоял рядом — тот, кто завладел сервером, этим уводил
             // людей на свою сборку (третий аудит, В29 прогона 1).
-            return "подпись файла не наша. Не удаляйте приложение ради этого " +
+            return "подпись файла не та. Не удаляйте приложение ради этого " +
                 "обновления и не ставьте файл по ссылкам из его текста — напишите @toomonn"
         }
         return null

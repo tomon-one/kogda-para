@@ -271,7 +271,7 @@ internal fun noNextLesson(
 ): String {
     if (groupName == null) return "Откройте приложение и выберите свою группу"
     if (schedule == null) return "Расписание не загружено"
-    if (broken) return "Сбой у нас: расписание не обновляется"
+    if (broken) return "Сбой: расписание не обновляется"
     if (isStale(fetchedAt)) return "Данные устарели"
     val end = schedule.coverage.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     if (end == null || end.isBefore(today.plusDays(6))) return "Дальше расписание ещё не опубликовано"

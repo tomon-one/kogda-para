@@ -65,7 +65,7 @@ class MissingDayTest {
             missingDay(window, tuesday, old, false).text,
         )
         assertEquals(
-            "Сбой у нас: расписание не обновляется",
+            "Сбой: расписание не обновляется",
             missingDay(window, tuesday, fresh, true).text,
         )
         // Свежие данные, сервер цел, а дня всё равно нет на телефоне (быстрое
@@ -88,7 +88,7 @@ class MissingDayTest {
     @Test
     fun `сбой сервера называем сбоем, а не отсутствием расписания`() {
         val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, fresh, true)
-        assertEquals("Сбой у нас: расписание не обновляется", answer.text)
+        assertEquals("Сбой: расписание не обновляется", answer.text)
         assertTrue(answer.toSource)
     }
 
@@ -97,7 +97,7 @@ class MissingDayTest {
         val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, old, true)
         // «Нажмите на время в шапке» здесь было бы отправкой к кнопке,
         // которая при сбое сервера ничего не изменит.
-        assertEquals("Сбой у нас: расписание не обновляется", answer.text)
+        assertEquals("Сбой: расписание не обновляется", answer.text)
     }
 
     @Test
