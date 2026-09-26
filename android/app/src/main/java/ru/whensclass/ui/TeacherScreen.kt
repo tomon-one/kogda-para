@@ -61,7 +61,6 @@ fun TeacherScreen(
     searchLabel: String = "Поиск по фамилии",
     /** Что за список — для «не загрузился»: у преподавателя во вкладке групп стояло «преподавателей» (М18 прогона 2). */
     listName: String = "Список преподавателей",
-    showGroups: Boolean = true,
     selfId: String? = null,
     startDay: String? = null,
     startKey: Int = 0,
