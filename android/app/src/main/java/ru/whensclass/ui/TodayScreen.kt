@@ -877,11 +877,12 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
         color = if (muted) MaterialTheme.colorScheme.onSurfaceVariant
         else MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-        // Аудитория бывает и текстом: «Спортзал Б.Хмельницкого 2». Без
-        // многоточия обрыв читался как самостоятельное короткое название,
-        // а без weight эта строка отбирала место у типа занятия рядом,
-        // и «Лекция» пропадала за краем.
+        // Две строки: аудитория бывает и текстом — «Спортзал Б.Хмельницкого
+        // 2», «выездная, с 15.00», — и в одну строку её хвост уходил в
+        // многоточие рядом с типом занятия (третий аудит, В7 прогона 2). Без
+        // многоточия обрыв читался как самостоятельное короткое название, а
+        // без weight эта строка отбирала место у типа, и «Лекция» пропадала.
+        maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier.padding(end = 8.dp),
     )

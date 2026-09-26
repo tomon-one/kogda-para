@@ -585,8 +585,10 @@ private fun Details(lesson: LessonDto, colors: Palette) {
     // одна — при том что смотрят в него ради двух ближайших.
     val parts = buildList {
         if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
-        kindName(lesson.kind)?.let { add(it) }
+        // Место — раньше типа: строка одна, и тип вытеснял кабинет в
+        // многоточие (третий аудит, В7 прогона 2).
         add(if (lesson.isOnline) onlineLabel(lesson) else roomLabel(lesson.room) ?: "не указано")
+        kindName(lesson.kind)?.let { add(it) }
         // В расписании преподавателя вместо его имени — группы, которым читается
         // пара: сам он и так знает, кто ведёт.
         (lesson.groups ?: lesson.teachers.firstOrNull()?.let(::surnameOnly))?.let { add(it) }

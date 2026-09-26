@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.currentState
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -88,10 +89,17 @@ class NextLessonWidget : GlanceAppWidget() {
             ) {
                 if (lesson == null || next == null) {
                     Text(
-                        if (schedule == null) "Расписание не загружено"
-                        else "Дальше пар нет",
+                        noNextLesson(
+                            state?.groupName, schedule, today, state?.fetchedAt ?: 0L, broken,
+                        ),
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
+                    if (state?.groupName == null) {
+                        // Группа не выбрана — обновлять нечего: нажатие ведёт в
+                        // приложение, а не в «обновлено» (третий аудит, М73
+                        // прогона 2).
+                        return@Column
+                    }
                     // Отклик на ⟳ — как в шапках двух других виджетов: раньше
                     // маленький виджет нажатие не замечал ничем (второй аудит, М17).
                     val busy = refreshing()
@@ -130,16 +138,24 @@ class NextLessonWidget : GlanceAppWidget() {
                     next.day == today.plusDays(1) -> "завтра"
                     else -> formatDayTitleShort(next.day)
                 }
-                // Сбой на сервере — в ту же строку и тем же красным, что у
-                // остальных виджетов: пара на экране в этот момент из
-                // прежнего снимка, и промолчать здесь значит соврать.
-                val head = lesson.groups?.let { "$when_ · $time · $it" } ?: "$when_ · $time"
+                // Сбой на сервере — тем же красным, что у остальных виджетов:
+                // пара на экране в этот момент из прежнего снимка, и промолчать
+                // здесь значит соврать. Первым словом, а не хвостом: в хвосте
+                // однострочной шапки «сбой» уходил в многоточие, и оставался
+                // красный цвет без причины (третий аудит, В6 прогона 2).
+                val status = when {
+                    gone -> "нет в таблице · "
+                    broken -> "сбой · "
+                    else -> ""
+                }
+                val head = status + (lesson.groups?.let { "$when_ · $time · $it" } ?: "$when_ · $time")
+                // Три строки не влезают в низкую клетку при крупном шрифте, и
+                // корпус срезал нижнюю — место. Тогда место — в шапку, а не
+                // долой (третий аудит, М26 прогона 2).
+                val scale = fontScale()
+                val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
                 Text(
-                    when {
-                        gone -> "$head · нет в таблице"
-                        broken -> "$head · сбой"
-                        else -> head
-                    },
+                    if (tight) "$head · ${place(lesson, withKind = false)}" else head,
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
@@ -162,7 +178,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     ),
                     modifier = GlanceModifier.fillMaxWidth(),
                 )
-                Text(
+                if (!tight) Text(
                     place(lesson),
                     maxLines = 1,
                     style = TextStyle(
@@ -192,7 +208,15 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
     if (schedule == null) return null
     val bells = schedule.bells
     val today = now.toLocalDate()
-    val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }?.lessons.orEmpty()
+    // Только свои и не отменённые: отменённая пара во время своего слота была
+    // «идёт сейчас», а накануне — «завтра · 09:00» зачёркнутой вместо
+    // настоящей первой (третий аудит, В1 прогона 2); пара соседней подгруппы
+    // выдавалась за свою ближайшую (В5). У преподавателя подпись группы — у
+    // каждой пары, там свои все.
+    fun mine(lesson: LessonDto) =
+        !lesson.isCancelled && (schedule.isTeacher || lesson.groups == null)
+    val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }
+        ?.lessons.orEmpty().filter(::mine)
 
     currentLessonNumber(bells, today, now)
         ?.let { number -> todayLessons.firstOrNull { it.number == number } }
@@ -208,21 +232,48 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
     for (day in schedule.days) {
         val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
         if (date <= today) continue
-        day.lessons.firstOrNull()?.let { return NextLesson(date, it) }
+        day.lessons.firstOrNull(::mine)?.let { return NextLesson(date, it) }
     }
     return null
 }
 
-private fun place(lesson: LessonDto): String = buildString {
-    kindName(lesson.kind)?.let { append(it) }
+/**
+ * Что сказать, когда ближайшей пары нет. «Дальше пар нет» — только если лист
+ * покрывает неделю вперёд: иначе это «ещё не опубликовано», «устарели» или
+ * «сбой», как у дневного виджета. Раньше «дальше пар нет» стояло и в субботу
+ * перед неопубликованной неделей — ровно то, от чего чинили 24 сентября
+ * (третий аудит, В12 прогона 1).
+ */
+internal fun noNextLesson(
+    groupName: String?,
+    schedule: ScheduleDto?,
+    today: LocalDate,
+    fetchedAt: Long,
+    broken: Boolean,
+): String {
+    if (groupName == null) return "Откройте приложение и выберите свою группу"
+    if (schedule == null) return "Расписание не загружено"
+    if (broken) return "Сбой у нас: расписание не обновляется"
+    if (isStale(fetchedAt)) return "Данные устарели"
+    val end = schedule.coverage.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    if (end == null || end.isBefore(today.plusDays(6))) return "Дальше расписание ещё не опубликовано"
+    return "Дальше пар нет"
+}
+
+/** Три строки маленького виджета — в sp, без отступов. */
+private const val TIGHT_HEIGHT_SP = 52
+
+private fun place(lesson: LessonDto, withKind: Boolean = true): String = buildString {
+    // Место — первым, тип — после: строка одна и обрезается справа, и
+    // «Практика · …» уводила в многоточие номер кабинета (третий аудит, В7
+    // прогона 2).
     if (lesson.isOnline) {
-        if (isNotEmpty()) append(" · ")
         // Значок обещает, что по нажатию скопируется ссылка. Пары без
         // ссылки помечены тем же словом, но нажимать там нечего.
         append(onlineLabel(lesson))
         if (lesson.url != null) append("  ⧉")
     } else {
-        if (isNotEmpty()) append(" · ")
         append(roomLabel(lesson.room) ?: "не указано")
     }
+    if (withKind) kindName(lesson.kind)?.let { append(" · ").append(it) }
 }
