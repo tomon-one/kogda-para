@@ -22,7 +22,7 @@ from test_invariants import synthetic_sheet
 from whensclass.domain.models import Lesson, SourceFormatChanged
 from whensclass.parser.csv_schedule import (
     FIXTURE,
-    _check_shift,
+    check_shift,
     collapse_export,
     parse_export,
     parse_sheet,
@@ -49,10 +49,10 @@ def shifted(honest, window, k, since=7):
 def test_history_rejects_six_groups_and_passes_five(k):
     """Голоса по истории: 5 групп подряд — честный разброс, 6 — сдвиг."""
     honest = synthetic_sheet()
-    _check_shift(shifted(honest, range(8, 13), k))
+    check_shift(shifted(honest, range(8, 13), k))
     side = "правее" if k > 0 else "левее"
     with pytest.raises(SourceFormatChanged, match=f"на {abs(k)} колонк\\w+ {side}"):
-        _check_shift(shifted(honest, range(8, 14), k))
+        check_shift(shifted(honest, range(8, 14), k))
 
 
 def test_left_neighbour_is_the_block_insertion():
@@ -62,18 +62,18 @@ def test_left_neighbour_is_the_block_insertion():
     ids = [g.id for g in honest.groups]
     tail = shifted(honest, range(10, len(ids)), -1)
     with pytest.raises(SourceFormatChanged, match="левее"):
-        _check_shift(tail)
+        check_shift(tail)
 
 
 def test_previous_version_rejects_three_groups_and_passes_two():
     """Правка уже выложенной недели сверяется с прежней версией: окно в три
     группы — сдвиг, в две — ещё нет (честный максимум по архиву — одна)."""
     honest = synthetic_sheet()
-    _check_shift(shifted(honest, range(8, 10), 1), previous=honest)
+    check_shift(shifted(honest, range(8, 10), 1), previous=honest)
     with pytest.raises(SourceFormatChanged, match="против прежней версии"):
-        _check_shift(shifted(honest, range(8, 11), 1), previous=honest)
+        check_shift(shifted(honest, range(8, 11), 1), previous=honest)
     with pytest.raises(SourceFormatChanged, match="против прежней версии"):
-        _check_shift(shifted(honest, range(8, 11), -2), previous=honest)
+        check_shift(shifted(honest, range(8, 11), -2), previous=honest)
 
 
 def test_shared_lectures_of_subgroups_are_not_votes():
@@ -84,7 +84,7 @@ def test_shared_lectures_of_subgroups_are_not_votes():
         a, b = honest.groups[i].id, honest.groups[i + 1].id
         for day in honest.dates:
             honest.schedule[b][day] = list(honest.schedule[a][day])
-    _check_shift(honest, previous=honest)
+    check_shift(honest, previous=honest)
 
 
 def _vertical(honest, gid, days, step=1):
@@ -104,9 +104,9 @@ def test_vertical_shift_on_three_days_is_rejected():
     законная перестановка, три — сдвиг."""
     honest = synthetic_sheet()
     gid = honest.groups[4].id
-    _check_shift(_vertical(honest, gid, honest.dates[5:7]), previous=honest)
+    check_shift(_vertical(honest, gid, honest.dates[5:7]), previous=honest)
     with pytest.raises(SourceFormatChanged, match="по вертикали"):
-        _check_shift(_vertical(honest, gid, honest.dates[5:8]), previous=honest)
+        check_shift(_vertical(honest, gid, honest.dates[5:8]), previous=honest)
 
 
 def test_teacher_names_in_place_of_subjects_are_a_row_shift():
@@ -120,14 +120,14 @@ def test_teacher_names_in_place_of_subjects_are_a_row_shift():
         two.schedule[g.id][day] = [
             dataclasses.replace(first, subject="Иванов Иван Иванович"), *rest
         ]
-    _check_shift(two)
+    check_shift(two)
     three = copy.deepcopy(two)
     first, *rest = three.schedule[honest.groups[2].id][day]
     three.schedule[honest.groups[2].id][day] = [
         dataclasses.replace(first, subject="Петрова А. С."), *rest
     ]
     with pytest.raises(SourceFormatChanged, match="вместо названия ФИО"):
-        _check_shift(three)
+        check_shift(three)
 
 
 def test_cells_in_the_empty_columns_of_a_block_are_a_shift(fixture_csv):
@@ -178,7 +178,7 @@ def test_live_versions_are_honest(live):
     """Честная сторона на живом листе: версия, в которой впервые пришла
     неделя 21–26.09, против прежней — не сдвиг."""
     before, after, _, _ = live
-    _check_shift(after, seed=shift_seed(before, after), previous=before)
+    check_shift(after, seed=shift_seed(before, after), previous=before)
 
 
 def test_live_new_week_with_three_inserted_blocks_is_rejected(live):
@@ -191,7 +191,7 @@ def test_live_new_week_with_three_inserted_blocks_is_rejected(live):
         bad = parse_export(
             _insert(text, *NEW_WEEK, BLOCKS[84], 12), "лист", "656498718", around=today
         )
-        _check_shift(bad, seed=shift_seed(before, bad), previous=before)
+        check_shift(bad, seed=shift_seed(before, bad), previous=before)
 
 
 def test_live_edit_with_one_inserted_block_is_rejected(live):
@@ -202,7 +202,7 @@ def test_live_edit_with_one_inserted_block_is_rejected(live):
         _insert(text, *NEW_WEEK, BLOCKS[153], 4), "лист", "656498718", around=today
     )
     with pytest.raises(SourceFormatChanged, match="против прежней версии"):
-        _check_shift(bad, seed=shift_seed(after, bad), previous=after)
+        check_shift(bad, seed=shift_seed(after, bad), previous=after)
 
 
 def test_live_one_cell_insertion_is_rejected_by_the_parse(live):
@@ -230,8 +230,8 @@ def test_vertical_shift_of_many_groups_on_one_day_is_rejected():
     few, many = copy.deepcopy(honest), copy.deepcopy(honest)
     for g in honest.groups[:9]:
         few = _vertical(few, g.id, day)
-    _check_shift(few, previous=honest)
+    check_shift(few, previous=honest)
     for g in honest.groups[:10]:
         many = _vertical(many, g.id, day)
     with pytest.raises(SourceFormatChanged, match="у 10 групп"):
-        _check_shift(many, previous=honest)
+        check_shift(many, previous=honest)

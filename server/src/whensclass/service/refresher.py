@@ -21,7 +21,7 @@ import httpx
 from ..config import settings
 from ..domain.models import SheetTooSmall, SourceFormatChanged, a1_column
 from ..domain.teachers import build_index
-from ..parser.csv_schedule import Limits, _check_shift, parse_export, shift_seed
+from ..parser.csv_schedule import Limits, check_shift, parse_export, shift_seed
 from ..sources import gsheets, sheet_index
 from ..storage import history
 from . import alerts
@@ -118,7 +118,7 @@ class Refresher:
                 log.exception("заход обновления упал")
                 self._fail(
                     f"служба споткнулась при обновлении: {type(exc).__name__}: "
-                    f"{sheet_index._hide_key(exc)}",
+                    f"{sheet_index.hide_key(exc)}",
                     kind="error",
                     public=f"служба споткнулась при обновлении: {type(exc).__name__}",
                 )
@@ -410,7 +410,7 @@ class Refresher:
                     if snapshot is not None:
                         for group, traces in shift_seed(snapshot, current).items():
                             seed.setdefault(group, set()).update(traces)
-                    self._suspicions += _check_shift(
+                    self._suspicions += check_shift(
                         current, seed=seed, previous=self.store.snapshot
                     )
                     _check_lost_names(self.store.snapshot, current, gid)
