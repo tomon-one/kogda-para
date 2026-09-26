@@ -100,4 +100,14 @@ class NextLessonTest {
         assertEquals("идёт сейчас · 14:20", nextLessonHead("14:20", "идёт сейчас", true, null))
         assertEquals("09:00 · завтра · ИСП-924/2", nextLessonHead("09:00", "завтра", false, "ИСП-924/2"))
     }
+
+    @Test
+    fun `в тесной клетке место раньше группы и без «сегодня»`() {
+        assertEquals(
+            "14:20 · каб. 275 · ИСП-924/2",
+            nextLessonHead("14:20", "сегодня", false, "ИСП-924/2", place = "каб. 275"),
+        )
+        assertEquals("09:00 · завтра · каб. 275", nextLessonHead("09:00", "завтра", false, null, place = "каб. 275"))
+        assertEquals("идёт сейчас · 14:20 · онлайн", nextLessonHead("14:20", "идёт сейчас", true, null, place = "онлайн"))
+    }
 }

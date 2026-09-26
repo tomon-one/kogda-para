@@ -177,20 +177,26 @@ object LessonAlarms {
         start.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + " — $subject"
     }
 
-    fun text(alarm: Alarm): String = buildString {
-        append("${alarm.lesson.number} пара")
-        kindName(alarm.lesson.kind)?.let { append(", ${it.lowercase()}") }
-        if (alarm.lesson.isOnline) {
-            append(". Онлайн")
-            alarm.lesson.room?.trim()?.takeIf { it.isNotEmpty() }?.let { append(", комната $it") }
+    /**
+     * Текст напоминания. Место — первым: напоминание читают по пути, и
+     * главное в нём — куда идти.
+     */
+    fun text(alarm: Alarm): String {
+        val lesson = alarm.lesson
+        val place = if (lesson.isOnline) {
+            "Онлайн" + (lesson.room?.trim()?.takeIf { it.isNotEmpty() }?.let { ", комната $it" } ?: "")
         } else {
-            roomLabel(alarm.lesson.room)?.let { append(". $it") }
+            roomLabel(lesson.room)?.replaceFirstChar { it.uppercase() }
         }
-        alarm.lesson.teachers.firstOrNull()?.let { append(". $it") }
-        // Чья пара: у подгруппы — соседки, у преподавателя — каким группам он
-        // идёт читать. На экране и в виджетах подпись есть, а в напоминании её
-        // не было, и пара соседней подгруппы приходила как своя.
-        alarm.lesson.groups?.trim()?.takeIf { it.isNotEmpty() }?.let { append(". $it") }
+        return listOfNotNull(
+            place,
+            "${lesson.number} пара" + (kindName(lesson.kind)?.let { ", ${it.lowercase()}" } ?: ""),
+            lesson.teachers.firstOrNull(),
+            // Чья пара: у подгруппы — соседки, у преподавателя — каким группам
+            // он идёт читать. На экране и в виджетах подпись есть, а в
+            // напоминании её не было, и пара соседней подгруппы приходила как своя.
+            lesson.groups?.trim()?.takeIf { it.isNotEmpty() },
+        ).joinToString(". ")
     }
 
     const val EXTRA_SUBJECT = "subject"

@@ -163,14 +163,17 @@ class NextLessonWidget : GlanceAppWidget() {
                     stale -> "устарело · "
                     else -> ""
                 }
-                val head = status + nextLessonHead(time, when_, ongoing, lesson.groups)
                 // Три строки не влезают в низкую клетку при крупном шрифте, и
                 // корпус срезал нижнюю — место. Тогда место — в шапку, а не
                 // долой.
                 val scale = fontScale()
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
+                val head = status + nextLessonHead(
+                    time, when_, ongoing, lesson.groups,
+                    place = if (tight) place(lesson, withKind = false) else null,
+                )
                 Text(
-                    if (tight) "$head · ${place(lesson, withKind = false)}" else head,
+                    head,
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
@@ -292,9 +295,23 @@ internal fun noNextLesson(
  * 1…» — пропадало время, ради которого виджет и смотрят (проверка сборки 82
  * на телефоне, 26.09). «Идёт сейчас» — всё же первым: это главное.
  */
-internal fun nextLessonHead(time: String, whenWord: String, ongoing: Boolean, groups: String?): String {
-    val core = if (ongoing) "$whenWord · $time" else "$time · $whenWord"
-    return groups?.let { "$core · $it" } ?: core
+internal fun nextLessonHead(
+    time: String,
+    whenWord: String,
+    ongoing: Boolean,
+    groups: String?,
+    place: String? = null,
+): String {
+    // [place] — только в тесной клетке, где третьей строки нет. Там место
+    // идёт раньше группы, а «сегодня» опускается: строка режется справа, и
+    // место уходило в многоточие первым.
+    val day = whenWord.takeUnless { place != null && !ongoing && it == "сегодня" }
+    val core = when {
+        ongoing -> "$whenWord · $time"
+        day == null -> time
+        else -> "$time · $day"
+    }
+    return listOfNotNull(core, place, groups).joinToString(" · ")
 }
 
 /** Три строки маленького виджета — в sp, без отступов. */
