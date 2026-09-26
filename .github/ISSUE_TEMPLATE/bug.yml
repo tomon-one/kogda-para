@@ -1,0 +1,39 @@
+name: Ошибка
+description: Приложение или виджет работают не так, как написано
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issue видят все. Об уязвимости — не сюда, а по [SECURITY.md](https://github.com/tomon-one/kogda-para/blob/master/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Версия приложения
+      description: «Настройки», строка «Версия …»
+      placeholder: pr-Зерно.0.10.2
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: Телефон и версия Android
+      placeholder: Samsung Galaxy A52, Android 13
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Что случилось
+      description: Что делали, что ожидали увидеть и что увидели. Скриншот можно перетащить сюда.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Сведения для отчёта
+      description: >-
+        «Настройки» → «О приложении» → «Сведения для отчёта» → скопировать.
+        В них есть выбранная группа, а у преподавателя — его имя: если не хотите
+        показывать их всем, пришлите сведения автору в Telegram.
+      render: text
