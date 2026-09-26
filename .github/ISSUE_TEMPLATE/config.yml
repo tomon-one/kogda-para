@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Написать автору в Telegram
+    url: https://t.me/toomonn
+    about: Если не хочется заводить issue или нужно прислать что-то лично.
