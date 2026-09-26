@@ -328,3 +328,66 @@ def test_teacher_waiting_for_rename_confirmation_gets_404_not_free_days(fixture_
     app.state.refresher = refresher
     client = TestClient(app)
     assert client.get("/v1/teacher/otpusk-o-o?from=2026-09-07&days=3").status_code == 404
+
+
+# --- Третий аудит, прогон 2: В11 и В12 ---------------------------------------
+
+def test_cancelled_lesson_carries_x_and_c(client, fixture_csv):
+    """В11 прогона 2: признаки отмены и причины в JSON не проверял ни один тест —
+    выброси их, и отменённые пары у всех пришли бы как обычные."""
+    snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
+    gid, day, lesson = next(
+        (gid, day, x)
+        for gid, by_date in snapshot.schedule.items()
+        for day, lessons in by_date.items()
+        for x in lessons
+        if x.cancelled and x.note
+    )
+    body = client.get(f"/v1/schedule/{gid}?from={day}&days=1").json()
+    [sent] = [x for x in body["days"][0]["l"] if x["n"] == lesson.number and x.get("x")]
+    assert sent["x"] == 1 and sent["c"] == lesson.note
+
+
+def test_routes_cut_the_unpublished_tail_by_today(monkeypatch):
+    """В12 прогона 2: убери today=_today() из маршрутов — и починка 24.09
+    (недописанная неделя — «ещё не опубликовано») пропадала молча."""
+    from whensclass.api import routes
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+
+    week = [dt.date(2026, 9, 21) + dt.timedelta(days=d) for d in range(6)]
+    nxt = [d + dt.timedelta(days=7) for d in week]
+    refs = [GroupRef(name=f"Г-{n}", id=f"g-{n}", column=2 + 4 * n) for n in range(4)]
+    snap = Snapshot(sheet_title="лист", groups=refs, dates=week + nxt)
+    lesson = Lesson(number=1, subject="Физика", teachers=("Иванов И. И.",))
+    for n, ref in enumerate(refs):
+        snap.schedule[ref.id] = {d: [lesson] for d in week + (nxt if n == 0 else [])}
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 24))
+    app = FastAPI()
+    app.include_router(router)
+    app.state.store = FakeStore(snap)
+    app.state.refresher = FakeRefresher()
+    client = TestClient(app)
+    body = client.get("/v1/schedule/g-2?from=2026-09-21&days=13").json()
+    assert body["cov"] == ["2026-09-21", "2026-09-26"]
+    teacher = client.get("/v1/teacher/ivanov-i-i?from=2026-09-21&days=13").json()
+    assert teacher["cov"] == ["2026-09-21", "2026-09-26"]
+
+
+def test_teacher_route_follows_the_rename_book(fixture_csv, monkeypatch):
+    """В12 прогона 2: обращение /v1/teacher к книге переименований тоже не было
+    закреплено: старый id отвечает расписанием нового, в ответе — новый g."""
+    snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
+    app = FastAPI()
+    app.include_router(router)
+    store = FakeStore(snapshot)
+    app.state.store = store
+    real = next(iter(store.teachers.names))
+
+    class Book(FakeRenames):
+        teachers = {"old-teacher": real}
+
+    refresher = FakeRefresher()
+    refresher.renames = Book()
+    app.state.refresher = refresher
+    body = TestClient(app).get("/v1/teacher/old-teacher?from=2026-09-07&days=3")
+    assert body.status_code == 200 and body.json()["g"] == real

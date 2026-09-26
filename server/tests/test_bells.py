@@ -8,6 +8,8 @@
 
 import json
 
+import pytest
+
 from whensclass.service.bells import BELLS, load_bells
 
 
@@ -65,3 +67,17 @@ def test_the_grid_we_ship_is_the_college_one():
     assert BELLS["6"] == ["17:40", "19:10"]
     for times in BELLS.values():
         assert len(times) == 2, "у пары есть начало и конец"
+
+
+@pytest.mark.parametrize(
+    "content",
+    ['[["09:00", "10:30"]]', "null", '{"1": "09:00-10:30"}', '{"1": ["10:30", "09:00"]}',
+     '{"первая": ["09:00", "10:30"]}', "{}"],
+)
+def test_bells_of_the_wrong_shape_fall_back_to_the_code(tmp_path, monkeypatch, content):
+    """Третий аудит, В18 прогона 2: правильный JSON не того вида — массив, null,
+    строка вместо пары — валил запуск или раздавался телефонам посимвольно."""
+    path = tmp_path / "bells.json"
+    path.write_text(content, "utf-8")
+    monkeypatch.setenv("WHENSCLASS_BELLS", str(path))
+    assert load_bells() == BELLS

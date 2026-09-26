@@ -196,7 +196,8 @@ def list_sheets() -> list[SheetInfo]:
                     f"Sheets API не отвечает {_api_failures} раз подряд "
                     f"({_api_error(exc)}). Без него gid листов не узнать: пока "
                     "служба живёт запомненным листом, а когда его покрытие кончится, "
-                    "уйдёт в stale. Проверить ключ — docs/deploy.md, «Ключ Sheets API».",
+                    "уйдёт в stale. Проверить ключ и его ограничение по адресу "
+                    "сервера — docs/deploy.md, «Ключ Sheets API».",
                 )
         else:
             if _api_failures >= API_FAILURES_TO_ALERT:
