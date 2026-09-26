@@ -60,8 +60,9 @@ class Refresher:
         # пролежал FETCH_GRACE, — как и тревогу владельцу (второй аудит, М25).
         self._fetch_only = True
         # Тревога «диск» уже ушла: следующая — только после окна тишины
-        # (второй аудит, В16).
-        self._disk_alerted = False
+        # (второй аудит, В16). Окна тишины помнятся между перезапусками (М35).
+        alerts.keep_in(state_dir / "alerts.json")
+        self._disk_alerted = alerts.sent_recently("disk")
         self._load_failing()
         # Сколько заходов подряд начались и не кончились: служба умерла
         # посреди разбора (память — MemoryMax) и перезапустилась. Перезапуск
@@ -80,6 +81,9 @@ class Refresher:
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
         self._seen_titles: set[str] | None = None
+        # Новые листы «групп», которые поиск пока не принял (пустые, одна
+        # шапка): слежка перепроверяет их, а не забывает до ночи (М14).
+        self._retry_titles: dict[str, int] = {}
         # Задачи планировщика идут в разных потоках и в начале каждого часа
         # совпадают: обновление раз в 20 минут и проверка книги раз в 30.
         # Без замка они переписывали друг другу status и набор листов —
@@ -138,8 +142,13 @@ class Refresher:
         texts: list[tuple[str, str | None, str, str]] = []
         try:
             if self._sheets is None or force:
+                # С понедельника, как окно приложения: иначе в воскресенье на
+                # стыке листов в снимке оставался только будущий лист, и вся
+                # прожитая неделя пропадала с экрана (третий аудит, М25
+                # прогона 1).
+                monday = today - dt.timedelta(days=today.weekday())
                 self._sheets = sheet_index.resolve_window(
-                    today, settings.window_days, self.state_dir, deep=force
+                    monday, settings.window_days + today.weekday(), self.state_dir, deep=force
                 )
 
             for title, gid in self._sheets:
@@ -255,11 +264,19 @@ class Refresher:
                 force=not self._disk_alerted,
             )
             self._disk_alerted = self._disk_alerted or sent
+            # Лист разобран и принят — прежний сбой закрыт, хоть снимок и
+            # не лёг на диск: иначе failing_since жил дальше, «починилось»
+            # не уходило, а первый чих сети сразу давал stale (третий аудит,
+            # М10 прогона 1). О диске — своя тревога выше.
             self.status = "ok"
+            self._recovered()
             return True
         if self._disk_alerted:
             self._disk_alerted = False
             alerts.forget("disk")
+            alerts.notify(
+                "disk-ok", "Снимок снова записывается на диск.", force=True, good=True
+            )
         self._source_hashes = {title: digest for title, _, _, digest in texts}
         for title, gid, text, digest in texts:
             dropped = self._dropped.get(title)
@@ -313,13 +330,27 @@ class Refresher:
             self._seen_titles = titles
             return False
 
-        fresh = titles - self._seen_titles
+        fresh = (titles - self._seen_titles) | (set(self._retry_titles) & titles)
         self._seen_titles = titles
         if not fresh:
             return False
 
         log.info("в книге появился лист: %s — ищу заново", ", ".join(sorted(fresh)))
-        return self.refresh(force=True)
+        changed = self.refresh(force=True)
+        # Лист «групп», заведённый пустым, поиск отвергает, а заполненный
+        # позже служба узнавала только ночью (третий аудит, М14 прогона 1):
+        # такие имена перепроверяются на следующих слежках, до RETRY_LOOKS раз.
+        known = set(sheet_index.SheetIndex(self.state_dir).known)
+        for title in fresh:
+            if title in known or not sheet_index.looks_like_groups(title):
+                self._retry_titles.pop(title, None)
+                continue
+            tries = self._retry_titles.get(title, 0) + 1
+            if tries > RETRY_LOOKS:
+                self._retry_titles.pop(title, None)
+            else:
+                self._retry_titles[title] = tries
+        return changed
 
     def _parse(self, texts, today: dt.date):
         """Тексты листов -> (снимок, индекс преподавателей) или None.
@@ -500,6 +531,9 @@ class Refresher:
             log.warning("отметка захода не снялась: %s", exc)
 
 
+# Сколько раз слежка (раз в полчаса) перепроверяет новый лист «групп», который
+# поиск ещё не принял: шесть часов (М14).
+RETRY_LOOKS = 12
 # Сколько сетевой сбой держим за чих: ни тревоги, ни stale наружу (М25).
 FETCH_GRACE = dt.timedelta(minutes=30)
 # После скольких заходов подряд, умерших посреди разбора, — тревога (М36).

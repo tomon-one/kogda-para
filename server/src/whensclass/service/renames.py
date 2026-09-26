@@ -57,6 +57,10 @@ CONFIRMATIONS = 3
 # (второй аудит, В7). Состав id на неизменном листе не меняется по
 # определению, так что время здесь — такое же подтверждение.
 CONFIRM_AFTER = dt.timedelta(minutes=40)
+# Заход T+40 зовёт подтверждение на секунды раньше сорока минут от записи
+# (время ставится после скачивания и разбора), и подтверждение уезжало на
+# T+60, а вечером — на ночь (третий аудит, М20 прогона 1).
+CONFIRM_SLACK = dt.timedelta(minutes=3)
 
 
 def group_traces(snapshot: Snapshot) -> dict[str, Trace]:
@@ -193,12 +197,20 @@ def _across_sheets(previous: Snapshot, current: Snapshot, vanished: set[str]) ->
     (второй аудит, В6). Кандидаты — группы, которых не было в листе старого
     id, сравнение — по недельному узору пар.
     """
-    if not vanished or len(previous.sheet_columns) < 2:
+    if not vanished:
         return {}
-    homes = [set(ids) for ids in previous.sheet_columns.values() if vanished & set(ids)]
-    if not homes:
+    if len(previous.sheet_columns) >= 2:
+        homes = [set(ids) for ids in previous.sheet_columns.values() if vanished & set(ids)]
+        if not homes:
+            return {}
+        home_ids = set().union(*homes)
+    elif not set(previous.dates) & set(current.dates):
+        # Прежний снимок — один уходящий лист, новый — один следующий: склейки
+        # не было (новый прочитан после ухода старого), и стык по-прежнему не
+        # был виден (третий аудит, М21 прогона 1). Родной лист — весь прежний.
+        home_ids = {g.id for g in previous.groups}
+    else:
         return {}
-    home_ids = set().union(*homes)
     candidates = {g.id for g in current.groups} - home_ids
     if not candidates:
         return {}
@@ -222,13 +234,20 @@ def _teachers_across_sheets(
     только в новом листе. Сравнение — по недельному узору, фамилия — та же
     (проверяется там же, где у обычного переименования).
     """
-    if not vanished or len(previous.sheet_columns) < 2 or not previous.places:
+    if not vanished:
         return {}
-    sheet_of = {day: place.gid for day, place in previous.places.items()}
-    homes = {sheet_of.get(day) for tid in vanished for day in previous_teachers.days(tid)} - {None}
-    if not homes:
+    if len(previous.sheet_columns) >= 2 and previous.places:
+        sheet_of = {day: place.gid for day, place in previous.places.items()}
+        homes = {
+            sheet_of.get(day) for tid in vanished for day in previous_teachers.days(tid)
+        } - {None}
+        if not homes:
+            return {}
+        home_days = {day for day, gid in sheet_of.items() if gid in homes}
+    elif not set(previous.dates) & set(current.dates):
+        home_days = set(previous.dates)  # М21: один уходящий лист целиком
+    else:
         return {}
-    home_days = {day for day, gid in sheet_of.items() if gid in homes}
     candidates = {
         tid for tid in current_teachers.names
         if not set(previous_teachers.days(tid)) & home_days
@@ -436,7 +455,7 @@ def _confirmed(entry: dict) -> bool:
     except (KeyError, TypeError, ValueError):
         # Записи до 23 сентября 2026 без времени — только по счёту.
         return False
-    return _now() - since >= CONFIRM_AFTER
+    return _now() - since >= CONFIRM_AFTER - CONFIRM_SLACK
 
 
 def _promote(book: dict[str, str], pending: dict[str, dict], old_id: str, what: str) -> None:

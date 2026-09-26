@@ -178,6 +178,12 @@ _cached_sheets: list[SheetInfo] = []
 # (второй аудит, М26). Один отказ — чих, два подряд (полчаса) — тревога.
 _api_failures = 0
 API_FAILURES_TO_ALERT = 2
+_KEY_CODES = (400, 401, 403, 429)
+
+
+def looks_like_groups(title: str) -> bool:
+    """Лист по имени — расписание групп (кандидат, до которого стоит достучаться)."""
+    return bool(_LOOKS_LIKE_GROUPS.search(title))
 
 
 def list_sheets() -> list[SheetInfo]:
@@ -188,9 +194,14 @@ def list_sheets() -> list[SheetInfo]:
         try:
             sheets = gsheets.list_sheets_via_api(settings.sheets_api_key)
         except Exception as exc:  # ключ протух, квота, сеть
-            _api_failures += 1
             log.warning("Sheets API не ответил (%s), иду через xlsx", _hide_key(exc))
-            if _api_failures >= API_FAILURES_TO_ALERT:
+            # Отказом ключа считаются только ответы Google о ключе и квоте; сеть
+            # — сетевой тревогой, иначе на одну беду приходили две, и одна звала
+            # проверять ключ (третий аудит, М11 прогона 1).
+            code = getattr(getattr(exc, "response", None), "status_code", None)
+            if code in _KEY_CODES:
+                _api_failures += 1
+            if _api_failures >= API_FAILURES_TO_ALERT and code in _KEY_CODES:
                 alerts.notify(
                     "key",
                     f"Sheets API не отвечает {_api_failures} раз подряд "
@@ -202,6 +213,8 @@ def list_sheets() -> list[SheetInfo]:
         else:
             if _api_failures >= API_FAILURES_TO_ALERT:
                 alerts.forget("key")
+                alerts.notify("key-ok", "Sheets API снова отвечает: ключ работает.",
+                              force=True, good=True)
             _api_failures = 0
             return sheets
 
@@ -265,7 +278,10 @@ def resolve_window(
             # минут — уже расточительство.
             return sheets
         try:
-            following = resolve_for(covered_to + dt.timedelta(days=1), state_dir)
+            # Глубоко, как и весь заход: без deep промах, записанный меньше
+            # двух часов назад, прятал только что появившийся лист до ночи
+            # (третий аудит, М19 прогона 1).
+            following = resolve_for(covered_to + dt.timedelta(days=1), state_dir, deep=True)
         except SheetNotFound:
             log.info("следующий лист ещё не опубликован, отдаём что есть")
             return sheets
@@ -389,6 +405,11 @@ def resolve_for(
                     unread.append(sheet.title)
                 continue
             snapshot = parse_csv(text, sheet.title, limits=_candidate_limits(), around=day)
+        except gsheets.SheetClosed:
+            # Закрытую таблицу поиск выдавал за «добраться не вышло», и
+            # владелец шёл смотреть сеть и ключ, а не доступ (третий аудит,
+            # М23 прогона 1). Наверх — как в заходе по gid.
+            raise
         except SourceFormatChanged as exc:
             # «Не похож на расписание групп» — обычно честный отказ: в книге
             # лежат и календарный график, и расписание аудиторий. Но если так

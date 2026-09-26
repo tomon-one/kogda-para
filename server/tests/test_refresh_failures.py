@@ -67,6 +67,15 @@ def sheet(monkeypatch, fixture_csv):
     return box
 
 
+def _csv(rows) -> str:
+    import csv
+    import io
+
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(rows)
+    return buf.getvalue()
+
+
 def cell_replace(text: str, old: str, new: str) -> str:
     assert old in text, old
     return text.replace(old, new, 1)
@@ -97,7 +106,14 @@ def test_punctuation_teacher_does_not_freeze_snapshot(tmp_path, sheet, sent, fix
     r = Refresher(store, tmp_path)
     assert r.refresh(today=TODAY) is True
     name = a_teacher(fixture_csv)
-    sheet["text"] = cell_replace(fixture_csv, name, f"{name}, .")
+    # Через csv.writer, с кавычками: без них запятая резала ячейку, и «.» уезжала
+    # в соседнюю колонку, которую разбор не читает (третий аудит, М22 прогона 1).
+    rows = read_csv(fixture_csv)
+    i, j = next(
+        (i, j) for i, row in enumerate(rows) for j, cell in enumerate(row) if name in cell
+    )
+    rows[i][j] = rows[i][j].replace(name, f"{name}, .")
+    sheet["text"] = _csv(rows)
     assert r.refresh(today=TODAY, force=True) is True
     assert r.status == "ok" and "." not in store.teachers.names.values()
     # И дальше обновляется: колледж правит лист — изменения доходят.
@@ -141,14 +157,20 @@ def test_dash_instead_of_group_name_is_format_not_network(tmp_path, sheet, sent,
     """Колонка без имени — пропуск блока с предупреждением, а не ValueError."""
     rows = read_csv(fixture_csv)
     names = next(i for i, r in enumerate(rows) if sum(c.strip() == "Преподаватель" for c in r) >= 3) + 1
-    col = next(c for c, v in enumerate(rows[names]) if v.strip())
-    victim = rows[names][col].strip()
-    sheet["text"] = fixture_csv.replace(victim, "-", 1)
+    # Колонка имени — та, где выше стоит «Преподаватель», а не первая непустая:
+    # прежний тест попадал в «№» и проходил и на коде до починки (третий
+    # аудит, М22 прогона 1).
+    col = next(c for c, v in enumerate(rows[names - 1]) if v.strip() == "Преподаватель")
+    known = {g.name for g in parse_csv(fixture_csv, "ф", FIXTURE).groups}
+    assert rows[names][col].strip() in known, "портим именно имя группы"
+    rows[names][col] = "-"
+    sheet["text"] = _csv(rows)
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
     r.refresh(today=TODAY)
     # Либо лист принят без этой колонки, либо отвергнут как формат — но не «сеть».
     assert not (r.last_error or "").startswith("таблица не прочиталась")
+    assert r.status == "ok" or "формат" in (r.last_error or "")
 
 
 # --- В27: from далеко от сегодня --------------------------------------------
@@ -304,7 +326,7 @@ def test_dead_sheets_key_alerts_after_two_failures(monkeypatch, sent):
     monkeypatch.setattr(sheet_index, "_api_failures", 0)
 
     def dead(key):
-        raise RuntimeError("403")
+        raise _google_says(403)
 
     monkeypatch.setattr(gsheets, "list_sheets_via_api", dead)
     monkeypatch.setattr(gsheets, "list_sheets_via_xlsx", lambda: [])
@@ -314,6 +336,46 @@ def test_dead_sheets_key_alerts_after_two_failures(monkeypatch, sent):
     sheet_index.list_sheets()
     assert len(sent) == 1 and "Sheets API" in sent[0]["message"]
     assert "ключ" not in sent[0]["message"].split("(")[1].split(")")[0]
+
+
+def _google_says(code: int, url: str = "https://sheets.googleapis.com/v4/spreadsheets/x"):
+    import httpx
+
+    request = httpx.Request("GET", url)
+    return httpx.HTTPStatusError(
+        f"Client error '{code}' for url '{url}'", request=request,
+        response=httpx.Response(code, request=request),
+    )
+
+
+def test_network_trouble_is_not_blamed_on_the_key(monkeypatch, sent):
+    """Третий аудит, М11 прогона 1: полчаса без связи с Google давали тревогу
+    «Проверить ключ». Отказ ключа — только ответ Google о ключе или квоте; и
+    когда ключ снова работает, об этом говорится."""
+    import httpx
+
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
+    monkeypatch.setattr(sheet_index, "_api_failures", 0)
+    failure = {"exc": httpx.ConnectError("нет связи")}
+
+    def api(key):
+        if failure["exc"]:
+            raise failure["exc"]
+        return []
+
+    monkeypatch.setattr(gsheets, "list_sheets_via_api", api)
+    monkeypatch.setattr(gsheets, "list_sheets_via_xlsx", lambda: [])
+    monkeypatch.setattr(sheet_index, "_last_xlsx", None)
+    for _ in range(3):
+        sheet_index.list_sheets()
+    assert sent == []
+    failure["exc"] = _google_says(403)
+    sheet_index.list_sheets()
+    sheet_index.list_sheets()
+    assert len(sent) == 1
+    failure["exc"] = None
+    sheet_index.list_sheets()
+    assert len(sent) == 2 and "ключ работает" in sent[1]["message"]
 
 
 # --- М36: смерть посреди разбора --------------------------------------------
@@ -459,9 +521,8 @@ def test_key_never_reaches_alert_or_log(monkeypatch, sent, caplog):
     monkeypatch.setattr(sheet_index, "_api_failures", 0)
 
     def dead(key):
-        raise RuntimeError(
-            "Client error '403 Forbidden' for url "
-            f"'https://sheets.googleapis.com/v4/spreadsheets/x?key={SECRET}&fields=sheets'"
+        raise _google_says(
+            403, f"https://sheets.googleapis.com/v4/spreadsheets/x?key={SECRET}&fields=sheets"
         )
 
     monkeypatch.setattr(gsheets, "list_sheets_via_api", dead)
@@ -540,3 +601,92 @@ def test_refresher_gates_keep_the_previous_snapshot(
     assert r.refresh(today=TODAY, force=True) is False
     assert r.status == "stale" and store.snapshot is before
     assert reason in r.last_error and sent, r.last_error
+
+
+def test_recovery_with_a_failing_disk_still_closes_the_failure(
+    tmp_path, sheet, sent, monkeypatch, fixture_csv
+):
+    """Третий аудит, М10 прогона 1: лист починили, а снимок не лёг на диск —
+    сбой не закрывался, «починилось» не уходило, и первый чих сети сразу давал
+    stale."""
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    assert r.refresh(today=TODAY) is True
+    r._fail("формат таблицы изменился: x", kind="format")
+
+    def full(*args, **kwargs):
+        raise OSError("места нет")
+
+    monkeypatch.setattr(store, "put", full)
+    sheet["text"] = cell_replace(fixture_csv, a_teacher(fixture_csv), "Новиков Н. Н.")
+    assert r.refresh(today=TODAY, force=True) is True
+    assert r.status == "ok" and r.failing_since is None
+    assert any("снова обновляется" in m["message"] for m in sent)
+    assert any("не записался" in m["message"] for m in sent)
+
+
+def test_new_group_sheet_rejected_by_search_is_looked_at_again(tmp_path, monkeypatch):
+    """Третий аудит, М14 прогона 1: лист «групп», заведённый пустым, поиск
+    отвергал, и заполненный позже служба узнавала только ночью."""
+    from whensclass.sources.gsheets import SheetInfo
+
+    monkeypatch.setattr(settings, "sheets_api_key", "ключ")
+    books = [[SheetInfo(title="расписание групп 21.-26.09", gid="1", hidden=False)]]
+    monkeypatch.setattr(sheet_index, "list_sheets", lambda: books[-1])
+    monkeypatch.setattr(sheet_index, "candidates", lambda sheets, day: sheets)
+    r = Refresher(SnapshotStore(tmp_path), tmp_path)
+    calls = []
+    monkeypatch.setattr(r, "refresh", lambda force=False: calls.append(force) or False)
+    r.look_for_new_sheet()
+    books.append(books[-1] + [SheetInfo(title="расписание групп 28.09-03.10", gid="2",
+                                        hidden=False)])
+    r.look_for_new_sheet()
+    r.look_for_new_sheet()
+    assert calls == [True, True], "пустой новый лист — посмотреть ещё раз"
+    sheet_index.SheetIndex(tmp_path).remember(
+        "расписание групп 28.09-03.10", "2", dt.date(2026, 9, 28), dt.date(2026, 10, 3)
+    )
+    r.look_for_new_sheet()
+    r.look_for_new_sheet()
+    assert calls == [True, True, True], "принятый — больше не трогаем"
+
+
+def test_window_of_sheets_starts_on_monday_like_the_app(tmp_path, sheet, sent, monkeypatch):
+    """Третий аудит, М25 прогона 1: в воскресенье на стыке листов набор
+    считался от сегодня — в снимке оставался только будущий лист, и прожитая
+    неделя пропадала с экрана. Приложение просит окно с понедельника."""
+    asked = []
+
+    def window(start, days, state_dir, deep=False):
+        asked.append((start, days))
+        return [("лист", "656498718")]
+
+    monkeypatch.setattr(sheet_index, "resolve_window", window)
+    r = Refresher(SnapshotStore(tmp_path), tmp_path)
+    r.refresh(today=dt.date(2026, 9, 13))  # воскресенье
+    assert asked[0] == (dt.date(2026, 9, 7), settings.window_days + 6)
+
+
+def test_disk_alert_window_survives_restart_and_recovery_is_told(
+    tmp_path, sheet, sent, monkeypatch
+):
+    """Третий аудит, М35 прогона 1: тревога о диске жила в памяти — после
+    перезапуска посреди той же беды уходила снова, а «починилось» не
+    приходило вовсе."""
+    store = SnapshotStore(tmp_path)
+
+    def full(*args, **kwargs):
+        raise OSError("места нет")
+
+    monkeypatch.setattr(store, "put", full)
+    r = Refresher(store, tmp_path)
+    r.refresh(today=TODAY)
+    assert sum("не записался" in m["message"] for m in sent) == 1
+    alerts._last_sent.clear()
+    again = Refresher(store, tmp_path)
+    again.refresh(today=TODAY, force=True)
+    assert sum("не записался" in m["message"] for m in sent) == 1, "окно пережило перезапуск"
+    fresh = SnapshotStore(tmp_path)
+    healed = Refresher(fresh, tmp_path)
+    assert healed.refresh(today=TODAY, force=True) is True
+    assert any("снова записывается" in m["message"] for m in sent)
