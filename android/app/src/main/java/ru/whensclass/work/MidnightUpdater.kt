@@ -12,7 +12,6 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.glance.appwidget.updateAll
 import ru.whensclass.AppContainer
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.widget.NextLessonWidget

@@ -24,8 +24,12 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         // Заодно смотрим, не вышла ли новая сборка: раз в час — ровно та
         // частота, с которой об этом стоит узнавать.
         runCatching { container.updates.announceIfNew(container.store) }
-        return when (result) {
-            is RefreshResult.Failed -> Result.retry()
+        // Повтор с паузой — только у разовой работы. У периодической retry()
+        // подменял час экспоненциальной паузой до пяти часов, и после
+        // починки сервера телефон часами держал «сбой» (третий аудит, В15
+        // прогона 1): она придёт сама через час.
+        return when {
+            result is RefreshResult.Failed && ONE_SHOT_TAG in tags -> Result.retry()
             else -> Result.success()
         }
     }
@@ -33,6 +37,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
     companion object {
         private const val PERIODIC = "sync"
         private const val ONE_SHOT = "sync-now"
+        private const val ONE_SHOT_TAG = "sync-one-shot"
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
@@ -56,6 +61,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
          */
         fun now(context: Context) {
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
+                .addTag(ONE_SHOT_TAG)
                 .setConstraints(
                     Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
                 )

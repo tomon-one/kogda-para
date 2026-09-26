@@ -35,6 +35,9 @@ object Notifications {
     // изменениях перезаписывало непрочитанное о сбое и наоборот (второй
     // аудит, М12).
     private const val ID_SERVER = 4
+    // Своё для «подгруппы нет в таблице»: с общим ID_CHANGES оно затирало
+    // непрочитанное «Расписание изменилось» (третий аудит, М15 прогона 1).
+    private const val ID_SUBGROUP = 5
 
     fun ensureChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -82,8 +85,17 @@ object Notifications {
         show(context, CHANNEL_LESSON, ID_LESSON, title, text, day)
     }
 
-    fun changes(context: Context, title: String, text: String) {
-        show(context, CHANNEL_CHANGES, ID_CHANGES, title, text, day = null)
+    /**
+     * `until` — когда снять само: новость про сегодняшний день к полуночи
+     * устаревает, и наутро висящее «Завтра: добавилась пара» читалось бы как
+     * новость о послезавтра (третий аудит, М71 прогона 2).
+     */
+    fun changes(context: Context, title: String, text: String, until: Long? = null) {
+        show(context, CHANNEL_CHANGES, ID_CHANGES, title, text, day = null, until = until)
+    }
+
+    fun subgroupGone(context: Context, title: String, text: String) {
+        show(context, CHANNEL_CHANGES, ID_SUBGROUP, title, text, day = null)
     }
 
     /** Сервер лежит дольше двух часов — канал тот же, что у изменений, id свой. */
@@ -106,6 +118,7 @@ object Notifications {
         text: String,
         day: String?,
         update: Boolean = false,
+        until: Long? = null,
     ): Boolean {
         if (!allowed(context)) return false
         ensureChannels(context)
@@ -121,7 +134,9 @@ object Notifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(context, channel)
+        val builder = NotificationCompat.Builder(context, channel)
+        until?.let { builder.setTimeoutAfter((it - System.currentTimeMillis()).coerceAtLeast(60_000L)) }
+        val notification = builder
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)

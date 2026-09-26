@@ -75,13 +75,24 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             val known = prefs[KEY_UNREACHABLE_SINCE]
                 ?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-            if (known != null) first = known else prefs[KEY_UNREACHABLE_SINCE] = now.toString()
+            val last = prefs[KEY_UNREACHABLE_LAST]
+                ?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            // Неудачи — подряд: между двумя случайными с разницей в несколько
+            // часов сервер отвечал, и они не складываются в «не отвечает с
+            // утра» (третий аудит, М12 прогона 1).
+            val streak = known != null && last != null &&
+                java.time.Duration.between(last, now) < UNREACHABLE_STREAK_GAP
+            if (streak) first = known!! else prefs[KEY_UNREACHABLE_SINCE] = now.toString()
+            prefs[KEY_UNREACHABLE_LAST] = now.toString()
         }
         return first
     }
 
     suspend fun clearUnreachable() {
-        context.dataStore.edit { it.remove(KEY_UNREACHABLE_SINCE) }
+        context.dataStore.edit {
+            it.remove(KEY_UNREACHABLE_SINCE)
+            it.remove(KEY_UNREACHABLE_LAST)
+        }
     }
 
     suspend fun staleNotifiedFor(): String? = context.dataStore.data.first()[KEY_STALE_NOTIFIED]
@@ -253,14 +264,18 @@ class ScheduleStore(private val context: Context) {
     val teacherId: Flow<String?> = context.dataStore.data.map { it[KEY_TEACHER_ID] }
     val teacherName: Flow<String?> = context.dataStore.data.map { it[KEY_TEACHER_NAME] }
 
-    suspend fun selectTeacher(id: String, name: String) {
+    suspend fun selectTeacher(id: String, name: String, unchanged: Boolean = false) {
         context.dataStore.edit {
             it.remove(KEY_GONE_SINCE)
             it.remove(KEY_GONE)
             it[KEY_TEACHER_ID] = id
             it[KEY_TEACHER_NAME] = name
+            // Повторный выбор себя же — не повод стирать своё расписание без
+            // связи (третий аудит, М1 прогона 2).
+            if (unchanged) return@edit
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
+            it.remove(KEY_FETCHED_AT)
         }
     }
 
@@ -322,18 +337,30 @@ class ScheduleStore(private val context: Context) {
      */
     suspend fun selectGroup(id: String, name: String, unchanged: Boolean = false) {
         context.dataStore.edit {
+            val sameGroup = it[KEY_GROUP_ID] == id
+            val wasGone = it[KEY_GONE] == "1"
             it[KEY_GROUP_ID] = id
             it[KEY_GROUP_NAME] = name
             it.remove(KEY_GONE_SINCE)
             it.remove(KEY_GONE)
             if (unchanged) return@edit
-            // Расписание прошлой группы показывать нельзя ни секунды.
+            // Расписание прошлой группы показывать нельзя ни секунды — и время
+            // его загрузки тоже: рядом с «ещё не загружено» стояло «обновлено
+            // в 14:20» прежнего выбора (третий аудит, М3 прогона 2).
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
+            it.remove(KEY_FETCHED_AT)
             // Соседняя подгруппа была парой к прежней группе, к новой она
-            // отношения не имеет.
-            it.remove(KEY_GROUP2_ID)
-            it.remove(KEY_GROUP2_NAME)
+            // отношения не имеет. Но та же группа после роли преподавателя —
+            // та же пара подгрупп (М4 прогона 2), а перевыбор после «группы
+            // больше нет» — обычно та же группа под новым именем, и соседку
+            // молча стирать нельзя (М6): не найдётся она — скажет сама.
+            if (!sameGroup && !wasGone) {
+                it.remove(KEY_GROUP2_ID)
+                it.remove(KEY_GROUP2_NAME)
+                it.remove(KEY_GROUP2_GONE_SINCE)
+                it.remove(KEY_GROUP2_GONE)
+            }
         }
     }
 
@@ -377,19 +404,31 @@ class ScheduleStore(private val context: Context) {
 
     suspend fun currentSecondGroupId(): String? = secondGroupId.first()
 
-    suspend fun selectSecondGroup(id: String, name: String) {
+    /**
+     * Соседняя подгруппа выбрана или снята (`id` = null). Свои пары остаются —
+     * `ownOnly` это они, без пар прежней соседки, и снимок помечен обрубком: без
+     * связи раньше стиралось всё, и экран с виджетами писали «ещё не
+     * загружено» (третий аудит, М1 прогона 2). Отметки о пропаже прежней
+     * соседки — прочь: иначе один 404 новой снимал её без часа проверки (М42
+     * прогона 1).
+     */
+    suspend fun setSecondGroup(id: String?, name: String?, ownOnly: String?) {
         context.dataStore.edit {
-            it[KEY_GROUP2_ID] = id
-            it[KEY_GROUP2_NAME] = name
-            dropSchedule(it)
-        }
-    }
-
-    suspend fun clearSecondGroup() {
-        context.dataStore.edit {
-            it.remove(KEY_GROUP2_ID)
-            it.remove(KEY_GROUP2_NAME)
-            dropSchedule(it)
+            if (id != null && name != null) {
+                it[KEY_GROUP2_ID] = id
+                it[KEY_GROUP2_NAME] = name
+            } else {
+                it.remove(KEY_GROUP2_ID)
+                it.remove(KEY_GROUP2_NAME)
+            }
+            it.remove(KEY_GROUP2_GONE_SINCE)
+            it.remove(KEY_GROUP2_GONE)
+            if (ownOnly != null) {
+                it[KEY_SCHEDULE] = ownOnly
+                it[KEY_PARTIAL] = "1"
+            } else {
+                dropSchedule(it)
+            }
         }
     }
 
@@ -404,6 +443,7 @@ class ScheduleStore(private val context: Context) {
         prefs.remove(KEY_SCHEDULE)
         prefs.remove(KEY_GENERATED_AT)
         prefs.remove(KEY_PARTIAL)
+        prefs.remove(KEY_FETCHED_AT)
     }
 
     /**
@@ -421,18 +461,30 @@ class ScheduleStore(private val context: Context) {
         return confirmed
     }
 
+    /** Соседка снова отвечает: отметки о пропаже — прочь, её пары вернутся. */
     suspend fun clearSecondNotFound() {
-        context.dataStore.edit { it.remove(KEY_GROUP2_GONE_SINCE) }
-    }
-
-    /** Снять соседнюю подгруппу, не стирая расписания: оно сейчас же перепишется. */
-    suspend fun forgetSecondGroup() {
         context.dataStore.edit {
-            it.remove(KEY_GROUP2_ID)
-            it.remove(KEY_GROUP2_NAME)
             it.remove(KEY_GROUP2_GONE_SINCE)
+            it.remove(KEY_GROUP2_GONE)
         }
     }
+
+    /**
+     * Соседки нет в таблице — подтверждено. Выбор не стирается: раньше через
+     * час 404 его стирало навсегда, и после починки таблицы её пары сами не
+     * возвращались (третий аудит, М41 прогона 1). true — отметка новая, о ней
+     * пора сказать.
+     */
+    suspend fun markSecondGone(): Boolean {
+        var fresh = false
+        context.dataStore.edit {
+            fresh = it[KEY_GROUP2_GONE] != "1"
+            it[KEY_GROUP2_GONE] = "1"
+        }
+        return fresh
+    }
+
+    val secondGone: Flow<Boolean> = context.dataStore.data.map { it[KEY_GROUP2_GONE] == "1" }
 
     /** Лежит ли на телефоне расписание без пар соседней подгруппы (не дошли до неё). */
     suspend fun schedulePartial(): Boolean = context.dataStore.data.first()[KEY_PARTIAL] == "1"
@@ -487,7 +539,22 @@ class ScheduleStore(private val context: Context) {
      */
     suspend fun countOpen() = bump(KEY_TALLY_OPENS)
 
-    suspend fun countWidgetDraw() = bump(KEY_TALLY_DRAWS)
+    /**
+     * Показ виджета — не чаще раза в три часа: каждая техническая перерисовка
+     * (звонок, полночь, часовой заход) за сутки набирала десятки «ответов
+     * вместо таблицы», даже если на телефон никто не смотрел (третий аудит,
+     * М38 прогона 2).
+     */
+    suspend fun countWidgetDraw() {
+        val now = System.currentTimeMillis()
+        var due = false
+        context.dataStore.edit {
+            val last = it[KEY_DRAW_COUNTED]?.toLongOrNull()
+            due = last == null || now - last >= DRAW_COUNT_GAP_MILLIS
+            if (due) it[KEY_DRAW_COUNTED] = now.toString()
+        }
+        if (due) bump(KEY_TALLY_DRAWS)
+    }
 
     suspend fun tally(): Tally = context.dataStore.data.first().let {
         Tally(
@@ -535,6 +602,13 @@ class ScheduleStore(private val context: Context) {
         val KEY_PARTIAL = stringPreferencesKey("schedule_partial")
         val KEY_WINDOW_FROM = stringPreferencesKey("window_from")
         val KEY_GROUP2_GONE_SINCE = stringPreferencesKey("group2_gone_since")
+        val KEY_GROUP2_GONE = stringPreferencesKey("group2_gone")
+        val KEY_UNREACHABLE_LAST = stringPreferencesKey("unreachable_last")
+        val KEY_DRAW_COUNTED = stringPreferencesKey("draw_counted")
+        /** Неудачи, разделённые таким перерывом, — не одна беда. */
+        val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(1)
+        /** Счёт показов виджета — не чаще раза в столько. */
+        const val DRAW_COUNT_GAP_MILLIS = 3L * 60 * 60 * 1000
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")
         val KEY_SCHEDULE = stringPreferencesKey("schedule_json")
         val KEY_GROUPS = stringPreferencesKey("groups_json")
