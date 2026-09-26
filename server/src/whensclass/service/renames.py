@@ -221,6 +221,7 @@ def _across_sheets(previous: Snapshot, current: Snapshot, vanished: set[str]) ->
 
 def _teachers_across_sheets(
     previous: Snapshot,
+    current: Snapshot,
     previous_teachers: TeacherIndex,
     current_teachers: TeacherIndex,
     vanished: set[str],
@@ -366,7 +367,7 @@ class RenameBook:
             set(previous_teachers.names) - set(current_teachers.names) - set(found_teachers)
         )
         found_teachers.update(
-            _teachers_across_sheets(previous, previous_teachers, current_teachers, leftover_teachers)
+            _teachers_across_sheets(previous, current, previous_teachers, current_teachers, leftover_teachers)
         )
         for old_id, new_id in list(found_teachers.items()):
             old_name = previous_teachers.names.get(old_id, old_id)
