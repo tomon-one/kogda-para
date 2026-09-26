@@ -48,20 +48,24 @@ FILLED_SHARE = 0.5
 
 
 def published(snapshot: Snapshot, today: date | None) -> list[date]:
-    """Дни листа, которые колледж уже выложил, а не только начал.
+    """Дни листа, которые колледж уже выложил, а не только начал, — по листу.
 
     Новую неделю колледж пишет в лист постепенно: сначала даты, потом пары
     по группам. Раньше такой день сразу попадал в `cov`, и группы, до которых
     колледж ещё не дошёл, получали «пар нет» вместо «ещё не опубликовано»:
     18 сентября 2026 в 19:20–21:20 так выглядела вся неделя 21–26.09, а
-    24 сентября — понедельник 28.09 (пары у 20 групп из 189), уже в окне
+    24 сентября — понедельник 28.09 (пары у 6 групп из 189), уже в окне
     приложения. Человек в пятницу читает «в понедельник пар нет» и не идёт.
 
     Отрезается только хвост: цепочка недописанных дней в конце листа, после
     сегодняшнего. Пустой день посреди выложенной недели — праздник — так и
-    остаётся «пар нет»; сегодня и прошлое не отрезаются никогда. Ошибка в
-    другую сторону безопасна: праздник в самом конце листа покажется «ещё не
+    остаётся «пар нет»; сегодня и прошлое тут не отрезаются. Ошибка в другую
+    сторону безопасна: праздник в самом конце листа покажется «ещё не
     опубликовано».
+
+    Это `cov` в /v1/meta и граница для остатка недели у группы. Группе и
+    преподавателю край считается свой — `group_published`,
+    `teacher_published`: доля по листу не видит, до кого колледж не дошёл.
     """
     dates = sorted(snapshot.dates)
     if today is None:
@@ -79,6 +83,60 @@ def published(snapshot: Snapshot, today: date | None) -> list[date]:
             break
         end -= 1
     return dates[:end]
+
+
+def _group_edge(snapshot: Snapshot, group_id: str, sheet: list[date]) -> date | None:
+    """Последний день, который колледж выложил группе; None — ни одного.
+
+    Колледж дописывает колонку группы сразу на месяц и группу за группой
+    (живой лист 24 сентября 2026: у 6 групп из 189 пары по 28.10, у
+    остальных пусто). Доля по листу тут не судья: дописана половина групп —
+    и прочие получали три недели «пар нет» (третий аудит, К2 прогона 1).
+    Поэтому край — у каждой группы свой: её последний день с парами. Дальше
+    него — только остаток той же недели и только внутри выложенного по листу
+    (`sheet`): суббота без пар у группы, которая по субботам не учится, —
+    «пар нет», а не «ещё не опубликовано».
+
+    Ошибка — в безопасную сторону: группа на практике, чья колонка пуста до
+    конца листа, увидит «ещё не опубликовано» вместо «пар нет». В сентябре
+    2026 таких в дописанных неделях 0–3 из 189.
+    """
+    by_date = snapshot.schedule.get(group_id, {})
+    last = max((day for day, lessons in by_date.items() if lessons), default=None)
+    if last is None or not sheet:
+        return last
+    week_end = last + timedelta(days=6 - last.weekday())
+    return max(last, min(week_end, sheet[-1]))
+
+
+def _upto(snapshot: Snapshot, edge: date | None) -> list[date]:
+    return [day for day in sorted(snapshot.dates) if edge is not None and day <= edge]
+
+
+def group_published(snapshot: Snapshot, group_id: str, today: date | None) -> list[date]:
+    """Дни листа, которые колледж уже выложил этой группе (`cov` группы)."""
+    sheet = published(snapshot, today)
+    if today is None:
+        return sheet
+    return _upto(snapshot, _group_edge(snapshot, group_id, sheet))
+
+
+def teacher_published(
+    snapshot: Snapshot, index: TeacherIndex, teacher_id: str, today: date | None
+) -> list[date]:
+    """Дни, выложенные преподавателю: дописаны все его группы.
+
+    День преподавателя собран из чужих колонок: вписана одна группа из его
+    шести — у него «одна пара в понедельник» без признака, что остальное не
+    выложено (третий аудит, В16 прогона 1). Поэтому его край — самый ранний
+    из краёв его групп. Группы — все, у кого он ведёт хоть одну пару в листе.
+    """
+    sheet = published(snapshot, today)
+    groups = index.groups.get(teacher_id)
+    if today is None or not groups:
+        return sheet
+    edges = [_group_edge(snapshot, group, sheet) for group in groups]
+    return _upto(snapshot, None if None in edges else min(edges))
 
 
 def _cov(dates: list[date]) -> list[str] | None:
@@ -155,15 +213,16 @@ def teacher_payload(
         return None
 
     by_date = index.days(teacher_id)
-    shown = published(snapshot, today)
+    shown = teacher_published(snapshot, index, teacher_id, today)
     covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
 
     out_days = []
     for offset in range(days):
         day = start + timedelta(days=offset)
-        # За краем выложенного — только дни, где пары уже вписаны.
-        if day not in covered and not by_date.get(day):
+        # За краем выложенного дня нет, даже если часть его пар вписана:
+        # остальные его группы колледж ещё не дописал.
+        if day not in covered:
             continue
         lessons = []
         for entry in by_date.get(day, []):
@@ -219,25 +278,24 @@ def schedule_payload(
     """Тело для виджета. None, если такой группы в листе нет.
 
     `today` — сегодня по часам колледжа: от него считается недописанный
-    хвост листа (`published`). Без него покрытие — весь лист.
+    хвост (`group_published`). Без него покрытие — весь лист.
     """
     group = next((g for g in snapshot.groups if g.id == group_id), None)
     if group is None:
         return None
 
     by_date = snapshot.schedule.get(group_id, {})
-    shown = published(snapshot, today)
+    shown = group_published(snapshot, group_id, today)
     covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
 
     out_days = []
     for offset in range(days):
         day = start + timedelta(days=offset)
-        if day not in covered and not by_date.get(day):
+        if day not in covered:
             # Дня нет в ответе вовсе — виджет отличит «пар нет» от
-            # «расписание ещё не опубликовано». За краем выложенного
-            # (`published`) день приходит, только если пары группы в нём
-            # уже вписаны.
+            # «расписание ещё не опубликовано». Дни с парами группы в
+            # покрытие входят всегда, так что пропасть они тут не могут.
             continue
         out_day = {
             "d": day.isoformat(),
