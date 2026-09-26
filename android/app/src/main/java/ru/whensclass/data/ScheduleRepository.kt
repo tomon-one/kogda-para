@@ -208,7 +208,7 @@ class ScheduleRepository(
             }
             return
         }
-        if (!store.notifyChangesEnabled()) return
+        if (!store.notifyServerEnabled()) return
         if (store.staleNotifiedFor() == sinceIso) return
         val since = runCatching { java.time.Instant.parse(sinceIso) }.getOrNull() ?: return
         if (System.currentTimeMillis() - since.toEpochMilli() < STALE_NOTIFY_AFTER_MILLIS) return
@@ -534,7 +534,7 @@ class ScheduleRepository(
                     // Не стираем выбор, а отмечаем: вернётся соседка — вернутся и
                     // её пары (М41 прогона 1). Сказать — один раз, своим
                     // уведомлением и только тому, кто просил сообщать (М15).
-                    if (store.markSecondGone() && store.notifyChangesEnabled()) {
+                    if (store.markSecondGone() && store.notifySubgroupEnabled()) {
                         Notifications.subgroupGone(
                             context,
                             "Соседней подгруппы $name сейчас нет в таблице",

@@ -7,13 +7,10 @@ import android.provider.Settings
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -45,7 +42,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -53,9 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
-import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.ReleaseDto
-import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.widget.ThemeChoice
 import ru.whensclass.widget.formatDurationShort
 
@@ -79,6 +79,8 @@ fun SettingsScreen(
     notifyEnabled: Boolean,
     notifyChanges: Boolean,
     notifyUpdates: Boolean,
+    notifyServer: Boolean = true,
+    notifySubgroup: Boolean = true,
     exactAlarms: Boolean,
     notifications: Boolean,
     /** Что телефон делает с приложением помимо его настроек. */
@@ -87,6 +89,8 @@ fun SettingsScreen(
     onNotifyEnabled: (Boolean) -> Unit,
     onNotifyChanges: (Boolean) -> Unit,
     onNotifyUpdates: (Boolean) -> Unit,
+    onNotifyServer: (Boolean) -> Unit = {},
+    onNotifySubgroup: (Boolean) -> Unit = {},
     focusUpdate: Boolean,
     checkingUpdate: Boolean,
     updateChecked: Boolean,
@@ -203,61 +207,54 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 10.dp),
                 )
-                Text(
-                    "За сколько предупредить",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Одной строкой с выпадающим списком: одиннадцать фишек в три
+                // ряда занимали полэкрана ради одной настройки (просьба Tomon
+                // 27.09). Разброс по-прежнему большой: кому-то хватит десяти
+                // минут, кому-то ехать через весь город, а кому-то ровно сорок
+                // семь — для того «Своё время…».
+                MinutesPicker(
+                    current = notifyBefore,
+                    onPick = onNotifyBefore,
+                    onOwn = { askOwnTime = true },
                 )
-                // Разброс большой: кому-то хватит десяти минут, а кому-то ехать
-                // через весь город.
-                FlowRow(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    NOTIFY_OPTIONS.forEach { minutes ->
-                        MinutesChip(
-                            minutes = minutes,
-                            selected = minutes == notifyBefore,
-                            onPick = { onNotifyBefore(minutes) },
-                        )
-                    }
-                    // Готовых значений хватает не всем: кто-то едет ровно сорок
-                    // семь минут и хочет именно столько.
-                    MinutesChip(
-                        label = if (notifyBefore !in NOTIFY_OPTIONS) formatDurationShort(notifyBefore)
-                        else "Своё",
-                        selected = notifyBefore !in NOTIFY_OPTIONS,
-                        onPick = { askOwnTime = true },
-                    )
-                }
             }
-            // Не только при напоминаниях: звонок для виджетов — подсветка
-            // идущей пары — ждёт того же разрешения, а на Android 14+ его по
-            // умолчанию нет (третий аудит, М5 прогона 2).
-            ExactAlarms(exactAlarms, notifyEnabled)
 
+            // У каждого вида уведомлений — свой выключатель и свой канал:
+            // сбой сервера и пропажа подгруппы раньше шли под «изменениями»
+            // (просьба Tomon 27.09).
             SwitchRow("Сообщать об изменениях", notifyChanges, onNotifyChanges)
             if (notifyChanges && notifications && phone.changesChannelOff) {
                 ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES, "Сообщения об изменениях")
             }
-            Text(
-                // Тот же выключатель гасит и уведомление о лежащем сервере —
-                // об этом молчали (второй аудит, М10).
-                // И о пропаже соседней подгруппы — она идёт тем же
-                // выключателем (третий аудит, контроль 1 прогона 1).
-                // У преподавателя подгрупп нет.
-                if (teacherMode) "Отмены и замены на сегодня и завтра и сбой сервера " +
-                    "дольше двух часов."
-                else "Отмены и замены на сегодня и завтра, пропажа соседней подгруппы и " +
-                    "сбой сервера дольше двух часов.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Hint("Отмены и замены на сегодня и завтра.")
+
+            SwitchRow("Сообщать о сбоях сервера", notifyServer, onNotifyServer)
+            if (notifyServer && notifications && phone.serverChannelOff) {
+                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SERVER, "Сообщения о сбоях")
+            }
+            Hint("Если расписание не обновляется дольше двух часов — один раз за сбой; " +
+                "уведомление уберётся само, когда сервер починится.")
+
+            // Только студенту с выбранной соседней подгруппой: остальным
+            // этого уведомления не бывает.
+            if (!teacherMode && secondGroupName != null) {
+                SwitchRow("Сообщать о пропаже подгруппы", notifySubgroup, onNotifySubgroup)
+                if (notifySubgroup && notifications && phone.subgroupChannelOff) {
+                    ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SUBGROUP, "Сообщения о подгруппе")
+                }
+                Hint("Если соседней подгруппы не стало в таблице — один раз.")
+            }
 
             SwitchRow("Сообщать о новых версиях", notifyUpdates, onNotifyUpdates)
-            Text(
-                // Магазина нет, обновление никто не принесёт.
-                "Приложение проверяет это раз в час вместе с расписанием.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Магазина нет, обновление никто не принесёт.
+            Hint("Приложение проверяет это раз в час вместе с расписанием.")
+
+            // В конце блока: это разрешение телефона, а не выключатель, и нужно
+            // оно не только напоминаниям — звонок для виджетов, подсветка
+            // идущей пары, ждёт того же, а на Android 14+ его по умолчанию нет
+            // (третий аудит, М5 прогона 2). Посреди выключателей оно рвало их
+            // ряд (просьба Tomon 27.09).
+            ExactAlarms(exactAlarms, notifyEnabled)
         }
 
         Section("Расписание") {
@@ -509,30 +506,71 @@ private fun OwnTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> 
     )
 }
 
+/** Пояснение под выключателем. */
 @Composable
-private fun MinutesChip(
-    minutes: Int = 0,
-    label: String = formatDurationShort(minutes),
-    selected: Boolean,
-    onPick: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.surfaceVariant,
-        // Выбранность — не только цветом: экранный чтец говорил одно число
-        // (третий аудит, М19 прогона 2).
-        modifier = Modifier.padding(end = 6.dp, bottom = 6.dp)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onPick),
+private fun Hint(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/**
+ * «За сколько предупредить · 20 мин ▾» — одной строкой. Выбранное в списке
+ * отмечено галочкой и для экранного чтеца (третий аудит, М19 прогона 2).
+ */
+@Composable
+private fun MinutesPicker(current: Int, onPick: (Int) -> Unit, onOwn: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClickLabel = "Выбрать время") { open = true },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary
-            else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-        )
+        Text("За сколько предупредить", style = MaterialTheme.typography.bodyLarge)
+        Box {
+            Text(
+                formatDurationShort(current) + " ▾",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                NOTIFY_OPTIONS.forEach { minutes ->
+                    MinutesItem(formatDurationShort(minutes), selected = minutes == current) {
+                        open = false
+                        onPick(minutes)
+                    }
+                }
+                val own = current !in NOTIFY_OPTIONS
+                MinutesItem(
+                    if (own) "Своё: ${formatDurationShort(current)}…" else "Своё время…",
+                    selected = own,
+                ) {
+                    open = false
+                    onOwn()
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun MinutesItem(label: String, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        onClick = onClick,
+        trailingIcon = if (selected) {
+            { Icon(Icons.Default.Check, contentDescription = null) }
+        } else {
+            null
+        },
+        modifier = Modifier.semantics { this.selected = selected },
+    )
 }
 
 @Composable

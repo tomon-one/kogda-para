@@ -23,6 +23,10 @@ data class PhoneState(
     val lessonChannelOff: Boolean = false,
     /** Канал «Изменения в расписании» выключен. */
     val changesChannelOff: Boolean = false,
+    /** Канал «Сбои сервера» выключен. */
+    val serverChannelOff: Boolean = false,
+    /** Канал «Соседняя подгруппа» выключен. */
+    val subgroupChannelOff: Boolean = false,
     /** Почему фоновая работа может не идти — словами; пусто — не видно причин. */
     val backgroundLimits: List<String> = emptyList(),
     /** Пояс телефона не совпадает с поясом колледжа при выключенном автоопределении. */
@@ -34,6 +38,8 @@ data class PhoneState(
         fun read(context: Context): PhoneState = PhoneState(
             lessonChannelOff = Notifications.channelOff(context, Notifications.CHANNEL_LESSON),
             changesChannelOff = Notifications.channelOff(context, Notifications.CHANNEL_CHANGES),
+            serverChannelOff = Notifications.channelOff(context, Notifications.CHANNEL_SERVER),
+            subgroupChannelOff = Notifications.channelOff(context, Notifications.CHANNEL_SUBGROUP),
             backgroundLimits = backgroundLimits(context),
             zoneWarning = zoneWarning(context),
             canInstall = runCatching { context.packageManager.canRequestPackageInstalls() }.getOrDefault(true),
