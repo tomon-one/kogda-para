@@ -175,11 +175,16 @@ def test_dash_instead_of_group_name_is_format_not_network(tmp_path, sheet, sent,
 
 # --- В27: from далеко от сегодня --------------------------------------------
 
-def test_far_from_is_422_not_500(fixture_csv):
+def test_far_from_is_422_not_500(fixture_csv, monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
+    from whensclass.api import routes
     from whensclass.api.routes import router
+
+    # «Сегодня» — своё: с 09.09.2027 настоящее сделало бы from=2026-09-07
+    # далёким, и красный тест остановил бы выкладку (третий аудит, М59 прогона 2).
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 8))
 
     class Store:
         snapshot = parse_csv(fixture_csv, "ф", FIXTURE)
@@ -759,3 +764,65 @@ def test_watch_baseline_survives_restart(tmp_path, monkeypatch):
     monkeypatch.setattr(restarted, "refresh", lambda force=False: calls.append(force) or False)
     restarted.look_for_new_sheet()
     assert calls == [True]
+
+
+def test_network_grace_is_half_an_hour_by_the_clock(tmp_path, sent, fixture_csv):
+    """Третий аудит, М57 прогона 2: льгота держалась только относительно себя —
+    при FETCH_GRACE в секунду тесты были зелёными. Тут — минутами."""
+    store = SnapshotStore(tmp_path)
+    store.put(
+        parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
+    )
+    r = Refresher(store, tmp_path)
+    r._fail("таблица не прочиталась: ReadTimeout", kind="fetch")
+    r.failing_since -= dt.timedelta(minutes=29)
+    r._fetch_since -= dt.timedelta(minutes=29)
+    r._fail("таблица не прочиталась: ReadTimeout", kind="fetch")
+    assert r.status == "ok" and sent == []
+    r.failing_since -= dt.timedelta(minutes=2)
+    r._fetch_since -= dt.timedelta(minutes=2)
+    r._fail("таблица не прочиталась: ReadTimeout", kind="fetch")
+    assert r.status == "stale" and len(sent) == 1
+
+
+def test_snapshot_survives_the_disk_whole(tmp_path, fixture_csv):
+    """Третий аудит, М58 прогона 2: снимок на диске проверялся только по places —
+    забудь дописать новое поле пары, и тесты зелёные. Тут — целиком."""
+    from whensclass.parser.csv_schedule import parse_export
+
+    snapshot = parse_export(fixture_csv, "лист", "656498718", limits=FIXTURE)
+    store = SnapshotStore(tmp_path)
+    store.put(snapshot, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    loaded = SnapshotStore(tmp_path)
+    assert loaded.load()
+    assert loaded.snapshot == snapshot
+
+
+def test_one_changed_sheet_of_two_rebuilds_the_whole_window(
+    tmp_path, sent, fixture_csv, monkeypatch
+):
+    """Третий аудит, М65 прогона 2: окно из двух листов, изменился один —
+    снимок пересобирается из обоих (починка М22 второго аудита, без теста)."""
+    later = fixture_csv
+    for old, new in (("02.09.2026", "14.09.2026"), ("03.09.2026", "15.09.2026"),
+                     ("04.09.2026", "16.09.2026"), ("05.09.2026", "17.09.2026"),
+                     ("07.09.2026", "18.09.2026"), ("08.09.2026", "19.09.2026"),
+                     ("09.09.2026", "21.09.2026"), ("10.09.2026", "22.09.2026"),
+                     ("11.09.2026", "23.09.2026"), ("12.09.2026", "24.09.2026")):
+        later = later.replace(old, new)
+    import re as _re
+
+    later = _re.sub(r"(\d\d\.09\.2026)\s+\w+", r"\1", later)
+    texts = {"лист": fixture_csv, "следующий": later}
+    monkeypatch.setattr(
+        sheet_index, "resolve_window", lambda *a, **k: [("лист", "1"), ("следующий", "2")]
+    )
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
+    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    assert r.refresh(today=TODAY) is True
+    texts["лист"] = cell_replace(fixture_csv, a_teacher(fixture_csv), "Новиков Н. Н.")
+    assert r.refresh(today=TODAY) is True
+    days = set(store.snapshot.dates)
+    assert dt.date(2026, 9, 2) in days and dt.date(2026, 9, 24) in days

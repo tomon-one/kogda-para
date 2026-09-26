@@ -89,9 +89,14 @@ def test_schedule_points_into_the_sheet(client):
     assert all(isinstance(day["row"], int) and day["row"] > 1 for day in body["days"])
 
 
-def test_meta_points_at_the_sheet_of_today(client):
+def test_meta_points_at_the_sheet_of_today(client, monkeypatch):
+    from whensclass.api import routes
+
+    # Воскресенье 13.09 в фикстуру не попадает — берётся ближайший день, с того
+    # же листа. Раньше «сегодня» было 08.09, внутри фикстуры, и запасной поиск
+    # ближайшего не проверялся (третий аудит, М60 прогона 2).
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 13))
     body = client.get("/v1/meta").json()
-    # Сегодня в фикстуру не попадает, берётся ближайший день — с того же листа.
     assert body["src_url"].endswith("#gid=656498718")
 
 
