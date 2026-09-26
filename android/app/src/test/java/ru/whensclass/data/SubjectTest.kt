@@ -1,6 +1,9 @@
 package ru.whensclass.data
 
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -12,9 +15,11 @@ import org.junit.Test
  * то же самое повторилось с подгруппой.
  *
  * Сравнение целиком, а не по одному полю, — вся защита и держится на нём.
- * Здесь закреплено, что в сравнении участвуют все три части: добавит кто-то
- * четвёртую настройку и забудет её здесь — тест не поможет, а вот убрать одну
- * из этих трёх молча уже не выйдет.
+ * Здесь закреплено, что в сравнении участвуют все три части, и что запись
+ * идёт через writeIfStillAsked. До 26.09.2026 тест проверял только equals
+ * data class, а саму сверку не исполнял: её удаление или перенос за запись
+ * оставляли всё зелёным (третий аудит, В17 прогона 2). Вызов из refresh()
+ * unit-тест по-прежнему не видит — зато записи вне сверки там больше нет.
  */
 class SubjectTest {
 
@@ -46,5 +51,33 @@ class SubjectTest {
     @Test
     fun `группу не выбрали вовсе — это не то же самое, что выбрали`() {
         assertNotEquals(asked, asked.copy(id = null))
+    }
+
+    @Test
+    fun `чужой ответ не записывается, свой — записывается`() = runBlocking {
+        val written = mutableListOf<String>()
+        val stale = writeIfStillAsked(asked, { asked.copy(second = null) }) {
+            written += "чужое"
+            "записано"
+        }
+        assertNull(stale)
+        assertEquals(emptyList<String>(), written)
+
+        val fresh = writeIfStillAsked(asked, { asked.copy() }) {
+            written += "своё"
+            "записано"
+        }
+        assertEquals("записано", fresh)
+        assertEquals(listOf("своё"), written)
+    }
+
+    @Test
+    fun `кто выбран, спрашивается в момент записи, а не заранее`() = runBlocking {
+        // Выбор сменился между запросом и записью: сверка берёт нынешний.
+        var now = asked
+        val result = writeIfStillAsked(asked, { now }) { "записано" }
+        assertEquals("записано", result)
+        now = asked.copy(id = "isp-924-3")
+        assertNull(writeIfStillAsked(asked, { now }) { "записано" })
     }
 }

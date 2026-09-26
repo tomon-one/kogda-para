@@ -75,4 +75,17 @@ class ScheduleMergeTest {
         val merged = mergeSecondGroup(schedule("ИСП-924/1", lesson(1, "Физика")), secondary)
         assertEquals(listOf("2026-09-08"), merged.days.map { it.date })
     }
+
+    @Test
+    fun `свои пары из склейки — и подписанная своя тоже`() {
+        // На общем номере склейка подписывает и свою пару; «свои = без
+        // подписи» выбрасывал её вместе с соседской.
+        val merged = mergeSecondGroup(
+            schedule("ИСП-924/1", lesson(3, "Физика", room = "101"), lesson(4, "Химия")),
+            schedule("ИСП-924/2", lesson(3, "Физика", room = "102"), lesson(5, "Право")),
+        )
+        val own = merged.ownOnly().days.single().lessons
+        assertEquals(listOf(3 to "101", 4 to null), own.map { it.number to it.room })
+        assertEquals(listOf<String?>(null, null), own.map { it.groups })
+    }
 }

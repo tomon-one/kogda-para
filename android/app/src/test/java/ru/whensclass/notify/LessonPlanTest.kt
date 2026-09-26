@@ -120,6 +120,15 @@ class LessonPlanTest {
     }
 
     @Test
+    fun `своя пара на общем номере подписана своим именем — и напоминает`() {
+        // Склейка подписывает свою пару, когда у соседки на том же номере
+        // другое. Проверка «своя = без подписи» глушила напоминание о ней.
+        val own = LessonDto(number = 1, subject = "Физика", groups = "ИСП-924/1")
+        val plan = LessonAlarms.plan(day(own, neighbour(1), lesson(2)), minutes = 20, now = night)
+        assertEquals(listOf("Физика"), plan.map { it.lesson.subject })
+    }
+
+    @Test
     fun `у преподавателя подпись группы у каждой пары — все свои`() {
         val teacher = day(
             LessonDto(number = 1, subject = "Физика", groups = "ИСП-924/1"),

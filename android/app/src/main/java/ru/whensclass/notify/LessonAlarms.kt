@@ -72,7 +72,7 @@ object LessonAlarms {
                 // конец такой пары не глушит напоминание о своей первой как
                 // «посреди предыдущей» (третий аудит, В24 прогона 1). У
                 // преподавателя подпись группы у каждой пары — свои все.
-                if (!schedule.isTeacher && lesson.groups != null) continue
+                if (schedule.isNeighbours(lesson)) continue
                 val bells = schedule.bells[lesson.number.toString()]
                 val start = bells?.getOrNull(0)
                     ?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: continue
