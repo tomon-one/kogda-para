@@ -8,7 +8,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.FileProvider
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -159,15 +165,40 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         data class Failed(val why: String) : Result
     }
 
+    /** Загрузка идёт; null — не идёт. Иначе — чем кончилась, пока экран не забрал. */
+    sealed interface Download {
+        data object Running : Download
+        data class Done(val result: Result) : Download
+    }
+
+    // Загрузка живёт здесь, а не в экране: поворот пересоздавал экран, кнопка
+    // снова звала «Обновить приложение», хотя загрузка шла, и второе нажатие
+    // открывало установщик дважды (третий аудит, М30 прогона 2).
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val _download = MutableStateFlow<Download?>(null)
+    val download: StateFlow<Download?> = _download.asStateFlow()
+
     /**
-     * Скачивает обновление и готовит установщик, когда файл готов.
+     * Скачивает обновление и готовит установщик, когда файл готов. Итог —
+     * в [download]; экран забирает его через [taken].
      *
      * Раньше загрузка и установка были двумя нажатиями: первое ставило файл в
      * очередь, второе — открывало установщик. Со стороны это выглядело как
      * кнопка, срабатывающая через раз.
      */
-    suspend fun downloadAndInstall(release: ReleaseDto): Result = withContext(Dispatchers.IO) {
-        downloading.withLock { fetchAndInstall(release) }
+    fun start(release: ReleaseDto) {
+        if (_download.value == Download.Running) return
+        _download.value = Download.Running
+        scope.launch {
+            val result = runCatching { downloading.withLock { fetchAndInstall(release) } }
+                .getOrElse { Result.Failed(updateFailure(it)) }
+            _download.value = Download.Done(result)
+        }
+    }
+
+    /** Экран показал итог загрузки или открыл установщик. */
+    fun taken() {
+        if (_download.value is Download.Done) _download.value = null
     }
 
     private suspend fun fetchAndInstall(release: ReleaseDto): Result {
