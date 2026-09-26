@@ -28,11 +28,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -85,8 +87,11 @@ class MainActivity : ComponentActivity() {
         val allowed = LessonAlarms.exactAllowed(this)
         if (allowed != exactAlarms.value) {
             exactAlarms.value = allowed
-            // Разрешение появилось — переставить будильники уже точными.
+            // Разрешение появилось — переставить будильники уже точными: и
+            // напоминания, и звонок для виджетов — подсветка идущей пары ждёт
+            // его же (третий аудит, М5 прогона 2).
             LessonAlarms.reschedule(this)
+            lifecycleScope.launch { ru.whensclass.work.MidnightUpdater.schedule(applicationContext) }
         }
     }
 
@@ -219,14 +224,20 @@ private fun App(
     var chosenTheme by remember { mutableStateOf<ThemeChoice?>(null) }
     val theme = chosenTheme ?: ThemeChoice.from(storedTheme)
 
-    var screen by remember { mutableStateOf(if (openUpdate) Screen.SETTINGS else Screen.TODAY) }
+    // Экран, выбор и загрузка — через rememberSaveable: поворот, разделение
+    // экрана и смена темы пересоздают Activity, и человек из настроек или
+    // поиска группы оказывался на «Сегодня» (третий аудит, М30 прогона 2).
+    var screen by rememberSaveable { mutableStateOf(if (openUpdate) Screen.SETTINGS else Screen.TODAY) }
+    // Откуда пришли к выбору группы: туда и «назад» — и стрелкой, и жестом.
+    // Стрелка вела в настройки, а жест — на главный (М16 прогона 2).
+    var groupsFrom by rememberSaveable { mutableStateOf(Screen.SETTINGS) }
     var update by remember { mutableStateOf<ReleaseDto?>(null) }
     // Отдельно от update: «сервер сказал, что новее ничего нет» и «до сервера
     // не достучались» — разные вещи, и человеку об этом надо говорить разное.
     var updateFailed by remember { mutableStateOf(false) }
     // Почему не удалось скачать. Раньше провал был молчаливым: кнопка
     // возвращалась из «Скачиваю…» в исходное, и всё.
-    var updateError by remember { mutableStateOf<String?>(null) }
+    var updateError by rememberSaveable { mutableStateOf<String?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
     var updateChecked by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
@@ -239,8 +250,9 @@ private fun App(
     // обновлено» (второй аудит, В12; починка М18 первого аудита не была
     // доведена).
     var refreshFailed by remember { mutableStateOf(false) }
-    var installing by remember { mutableStateOf(false) }
-    var focusUpdate by remember { mutableStateOf(openUpdate) }
+    val download by container.updates.download.collectAsState()
+    val installing = download == AppUpdate.Download.Running
+    var focusUpdate by rememberSaveable { mutableStateOf(openUpdate) }
     // Списки держим здесь, а не во вкладке: во вкладке они перезагружались
     // бы на каждое переключение. Но и одного захода за запуск мало —
     // не вышло с первого раза (метро, спящий вайфай), и список оставался
@@ -249,9 +261,23 @@ private fun App(
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
     // Какой список показывать на экране выбора: null — по текущей роли.
-    var pickTeacher by remember { mutableStateOf<Boolean?>(null) }
+    var pickTeacher by rememberSaveable { mutableStateOf<Boolean?>(null) }
     // Тот же экран, но выбирают не свою группу, а соседнюю подгруппу.
-    var pickSecond by remember { mutableStateOf(false) }
+    var pickSecond by rememberSaveable { mutableStateOf(false) }
+
+    // Итог загрузки обновления. Установщик открывается, когда человек в
+    // приложении: из фона Android 10+ его молча не пускал (М49 прогона 1).
+    LaunchedEffect(download) {
+        val done = download as? AppUpdate.Download.Done ?: return@LaunchedEffect
+        when (val result = done.result) {
+            is AppUpdate.Result.Failed -> updateError = result.why
+            is AppUpdate.Result.Ready -> lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) {
+                runCatching { context.startActivity(result.intent) }
+                    .onFailure { updateError = "не нашёл установщик Android" }
+            }
+        }
+        container.updates.taken()
+    }
 
     LaunchedEffect(screen, reloadKey) {
         if (groups.isNullOrEmpty()) groups = container.repository.groups()
@@ -262,9 +288,23 @@ private fun App(
     // навигация тут своя, а системе о ней никто не сказал. Из настроек и
     // выбора группы вернуться можно было только стрелкой в шапке.
     BackHandler(enabled = screen != Screen.TODAY) {
+        val back = if (screen == Screen.GROUPS) groupsFrom else Screen.TODAY
         pickSecond = false
         pickTeacher = null
-        screen = Screen.TODAY
+        screen = back
+    }
+
+    // Выбрали группу или себя: сразу на экран расписания, и ⟳ крутится, пока
+    // идёт сеть. Раньше на первом запуске экран тут же писал «Проверьте
+    // интернет», а из настроек список полминуты не реагировал (М2 прогона 2).
+    val afterPick: (suspend () -> Unit) -> Unit = { select ->
+        scope.launch {
+            refreshing = true
+            pickTeacher = null
+            screen = Screen.TODAY
+            select()
+            refreshing = false
+        }
     }
 
     val refreshNow: () -> Unit = {
@@ -275,7 +315,15 @@ private fun App(
             // а человек только что нажал кнопку и ждёт ответа сейчас.
             val result = container.repository.refresh(force = true)
             refreshFailed = result is RefreshResult.Failed
-            if (result is RefreshResult.Failed) refreshError = refreshFailure(result.error)
+            when (result) {
+                is RefreshResult.Failed -> refreshError = refreshFailure(result.error)
+                // Сервер здоров, группы нет: сказать об этом, а не молча
+                // погасить ⟳ крестиком «сервер не смог» (М24 прогона 2).
+                RefreshResult.Gone -> refreshError =
+                    if (teacherMode) "Вас больше нет в таблице — выберите себя заново"
+                    else "Группы больше нет в таблице — выберите заново"
+                else -> Unit
+            }
             refreshing = false
         }
     }
@@ -312,6 +360,13 @@ private fun App(
         WindowCompat.getInsetsController(window, view).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
+        }
+        // До Android 10 полосу навигации красит enableEdgeToEdge — по теме
+        // системы, а не приложения: тёмная тема приложения на светлой системе
+        // давала белые кнопки на почти белой полосе (М34 прогона 2).
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = (if (dark) DarkScheme else LightScheme).background.toArgb()
         }
     }
 
@@ -352,7 +407,7 @@ private fun App(
                             canGoBack = true,
                             onBack = {
                                 pickSecond = false
-                                screen = Screen.SETTINGS
+                                screen = groupsFrom
                             },
                             onPick = { group: GroupDto ->
                                 scope.launch {
@@ -374,15 +429,11 @@ private fun App(
                             canGoBack = chosenName != null,
                             onBack = {
                                 pickTeacher = null
-                                screen = Screen.SETTINGS
+                                screen = groupsFrom
                             },
                             onStudentMode = { pickTeacher = false },
                             onPick = { teacher ->
-                                scope.launch {
-                                    container.repository.selectSelfAsTeacher(teacher)
-                                    pickTeacher = null
-                                    screen = Screen.TODAY
-                                }
+                                afterPick { container.repository.selectSelfAsTeacher(teacher) }
                             },
                         )
                     } else {
@@ -392,15 +443,11 @@ private fun App(
                             canGoBack = chosenName != null,
                             onBack = {
                                 pickTeacher = null
-                                screen = Screen.SETTINGS
+                                screen = groupsFrom
                             },
                             onTeacherMode = { pickTeacher = true },
                             onPick = { group: GroupDto ->
-                                scope.launch {
-                                    container.repository.selectGroup(group)
-                                    pickTeacher = null
-                                    screen = Screen.TODAY
-                                }
+                                afterPick { container.repository.selectGroup(group) }
                             },
                         )
                     }
@@ -410,6 +457,7 @@ private fun App(
                         teacherMode = teacherMode,
                         onSwitchRole = {
                             pickTeacher = !teacherMode
+                            groupsFrom = Screen.SETTINGS
                             screen = Screen.GROUPS
                         },
                         theme = theme,
@@ -466,24 +514,9 @@ private fun App(
                             }
                         },
                         onUpdate = {
-                            val release = update
-                            if (release != null) {
-                                scope.launch {
-                                    installing = true
-                                    updateError = null
-                                    when (val result = container.updates.downloadAndInstall(release)) {
-                                        is AppUpdate.Result.Failed -> updateError = result.why
-                                        // Ушёл из приложения, пока качалось, — установщик
-                                        // откроется, когда вернётся: из фона Android 10+
-                                        // его молча не пускал (М49 прогона 1).
-                                        is AppUpdate.Result.Ready ->
-                                            lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) {
-                                                runCatching { context.startActivity(result.intent) }
-                                                    .onFailure { updateError = "не нашёл установщик Android" }
-                                            }
-                                    }
-                                    installing = false
-                                }
+                            update?.let {
+                                updateError = null
+                                container.updates.start(it)
                             }
                         },
                         onTheme = { choice ->
@@ -499,11 +532,13 @@ private fun App(
                         },
                         onChangeGroup = {
                             pickSecond = false
+                            groupsFrom = Screen.SETTINGS
                             screen = Screen.GROUPS
                         },
                         secondGroupName = secondGroupName?.let { if (secondGone) "$it — нет в таблице" else it },
                         onPickSecondGroup = {
                             pickSecond = true
+                            groupsFrom = Screen.SETTINGS
                             screen = Screen.GROUPS
                         },
                         onClearSecondGroup = {
@@ -538,12 +573,14 @@ private fun App(
                         onErrorShown = { refreshError = null },
                         loadTally = { container.store.tally() },
                         serverBroken = serverStatus != "ok",
+                        unreachable = serverStatus == ru.whensclass.data.STATUS_UNREACHABLE,
                         sourceUrl = tableUrl,
                         serverSince = serverSince,
                         gone = gone,
                         onRepick = {
                             pickTeacher = teacherMode
                             pickSecond = false
+                            groupsFrom = Screen.TODAY
                             screen = Screen.GROUPS
                         },
                         reloadKey = reloadKey,
@@ -564,10 +601,15 @@ private fun App(
 }
 
 
-/** Почему ручное обновление не удалось — словами для плашки. */
-private fun refreshFailure(error: Throwable): String = when (error) {
+/**
+ * Почему ручное обновление не удалось — словами для плашки. 503 у нас — не
+ * «занят», а «расписания на сервере ещё нет» (api.md); занятость nginx
+ * отвечает 429 (третий аудит, М78 прогона 2).
+ */
+internal fun refreshFailure(error: Throwable): String = when (error) {
     is ru.whensclass.data.HttpFailure -> when (error.code) {
-        429, 503 -> "Сервер занят, попробуйте через минуту"
+        429 -> "Сервер занят, попробуйте через минуту"
+        503 -> "На сервере ещё нет расписания: служба только запустилась. Попробуйте через пару минут"
         else -> "Не удалось обновить: сервер ответил ${error.code}"
     }
     else -> "Не удалось обновить: нет связи с сервером"

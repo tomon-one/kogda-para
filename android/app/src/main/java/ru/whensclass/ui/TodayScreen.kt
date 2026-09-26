@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -63,15 +64,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -142,6 +144,8 @@ fun TodayScreen(
     onErrorShown: () -> Unit = {},
     loadTally: suspend () -> ScheduleStore.Tally = { ScheduleStore.Tally(0, 0, 0) },
     serverBroken: Boolean = false,
+    /** Сервер не отвечает телефону — не то же, что «не прочитал таблицу». */
+    unreachable: Boolean = false,
     sourceUrl: String? = null,
     /** С какого момента сервер лежит (ISO, UTC) — для давности на плашке. */
     serverSince: String? = null,
@@ -155,7 +159,8 @@ fun TodayScreen(
     val today = now.toLocalDate()
 
     // Преподаватель открывает приложение на своём разделе.
-    var tab by remember(teacherMode) {
+    // Вкладка переживает поворот экрана (третий аудит, М30 прогона 2).
+    var tab by rememberSaveable(teacherMode) {
         mutableStateOf(if (teacherMode) Tab.TEACHERS else Tab.STUDENTS)
     }
     val snackbar = remember { SnackbarHostState() }
@@ -218,7 +223,15 @@ fun TodayScreen(
                 actions = {
                     RefreshButton(
                         refreshing = refreshing,
-                        broken = serverBroken || gone || refreshFailed,
+                        // Почему крестик — у каждой причины своё: пропажа
+                        // группы — не «сервер не смог» (М24 прогона 2).
+                        brokenWhy = when {
+                            refreshFailed -> "Не удалось обновить расписание"
+                            gone -> if (teacherMode) "Вас нет в таблице" else "Группы нет в таблице"
+                            unreachable -> "Сервер расписания не отвечает"
+                            serverBroken -> "Сервер не смог обновить расписание"
+                            else -> null
+                        },
                         onRefresh = onRefresh,
                     )
                     IconButton(onClick = if (hasUpdate) onUpdateBadge else onSettings) {
@@ -252,13 +265,24 @@ fun TodayScreen(
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // В таблицу — к своей колонке и сегодняшнему дню, если сервер
-            // рассказал, где они; иначе просто в книгу.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(padding)) {
+        // В таблицу — к своей колонке и сегодняшнему дню, если сервер
+        // рассказал, где они; иначе просто в книгу.
+        val plates: @Composable () -> Unit = {
             if (gone) Gone(groupName, teacherMode, onRepick)
             if (serverBroken) {
-                ServerBroken(sheetLink(schedule, today, sourceUrl), serverSince, schedule?.generatedAt, now)
+                ServerBroken(
+                    sheetLink(schedule, today, sourceUrl), serverSince, schedule?.generatedAt, now, unreachable,
+                )
             }
+        }
+        // Мало высоты — альбомная ориентация, половина экрана: плашки едут
+        // вместе со списком своих пар, а не отнимают у него всё место. Шапка
+        // не прокручивается, и списку оставалось 0–30 dp (М29 прогона 2).
+        val platesInList = maxHeight < 480.dp && tab == Tab.STUDENTS && !teacherMode &&
+            !schedule?.days.isNullOrEmpty()
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!platesInList) plates()
             ScheduleTabs(
                 current = tab,
                 teacherMode = teacherMode,
@@ -324,14 +348,16 @@ fun TodayScreen(
                 else -> Unit
             }
 
-        if (explainMissing(schedule, today, sourceUrl)) return@Column
+        if (explainMissing(schedule, today, sourceUrl, loading = refreshing)) return@Column
         schedule ?: return@Column
 
         ScheduleDays(
             schedule = schedule,
             today = today,
             startDay = startDay,
+            header = if (platesInList) plates else null,
         )
+        }
         }
     }
 }
@@ -345,7 +371,7 @@ fun TodayScreen(
  * изменилось.
  */
 @Composable
-private fun RefreshButton(refreshing: Boolean, broken: Boolean, onRefresh: () -> Unit) {
+private fun RefreshButton(refreshing: Boolean, brokenWhy: String?, onRefresh: () -> Unit) {
     val angle = remember { Animatable(0f) }
     var done by remember { mutableStateOf(false) }
     var spinning by remember { mutableStateOf(false) }
@@ -374,11 +400,11 @@ private fun RefreshButton(refreshing: Boolean, broken: Boolean, onRefresh: () ->
         // Без Crossfade: он держит в дереве оба значка и заводит вторую анимацию
         // поверх первой. На первых запусках, пока код ещё не прогрет, это и
         // давало рывки у самой заметной анимации приложения.
-        if (done && broken) {
+        if (done && brokenWhy != null) {
             // Запрос прошёл, но сервер отдал прежнее расписание: галочка
             // здесь обещала бы свежесть, которой нет (учебная тревога
             // 14 сентября). Подробности — на плашке под шапкой.
-            Icon(Icons.Default.Close, contentDescription = "Сервер не смог обновить расписание")
+            Icon(Icons.Default.Close, contentDescription = brokenWhy)
         } else if (done) {
             Icon(Icons.Default.Check, contentDescription = "Расписание обновлено")
         } else {
@@ -463,12 +489,16 @@ private fun ScheduleTabs(current: Tab, teacherMode: Boolean, onPick: (Tab) -> Un
  * показывать нечего, приложение говорит почему.
  */
 @Composable
-private fun Explanation(title: String, text: String, sourceUrl: String? = null) {
+private fun Explanation(title: String, text: String, sourceUrl: String? = null, busy: Boolean = false) {
     val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (busy) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp).padding(bottom = 4.dp))
+            Spacer(Modifier.height(12.dp))
+        }
         Text(
             title,
             style = MaterialTheme.typography.titleMedium,
@@ -525,9 +555,12 @@ fun ScheduleDays(
     today: LocalDate,
     modifier: Modifier = Modifier,
     startDay: String? = null,
+    /** Первой строкой списка — например, плашки, когда шапке тесно. */
+    header: (@Composable () -> Unit)? = null,
 ) {
     val now = rememberNow(schedule.bells)
     val days = remember(schedule) { daysWithGaps(schedule) }
+    val shift = if (header != null) 1 else 0
 
     // Открываемся на сегодняшнем дне: неделя показывается с понедельника, и без
     // этого расписание начинается с прожитых дней.
@@ -535,19 +568,28 @@ fun ScheduleDays(
     // Позиция задаётся при создании списка, а не прокруткой после первого кадра.
     // Прокрутка успевала показать понедельник и уехать с него на глазах — тем
     // заметнее, чем медленнее запуск, а самый медленный он как раз первый.
+    // Дня нет — ближайший к нему: окно прошлой недели открывалось на своём
+    // понедельнике, а не на конце (третий аудит, М33 прогона 1).
     val target = startDay ?: today.toString()
-    val opening = remember(days, target) {
-        days.indexOfFirst { it.date >= target }.coerceAtLeast(0)
-    }
+    val opening = remember(days, target) { dayIndex(days, target) + shift }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = opening)
 
-    // День, открытый из виджета, приходит и позже: приложение уже на экране,
-    // человек нажал на другой день. Тогда прокрутка — единственный способ.
-    LaunchedEffect(startDay) {
-        if (startDay != null) {
-            val index = days.indexOfFirst { it.date >= startDay }
-            if (index > 0) listState.scrollToItem(index)
-        }
+    // Какой день ещё надо показать. Позиция списка задаётся только при его
+    // создании, а экран живёт и через ночь: наутро значок открывал вчерашний
+    // день, а в понедельник — конец следующей недели (В2 прогона 2). Поэтому:
+    // новые сутки — снова сегодняшний день; нужного дня пока нет в окне —
+    // ждём, пока обновление его принесёт (М33 прогона 1). Сохраняется через
+    // поворот: пролистанное человеком поворот не отменяет (М30 прогона 2).
+    var wanted by rememberSaveable { mutableStateOf<String?>(target) }
+    val firstToday = rememberSaveable { today.toString() }
+    LaunchedEffect(today) {
+        if (today.toString() != firstToday) wanted = today.toString()
+    }
+    LaunchedEffect(wanted, days) {
+        val want = wanted ?: return@LaunchedEffect
+        if (days.isEmpty()) return@LaunchedEffect
+        listState.scrollToItem(dayIndex(days, want) + shift)
+        if (days.any { it.date >= want }) wanted = null
     }
 
     LazyColumn(
@@ -556,10 +598,17 @@ fun ScheduleDays(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        header?.let { item(key = "header") { it() } }
         items(days, key = { it.date }) { day ->
             DayCard(day, schedule.bells, now)
         }
     }
+}
+
+/** Первый день не раньше [date]; все раньше — последний. */
+internal fun dayIndex(days: List<DayDto>, date: String): Int {
+    val index = days.indexOfFirst { it.date >= date }
+    return if (index >= 0) index else days.lastIndex.coerceAtLeast(0)
 }
 
 /**
@@ -626,8 +675,10 @@ private fun DayCard(
     ) {
         // Прошедший день не выбрасываем — иногда нужно вспомнить, что было
         // в начале недели, — но приглушаем, чтобы он не спорил с сегодняшним.
-        Column(modifier = if (past) Modifier.alpha(0.45f) else Modifier) {
-            DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday)
+        // Цветом, а не прозрачностью: alpha 0,45 давала контраст 2:1–3:1, и
+        // вчерашнюю аудиторию было не прочесть (третий аудит, М22 прогона 2).
+        Column {
+            DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday, past)
 
             if (day.lessons.isEmpty()) {
                 Text(
@@ -640,7 +691,9 @@ private fun DayCard(
                 day.lessons.forEachIndexed { index, lesson ->
                     // Линия во всю ширину карточки — расписание, а не плитки.
                     if (index > 0) HorizontalDivider()
-                    LessonRow(lesson, bells, isNow = lesson.number == current)
+                    // Отменённая пара в своё время — не «идёт сейчас» (М17
+                    // прогона 2).
+                    LessonRow(lesson, bells, isNow = lesson.number == current && !lesson.isCancelled, past)
                 }
                 // День, в котором отменили всё до единой пары. Случай редкий
                 // и по-своему счастливый: пары показать надо, а сказать о нём
@@ -696,7 +749,7 @@ private val FREE = listOf(
 )
 
 @Composable
-private fun DayHeader(title: String, isToday: Boolean) {
+private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -719,8 +772,11 @@ private fun DayHeader(title: String, isToday: Boolean) {
             title.replaceFirstChar { it.uppercase() },
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = if (isToday) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface,
+            color = when {
+                isToday -> MaterialTheme.colorScheme.primary
+                past -> MaterialTheme.colorScheme.onSurfaceVariant
+                else -> MaterialTheme.colorScheme.onSurface
+            },
             modifier = Modifier.padding(
                 start = if (isToday) 12.dp else 16.dp,
                 end = 16.dp,
@@ -736,7 +792,12 @@ private fun LessonRow(
     lesson: LessonDto,
     bells: Map<String, List<String>>,
     isNow: Boolean,
+    past: Boolean = false,
 ) {
+    val main = if (past) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+    // Колонка растёт со шрифтом: «09:00–10:30» в sp, колонка в dp, и с
+    // крупным шрифтом конец пары уходил в многоточие (М28 прогона 2).
+    val timeColumn = TIME_COLUMN * LocalDensity.current.fontScale.coerceAtLeast(1f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -748,7 +809,7 @@ private fun LessonRow(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Column(modifier = Modifier.width(TIME_COLUMN)) {
+        Column(modifier = Modifier.width(timeColumn)) {
             Text(
                 "${lesson.number} пара",
                 style = MaterialTheme.typography.labelSmall,
@@ -760,8 +821,7 @@ private fun LessonRow(
                     it,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isNow) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurface,
+                    color = if (isNow) MaterialTheme.colorScheme.primary else main,
                     maxLines = 1,
                     // Колонка времени шириной ровно под «09:00–10:30» при
                     // обычном шрифте. С крупным системным диапазон перестаёт
@@ -788,6 +848,7 @@ private fun LessonRow(
                 lesson.subject,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
+                color = main,
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
             )
 
@@ -801,12 +862,12 @@ private fun LessonRow(
                 // строку целиком.
                 val shrink = Modifier.weight(1f, fill = false)
                 if (lesson.isOnline) {
-                    Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, modifier = shrink)
+                    Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, muted = past, modifier = shrink)
                 } else {
                     // Ни кабинета, ни ссылки — так и говорим: пустая строка
                     // читается как «не загрузилось», хотя в таблице там пусто.
                     val room = roomLabel(lesson.room)
-                    Place(room ?: "Не указано", muted = room == null, modifier = shrink)
+                    Place(room ?: "Не указано", muted = room == null || past, modifier = shrink)
                 }
                 kindName(lesson.kind)?.let {
                     Text(
@@ -901,7 +962,13 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
  * подставил бы туда чужой розовый.
  */
 @Composable
-private fun ServerBroken(sourceUrl: String?, since: String?, generatedAt: String?, now: LocalDateTime) {
+private fun ServerBroken(
+    sourceUrl: String?,
+    since: String?,
+    generatedAt: String?,
+    now: LocalDateTime,
+    unreachable: Boolean = false,
+) {
     val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -911,15 +978,19 @@ private fun ServerBroken(sourceUrl: String?, since: String?, generatedAt: String
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            // Сервер не ответил телефону — не «не прочитал таблицу»: таблица
+            // тут ни при чём, и уведомление в тот же момент говорит «не
+            // отвечает» (третий аудит, М13 прогона 1).
             Text(
-                "Сбой на нашем сервере",
+                if (unreachable) "Сервер расписания не отвечает" else "Сбой на нашем сервере",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.error,
             )
             Text(
-                "Не удалось прочитать таблицу, приложение показывает последнее, " +
-                    "что пришло. Пары могли поменяться.",
+                (if (unreachable) "Телефон не достучался до нашего сервера, "
+                else "Не удалось прочитать таблицу, ") +
+                    "приложение показывает последнее, что пришло. Пары могли поменяться.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -927,8 +998,12 @@ private fun ServerBroken(sourceUrl: String?, since: String?, generatedAt: String
             // выглядеть как минута рядом с честным «обновлено 5 минут назад».
             since?.let {
                 Text(
+                    // gen — не «получено», а последняя правка таблицы, которую
+                    // сервер успел забрать (третий аудит, М74 прогона 2).
                     "Сбой с ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}." +
-                        (generatedAt?.let { g -> " Расписание на экране получено ${formatReceived(g)}." } ?: ""),
+                        (generatedAt?.let { g ->
+                            " Последняя правка таблицы, которую сервер успел забрать, — ${formatReceived(g)}."
+                        } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 4.dp),
@@ -944,7 +1019,7 @@ private fun ServerBroken(sourceUrl: String?, since: String?, generatedAt: String
     }
 }
 
-/** «11 сентября в 10:40» — когда сервер собрал то, что на экране. */
+/** «11 сентября в 10:40» — когда сервер в последний раз забрал из таблицы новое. */
 private fun formatReceived(iso: String): String = runCatching {
     java.time.LocalDateTime.ofInstant(java.time.Instant.parse(iso), java.time.ZoneId.systemDefault())
         .format(java.time.format.DateTimeFormatter.ofPattern("d MMMM 'в' HH:mm", java.util.Locale("ru")))
@@ -1029,7 +1104,8 @@ private fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss:
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "${counted.opens} раз ответило приложение, " +
+                    // «3 раза», а не «3 раз» (третий аудит, М25 прогона 2).
+                    plural(counted.opens.toInt(), "раз", "раза", "раз") + " ответило приложение, " +
                         "${counted.draws} — виджеты. Каждый раз это было вместо " +
                         "таблицы колледжа.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -1046,7 +1122,7 @@ private fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss:
                         .atZone(ZoneId.systemDefault())
                         .toLocalDate()
                     Text(
-                        "Счёт идёт с ${formatDayTitle(day)}.",
+                        "Счёт идёт ${tallySince(day, ru.whensclass.widget.collegeToday())}.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1055,6 +1131,16 @@ private fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss:
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Ладно") } },
     )
+}
+
+/**
+ * «с 23 сентября», «с сегодняшнего дня»: после «с» — родительный падеж. Было
+ * «с сегодня, 25 сентября, пятница» (третий аудит, М25 прогона 2).
+ */
+internal fun tallySince(day: LocalDate, today: LocalDate): String = when (day) {
+    today -> "с сегодняшнего дня"
+    today.minusDays(1) -> "со вчерашнего дня"
+    else -> "с " + day.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", java.util.Locale("ru")))
 }
 
 /**
@@ -1077,13 +1163,29 @@ private fun OnlineLink(url: String) {
         // Хост не с площадки вебинаров колледжа — предупреждаем прямо: ссылку
         // мог вписать кто угодно, кто правит таблицу (второй аудит, М37).
         val known = remember(url) { ru.whensclass.data.isKnownWebinar(url) }
-        Text(
-            if (known) linkTail(url) else "чужой адрес: " + linkTail(url),
-            style = MaterialTheme.typography.bodySmall,
-            color = if (known) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        val color = if (known) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+        // Хост ужимается, хвост — нет: ради последних цифр хвост и показан, а
+        // одной строкой с многоточием в конце они пропадали первыми на узком
+        // телефоне (третий аудит, М20 прогона 2).
+        Row {
+            Text(
+                if (known) host(url) else "чужой адрес: " + host(url),
+                style = MaterialTheme.typography.bodySmall,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            linkEnd(url)?.let {
+                Text(
+                    " · …/$it",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = color,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+        }
         // Волосок между кнопками: вплотную их рамки сливались в одну рамку с
         // перегородкой, а зазор пошире разносил пару в две разные кнопки.
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1094,7 +1196,8 @@ private fun OnlineLink(url: String) {
 }
 
 /**
- * «https://my.mts-link.ru/j/100000001/20000000028» -> «my.mts-link.ru · …/20000000028».
+ * «https://my.mts-link.ru/j/100000001/20000000028» -> «20000000028»: хвост
+ * к хосту, строкой «my.mts-link.ru · …/20000000028».
  *
  * И хост, и хвост. По хвосту отличают три пары подряд в одной комнате от трёх
  * разных: расходятся последние цифры. А по хосту видно, куда ведёт ссылка:
@@ -1102,13 +1205,11 @@ private fun OnlineLink(url: String) {
  * неотличима от настоящей. Хост возвращали ещё 8 сентября, и он снова пропал
  * (второй аудит, М37).
  */
-private fun linkTail(url: String): String {
-    val segment = runCatching { Uri.parse(url).pathSegments }
+private fun linkEnd(url: String): String? =
+    runCatching { Uri.parse(url).pathSegments }
         .getOrNull()
         ?.lastOrNull { it.isNotBlank() }
-        ?: return host(url)
-    return host(url) + " · …/" + segment.takeLast(16)
-}
+        ?.takeLast(16)
 
 /** «https://my.mts-link.ru/j/144...» -> «my.mts-link.ru»: запасной вид без пути. */
 private fun host(url: String): String =
@@ -1145,10 +1246,25 @@ private fun copyLink(context: android.content.Context, url: String) =
 
 
 /**
- * Объяснение вместо пустого экрана, когда своего расписания нет. true — объяснили.
+ * Объяснение вместо пустого экрана, когда расписания нет. true — объяснили.
+ * [loading] — оно как раз загружается: сразу после выбора группы экран писал
+ * «Проверьте интернет», хотя запрос только ушёл (третий аудит, М2 прогона 2).
  */
 @Composable
-private fun explainMissing(schedule: ScheduleDto?, today: java.time.LocalDate, sourceUrl: String?): Boolean {
+internal fun explainMissing(
+    schedule: ScheduleDto?,
+    today: java.time.LocalDate,
+    sourceUrl: String?,
+    loading: Boolean = false,
+): Boolean {
+    if (schedule == null && loading) {
+        Explanation(
+            title = "Загружаю расписание",
+            text = "Обычно это несколько секунд.",
+            busy = true,
+        )
+        return true
+    }
     if (schedule == null) {
         Explanation(
             title = "Расписание ещё не загружено",
