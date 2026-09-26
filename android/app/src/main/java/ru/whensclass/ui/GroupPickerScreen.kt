@@ -1,7 +1,5 @@
 package ru.whensclass.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,51 +29,20 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.R
 import ru.whensclass.data.GroupDto
 import ru.whensclass.widget.plural
-
-/** Сообщение о неудачной загрузке — со ссылкой, куда написать. */
-@Composable
-private fun LoadFailed(loadDiagnostics: (suspend () -> String)?) {
-    val context = LocalContext.current
-    Column(modifier = Modifier.padding(16.dp)) {
-        Text(
-            "Список групп не загрузился. Проверьте интернет или напишите",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Text(
-            "@toomonn",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .clickable {
-                    runCatching {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/toomonn"))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                        )
-                    }
-                }
-                .padding(vertical = 4.dp),
-        )
-        // Отсюда до настроек человек не дойдёт: группа не выбрана, а
-        // значит и остальное приложение ему закрыто. Между тем именно
-        // здесь спотыкается тот, кто поставил приложение впервые.
-        loadDiagnostics?.let { ReportLink(it) }
-    }
-}
 
 /**
  * Выбор группы из почти двух сотен.
@@ -86,17 +53,16 @@ private fun LoadFailed(loadDiagnostics: (suspend () -> String)?) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupPickerScreen(
-    loadGroups: suspend () -> List<GroupDto>,
+    /** Список держит App: сохранённый — сразу, свежий — следом (М31 прогона 2). */
+    groups: List<GroupDto>?,
     onPick: (GroupDto) -> Unit,
     canGoBack: Boolean = false,
     onBack: () -> Unit = {},
     onTeacherMode: (() -> Unit)? = null,
     loadDiagnostics: (suspend () -> String)? = null,
 ) {
-    var groups by remember { mutableStateOf<List<GroupDto>?>(null) }
-    var query by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) { groups = loadGroups() }
+    // Набранное переживает поворот (М30 прогона 2).
+    var query by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -121,7 +87,9 @@ fun GroupPickerScreen(
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        // Список отступает от клавиатуры: окно под неё не ужимается
+        // (enableEdgeToEdge), и найденное пряталось под ней (М35 прогона 2).
+        Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             if (!canGoBack) {
                 // Первый запуск: логотип уместен, дальше он только мешает.
                 Image(
@@ -164,7 +132,7 @@ fun GroupPickerScreen(
                     CircularProgressIndicator()
                 }
 
-                list.isEmpty() -> LoadFailed(loadDiagnostics)
+                list.isEmpty() -> LoadFailed("Список групп", loadDiagnostics)
 
                 else -> {
                     // Отбор считаем только когда меняется запрос или сам список:
@@ -172,7 +140,7 @@ fun GroupPickerScreen(
                     // строк заметно подтормаживал.
                     val filtered = remember(list, query) {
                         if (query.isBlank()) list
-                        else list.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                        else list.filter { matchesQuery(it.name, query) }
                     }
                     if (filtered.isEmpty()) {
                         Text(

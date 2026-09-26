@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +57,10 @@ fun WelcomeScreen(onContinue: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Отступ от строки состояния и навигации: у приветствия нет
+            // Scaffold, и при enableEdgeToEdge логотип уходил под часы (третий
+            // аудит, М21 прогона 2).
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,

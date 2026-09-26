@@ -234,6 +234,18 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
+    /** Закреплённый id сменился — переименование (М11 прогона 2). */
+    suspend fun replacePinnedGroup(old: String, new: String) = replacePinned(KEY_PINNED_GROUPS, old, new)
+
+    suspend fun replacePinnedTeacher(old: String, new: String) = replacePinned(KEY_PINNED_TEACHERS, old, new)
+
+    private suspend fun replacePinned(key: Preferences.Key<String>, old: String, new: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[key]?.split("\n")?.filter(String::isNotBlank).orEmpty()
+            prefs[key] = current.map { if (it == old) new else it }.distinct().joinToString("\n")
+        }
+    }
+
     suspend fun togglePinnedTeacher(id: String) {
         context.dataStore.edit { prefs ->
             val current = prefs[KEY_PINNED_TEACHERS]?.split("\n")?.filter(String::isNotBlank)

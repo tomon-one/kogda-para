@@ -32,6 +32,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.data.GroupDto
@@ -53,7 +56,7 @@ fun SelfPickerScreen(
     onStudentMode: () -> Unit = {},
     loadDiagnostics: (suspend () -> String)? = null,
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -78,7 +81,8 @@ fun SelfPickerScreen(
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        // От клавиатуры — как в выборе группы (М35 прогона 2).
+        Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             TextButton(onClick = onStudentMode, modifier = Modifier.padding(start = 8.dp)) {
                 Text("Я студент")
             }
@@ -100,19 +104,14 @@ fun SelfPickerScreen(
                     CircularProgressIndicator()
                 }
 
-                teachers.isEmpty() -> Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "Список преподавателей не загрузился. Проверьте интернет.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    // До настроек отсюда не дойти: себя ещё не выбрали.
-                    loadDiagnostics?.let { ReportLink(it) }
-                }
+                // До настроек отсюда не дойти: себя ещё не выбрали — адрес
+                // и отчёт здесь же (М76 прогона 2).
+                teachers.isEmpty() -> LoadFailed("Список преподавателей", loadDiagnostics)
 
                 else -> {
                     val filtered = remember(teachers, query) {
                         if (query.isBlank()) teachers
-                        else teachers.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                        else teachers.filter { matchesQuery(it.name, query) }
                     }
                     if (filtered.isEmpty()) {
                         // Тот же ответ, что и в списке групп: пустой экран после
