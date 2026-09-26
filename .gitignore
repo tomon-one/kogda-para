@@ -42,3 +42,14 @@ current.md
 
 # Личные разрешения Claude Code — у каждого свои, в репозиторий не идут.
 .claude/settings.local.json
+
+# Внутренние документы и выкладка на сервер автора: аудиты, их планы,
+# руководство по серверу, скрипты с его адресом. Это то, как проект делают
+# и где он живёт, — лежит на диске, в открытый репозиторий не идёт
+# (Tomon, 27.09.2026).
+docs/audit-*.md
+docs/hardening-*.md
+docs/deploy.md
+tools/deploy_server.sh
+tools/publish_apk.py
+tools/pull_state.sh
