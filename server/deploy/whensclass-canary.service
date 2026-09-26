@@ -21,4 +21,26 @@ ProtectSystem=strict
 ProtectHome=yes
 ProtectKernelTunables=yes
 ReadWritePaths=/var/lib/whensclass
-ReadOnlyPaths=/var/lib/whensclass/apk
+ReadOnlyPaths=-/var/lib/whensclass/apk
+
+# Узкий профиль процесса (третий аудит, М44 прогона 1): канарейка разбирает
+# сетевой ввод, и если её всё же захватят, пусть это будет процесс без
+# лишних семейств адресов, системных вызовов и чужих процессов в /proc.
+# Только то, что не мешает Python, uvicorn и httpx; PrivateUsers и
+# ProcSubset не ставим — первое путает группу сокета для nginx, второе
+# прячет /proc/meminfo, который читают библиотеки.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+ProtectProc=invisible
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
