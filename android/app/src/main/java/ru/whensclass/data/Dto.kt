@@ -21,7 +21,11 @@ data class ScheduleDto(
     @SerialName("src_url") val sourceUrl: String? = null,
     /** Колонка группы в этом листе, буквами как в Sheets: «EQ». */
     @SerialName("col") val column: String? = null,
-)
+    /** «teacher» у расписания преподавателя: там подпись группы у каждой пары. */
+    @SerialName("kind") val kind: String? = null,
+) {
+    val isTeacher: Boolean get() = kind == "teacher"
+}
 
 @Serializable
 data class DayDto(
