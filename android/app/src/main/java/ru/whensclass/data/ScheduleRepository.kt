@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import ru.whensclass.notify.LessonAlarms
@@ -323,7 +325,21 @@ class ScheduleRepository(
      * пусть виджет молча показывает прежнее, это лучше, чем сообщение об
      * ошибке вместо пар.
      */
-    suspend fun refresh(force: Boolean = false): RefreshResult = withContext(Dispatchers.IO) {
+    /**
+     * Обновления — по одному. Параллельные (двойное нажатие ⟳, часовой заход и
+     * открытие приложения разом) затирали флаги друг друга, а более старый
+     * ответ мог лечь поверх нового с обратным «изменилось» (третий аудит, М15
+     * прогона 2).
+     */
+    private val refreshLock = Mutex()
+
+    /** Идёт ли сейчас обновление. */
+    val refreshing: Boolean get() = refreshLock.isLocked
+
+    suspend fun refresh(force: Boolean = false): RefreshResult =
+        refreshLock.withLock { refreshOnce(force) }
+
+    private suspend fun refreshOnce(force: Boolean): RefreshResult = withContext(Dispatchers.IO) {
         val asked = subject()
         val teacherMode = asked.teacher
         val subject = asked.id

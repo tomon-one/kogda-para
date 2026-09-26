@@ -131,7 +131,7 @@ fun ScheduleWidgetContent(
  * Расписание приходит с понедельника, вместе с прожитыми днями, поэтому
  * считать по длине списка нельзя: выходило, что вперёд листать некуда.
  */
-private fun lastOffset(schedule: ScheduleDto?, today: LocalDate): Int =
+internal fun lastOffset(schedule: ScheduleDto?, today: LocalDate): Int =
     offsets(schedule, today).maxOrNull()?.coerceIn(0, ScheduleWidget.MAX_OFFSET) ?: 0
 
 /**
@@ -140,7 +140,7 @@ private fun lastOffset(schedule: ScheduleDto?, today: LocalDate): Int =
  * Расписание приходит с понедельника: прожитые дни уже лежат на телефоне, и
  * запрещать их листать незачем — на экране приложения они тоже остаются.
  */
-private fun firstOffset(schedule: ScheduleDto?, today: LocalDate): Int =
+internal fun firstOffset(schedule: ScheduleDto?, today: LocalDate): Int =
     offsets(schedule, today).minOrNull()?.coerceIn(-ScheduleWidget.MAX_OFFSET, 0) ?: 0
 
 private fun offsets(schedule: ScheduleDto?, today: LocalDate): List<Int> {
@@ -428,8 +428,18 @@ internal fun missingDay(
         !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
             !day.isAfter(LocalDate.parse(schedule.coverage[1]))
     }.getOrDefault(false)
+    // «Выходной» — только про день между первым и последним скачанным днём:
+    // cov относится ко всему листу, а не к окну на телефоне, и будень новой
+    // недели при окне прошлой назывался выходным, хотя пары у группы есть
+    // (третий аудит, В20 прогона 1; М13 прогона 2).
+    val dates = schedule.days.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+    val inWindow = dates.isNotEmpty() && !day.isBefore(dates.min()) && !day.isAfter(dates.max())
+    val off = if (week) "Выходной: пар в эти дни нет" else "Выходной: пар в этот день нет"
     return when {
-        covered -> Missing(if (week) "Выходной: пар в эти дни нет" else "Выходной: пар в этот день нет")
+        // Воскресений в листах не бывает: это выходной всегда, и при cov,
+        // который кончается субботой (М17 прогона 1).
+        day.dayOfWeek == java.time.DayOfWeek.SUNDAY -> Missing(off)
+        covered && inWindow -> Missing(off)
         // Сбой проверяем раньше несвежести. Данные при сбое всегда рано
         // или поздно стареют, и «нажмите на время в шапке» отправляло
         // человека жать кнопку, которая в этом случае помочь не может.
@@ -438,6 +448,12 @@ internal fun missingDay(
         // спокойно ждал расписания, которого мы уже не принесём.
         serverBroken -> Missing("Сбой у нас: расписание не обновляется", toSource = true)
         isStale(fetchedAt) -> Missing("Данные устарели. Нажмите на время в шапке")
+        // Лист этот день покрывает, а на телефоне его нет — окно не то.
+        // Утверждать «выходной» или «не опубликовано» нечем.
+        covered -> Missing(
+            if (week) "Расписание на эти дни не загружено. Нажмите на время в шапке"
+            else "Расписание на этот день не загружено. Нажмите на время в шапке",
+        )
         // Единственное объяснение, которое приложение проверить не может:
         // ровно так же выглядит наш собственный промах с поиском листа.
         // Поэтому спорить о виновнике незачем — надо дать выход к таблице.
