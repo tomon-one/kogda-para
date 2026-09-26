@@ -57,8 +57,9 @@ android {
             applicationIdSuffix = ".debug"
             // По умолчанию отладочная сборка ходит туда же, куда и рабочая.
             // Чтобы отлаживать против сервера на своём компьютере, пропишите
-            // WHENSCLASS_BASE_URL в local.properties — тогда пригодится
-            // разрешение на http из src/debug/res/xml/network_security_config.xml.
+            // WHENSCLASS_BASE_URL=http://localhost:8081 в local.properties и
+            // сделайте `adb reverse tcp:8081 tcp:8081`: http к localhost
+            // разрешает src/debug/res/xml/network_security_config.xml.
             val local = gradleLocalProperties(rootDir)
             val url = local.getProperty("WHENSCLASS_BASE_URL")
                 ?: "https://schedule.edelweiss-alpine-confederation.ru"

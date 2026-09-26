@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Только для отладочной сборки. Пока служба не выложена на сервер, телефон
-  ходит на компьютер в домашней сети по обычному http — а Android начиная с
-  девятой версии такое запрещает. Разрешаем ровно локальные адреса и ничего
-  сверх того; в релизной сборке этого файла нет вовсе, там только https.
+  Только для отладочной сборки: служба, запущенная на компьютере, отвечает по
+  http, а Android с девятой версии его запрещает. Телефон достаёт до
+  компьютера через `adb reverse tcp:8081 tcp:8081` — по localhost, без адреса
+  в домашней сети; эмулятор — по 10.0.2.2. В релизной сборке этого файла нет,
+  там только https.
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">192.168.1.111</domain>
-        <domain includeSubdomains="false">10.0.2.2</domain>
         <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
     </domain-config>
 </network-security-config>
