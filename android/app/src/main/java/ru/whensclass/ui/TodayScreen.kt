@@ -834,6 +834,16 @@ private fun LessonRow(
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Medium,
                 )
+            } else {
+                // У замены — «вместо: Математика»: без неё новая пара в том же
+                // часе выглядела бы ошибкой таблицы (третий аудит, В2 прогона 1).
+                lesson.note?.let {
+                    Text(
+                        it.replaceFirstChar { c -> c.uppercase() },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
         }
