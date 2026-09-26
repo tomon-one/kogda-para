@@ -153,7 +153,7 @@ class ScheduleWidget : GlanceAppWidget() {
         /** Меняется при каждой перерисовке — см. [redrawWidgets]. */
         val KEY_TICK = longPreferencesKey("tick")
 
-        /** Дальше недели листать нечего: ровно столько храним на телефоне. */
+        /** Виджет листает неделю в обе стороны; дальше — в приложении, там две недели. */
         const val MAX_OFFSET = 6
 
         private val json = Json { ignoreUnknownKeys = true }
