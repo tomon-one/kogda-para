@@ -36,6 +36,9 @@ class TeacherIndex:
     names: dict[str, str] = field(default_factory=dict)
     # id -> дата -> пары
     schedule: dict[str, dict[dt.date, list[TeacherLesson]]] = field(default_factory=dict)
+    # id -> id групп, у которых он ведёт пары хоть раз в листе: день
+    # преподавателя выложен, только когда колледж дописал все его группы
+    groups: dict[str, set[str]] = field(default_factory=dict)
 
     def days(self, teacher: str) -> dict[dt.date, list[TeacherLesson]]:
         return self.schedule.get(teacher, {})
@@ -91,6 +94,7 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
                         log.warning("у преподавателя %r нет идентификатора — пропускаю", name)
                         continue
                     index.names.setdefault(tid, name)
+                    index.groups.setdefault(tid, set()).add(gid)
                     state = (
                         lesson.room, lesson.url, lesson.online or bool(lesson.url),
                         lesson.cancelled,

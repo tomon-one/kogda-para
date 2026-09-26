@@ -154,20 +154,105 @@ def test_unfilled_next_week_is_not_published():
     meta = meta_payload(snap, GENERATED, "ok", None, today=THURSDAY)
     assert meta["cov"] == ["2026-09-21", "2026-09-26"]
 
-    # У кого пары уже вписаны — видит их и за краем выложенного.
+    # У кого пары уже вписаны — тому неделя выложена.
     filled = schedule_payload(snap, "g-0", dt.date(2026, 9, 21), 8, GENERATED, today=THURSDAY)
     assert filled["days"][-1] == {"d": "2026-09-28", "l": [{"n": 1, "s": "Математика"}]}
+    assert filled["cov"] == ["2026-09-21", "2026-10-03"]
 
 
 def test_filled_week_is_published_and_holiday_inside_stays_free():
     """Дописанная неделя выложена целиком; пустой день посреди неё —
     праздник — остаётся «пар нет», а не «ещё не опубликовано»."""
-    filling = {**{d: 10 for d in WEEK}, **{d: 9 for d in NEXT}}
+    filling = {**{d: 10 for d in WEEK}, **{d: 10 for d in NEXT}}
     filling[NEXT[2]] = 0
     snap = _filling(filling)
     body = schedule_payload(snap, "g-9", dt.date(2026, 9, 28), 6, GENERATED, today=THURSDAY)
     assert body["cov"] == ["2026-09-21", "2026-10-03"]
     assert {"d": "2026-09-30", "l": []} in body["days"]
+
+
+def test_group_the_college_has_not_reached_sees_unpublished():
+    """Третий аудит, К2 прогона 1: колледж дописывает колонку группы сразу на
+    месяц и группу за группой. Дописана больше половины групп — доля по листу
+    пропускает неделю, и остальные получали её как «пар нет». Край у каждой
+    группы свой."""
+    snap = _filling({**{d: 10 for d in WEEK}, **{d: 6 for d in NEXT}})
+
+    behind = schedule_payload(snap, "g-7", dt.date(2026, 9, 21), 13, GENERATED, today=THURSDAY)
+    assert behind["cov"] == ["2026-09-21", "2026-09-26"]
+    assert [d["d"] for d in behind["days"]] == [d.isoformat() for d in WEEK]
+
+    done = schedule_payload(snap, "g-0", dt.date(2026, 9, 21), 13, GENERATED, today=THURSDAY)
+    assert done["cov"] == ["2026-09-21", "2026-10-03"]
+
+
+def test_unreached_group_is_cut_even_today():
+    """Второй край К2: понедельник настал, а колонку группы колледж ещё не
+    дописал. Сегодняшний день по листу не режется, но группе он — «ещё не
+    опубликовано», а не «сегодня пар нет»."""
+    snap = _filling({**{d: 10 for d in WEEK}, **{d: 2 for d in NEXT}})
+    monday = NEXT[0]
+    body = schedule_payload(snap, "g-5", monday, 6, GENERATED, today=monday)
+    assert body["cov"] == ["2026-09-21", "2026-09-26"]
+    assert body["days"] == []
+
+
+def test_free_days_of_a_filled_group_are_not_holes():
+    """Третий аудит, М17 прогона 1: за краем листа у дописанной группы
+    приходили только дни с парами, а свободный четверг между ними пропадал.
+    Теперь её покрытие — до её последнего дня, и четверг — «пар нет»."""
+    filling = {**{d: 10 for d in WEEK}, **{d: 2 for d in NEXT}}
+    snap = _filling(filling)
+    del snap.schedule["g-0"][NEXT[3]]
+    body = schedule_payload(snap, "g-0", NEXT[0], 6, GENERATED, today=THURSDAY)
+    assert body["cov"] == ["2026-09-21", "2026-10-03"]
+    assert {"d": NEXT[3].isoformat(), "l": []} in body["days"]
+
+
+def test_saturday_off_is_free_not_unpublished():
+    """Группа, которая по субботам не учится: суббота выложенной недели —
+    «пар нет». Край группы — её пятница, но остаток недели ей тоже выложен."""
+    snap = _filling({d: 10 for d in WEEK})
+    del snap.schedule["g-3"][WEEK[5]]
+    body = schedule_payload(snap, "g-3", WEEK[0], 6, GENERATED, today=THURSDAY)
+    assert body["cov"] == ["2026-09-21", "2026-09-26"]
+    assert body["days"][-1] == {"d": "2026-09-26", "l": []}
+
+
+def test_group_with_no_lessons_at_all_has_nothing_published():
+    """Пустая колонка — колледж до группы не дошёл: ни `cov`, ни дней."""
+    snap = _filling({d: 5 for d in WEEK})
+    body = schedule_payload(snap, "g-7", WEEK[0], 6, GENERATED, today=THURSDAY)
+    assert "cov" not in body
+    assert body["days"] == []
+
+
+def test_teacher_day_waits_for_all_his_groups():
+    """Третий аудит, В16 прогона 1: вписана одна группа преподавателя из его
+    двух — у него был «понедельник с одной парой» как целый день. День
+    преподавателя выложен, только когда дописаны все его группы."""
+    from whensclass.api.payloads import teacher_payload
+    from whensclass.domain.models import Lesson
+    from whensclass.domain.teachers import build_index
+
+    snap = _filling({**{d: 10 for d in WEEK}, **{d: 6 for d in NEXT}})
+    for gid in ("g-0", "g-7"):
+        for day in snap.schedule[gid]:
+            snap.schedule[gid][day] = [
+                Lesson(number=1 if gid == "g-0" else 2, subject="Физика", teachers=("Иванов И. И.",))
+            ]
+    index = build_index(snap)
+    tid = next(iter(index.names))
+    body = teacher_payload(snap, index, tid, WEEK[0], 13, GENERATED, today=THURSDAY)
+    assert body["cov"] == ["2026-09-21", "2026-09-26"]
+    assert [d["d"] for d in body["days"]] == [d.isoformat() for d in WEEK]
+
+    # Оба дописаны — неделя его.
+    for day in NEXT:
+        snap.schedule["g-7"][day] = [Lesson(number=2, subject="Физика", teachers=("Иванов И. И.",))]
+    index = build_index(snap)
+    body = teacher_payload(snap, index, tid, WEEK[0], 13, GENERATED, today=THURSDAY)
+    assert body["cov"] == ["2026-09-21", "2026-10-03"]
 
 
 def test_today_and_past_are_never_cut():
