@@ -18,9 +18,8 @@ class Settings(BaseSettings):
     sheet_title: str | None = None
     sheet_gid: str | None = None
 
-    # Ключ Sheets API. Без него список листов берётся из xlsx, а там gid нет —
-    # лист не прочитать, служба уходит в stale с тревогой (docs/deploy.md,
-    # «Ключ Sheets API»).
+    # Ключ Sheets API. Без него gid листов взять неоткуда — лист не прочитать,
+    # служба уходит в stale с тревогой (docs/deploy.md, «Ключ Sheets API»).
     sheets_api_key: str | None = None
 
     # Оповещения владельцу о поломках через ntfy.sh. Тема — длинная случайная

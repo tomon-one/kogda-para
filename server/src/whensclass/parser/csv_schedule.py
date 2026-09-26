@@ -507,7 +507,10 @@ def _validate(
         raise SheetTooSmall(
             f"нашёл всего {total} пар, ожидал не меньше {limits.min_lessons}"
         )
-    _check_shift(snapshot)
+    # Сдвиг по содержимому здесь не проверяется: его зовут явно служба (с
+    # историей прежнего снимка) и канарейка. Раньше он шёл дважды — здесь без
+    # истории и в службе с ней, — и не было видно, какая из двух проверок
+    # отвергла лист (третий аудит, М42 прогона 2).
 
 
 def _trace(lesson: Lesson) -> tuple[str, tuple[str, ...]]:
@@ -540,7 +543,7 @@ def shift_seed(previous: Snapshot | None, current: Snapshot) -> Seed:
 
 def _check_shift(
     snapshot: Snapshot, seed: Seed | None = None, previous: Snapshot | None = None
-) -> None:
+) -> list[str]:
     """Сдвиг колонок или ячеек по содержимому (см. SHIFT_*, PREV_*, выше).
 
     История копится по дням, а не собирается заново для каждого дня из всех
@@ -549,6 +552,9 @@ def _check_shift(
     склеенный снимок двух листов сюда не годится: проверять каждый лист
     отдельно (М9). `previous` — прежний принятый снимок: с ним сверяются
     даты, что есть в обоих.
+
+    Возвращает подозрения, которые отказом не стали: «у многих групп
+    незнакомые предметы» (`_warn_strangers`) — их служба шлёт тревогой.
     """
     seed = seed or {}
     first: dict[int, str] = {}
@@ -561,11 +567,13 @@ def _check_shift(
         _judge_against_previous(snapshot, previous, order, names)
         _check_vertical(snapshot, previous, names)
     history = {gid: set(seed.get(gid, ())) for gid in snapshot.schedule}
+    suspicions: list[str] = []
     for day in snapshot.dates:
         _judge_neighbours(snapshot, day, history, order, names)
-        _warn_strangers(snapshot, day, history)
+        suspicions += _warn_strangers(snapshot, day, history)
         for gid, by_date in snapshot.schedule.items():
             history[gid].update(_trace(x) for x in by_date.get(day, []))
+    return suspicions
 
 
 def _shift_message(votes: int, start: str, day: date, k: int, how: str) -> str:
@@ -700,10 +708,13 @@ def _check_name_subjects(snapshot: Snapshot) -> None:
             )
 
 
-def _warn_strangers(snapshot: Snapshot, day: date, history: dict[str, set]) -> None:
-    """Много незнакомых пар — не отказ, а запись в журнал: так выглядит и
-    неделя практики, и классный час, и сдвиг, которого признак соседа не
-    увидел (например, в первые дни листа без истории)."""
+def _warn_strangers(snapshot: Snapshot, day: date, history: dict[str, set]) -> list[str]:
+    """Много незнакомых пар — не отказ, а подозрение: так выглядит и неделя
+    практики, и классный час, и сдвиг, которого признак соседа не увидел.
+    Раньше — только запись в журнал, хотя на честном архиве 14–24.09 она не
+    сработала ни разу, а сдвиг на три блока видела (третий аудит, М41 прогона 2);
+    теперь подозрения уходят наверх, и служба шлёт по ним тревогу."""
+    found: list[str] = []
     compared = 0
     strangers: list[str] = []
     rows: dict[int, list[int]] = {}
@@ -724,16 +735,17 @@ def _warn_strangers(snapshot: Snapshot, day: date, history: dict[str, set]) -> N
             strangers.append(gid)
     for number, (seen, unknown) in sorted(rows.items()):
         if seen >= SHIFT_MIN_GROUPS and unknown / seen > SHIFT_ROW_WARN_SHARE:
-            log.warning(
-                "%d-я пара %s: у %d групп из %d незнакомый предмет — не сдвиг по соседям, "
-                "но присмотреться", number, day, unknown, seen,
+            found.append(
+                f"{number}-я пара {day}: у {unknown} групп из {seen} незнакомый предмет"
             )
     if compared >= SHIFT_MIN_GROUPS and len(strangers) / compared > SHIFT_WARN_SHARE:
-        log.warning(
-            "день %s: у %d групп из %d ни одного знакомого предмета (%s) — "
-            "не сдвиг по соседям, но присмотреться", day, len(strangers), compared,
-            ", ".join(strangers[:3]),
+        found.append(
+            f"{day}: у {len(strangers)} групп из {compared} ни одного знакомого предмета "
+            f"({', '.join(strangers[:3])})"
         )
+    for message in found:
+        log.warning("%s — не сдвиг по соседям, но присмотреться", message)
+    return found
 
 
 def collapse_export(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> list[list[str]]:

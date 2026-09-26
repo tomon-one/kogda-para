@@ -99,20 +99,29 @@ class SnapshotStore:
             log.warning("список знакомых преподавателей не записался: %s", exc)
 
     def load(self) -> bool:
-        """Поднимает снимок с диска. False, если его нет или он испорчен."""
-        try:
-            data = json.loads(self.path.read_text("utf-8"))
-        except (OSError, ValueError) as exc:
-            log.info("снимок с диска не поднялся: %s", exc)
-            return False
-        try:
-            self._snapshot = _from_dict(data["snapshot"])
-            self._generated = dt.datetime.fromisoformat(data["generated"])
-            self._teachers = None
-        except (KeyError, ValueError, TypeError) as exc:
-            log.warning("снимок на диске испорчен: %s", exc)
-            return False
-        return True
+        """Поднимает снимок с диска. False, если его нет или он испорчен.
+
+        Испорчен основной — поднимается прежний, snapshot.prev.json: его
+        писали на каждом обновлении и ни разу не читали (третий аудит, М46
+        прогона 2). Лучше снимок двадцатиминутной давности, чем 503 до конца
+        первого разбора.
+        """
+        for path in (self.path, self.previous):
+            try:
+                data = json.loads(path.read_text("utf-8"))
+                snapshot = _from_dict(data["snapshot"])
+                generated = dt.datetime.fromisoformat(data["generated"])
+            except OSError as exc:
+                log.info("снимок %s не поднялся: %s", path.name, exc)
+                continue
+            except (KeyError, ValueError, TypeError) as exc:
+                log.warning("снимок %s испорчен: %s", path.name, exc)
+                continue
+            if path is self.previous:
+                log.warning("основной снимок не поднялся — беру прежний, %s", path.name)
+            self._snapshot, self._generated, self._teachers = snapshot, generated, None
+            return True
+        return False
 
     def _write(self, snapshot: Snapshot, generated: dt.datetime) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

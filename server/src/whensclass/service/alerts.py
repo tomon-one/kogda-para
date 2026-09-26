@@ -30,6 +30,8 @@ log = logging.getLogger(__name__)
 
 # Чтобы неудачное обновление раз в двадцать минут не превратилось в поток.
 _QUIET_SECONDS = 6 * 60 * 60
+# Дольше этого окно тишины не помнится (у тревоги каникул — месяц).
+_LONGEST_WINDOW = 45 * 24 * 60 * 60
 _last_sent: dict[str, float] = {}
 # Когда ушла тревога каждого вида — по часам, для файла: окно тишины должно
 # пережить перезапуск для всех видов, а не только для тех, что пишет
@@ -42,16 +44,20 @@ _state_path: pathlib.Path | None = None
 _TIMEOUT = 10.0
 
 
-def configured() -> bool:
-    return bool(settings.ntfy_topic)
-
-
-def notify(kind: str, text: str, force: bool = False, good: bool = False) -> bool:
+def notify(
+    kind: str,
+    text: str,
+    force: bool = False,
+    good: bool = False,
+    quiet: bool = False,
+    window: float = _QUIET_SECONDS,
+) -> bool:
     """Отправляет сообщение владельцу. True, если получилось.
 
     `kind` — вид происшествия: одинаковые не повторяются чаще, чем раз в шесть
     часов. Таблица может лежать сутки, и напоминать об этом каждые двадцать
-    минут незачем. `good` — не тревога, а «починилось».
+    минут незачем. `good` — не тревога, а «починилось». `quiet` — не беда, а
+    сведение (приоритет 2, без звука); `window` — своё окно тишины в секундах.
     """
     if not settings.ntfy_topic:
         log.debug("оповещения не настроены, пропускаю: %s", text)
@@ -62,7 +68,7 @@ def notify(kind: str, text: str, force: bool = False, good: bool = False) -> boo
     # «Ни разу не слали» — это None, а не ноль: monotonic считается от
     # загрузки машины, и с нулём первые шесть часов после перезагрузки
     # сервера любая тревога считалась бы уже отправленной.
-    if not force and last is not None and now - last < _QUIET_SECONDS:
+    if not force and last is not None and now - last < window:
         return False
 
     # Публикация JSON-ом в корень, а не POST в /<тема>: так тема не стоит в
@@ -72,7 +78,7 @@ def notify(kind: str, text: str, force: bool = False, good: bool = False) -> boo
         "topic": settings.ntfy_topic,
         "title": "Когда пара?",
         "message": text,
-        "priority": 3 if good else 4,
+        "priority": 2 if quiet else 3 if good else 4,
         "tags": ["white_check_mark"] if good else ["rotating_light"],
     }
     try:
@@ -136,7 +142,7 @@ def remember(kind: str, at: dt.datetime) -> None:
     М23). Время последней тревоги лежит в failing.json и поднимается отсюда.
     """
     ago = (dt.datetime.now(dt.timezone.utc) - at).total_seconds()
-    if 0 <= ago < _QUIET_SECONDS:
+    if 0 <= ago < _LONGEST_WINDOW:
         _last_sent[kind] = time.monotonic() - ago
         _sent_at[kind] = at
 

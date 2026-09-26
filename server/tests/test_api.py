@@ -174,6 +174,11 @@ def test_health_is_503_when_stale_or_today_is_uncovered(fixture_csv, monkeypatch
     assert client.get("/healthz").status_code == 503
     monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 13))
     assert client.get("/healthz").status_code == 200
+    # Лист кончился больше недели назад — каникулы: 200 с пометкой, а не 503
+    # все учебные дни лета (третий аудит, М88 прогона 2).
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 21))
+    holiday = client.get("/healthz")
+    assert holiday.status_code == 200 and "каникулы" in holiday.json()["note"]
 
 
 def test_empty_store_answers_503(fixture_csv):
@@ -395,3 +400,18 @@ def test_teacher_route_follows_the_rename_book(fixture_csv, monkeypatch):
     app.state.refresher = refresher
     body = TestClient(app).get("/v1/teacher/old-teacher?from=2026-09-07&days=3")
     assert body.status_code == 200 and body.json()["g"] == real
+
+
+def test_broken_snapshot_on_disk_falls_back_to_the_previous(tmp_path, fixture_csv):
+    """Третий аудит, М46 прогона 2: snapshot.prev.json писался на каждом
+    обновлении и не читался ни разу. Испорчен основной — поднимается прежний."""
+    from whensclass.storage.snapshot_store import SnapshotStore
+
+    store = SnapshotStore(tmp_path)
+    snapshot = parse_csv(fixture_csv, "лист", FIXTURE)
+    generated = dt.datetime(2026, 9, 7, 3, 32, tzinfo=dt.timezone.utc)
+    store.put(snapshot, generated)
+    store.put(snapshot, generated + dt.timedelta(minutes=20))
+    (tmp_path / "snapshot.json").write_text("{обрыв записи", "utf-8")
+    again = SnapshotStore(tmp_path)
+    assert again.load() is True and again.generated == generated

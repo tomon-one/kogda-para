@@ -15,7 +15,10 @@ dependencies = [
 dev = ["pytest>=8.3", "ruff>=0.7"]
 
 [build-system]
-requires = ["setuptools>=68"]
+# Точно, а не «не ниже»: pip собирает editable-установку в отдельном окружении
+# из PyPI, и constraints.txt туда не доходит — на каждой выкладке под root
+# ставилась и исполнялась самая свежая версия (третий аудит, М36 прогона 2).
+requires = ["setuptools==80.10.2"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
