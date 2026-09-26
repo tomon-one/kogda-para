@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     # служба уходит в stale с тревогой (docs/deploy.md, «Ключ Sheets API»).
     sheets_api_key: str | None = None
 
+    # Запасной путь к Google — машина exit по ssh, когда напрямую Google не
+    # отвечает. Вид «пользователь@хост:порт»; пусто — запасного пути нет. На
+    # exit ключ службы вызывает только wc-fetch (server/deploy/exit/wc-fetch):
+    # тот отдаёт одну эту таблицу и больше ничего.
+    exit_ssh: str | None = None
+    exit_key: str = "/etc/whensclass/exit_key"
+    exit_known_hosts: str = "/etc/whensclass/exit_known_hosts"
+
     # Оповещения владельцу о поломках через ntfy.sh. Тема — длинная случайная
     # строка, она же пароль. Без темы тревоги не уходят никуда: служба
     # работает, но молча.
