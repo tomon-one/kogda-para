@@ -27,7 +27,11 @@ class HttpFailure(val code: Int, path: String) : IOException("сервер от�
 /** Файл обновления оказался больше объявленного — загрузка остановлена. */
 class TooLarge(limit: Long) : IOException("файл больше объявленных $limit байт")
 
-class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildConfig.BASE_URL) {
+class ScheduleApi(
+    cacheDir: java.io.File,
+    private val baseUrl: String = BuildConfig.BASE_URL,
+    private val githubApi: String = GITHUB_API,
+) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -43,6 +47,18 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
     fun meta(): MetaDto = get("/v1/meta").let(json::decodeFromString)
 
     fun release(): ReleaseDto = get("/v1/app").let(json::decodeFromString)
+
+    /** Самая новая сборка среди выпусков на GitHub; null — ни в одном нет файла. */
+    fun githubRelease(): ReleaseDto? {
+        val request = Request.Builder()
+            .url(githubApi.trimEnd('/') + "/repos/$REPO/releases?per_page=10")
+            .header("Accept", "application/vnd.github+json")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw HttpFailure(response.code, "выпуски GitHub")
+            return newestOnGithub(json.decodeFromString<List<GithubRelease>>(response.body.string()))
+        }
+    }
 
     fun groups(): GroupsDto = get("/v1/groups").let(json::decodeFromString)
 
@@ -104,13 +120,18 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
 
     /**
      * Наш ли это адрес: тот же протокол, хост и порт, что у сервера
-     * расписания. Файл обновления качаем только оттуда — адрес из ответа
-     * /v1/app иначе уводил загрузку на любой хост.
+     * расписания, или выпуски этого репозитория на GitHub. Файл обновления
+     * качаем только оттуда — адрес из ответа /v1/app иначе уводил загрузку на
+     * любой хост.
      */
     fun isOurs(url: String): Boolean {
-        val base = baseUrl.toHttpUrlOrNull() ?: return false
         val target = url.toHttpUrlOrNull() ?: return false
-        return target.scheme == base.scheme && target.host == base.host && target.port == base.port
+        val base = baseUrl.toHttpUrlOrNull()
+        if (base != null && target.scheme == base.scheme && target.host == base.host && target.port == base.port) {
+            return true
+        }
+        return target.scheme == "https" && target.host == "github.com" && target.port == 443 &&
+            target.encodedPath.startsWith("/$REPO/releases/download/")
     }
 
     private fun get(path: String): String {
@@ -126,5 +147,7 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
 
     private companion object {
         const val CACHE_BYTES = 2L * 1024 * 1024
+        const val GITHUB_API = "https://api.github.com"
+        const val REPO = "tomon-one/kogda-para"
     }
 }

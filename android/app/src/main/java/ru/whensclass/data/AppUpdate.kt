@@ -33,6 +33,38 @@ data class ReleaseDto(
     @SerialName("notes") val notes: String = "",
 )
 
+/** Выпуск на GitHub — запасной источник, когда сервер приложения не отвечает. */
+@Serializable
+internal data class GithubRelease(
+    @SerialName("tag_name") val tag: String,
+    @SerialName("draft") val draft: Boolean = false,
+    @SerialName("assets") val assets: List<GithubAsset> = emptyList(),
+)
+
+@Serializable
+internal data class GithubAsset(
+    @SerialName("name") val name: String,
+    @SerialName("size") val size: Long = 0,
+    @SerialName("browser_download_url") val url: String,
+)
+
+private val APK_NAME = Regex("""kogda-para-(\d+)\.apk""")
+
+/**
+ * Самая новая сборка среди выпусков на GitHub. Номер сборки — из имени файла
+ * (`kogda-para-86.apk`), версия — из тега; выпуск без такого файла не в счёт.
+ */
+internal fun newestOnGithub(releases: List<GithubRelease>): ReleaseDto? = releases
+    .filterNot { it.draft }
+    .mapNotNull { release ->
+        release.assets.firstNotNullOfOrNull { asset ->
+            APK_NAME.matchEntire(asset.name)?.groupValues?.get(1)?.toIntOrNull()?.let { code ->
+                ReleaseDto(versionCode = code, versionName = release.tag, url = asset.url, size = asset.size)
+            }
+        }
+    }
+    .maxByOrNull { it.versionCode }
+
 /**
  * Объявлять ли сборку. Про одну и ту же — один раз, но «уже объявлено»
  * сверяется на равенство, а не «не меньше»: номер приходит с сервера без
@@ -122,7 +154,10 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     }
 
     suspend fun check(): Check = withContext(Dispatchers.IO) {
+        // Сервер не ответил — спросить выпуски на GitHub: сборка с починкой
+        // или новым адресом сервера должна дойти и тогда, когда сервер лежит.
         val release = runCatching { api.release() }.getOrNull()
+            ?: runCatching { api.githubRelease() }.getOrNull()
             ?: return@withContext Check.Failed
         if (release.versionCode > BuildConfig.VERSION_CODE) {
             Check.Available(release)
@@ -190,10 +225,24 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         if (_download.value == Download.Running) return
         _download.value = Download.Running
         scope.launch {
-            val result = runCatching { downloading.withLock { fetchAndInstall(release) } }
+            val result = runCatching { downloading.withLock { fetchWithFallback(release) } }
                 .getOrElse { Result.Failed(updateFailure(it)) }
             _download.value = Download.Done(result)
         }
+    }
+
+    /**
+     * Не вышло с сервера — та же сборка с GitHub. Только та же: другой номер
+     * человек не выбирал. Не вышло и там — показываем первую причину.
+     */
+    private suspend fun fetchWithFallback(release: ReleaseDto): Result {
+        val first = runCatching { fetchAndInstall(release) }.getOrElse { Result.Failed(updateFailure(it)) }
+        if (first !is Result.Failed) return first
+        val mirror = runCatching { api.githubRelease() }.getOrNull()
+            ?.takeIf { it.versionCode == release.versionCode && it.url != release.url }
+            ?: return first
+        val second = runCatching { fetchAndInstall(mirror) }.getOrElse { Result.Failed(updateFailure(it)) }
+        return if (second is Result.Failed) first else second
     }
 
     /** Экран показал итог загрузки или открыл установщик. */
@@ -206,7 +255,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             return Result.Failed("сервер не сообщил размер сборки")
         }
         if (!api.isOurs(release.url)) {
-            return Result.Failed("адрес файла — не сервер приложения")
+            return Result.Failed("адрес файла — не сервер приложения и не GitHub")
         }
         val file = File(dir(), name(release))
         if (!ready(file, release)) {
