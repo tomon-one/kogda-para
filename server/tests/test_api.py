@@ -13,7 +13,10 @@ from whensclass.parser.csv_schedule import FIXTURE, parse_csv
 
 class FakeStore:
     def __init__(self, snapshot, known=None):
+        from whensclass.domain.teachers import build_index
+
         self.snapshot = snapshot
+        self.teachers = build_index(snapshot) if snapshot is not None else None
         self.generated = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
         self.known = known or {}
 
@@ -263,3 +266,27 @@ def test_watchdogs_may_use_head(client):
     """nginx пропускает HEAD, а служба на @router.get отвечала на него 405."""
     assert client.head("/v1/meta").status_code == 200
     assert client.head("/v1/schedule/isp-924-2?from=2026-09-07&days=3").status_code == 200
+
+
+def test_known_teacher_without_lessons_gets_free_days_but_fixed_typo_gets_404(fixture_csv):
+    """Знакомый преподаватель без пар в листе (отпуск) — «пар нет», не 404
+    (второй аудит, В18). Но если колледж исправил опечатку в его имени и тот
+    же человек с парами стоит под другим id, пустые дни 60 дней говорили бы
+    «пар нет»: тогда 404, и приложение предложит выбрать заново (третий
+    аудит, В19 прогона 1)."""
+    snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
+    app = FastAPI()
+    app.include_router(router)
+    store = FakeStore(snapshot)
+    real = next(iter(store.teachers.names.values()))
+    surname, *rest = real.split()
+    typo = " ".join([surname, *(w[0] + "ъ" + w[1:] for w in rest)])
+    store.known = {"otpusk-o-o": "Отпусков Олег Олегович", "typo-id": typo}
+    app.state.store = store
+    app.state.refresher = FakeRefresher()
+    client = TestClient(app)
+
+    away = client.get("/v1/teacher/otpusk-o-o?from=2026-09-07&days=3")
+    assert away.status_code == 200
+    assert all(day["l"] == [] for day in away.json()["days"])
+    assert client.get("/v1/teacher/typo-id?from=2026-09-07&days=3").status_code == 404

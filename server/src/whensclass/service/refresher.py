@@ -18,8 +18,9 @@ import zoneinfo
 
 import httpx
 
+from ..api.payloads import a1_column
 from ..config import settings
-from ..domain.models import SourceFormatChanged
+from ..domain.models import SheetTooSmall, SourceFormatChanged
 from ..domain.teachers import build_index
 from ..parser.csv_schedule import Limits, _check_shift, parse_export, shift_seed
 from ..sources import gsheets, sheet_index
@@ -75,6 +76,8 @@ class Refresher:
         # Хеш текста каждого листа с прошлого удачного разбора: экспорт не
         # отдаёт ETag, «не изменилось» узнаём сами.
         self._source_hashes: dict[str, str] = {}
+        # Листы окна, пропущенные в последнем разборе (заголовок -> почему).
+        self._dropped: dict[str, str] = {}
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
         self._seen_titles: set[str] | None = None
@@ -245,8 +248,9 @@ class Refresher:
             self._disk_alerted = False
             alerts.forget("disk")
         self._source_hashes = {title: digest for title, _, _, digest in texts}
-        for _, gid, text, digest in texts:
-            history.archive(self.state_dir, gid, text, digest)
+        for title, gid, text, digest in texts:
+            dropped = self._dropped.get(title)
+            history.archive(self.state_dir, gid, text, digest, rejected=dropped)
         self.status = "ok"
         self._recovered()
         if previous is not None and previous_teachers is not None:
@@ -313,21 +317,38 @@ class Refresher:
         ValueError разборщика — это тоже формат: лист отвергнут, а не «сеть»
         с тревогой через полчаса и без архива (В26).
         """
+        self._dropped = {}
         try:
             snapshot = None
             for title, gid, text, _ in texts:
-                current = parse_export(
-                    text, title or f"gid {gid}", gid, limits=_limits(), around=today
-                )
-                # Сдвиг ищется по порядку колонок, а он у каждого листа свой:
-                # проверять лист отдельно, до склейки. Историю даёт прежний
-                # снимок и — для следующего листа — только что разобранный
-                # текущий (второй аудит, М9).
-                seed = shift_seed(self.store.snapshot, current)
-                if snapshot is not None:
-                    for group, traces in shift_seed(snapshot, current).items():
-                        seed.setdefault(group, set()).update(traces)
-                _check_shift(current, seed=seed)
+                name = title or f"gid {gid}"
+                try:
+                    current = parse_export(text, name, gid, limits=_limits(), around=today)
+                    # Сдвиг ищется по порядку колонок, а он у каждого листа
+                    # свой: проверять лист отдельно, до склейки. Историю даёт
+                    # прежний снимок и — для следующего листа — только что
+                    # разобранный текущий (второй аудит, М9).
+                    seed = shift_seed(self.store.snapshot, current)
+                    if snapshot is not None:
+                        for group, traces in shift_seed(snapshot, current).items():
+                            seed.setdefault(group, set()).update(traces)
+                    _check_shift(current, seed=seed, previous=self.store.snapshot)
+                    _check_lost_names(self.store.snapshot, current, gid)
+                except SheetTooSmall as exc:
+                    if snapshot is None:
+                        raise SourceFormatChanged(f"лист {name!r}: {exc}") from exc
+                    # Следующий лист колледж только начал: без него окно
+                    # короче, и за краем — «ещё не опубликовано». Раньше его
+                    # отказ валил весь набор, и правки сегодняшнего листа не
+                    # доходили до телефонов (третий аудит, В18 прогона 1).
+                    log.warning(
+                        "следующий лист %r ещё недописан (%s) — пока без него", name, exc
+                    )
+                    self._dropped[title] = f"следующий лист ещё недописан: {exc}"
+                    continue
+                except SourceFormatChanged as exc:
+                    # Имя листа — в тексте: в окне их бывает два.
+                    raise SourceFormatChanged(f"лист {name!r}: {exc}") from exc
                 snapshot = current if snapshot is None else snapshot.merged_with(current)
             if snapshot is None:
                 return None
@@ -481,6 +502,29 @@ def _check_group_drop(previous, current) -> None:
             f"пропало {len(lost)} групп из {len(previous.groups)}: "
             + ", ".join(lost[:10]) + ("…" if len(lost) > 10 else "")
         )
+
+
+def _check_lost_names(previous, current, gid: str | None) -> None:
+    """Отказ, если группа пропала, а её колонка на месте и с парами.
+
+    Так выглядит стёртое или испорченное имя в главном заголовке, которого
+    нет и в повторных: блок разбирается безымянным, и группа молча уходила в
+    404 при ok (третий аудит, В17 прогона 1). Пропажа одной группы не
+    доходит до `_check_group_drop`, а колонка с парами — не убранная группа.
+    """
+    if previous is None or not current.unnamed or not gid:
+        return
+    if not (set(previous.dates) & set(current.dates)):
+        return
+    was = previous.sheet_columns.get(gid, {})
+    kept = {g.id for g in current.groups}
+    for group in previous.groups:
+        column = was.get(group.id)
+        if group.id not in kept and column in current.unnamed:
+            raise SourceFormatChanged(
+                f"в главном заголовке у колонки {a1_column(column)} пропало имя группы "
+                f"{group.name}, а пары под ним на месте ({current.unnamed[column]})"
+            )
 
 
 def _check_today_kept(previous, current, today: dt.date) -> None:

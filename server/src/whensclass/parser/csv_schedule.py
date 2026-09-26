@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import csv
+import dataclasses
 import io
 import logging
 import re
@@ -17,9 +18,24 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from ..domain.models import Lesson, SheetPlace, Snapshot, SourceFormatChanged
-from .cells import parse_lesson
-from .groups import _HEADER_PREFIX, MIN_GROUPS, build_column_map, find_header_rows
+from ..domain.ids import group_id
+from ..domain.models import (
+    GroupRef,
+    Lesson,
+    SheetPlace,
+    SheetTooSmall,
+    Snapshot,
+    SourceFormatChanged,
+)
+from .cells import FIO_RE, parse_lesson, replaced_of
+from .groups import (
+    _HEADER_PREFIX,
+    MIN_GROUPS,
+    _warn_once,
+    build_column_map,
+    find_header_rows,
+    header_blocks,
+)
 
 log = logging.getLogger(__name__)
 
@@ -41,23 +57,46 @@ MAX_DAYS_AHEAD = 60
 # Сдвиг блока строк, под которым нет повторного заголовка, не видит ни одна
 # сверка колонок: каждая группа молча получает пары соседа. Видно его по
 # содержимому, и признак — именно «пары соседа», а не «незнакомые пары».
-# В строке пары идём по группам в порядке колонок: группа «голосует» за сдвиг
-# на k колонок, если её пару знает история соседа через k колонок, а её
-# собственная — нет; группа, чью пару знает только своя история, серию рвёт.
-# Отказ — если серия набрала SHIFT_RUN_REJECT голосов за один и тот же k.
 #
-# До 23 сентября 2026 отказ давала доля групп с незнакомыми парами, и она
-# ошибалась в обе стороны (второй аудит, К1, В3, В5): сдвиг хвоста листа на
-# 40–65 групп проходил, потому что соседи — часто подгруппы с общими
-# лекциями, а у 74 групп из 189 история была «короткой» и не сравнивалась;
-# зато неделя практики у курса, классный час у 70 групп, День здоровья или
-# ещё не проставленные преподаватели отвергали лист как сдвиг. Признак соседа
-# на живом листе 23.09.2026: сдвиги из находок — серии 17–63 голоса; законные
-# правки — 0–1; все 194 честные версии листа за 13–23.09 — не больше 4
-# (подгруппы ГД-926/1–4 с общими парами на второй день листа). Порог — вдвое
-# выше честного максимума и вдвое ниже самой короткой атаки.
-SHIFT_RUN_REJECT = 8
-SHIFT_OFFSETS = (-2, -1, 1, 2)
+# Две сверки, обе по группам в порядке колонок и по смещению k колонок:
+# - с прежней версией листа — на датах, что есть в обеих: пара группы — та,
+#   что в прежней версии стояла у соседа через k, а не своя. Так видна правка
+#   уже выложенной недели. Отказ — серия в PREV_RUN_REJECT групп подряд;
+# - с историей групп — для новой недели, где прежней версии нет: группа за
+#   день голосует за k, если её пар, знакомых истории соседа и не знакомых
+#   своей, больше, чем наоборот. Отказ — серия в SHIFT_RUN_REJECT голосов.
+# Группа, у которой своего больше, серию рвёт; прочие её не трогают.
+#
+# До 23 сентября 2026 отказ давала доля групп с незнакомыми парами и
+# ошибалась в обе стороны (второй аудит, К1, В3, В5). С 23 по 26 сентября
+# голосовала строка пары, а не день группы, со смещениями ±1, ±2 и порогом 8:
+# хвост в один блок (31 группа), окно в 10 колонок, сдвиг на три блока (85–98
+# групп) проходили при ok (третий аудит, К1 прогона 1) — подгруппы с общими
+# лекциями и пустые пары не голосуют, и серия набиралась до 7.
+#
+# Пороги — по 225 парам соседних версий живого листа за 14–24.09.2026 и
+# стенду атак на неделю 21–26.09 (хвосты вставкой и удалением 1–4 блоков,
+# окна 2–30 колонок, сдвиг на неделе, выложенной сразу со сдвигом): честный
+# максимум сверки с прежней версией — 1, атаки — от 2 у окна в 2–3 колонки до
+# 150; голосов по истории — 3 честно, 4–7 у хвоста в один блок у правого края
+# и 20–140 у прочих хвостов.
+PREV_RUN_REJECT = 3
+SHIFT_RUN_REJECT = 6
+SHIFT_OFFSETS = (-4, -3, -2, -1, 1, 2, 3, 4)
+# Сдвиг не на целый блок («вставить 1–3 ячейки»): колонки +1 и +2 блока,
+# всегда пустые, получают текст. В 225 версиях — не больше одной ячейки, у
+# сдвига хоть на один день — от 70 (третий аудит, В5 прогона 1).
+SPILL_REJECT = 5
+# Сдвиг ячеек группы по вертикали («удалить ячейки, сдвиг вверх»). На одну
+# строку — ФИО преподавателя встаёт на место названия: честно 0 пар в день,
+# у сдвига — по паре на каждую задетую группу. На две — пары группы съезжают
+# на номер через границы дней: честно так меняется не больше одного дня
+# группы за версию, у сдвига — 4–6 (третий аудит, В6 прогона 1).
+NAME_SUBJECTS_REJECT = 3
+VERTICAL_DAYS_REJECT = 3
+# То же на одном дне у многих групп: честно — до 4 групп за день (14.09
+# 13:40), у сдвига в последний день листа — 21 и 135.
+VERTICAL_GROUPS_REJECT = 10
 # Прежняя доля незнакомых — теперь только запись в журнал: законные правки
 # задевают её так же, как сдвиг.
 SHIFT_WARN_SHARE = 0.25
@@ -120,9 +159,12 @@ def _parse_date(cell: str) -> date | None:
         return value
     expected = _WEEKDAYS[value.weekday()]
     if weekday.lower() != expected:
-        log.warning(
-            "в таблице %s помечен как %s, а это %s — верю числу",
-            value, weekday, expected,
+        # Раньше — «верю числу» в журнал: одна цифра, и понедельник уезжал в
+        # воскресенье, а неделя без пропуска воскресенья раздавала всем пары
+        # следующего дня при ok (третий аудит, В4 прогона 1). В архиве 14–24.09
+        # слово и число не расходились ни разу.
+        raise SourceFormatChanged(
+            f"дата {value:%d.%m.%Y} помечена как {weekday.lower()}, а это {expected}"
         )
     return value
 
@@ -153,7 +195,10 @@ def parse_sheet(
         return f"строке {i}"
 
     groups = build_column_map(rows, limits.min_groups)
-    skip = find_header_rows(rows, groups, limits.min_groups, where=where)
+    adopt: dict[int, list[str]] = {}
+    skip = find_header_rows(rows, groups, limits.min_groups, where=where, adopt=adopt)
+    groups, unnamed = _adopt_names(rows, groups, adopt, limits.min_groups)
+    _check_spill(rows, groups, skip, where)
 
     snapshot = Snapshot(sheet_title=sheet_title, groups=groups)
     for group in groups:
@@ -179,7 +224,10 @@ def parse_sheet(
             continue
 
         cell = _cell(row, 0)
-        found = _parse_date(cell)
+        try:
+            found = _parse_date(cell)
+        except SourceFormatChanged as exc:
+            raise SourceFormatChanged(f"{exc} в {where(i)}") from exc
         if found is None and cell.strip():
             if _LOOKS_LIKE_DATE.search(cell):
                 # Раньше такая ячейка просто не узнавалась: current оставался
@@ -189,6 +237,9 @@ def parse_sheet(
             # Слово без чисел — «понедельник» над датой, «неделя 3»: не дата.
             log.info("в колонке дат в %s не дата: %r — пропускаю", where(i), cell.strip())
         if found is not None:
+            if found.weekday() == 6:
+                # Воскресений в листах колледжа не бывает: это опечатка в числе.
+                raise SourceFormatChanged(f"дата {found:%d.%m.%Y} в {where(i)} — воскресенье")
             if around is not None and found > around + timedelta(days=MAX_DAYS_AHEAD):
                 raise SourceFormatChanged(
                     f"дата {found} в {where(i)} дальше {MAX_DAYS_AHEAD} дней от {around}"
@@ -250,14 +301,117 @@ def parse_sheet(
             )
             if lesson is not None:
                 snapshot.schedule[group.id].setdefault(current, []).append(lesson)
+        for col in unnamed:
+            if _cell(row, col).strip():
+                unnamed[col] += 1
 
     for by_date in snapshot.schedule.values():
         for day, lessons in by_date.items():
             lessons.sort(key=lambda x: x.number)
+    _settle_replacements(snapshot)
 
     snapshot.dates = sorted(seen_dates)
+    snapshot.unnamed = {col: n for col, n in unnamed.items() if n}
     _validate(snapshot, date_order, limits, date_where)
     return snapshot
+
+
+def _check_spill(rows: list[list[str]], groups: list[GroupRef], skip: set[int], where) -> None:
+    """Отказ, если в пустых колонках блоков (+1, +2) появился текст.
+
+    Так выглядит «вставить ячейки» не на ширину блока: предмет уезжает в +1
+    или +2, а аудитория соседа — в колонку предмета. Раньше это проходило при
+    ok: на две ячейки — «пар нет» у всех групп, на одну — номера аудиторий
+    вместо предметов (третий аудит, В5 прогона 1).
+    """
+    columns = sorted({g.column for g in groups})
+    found: list[tuple[int, int]] = []
+    for i, row in enumerate(rows):
+        if i in skip:
+            continue
+        for col in columns:
+            for extra in (1, 2):
+                if _cell(row, col + extra).strip():
+                    found.append((i, col + extra))
+    if len(found) >= SPILL_REJECT:
+        i, col = found[0]
+        raise SourceFormatChanged(
+            f"в {len(found)} ячейках пустых колонок блоков есть текст, первая — "
+            f"{where(i)}, колонка {col}: похоже на вставку ячеек не на ширину блока"
+        )
+
+
+def _topic(subject: str) -> str:
+    """Первые два слова названия: «Иностранный язык .Английский ячзык» и
+    «Иностранный язык, Английский» — один предмет."""
+    return " ".join(re.findall(r"[а-яёa-z]+", subject.casefold())[:2])
+
+
+def _settle_replacements(snapshot: Snapshot) -> None:
+    """Одно ФИО у замены — чьё: заменённой пары или новой?
+
+    Два ФИО колледж пишет как «прежний, новый», а одно бывает и тем, и другим.
+    Судим по остальным ячейкам листа: если преподаватель ведёт заменённый
+    предмет и не ведёт новый, это прежний — у новой пары его нет. Иначе в его
+    расписании стояла пара, которой у него нет: Звонцову, который ведёт
+    «Коммуникативный тренинг», — «Кураторский час» вместо него (третий аудит,
+    В2 прогона 1).
+    """
+    teaches: dict[str, set[str]] = {}
+    pending: list[tuple[list[Lesson], int, str]] = []
+    for by_date in snapshot.schedule.values():
+        for lessons in by_date.values():
+            for i, lesson in enumerate(lessons):
+                old = replaced_of(lesson)
+                if old is None:
+                    for name in lesson.teachers:
+                        teaches.setdefault(name, set()).add(_topic(lesson.subject))
+                elif len(lesson.teachers) == 1:
+                    pending.append((lessons, i, old))
+    for lessons, i, old in pending:
+        lesson = lessons[i]
+        known = teaches.get(lesson.teachers[0], set())
+        if _topic(old) in known and _topic(lesson.subject) not in known:
+            lessons[i] = dataclasses.replace(lesson, teachers=())
+
+
+def _adopt_names(
+    rows: list[list[str]], groups: list[GroupRef], adopt: dict[int, list[str]], min_groups: int
+) -> tuple[list[GroupRef], dict[int, int]]:
+    """Имена безымянным блокам главного заголовка — из повторного.
+
+    Возвращает группы (с подобранными) и оставшиеся безымянные блоки со
+    счётчиком пар, который набирает обход.
+    """
+    taken = {g.column for g in groups}
+    known = {g.id for g in groups}
+    blocks = header_blocks(rows, min_groups) - taken
+    groups = list(groups)
+    for col in sorted(adopt):
+        if col not in blocks:
+            # Главный заголовок про этот блок не знает вовсе — не с чего
+            # подбирать: его ставят и законно, под будущую группу.
+            _warn_once(
+                ("gap", col, tuple(adopt[col])),
+                "повторный заголовок: в колонке %d стоит %s, а в главном заголовке этой "
+                "колонки нет и такого имени нет нигде — считаю блок безымянным",
+                col, adopt[col], logger=log,
+            )
+            continue
+        for name in adopt[col]:
+            gid = group_id(name)
+            if gid in known:
+                continue
+            _warn_once(
+                ("adopt", col, name),
+                "в главном заголовке у колонки %d нет имени, а повторный называет её %r — "
+                "беру имя оттуда", col, name, logger=log,
+            )
+            known.add(gid)
+            groups.append(GroupRef(name=name, id=gid, column=col))
+        blocks.discard(col)
+    groups.sort(key=lambda g: g.column)
+    return groups, dict.fromkeys(blocks, 0)
 
 
 def _validate(
@@ -268,7 +422,7 @@ def _validate(
 ) -> None:
     """Проверяет, что разобранное похоже на расписание, а не на обломки."""
     if len(snapshot.dates) < limits.min_dates:
-        raise SourceFormatChanged(
+        raise SheetTooSmall(
             f"нашёл всего {len(snapshot.dates)} дней, ожидал не меньше {limits.min_dates}"
         )
     for k, (a, b) in enumerate(zip(seen_order, seen_order[1:])):
@@ -294,7 +448,7 @@ def _validate(
         )
     total = snapshot.total_lessons()
     if total < limits.min_lessons:
-        raise SourceFormatChanged(
+        raise SheetTooSmall(
             f"нашёл всего {total} пар, ожидал не меньше {limits.min_lessons}"
         )
     _check_shift(snapshot)
@@ -328,14 +482,17 @@ def shift_seed(previous: Snapshot | None, current: Snapshot) -> Seed:
     }
 
 
-def _check_shift(snapshot: Snapshot, seed: Seed | None = None) -> None:
-    """День против истории групп — в том же листе и в `seed` (см. SHIFT_*).
+def _check_shift(
+    snapshot: Snapshot, seed: Seed | None = None, previous: Snapshot | None = None
+) -> None:
+    """Сдвиг колонок или ячеек по содержимому (см. SHIFT_*, PREV_*, выше).
 
     История копится по дням, а не собирается заново для каждого дня из всех
     прошлых: так было квадратично по числу дат, а колледж дописывает недели в
     один лист (второй аудит, М36). Порядок колонок — этого снимка, поэтому
     склеенный снимок двух листов сюда не годится: проверять каждый лист
-    отдельно (М9).
+    отдельно (М9). `previous` — прежний принятый снимок: с ним сверяются
+    даты, что есть в обоих.
     """
     seed = seed or {}
     first: dict[int, str] = {}
@@ -343,6 +500,10 @@ def _check_shift(snapshot: Snapshot, seed: Seed | None = None) -> None:
         first.setdefault(group.column, group.id)
     order = [first[c] for c in sorted(first)]
     names = {g.id: g.name for g in snapshot.groups}
+    _check_name_subjects(snapshot)
+    if previous is not None:
+        _judge_against_previous(snapshot, previous, order, names)
+        _check_vertical(snapshot, previous, names)
     history = {gid: set(seed.get(gid, ())) for gid in snapshot.schedule}
     for day in snapshot.dates:
         _judge_neighbours(snapshot, day, history, order, names)
@@ -351,36 +512,136 @@ def _check_shift(snapshot: Snapshot, seed: Seed | None = None) -> None:
             history[gid].update(_trace(x) for x in by_date.get(day, []))
 
 
+def _shift_message(votes: int, start: str, day: date, k: int, how: str) -> str:
+    side = "правее" if k > 0 else "левее"
+    word = "колонку" if abs(k) == 1 else "колонки"
+    return (
+        f"{day} похоже на сдвиг колонок: у {votes} групп подряд, начиная с {start}, "
+        f"пары соседа на {abs(k)} {word} {side} ({how})"
+    )
+
+
+def _series(
+    order: list[str], k: int, score, threshold: int, names: dict[str, str], day: date, how: str
+) -> None:
+    """Серия групп подряд, у которых `score(i, j)` — «чужого больше своего»."""
+    votes, start = 0, None
+    for i, gid in enumerate(order):
+        j = i + k
+        if not 0 <= j < len(order):
+            continue
+        theirs, own = score(gid, order[j])
+        if theirs > own:
+            votes += 1
+            start = start or gid
+            if votes >= threshold:
+                raise SourceFormatChanged(
+                    _shift_message(votes, names.get(start, start), day, k, how)
+                )
+        elif own > theirs:
+            votes, start = 0, None
+
+
 def _judge_neighbours(
     snapshot: Snapshot, day: date, history: dict[str, set], order: list[str], names: dict[str, str]
 ) -> None:
-    """Отказ, если в строке пары подряд идущие группы получили пары соседа."""
-    lessons = {
-        gid: {x.number: x for x in snapshot.schedule.get(gid, {}).get(day, [])} for gid in order
+    """Отказ, если подряд идущие группы получили за день пары соседа — по истории."""
+    traces = {
+        gid: [_trace(x) for x in snapshot.schedule.get(gid, {}).get(day, [])] for gid in order
     }
-    for number in sorted({n for by_number in lessons.values() for n in by_number}):
+
+    def score(gid: str, neighbour: str) -> tuple[int, int]:
+        mine, theirs = history[gid], history[neighbour]
+        day_traces = traces[gid]
+        return (
+            sum(1 for x in day_traces if x in theirs and x not in mine),
+            sum(1 for x in day_traces if x in mine and x not in theirs),
+        )
+
+    for k in SHIFT_OFFSETS:
+        _series(order, k, score, SHIFT_RUN_REJECT, names, day, "по истории групп")
+
+
+def _slots(snapshot: Snapshot, gid: str, day: date) -> dict[int, Lesson]:
+    return {x.number: x for x in snapshot.schedule.get(gid, {}).get(day, [])}
+
+
+def _judge_against_previous(
+    snapshot: Snapshot, previous: Snapshot, order: list[str], names: dict[str, str]
+) -> None:
+    """Отказ, если на общей с прежней версией дате группы подряд получили
+    пары, которые там стояли у соседа, — пара в пару, по номерам."""
+    for day in sorted(set(snapshot.dates) & set(previous.dates)):
+        new = {gid: _slots(snapshot, gid, day) for gid in order}
+        old = {gid: _slots(previous, gid, day) for gid in order}
+
+        def score(gid: str, neighbour: str) -> tuple[int, int]:
+            mine, theirs = old[gid], old[neighbour]
+            lessons = new[gid].items()
+            return (
+                sum(1 for n, x in lessons if theirs.get(n) == x and mine.get(n) != x),
+                sum(1 for n, x in lessons if mine.get(n) == x and theirs.get(n) != x),
+            )
+
         for k in SHIFT_OFFSETS:
-            votes, start = 0, None
-            for i, gid in enumerate(order):
-                lesson = lessons[gid].get(number)
-                if lesson is None:
+            _series(order, k, score, PREV_RUN_REJECT, names, day, "против прежней версии")
+
+
+def _check_vertical(snapshot: Snapshot, previous: Snapshot, names: dict[str, str]) -> None:
+    """Отказ, если пары группы на нескольких днях съехали на номер-два против
+    прежней версии: так выглядит «удалить ячейки, сдвиг вверх» в её блоке."""
+    common = sorted(set(snapshot.dates) & set(previous.dates))
+    same_day: dict[tuple[date, int], list[str]] = {}
+    for gid in snapshot.schedule:
+        for step in (-2, -1, 1, 2):
+            days = []
+            for day in common:
+                new, old = _slots(snapshot, gid, day), _slots(previous, gid, day)
+                if new == old or len(new) < 2:
                     continue
-                trace = _trace(lesson)
-                own = trace in history[gid]
-                j = i + k
-                theirs = 0 <= j < len(order) and trace in history[order[j]]
-                if theirs and not own:
-                    votes += 1
-                    start = start or gid
-                    if votes >= SHIFT_RUN_REJECT:
-                        side = "правее" if k > 0 else "левее"
-                        raise SourceFormatChanged(
-                            f"{number}-я пара {day} похожа на сдвиг колонок: у {votes} групп "
-                            f"подряд, начиная с {names.get(start, start)}, пары соседа на "
-                            f"{abs(k)} {'колонку' if abs(k) == 1 else 'колонки'} {side}"
-                        )
-                elif own and not theirs:
-                    votes, start = 0, None
+                # Номер у съехавшей пары другой — сверяется всё, кроме него.
+                hit = sum(
+                    1 for n, x in new.items()
+                    if n + step in old and _same_but_number(old[n + step], x)
+                )
+                if hit >= 2 and hit >= len(new) - 1:
+                    days.append(day)
+                    same_day.setdefault((day, step), []).append(gid)
+            if len(days) >= VERTICAL_DAYS_REJECT:
+                raise SourceFormatChanged(
+                    f"у группы {names.get(gid, gid)} пары съехали на {abs(step)} "
+                    f"{'номер' if abs(step) == 1 else 'номера'} "
+                    f"{'вверх' if step > 0 else 'вниз'} на {len(days)} днях с {days[0]} — "
+                    "похоже на сдвиг ячеек по вертикали"
+                )
+    for (day, step), gids in sorted(same_day.items()):
+        if len(gids) >= VERTICAL_GROUPS_REJECT:
+            raise SourceFormatChanged(
+                f"{day} у {len(gids)} групп, начиная с {names.get(gids[0], gids[0])}, пары "
+                f"съехали на {abs(step)} {'номер' if abs(step) == 1 else 'номера'} — похоже "
+                "на сдвиг ячеек по вертикали"
+            )
+
+
+def _same_but_number(a: Lesson, b: Lesson) -> bool:
+    return dataclasses.replace(a, number=b.number) == b
+
+
+def _check_name_subjects(snapshot: Snapshot) -> None:
+    """Отказ, если в дне у нескольких пар вместо названия — ФИО: строки пар и
+    преподавателей поменялись местами (сдвиг ячеек на одну строку)."""
+    per_day: dict[date, list[str]] = {}
+    for gid, by_date in snapshot.schedule.items():
+        for day, lessons in by_date.items():
+            for lesson in lessons:
+                if FIO_RE.fullmatch(lesson.subject):
+                    per_day.setdefault(day, []).append(lesson.subject)
+    for day, found in sorted(per_day.items()):
+        if len(found) >= NAME_SUBJECTS_REJECT:
+            raise SourceFormatChanged(
+                f"{day} у {len(found)} пар вместо названия ФИО ({found[0]!r}…) — похоже на "
+                "сдвиг ячеек на строку"
+            )
 
 
 def _warn_strangers(snapshot: Snapshot, day: date, history: dict[str, set]) -> None:
@@ -514,7 +775,11 @@ def date_rows(first_column: list[str]) -> dict[date, int]:
     """
     rows: dict[date, int] = {}
     for index, cell in enumerate(first_column):
-        found = _parse_date(cell)
+        try:
+            found = _parse_date(cell)
+        except SourceFormatChanged:
+            # Отказ со строкой листа даст обход (`parse_sheet`).
+            continue
         if found is not None and found not in rows:
             rows[found] = index + 1
     return rows
