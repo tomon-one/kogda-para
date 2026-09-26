@@ -1107,7 +1107,7 @@ private fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss:
     val counted = tally ?: return
 
     // Крупное число — только открытия приложения: виджеты перерисовываются
-    // и тогда, когда на них никто не смотрит, а до сборки 82 считалась каждая
+    // и тогда, когда на них никто не смотрит, а до 26.09.2026 считалась каждая
     // техническая перерисовка (разбор текстов 27.09).
     val total = counted.opens
     val seconds = total * SHEET_SECONDS

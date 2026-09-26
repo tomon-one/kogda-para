@@ -40,12 +40,12 @@ class AppUpdateTest {
         }
         server.createContext("/repos/tomon-one/kogda-para/releases") { exchange ->
             val body = """[
-              {"tag_name":"pr-Зерно.0.10.4","draft":true,
-               "assets":[{"name":"kogda-para-88.apk","size":3,"browser_download_url":"https://github.com/x/88"}]},
-              {"tag_name":"pr-Зерно.0.10.3","draft":false,
-               "assets":[{"name":"kogda-para-87.apk","size":2500000,
-                          "browser_download_url":"https://github.com/tomon-one/kogda-para/releases/download/t/kogda-para-87.apk"}]},
-              {"tag_name":"pr-Зерно.0.10.2","assets":[{"name":"kogda-para-85.apk","size":1,"browser_download_url":"u"}]}
+              {"tag_name":"pr-Зерно.0.1.3","draft":true,
+               "assets":[{"name":"kogda-para-4.apk","size":3,"browser_download_url":"https://github.com/x/4"}]},
+              {"tag_name":"pr-Зерно.0.1.2","draft":false,
+               "assets":[{"name":"kogda-para-3.apk","size":2500000,
+                          "browser_download_url":"https://github.com/tomon-one/kogda-para/releases/download/t/kogda-para-3.apk"}]},
+              {"tag_name":"pr-Зерно.0.1.1","assets":[{"name":"kogda-para-2.apk","size":1,"browser_download_url":"u"}]}
             ]""".toByteArray()
             exchange.sendResponseHeaders(200, body.size.toLong())
             exchange.responseBody.use { it.write(body) }
@@ -92,29 +92,29 @@ class AppUpdateTest {
 
     @Test
     fun `качаем только со своего сервера`() {
-        assertTrue(api.isOurs("$base/download/kogda-para-82.apk"))
-        assertFalse(api.isOurs("https://evil.example/download/kogda-para-82.apk"))
-        assertFalse(api.isOurs("http://127.0.0.1:1/download/kogda-para-82.apk"))
+        assertTrue(api.isOurs("$base/download/kogda-para-2.apk"))
+        assertFalse(api.isOurs("https://evil.example/download/kogda-para-2.apk"))
+        assertFalse(api.isOurs("http://127.0.0.1:1/download/kogda-para-2.apk"))
         assertFalse(api.isOurs("не адрес"))
-        assertTrue(api.isOurs("https://github.com/tomon-one/kogda-para/releases/download/t/kogda-para-86.apk"))
-        assertFalse(api.isOurs("https://github.com/someone/else/releases/download/t/kogda-para-86.apk"))
-        assertFalse(api.isOurs("http://github.com/tomon-one/kogda-para/releases/download/t/kogda-para-86.apk"))
+        assertTrue(api.isOurs("https://github.com/tomon-one/kogda-para/releases/download/t/kogda-para-2.apk"))
+        assertFalse(api.isOurs("https://github.com/someone/else/releases/download/t/kogda-para-2.apk"))
+        assertFalse(api.isOurs("http://github.com/tomon-one/kogda-para/releases/download/t/kogda-para-2.apk"))
     }
 
     @Test
     fun `сервер молчит — сборка берётся из выпусков GitHub, черновики не в счёт`() {
         val release = api.githubRelease()!!
-        assertEquals(87, release.versionCode)
-        assertEquals("pr-Зерно.0.10.3", release.versionName)
+        assertEquals(3, release.versionCode)
+        assertEquals("pr-Зерно.0.1.2", release.versionName)
         assertEquals(2_500_000L, release.size)
         assertTrue(api.isOurs(release.url))
     }
 
     @Test
     fun `выпуск без файла сборки не в счёт`() {
-        val noApk = GithubRelease("pr-Зерно.0.10.5", assets = listOf(GithubAsset("notes.txt", 10, "u")))
-        val apk = GithubRelease("pr-Зерно.0.10.4", assets = listOf(GithubAsset("kogda-para-88.apk", 10, "u")))
-        assertEquals(88, newestOnGithub(listOf(noApk, apk))?.versionCode)
+        val noApk = GithubRelease("pr-Зерно.0.1.5", assets = listOf(GithubAsset("notes.txt", 10, "u")))
+        val apk = GithubRelease("pr-Зерно.0.1.4", assets = listOf(GithubAsset("kogda-para-4.apk", 10, "u")))
+        assertEquals(4, newestOnGithub(listOf(noApk, apk))?.versionCode)
         assertEquals(null, newestOnGithub(listOf(noApk)))
     }
 
