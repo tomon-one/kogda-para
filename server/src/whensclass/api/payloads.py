@@ -11,20 +11,10 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
 from ..config import settings
-from ..domain.models import Lesson, SheetPlace, Snapshot
+from ..domain.models import Lesson, SheetPlace, Snapshot, a1_column
 from ..domain.teachers import TeacherIndex
 
 API_VERSION = 1
-
-
-def a1_column(column: int) -> str:
-    """Номер колонки с нуля -> буквы, как в Sheets: 0 -> A, 26 -> AA, 664 -> YO."""
-    letters = ""
-    n = column + 1
-    while n:
-        n, rem = divmod(n - 1, 26)
-        letters = chr(65 + rem) + letters
-    return letters
 
 
 def sheet_url(gid: str | None = None) -> str:

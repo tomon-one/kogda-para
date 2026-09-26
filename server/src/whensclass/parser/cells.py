@@ -11,6 +11,7 @@ import logging
 import re
 
 from ..domain.models import Lesson
+from ..domain.teachers import PATRONYMIC_RE
 from .groups import _warn_once  # неувязка листа — состояние, а не событие: в журнал раз
 
 log = logging.getLogger(__name__)
@@ -60,6 +61,27 @@ _STUDENTS_IN_ROOM_RE = re.compile(
     r"([\wА-Яа-яЁё/.\-]+?)[\s.,;]*$",
     re.IGNORECASE,
 )
+
+# «X (Лек) Отмена Кураторский час»: пару X не отменили, а отдали кураторскому
+# часу — та же замена. Раньше пара уходила отменённой, с кураторским часом в
+# причине: напоминания нет, в виджете зачёркнуто, а час идёт (третий аудит,
+# М1 прогона 1).
+_CANCEL_FOR_RE = re.compile(
+    r"\bотмен\w*[\s\-–—:,.]*(?:замена[\s\-–—:,.]*)?(?=(?:кураторск|классн)\w*\s+час)",
+    re.IGNORECASE,
+)
+
+# Опечатка в слове «онлайн» — «онлай», «ондлайн», «онлдайн»: раньше пара
+# становилась очной с аудиторией-словом, а когда колледж ставил ссылку,
+# приложение объявляло «пара стала онлайн» (третий аудит, М2 прогона 1).
+_ONLINE_WORD = "онлайн"
+_ROOM_NUMBER_TAIL = re.compile(
+    r"^([а-яё]+)[\s.,:;()№#-]*(?:(\d{1,3})[\s.,:;()]*)?$", re.IGNORECASE
+)
+
+# Прочерк или «нет» вместо предмета или аудитории — пусто, а не пара «—» в
+# 9:00 и не «каб. -» (третий аудит, М9 прогона 1).
+_NOTHING_RE = re.compile(r"^(?:[\W_]*|нет)$", re.IGNORECASE)
 
 # Служебная заглушка колледжа вместо имени: не человек, в списке ей не место.
 _VACANCY_RE = re.compile(r"^вакансия\b", re.IGNORECASE)
@@ -129,6 +151,11 @@ def _extract_cancellation(text: str, tail: str) -> tuple[str, bool, str | None]:
     for line in text.split("\n"):
         m = _CANCEL_RE.search(line)
         if not m:
+            if cancelled and tail == "keep" and not _ROOM_RE.match(line):
+                # «отмена» / «преподаватель заболел» строкой ниже: это
+                # причина, а не аудитория (третий аудит, М3 прогона 1).
+                note_parts.append(line)
+                continue
             kept.append(line)
             continue
         cancelled = True
@@ -219,6 +246,10 @@ def _people(text: str) -> list[str]:
     found = [m.group(0) for m in FIO_RE.finditer(text)]
     if len(found) >= 2 or (found and found[0] != text):
         rest = FIO_RE.sub(" ", text).strip(" ,;.")
+        if PATRONYMIC_RE.match(rest):
+            # «Щетинкин Артем Сергеевич Анастасия Дмитриевна» — два куратора,
+            # у второй не написана фамилия; раньше она выпадала «припиской».
+            return [" ".join(name.split()) for name in found] + [rest]
         if rest:
             _warn_once(
                 ("приписка", text, rest),
@@ -242,6 +273,38 @@ def replaced_subject(subject: str) -> tuple[str, str] | None:
         return None
     old_name, _ = _split_kind(before)
     return " ".join(old_name.split()).strip(" ,;.") or before, after
+
+
+def _distance(a: str, b: str) -> int:
+    """Расстояние правки — для коротких слов, построчно."""
+    row = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (x != y))
+    return row[-1]
+
+
+def _online_room(room: str) -> str | None:
+    """Онлайн ли пара по колонке аудитории: None — нет; иначе номер комнаты
+    («онлайн 12» → «12») или пустая строка.
+
+    «онлай 12», «ондлайн» — «онлайн» с опечаткой: до двух правок (М2).
+    """
+    marked = _ONLINE_RE.match(room)
+    if marked:
+        return marked.group(1) or ""
+    m = _ROOM_NUMBER_TAIL.match(room)
+    if not m:
+        return None
+    word = m.group(1).casefold()
+    if word[:2] != "он" or _distance(word, _ONLINE_WORD) > 2:
+        return None
+    _warn_once(
+        ("онлайн", room), "в колонке аудитории %r — считаю опечаткой в «онлайн»", room,
+        logger=log,
+    )
+    return m.group(2) or ""
 
 
 _INSTEAD = "вместо: "
@@ -268,8 +331,16 @@ def parse_lesson(
         _warn_once(("шаблон", number), "в клетке пары заготовка «Дисциплина» — пары нет",
                    logger=log)
         return None
-    subject, cancel_a, note = _extract_cancellation(normalize(subject_raw), tail="note")
+    subject_text = normalize(subject_raw)
+    handed = _CANCEL_FOR_RE.search(subject_text)
+    if handed and subject_text[: handed.start()].strip():
+        subject_text = _CANCEL_FOR_RE.sub("ЗАМЕНА ", subject_text, count=1)
+    subject, cancel_a, note = _extract_cancellation(subject_text, tail="note")
     room_text, cancel_b, room_note = _extract_cancellation(normalize(room_raw), tail="keep")
+    if _NOTHING_RE.match(subject):
+        subject = ""
+    if _NOTHING_RE.match(room_text):
+        room_text = ""
     note = note or room_note
     teachers = split_teachers(normalize(teacher_raw))
     cancelled = cancel_a or cancel_b
@@ -312,13 +383,13 @@ def parse_lesson(
             url = found.group(0)
         else:
             room = room_text.replace("\n", " ").strip()
-            marked = _ONLINE_RE.match(room)
-            if marked:
+            online_room = _online_room(room)
+            if online_room is not None:
                 # Слово «онлайн» — не место. Оставляя его аудиторией,
                 # мы считали такую пару очной, и приложение объявляло
                 # «пара стала онлайн» ровно тогда, когда к давно
                 # онлайновой паре наконец дописывали ссылку.
-                online, room = True, marked.group(1)
+                online, room = True, online_room or None
 
     if url is None:
         # Иногда ссылку кладут в колонку предмета, и пара называлась адресом.

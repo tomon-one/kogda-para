@@ -181,3 +181,38 @@ def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_da
     assert body["cov"] == ["2026-09-26", "2026-09-26"]
     own = schedule_payload(merged, "a-1", saturday, 1, generated, today=saturday)
     assert own["col"] == "C"
+
+
+def test_names_without_surname_do_not_become_teachers():
+    """Третий аудит, М4 прогона 1: «Елена Сергеевна» и «СПТ» были в /v1/teachers."""
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+
+    day = dt.date(2026, 9, 17)
+    group = GroupRef(name="А-1", id="a-1", column=2)
+    snap = Snapshot(sheet_title="л", groups=[group], dates=[day])
+    snap.schedule = {"a-1": {day: [Lesson(
+        number=4, subject="Кураторский час",
+        teachers=("Щетинкин Артем Сергеевич", "Анастасия Дмитриевна", "СПТ"),
+    )]}}
+    assert list(build_index(snap).names.values()) == ["Щетинкин Артем Сергеевич"]
+
+
+def test_initials_are_merged_into_the_single_full_name():
+    """Третий аудит, М5 прогона 1: «Мисюрова Е.С.» и «Мисюрова Евгения
+    Сергеевна» — один человек, пары делились между двумя id. Краткая запись
+    сводится к полной, а её id отвечает полной (новый g перепишет выбор)."""
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+
+    d1, d2 = dt.date(2026, 9, 7), dt.date(2026, 9, 14)
+    snap = Snapshot(sheet_title="л", groups=[GroupRef(name="А-1", id="a-1", column=2)],
+                    dates=[d1, d2])
+    snap.schedule = {"a-1": {
+        d1: [Lesson(number=1, subject="Х", teachers=("Мисюрова Е.С.",))],
+        d2: [Lesson(number=1, subject="Х", teachers=("Мисюрова Евгения Сергеевна",)),
+             Lesson(number=2, subject="У", teachers=("Мисин А. Б.",))],
+    }}
+    index = build_index(snap)
+    full = teacher_id("Мисюрова Евгения Сергеевна")
+    assert set(index.names) == {full, teacher_id("Мисин А. Б.")}
+    assert set(index.days(full)) == {d1, d2}
+    assert index.aliases == {teacher_id("Мисюрова Е.С."): full}

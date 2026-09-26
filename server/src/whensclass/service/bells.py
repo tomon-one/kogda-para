@@ -63,6 +63,7 @@ def _shape_problem(data: object) -> str | None:
             return f"номер пары {key!r} — не число"
         if not isinstance(value, list) or len(value) != 2:
             return f"у пары {key} не пара времён: {value!r}"
-        if not all(isinstance(x, str) and _TIME.match(x) for x in value) or value[0] >= value[1]:
+        times = all(isinstance(x, str) and _TIME.match(x) for x in value)
+        if not times or value[0] >= value[1]:
             return f"у пары {key} время не «ЧЧ:ММ» по порядку: {value!r}"
     return None

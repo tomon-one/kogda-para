@@ -26,6 +26,7 @@ from ..domain.models import (
     SheetTooSmall,
     Snapshot,
     SourceFormatChanged,
+    a1_column,
 )
 from .cells import FIO_RE, parse_lesson, replaced_of
 from .groups import (
@@ -223,6 +224,8 @@ def parse_sheet(
     numbers_by_date: dict[date, list[int]] = {}
     # Даты дальше горизонта и где они в листе: с парами — отказ, без — отрезаем.
     far: dict[date, str] = {}
+    # Где в листе дата встретилась впервые — для отказа при повторе.
+    first_row: dict[date, str] = {}
 
     for i, row in enumerate(rows):
         if i in skip:
@@ -248,6 +251,14 @@ def parse_sheet(
             if around is not None and found > around + timedelta(days=limits.max_days_ahead):
                 far.setdefault(found, where(i))
             if found != current:
+                if found in first_row:
+                    # Копия блока вместе с датой: раньше отказ говорил о
+                    # номерах пар настоящего дня и без строки (третий аудит,
+                    # М8 прогона 1).
+                    raise SourceFormatChanged(
+                        f"дата {found:%d.%m.%Y} в {where(i)} уже была в {first_row[found]}"
+                    )
+                first_row[found] = where(i)
                 date_order.append(found)
                 date_where.append(where(i))
             current = found
@@ -268,6 +279,11 @@ def parse_sheet(
         if current is None:
             raise SourceFormatChanged(f"пара в {where(i)} раньше первой даты")
         number = int(m.group(1))
+        if number == 1 and found is not None and numbers_by_date.get(current):
+            raise SourceFormatChanged(
+                f"дата {found:%d.%m.%Y} в {where(i)} повторена: этот день уже начат в "
+                f"{first_row[found]}"
+            )
         if number == 1 and found is None and numbers_by_date.get(current):
             # С первой пары начинается новый день, а даты у него нет. Раньше
             # такой день молча дописывался к предыдущему, и отказ приходил
@@ -334,7 +350,7 @@ def _check_spill(rows: list[list[str]], groups: list[GroupRef], skip: set[int], 
         i, col = found[0]
         raise SourceFormatChanged(
             f"в {len(found)} ячейках пустых колонок блоков есть текст, первая — "
-            f"{where(i)}, колонка {col}: похоже на вставку ячеек не на ширину блока"
+            f"{where(i)}, колонка {a1_column(col)}: похоже на вставку ячеек не на ширину блока"
         )
 
 
@@ -405,9 +421,9 @@ def _adopt_names(
             # подбирать: его ставят и законно, под будущую группу.
             _warn_once(
                 ("gap", col, tuple(adopt[col])),
-                "повторный заголовок: в колонке %d стоит %s, а в главном заголовке этой "
+                "повторный заголовок: в колонке %s стоит %s, а в главном заголовке этой "
                 "колонки нет и такого имени нет нигде — считаю блок безымянным",
-                col, adopt[col], logger=log,
+                a1_column(col), adopt[col], logger=log,
             )
             continue
         for name in adopt[col]:
@@ -416,8 +432,8 @@ def _adopt_names(
                 continue
             _warn_once(
                 ("adopt", col, name),
-                "в главном заголовке у колонки %d нет имени, а повторный называет её %r — "
-                "беру имя оттуда", col, name, logger=log,
+                "в главном заголовке у колонки %s нет имени, а повторный называет её %r — "
+                "беру имя оттуда", a1_column(col), name, logger=log,
             )
             known.add(gid)
             groups.append(GroupRef(name=name, id=gid, column=col))

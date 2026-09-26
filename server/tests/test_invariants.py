@@ -32,7 +32,17 @@ def test_duplicated_date_block_is_rejected(fixture_csv):
     rows = rows_of(fixture_csv)
     first, second = date_rows(rows)[:2]
     rows[second][0] = rows[first][0]
-    with pytest.raises(SourceFormatChanged, match="номера пар"):
+    with pytest.raises(SourceFormatChanged, match="повторена: этот день уже начат в строке"):
+        parse_sheet(rows, "фикстура", FIXTURE)
+
+
+def test_date_copied_further_down_names_both_rows(fixture_csv):
+    """Третий аудит, М8 прогона 1: блок скопирован ниже вместе с датой и
+    номерами — отказ называл номера пар настоящего дня и без строки."""
+    rows = rows_of(fixture_csv)
+    starts = date_rows(rows)
+    rows[starts[3]][0] = rows[starts[1]][0]
+    with pytest.raises(SourceFormatChanged, match=r"уже была в строке \d+"):
         parse_sheet(rows, "фикстура", FIXTURE)
 
 

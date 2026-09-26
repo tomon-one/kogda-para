@@ -209,7 +209,9 @@ def teacher(
     if body is None:
         # Преподавателя переименовали в таблице — отвечаем за нового. В
         # ответе стоит его новый id, приложение перепишет выбор у себя.
-        renamed = refresher.renames.teacher(teacher_id)
+        renamed = (
+            refresher.renames.teacher(teacher_id) or store.teachers.aliases.get(teacher_id)
+        )
         if renamed:
             body = build(renamed)
     name = store.known_teacher(teacher_id) if body is None else None
