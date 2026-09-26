@@ -29,16 +29,22 @@ fun collegeToday(): LocalDate = LocalDate.now(COLLEGE_ZONE)
 
 /**
  * Ближайший момент, когда содержимое меняется само: звонок (начало или конец
- * пары) сегодня позже `now` — или полночь с минутой.
+ * пары) сегодня позже `now`, полночь с минутой — или [also] (момент, когда
+ * данные станут несвежими).
+ *
+ * Полночь — ближайшие 00:01, а не завтрашние: будильник, заведённый в первую
+ * минуту суток, перешагивал сегодняшние 00:01 и вставал на первый звонок, и
+ * листание «на завтра» держалось до 09:00 (третий аудит, М64 прогона 2).
  */
-fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime): LocalDateTime {
-    val midnight = now.toLocalDate().plusDays(1).atTime(LocalTime.of(0, 1))
+fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime, also: LocalDateTime? = null): LocalDateTime {
+    val midnight = now.toLocalDate().atTime(LocalTime.of(0, 1))
+        .let { if (it.isAfter(now)) it else it.plusDays(1) }
     val bell = bells.values.flatten()
         .mapNotNull { runCatching { LocalTime.parse(it) }.getOrNull() }
         .map { now.toLocalDate().atTime(it) }
         .filter { it.isAfter(now) }
         .minOrNull()
-    return listOfNotNull(bell, midnight).min()
+    return listOfNotNull(bell, midnight, also?.takeIf { it.isAfter(now) }).min()
 }
 
 /** Короткая подпись дня для виджета: «сегодня, 7 сентября», «пт, 11 сентября». */
@@ -104,21 +110,33 @@ fun formatFetchedAt(millis: Long): String {
 /**
  * То же время, но коротко — для шапки виджета, где на счету каждый пиксель.
  * «19:12», «вчера 21:40», «5 сен».
+ *
+ * [nowMillis] виджеты передают из корня: вложенная шапка, читавшая часы
+ * сама, пропускалась Compose и замирала — «вчера» не наступало до полуночи
+ * колледжа (третий аудит, М16 прогона 1).
  */
-fun formatFetchedShort(millis: Long): String {
+fun formatFetchedShort(millis: Long, nowMillis: Long = System.currentTimeMillis()): String {
     if (millis <= 0) return "—"
-    val moment = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
+    val zone = ZoneId.systemDefault()
+    val moment = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), zone)
+    val today = LocalDateTime.ofInstant(Instant.ofEpochMilli(nowMillis), zone).toLocalDate()
     val time = moment.format(DateTimeFormatter.ofPattern("HH:mm", RU))
     return when (moment.toLocalDate()) {
-        LocalDate.now() -> time
-        LocalDate.now().minusDays(1) -> "вчера $time"
+        today -> time
+        today.minusDays(1) -> "вчера $time"
         else -> moment.format(DateTimeFormatter.ofPattern("d MMM", RU))
     }
 }
 
-/** Данные считаем несвежими через полсуток — тогда виджет об этом говорит. */
-fun isStale(millis: Long): Boolean =
-    millis > 0 && System.currentTimeMillis() - millis > Duration.ofHours(12).toMillis()
+/** Через сколько данные несвежие — тогда виджет об этом говорит. */
+val STALE_AFTER: Duration = Duration.ofHours(12)
+
+/** Данные считаем несвежими через полсуток. [nowMillis] — см. [formatFetchedShort]. */
+fun isStale(millis: Long, nowMillis: Long = System.currentTimeMillis()): Boolean =
+    millis > 0 && nowMillis - millis > STALE_AFTER.toMillis()
+
+/** Момент `now` в миллисекундах — для шапок виджетов, которые получают время колледжа. */
+fun millisOf(now: LocalDateTime): Long = now.atZone(COLLEGE_ZONE).toInstant().toEpochMilli()
 
 fun parseTime(value: String?): LocalTime? =
     value?.let { runCatching { LocalTime.parse(it) }.getOrNull() }

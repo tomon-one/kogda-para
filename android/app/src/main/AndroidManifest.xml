@@ -74,7 +74,8 @@
 
         <receiver
             android:name=".widget.ScheduleWidgetReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_day_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -87,7 +88,8 @@
              оболочка, а места на домашнем экране обычно нет. -->
         <receiver
             android:name=".widget.NextLessonWidgetReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_next_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -100,7 +102,8 @@
              этот — на «когда окно» и «что в четверг». -->
         <receiver
             android:name=".widget.WeekWidgetReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:label="@string/widget_week_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
