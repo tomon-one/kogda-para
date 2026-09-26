@@ -10,8 +10,6 @@
 """
 
 import datetime as dt
-import gzip
-import json
 
 import pytest
 

@@ -12,6 +12,7 @@ import json
 import pytest
 
 from whensclass.api.payloads import groups_payload, schedule_payload
+from whensclass.domain.models import GroupRef, Lesson, Snapshot
 from whensclass.parser.csv_schedule import FIXTURE, parse_csv
 
 from conftest import GOLDEN
@@ -122,9 +123,8 @@ def test_offline_lesson_has_no_online_mark(snapshot):
         assert "o" not in lesson
 
 
-def _filling(filled: dict[dt.date, int], groups: int = 10) -> "Snapshot":
+def _filling(filled: dict[dt.date, int], groups: int = 10) -> Snapshot:
     """Лист, где в день `d` пары вписаны у `filled[d]` групп из `groups`."""
-    from whensclass.domain.models import GroupRef, Lesson, Snapshot
 
     refs = [GroupRef(name=f"Г-{n}", id=f"g-{n}", column=2 + 4 * n) for n in range(groups)]
     snap = Snapshot(sheet_title="лист", groups=refs, dates=sorted(filled))
