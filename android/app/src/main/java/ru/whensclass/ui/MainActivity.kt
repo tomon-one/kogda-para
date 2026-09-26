@@ -229,7 +229,12 @@ private fun App(
     val askNotifications = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { }
+    // Один раз, а не на каждое пересоздание экрана: поворот заново
+    // показывал системный запрос (третий аудит, М30 прогона 2).
+    var askedNotifications by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
+        if (askedNotifications) return@LaunchedEffect
+        askedNotifications = true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifications) {
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -322,12 +327,16 @@ private fun App(
     }
 
     // Новое нажатие по живому экрану: к дню из виджета или к обновлению.
+    // Уведомление без дня («Расписание изменилось») — тоже к расписанию:
+    // пересоздание экрана раньше так и делало.
     LaunchedEffect(openSeq) {
         if (openSeq == 0) return@LaunchedEffect
         if (openUpdate) {
             focusUpdate = true
             screen = Screen.SETTINGS
-        } else if (startDay != null) {
+        } else {
+            pickSecond = false
+            pickTeacher = null
             screen = Screen.TODAY
         }
     }
@@ -368,15 +377,23 @@ private fun App(
         screen = back
     }
 
+    // «Повторить» у списков — заново и сеть, даже если свежие уже приходили.
+    val retryLists: () -> Unit = {
+        listsFresh = false
+        reloadKey++
+    }
+
     // Выбрали группу или себя: сразу на экран расписания, и ⟳ крутится, пока
     // идёт сеть. Раньше на первом запуске экран тут же писал «Проверьте
     // интернет», а из настроек список полминуты не реагировал (М2 прогона 2).
     val afterPick: (suspend () -> Unit) -> Unit = { select ->
         scope.launch {
             refreshing = true
-            pickTeacher = null
             screen = Screen.TODAY
             select()
+            // После записи выбора: на первом запуске до неё виден экран выбора,
+            // и сброс роли раньше мелькал бы списком групп вместо своих.
+            pickTeacher = null
             refreshing = false
         }
     }
@@ -479,7 +496,7 @@ private fun App(
                     Screen.GROUPS -> if (pickSecond) {
                         GroupPickerScreen(
                             groups = groups,
-                            onRetry = { reloadKey++ },
+                            onRetry = retryLists,
                             canGoBack = true,
                             onBack = {
                                 pickSecond = false
@@ -501,7 +518,7 @@ private fun App(
                         // мгновение показывается чужое расписание.
                         SelfPickerScreen(
                             teachers = teachers,
-                            onRetry = { reloadKey++ },
+                            onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
                             canGoBack = chosenName != null,
                             onBack = {
@@ -516,7 +533,7 @@ private fun App(
                     } else {
                         GroupPickerScreen(
                             groups = groups,
-                            onRetry = { reloadKey++ },
+                            onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
                             canGoBack = chosenName != null,
                             onBack = {

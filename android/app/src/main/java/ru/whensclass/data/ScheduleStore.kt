@@ -303,6 +303,7 @@ class ScheduleStore(private val context: Context) {
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
             it.remove(KEY_FETCHED_AT)
+            it.remove(KEY_PENDING_CHANGES)
         }
     }
 
@@ -377,6 +378,8 @@ class ScheduleStore(private val context: Context) {
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
             it.remove(KEY_FETCHED_AT)
+            // Непрочитанные изменения — про прежнюю группу: к новым не копить.
+            it.remove(KEY_PENDING_CHANGES)
             // Соседняя подгруппа была парой к прежней группе, к новой она
             // отношения не имеет. Но та же группа после роли преподавателя —
             // та же пара подгрупп (М4 прогона 2), а перевыбор после «группы
@@ -471,6 +474,7 @@ class ScheduleStore(private val context: Context) {
         prefs.remove(KEY_GENERATED_AT)
         prefs.remove(KEY_PARTIAL)
         prefs.remove(KEY_FETCHED_AT)
+        prefs.remove(KEY_PENDING_CHANGES)
     }
 
     /**
