@@ -317,7 +317,6 @@ fun TodayScreen(
                         reloadKey = reloadKey,
                         searchLabel = "Поиск по названию группы",
                         listName = "Список групп",
-                        showGroups = false,
                         othersTitle = "Другие группы",
                         endNote = { n ->
                             "Всё. " +
