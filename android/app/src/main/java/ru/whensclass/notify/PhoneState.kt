@@ -1,7 +1,6 @@
 package ru.whensclass.notify
 
 import android.app.ActivityManager
-import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
@@ -46,11 +45,8 @@ data class PhoneState(
                 if (runCatching { activity?.isBackgroundRestricted }.getOrNull() == true) {
                     add("фоновая работа ограничена в настройках батареи")
                 }
-                val usage = context.getSystemService(UsageStatsManager::class.java)
-                val bucket = runCatching { usage?.appStandbyBucket }.getOrNull()
-                if (bucket != null && bucket >= UsageStatsManager.STANDBY_BUCKET_RARE) {
-                    add("система будит приложение редко — откройте его, это снимет ограничение")
-                }
+                // Группу «редко» (appStandbyBucket) не смотрим: читается это,
+                // когда приложение открыто, а открытое всегда в «активных».
             }
             val connectivity = context.getSystemService(ConnectivityManager::class.java)
             val saver = runCatching { connectivity?.restrictBackgroundStatus }.getOrNull()

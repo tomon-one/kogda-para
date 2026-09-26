@@ -597,7 +597,14 @@ fun ScheduleDays(
     }
     // Нажали на день в виджете, а экран жив: к этому дню.
     LaunchedEffect(startKey) {
-        if (startKey > 0 && startDay != null) wanted = startDay
+        if (startKey > 0) wanted = startDay ?: today.toString()
+    }
+    // Человек сам повёл список — ждать обещанного дня больше не надо: иначе
+    // следующее обновление утаскивало бы его обратно.
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect {
+            if (it is androidx.compose.foundation.interaction.DragInteraction.Start) wanted = null
+        }
     }
     LaunchedEffect(wanted, days) {
         val want = wanted ?: return@LaunchedEffect

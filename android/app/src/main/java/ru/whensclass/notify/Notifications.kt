@@ -134,6 +134,10 @@ object Notifications {
     fun newVersion(context: Context, title: String, text: String): Boolean =
         show(context, CHANNEL_UPDATE, ID_UPDATE, title, text, day = null, update = true)
 
+    // Разрешение проверяет allowed() в первой строке, а SecurityException, если
+    // его отберут между проверкой и показом, ловит runCatching: lint видит
+    // только вызов notify.
+    @android.annotation.SuppressLint("MissingPermission")
     private fun show(
         context: Context,
         channel: String,
