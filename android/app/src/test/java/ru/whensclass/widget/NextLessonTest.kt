@@ -81,7 +81,7 @@ class NextLessonTest {
         val endOfSheet = schedule(cov = "2026-09-26")
         assertNull(nextLesson(endOfSheet, now.atTime(19, 0)))
         assertEquals("Дальше расписание ещё не опубликовано", noNextLesson("ИСП-924/1", endOfSheet, now, fresh, false))
-        assertEquals("Сбой у нас: расписание не обновляется", noNextLesson("ИСП-924/1", endOfSheet, now, fresh, true))
+        assertEquals("Сбой: расписание не обновляется", noNextLesson("ИСП-924/1", endOfSheet, now, fresh, true))
         assertEquals("Данные устарели", noNextLesson("ИСП-924/1", endOfSheet, now, old, false))
         assertEquals("Дальше пар нет", noNextLesson("ИСП-924/1", schedule(cov = "2026-10-10"), now, fresh, false))
         assertEquals(
