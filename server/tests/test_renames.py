@@ -395,3 +395,24 @@ def test_confirmation_does_not_miss_the_forty_minute_refresh(tmp_path, snapshot,
     monkeypatch.setattr(renames, "_now", lambda: almost)
     book.tick()
     assert book.group("isp-924-2") == "isp-924-2a"
+
+
+# --- Третий аудит, М56 прогона 2: правила осторожности книги ----------------
+
+def _trace(*items):
+    items = frozenset(items)
+    return (items, items)
+
+
+def test_three_of_ten_shared_lessons_are_not_a_rename():
+    """MIN_SHARE: общих пар три из десяти — совпадение, не та же группа."""
+    old = {"a-1": _trace(*range(10))}
+    new = {"b-1": _trace(0, 1, 2, *range(100, 107))}
+    assert detect(old, new) == {}
+
+
+def test_two_equal_candidates_are_not_a_guess():
+    """Две новые группы с теми же парами и не подгруппы — угадывать нельзя."""
+    old = {"a-1": _trace(*range(10))}
+    new = {"b-1": _trace(*range(10)), "v-1": _trace(*range(10))}
+    assert detect(old, new) == {}

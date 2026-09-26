@@ -267,3 +267,20 @@ def test_next_sheet_is_searched_deep_when_the_refresh_is_deep(tmp_path, monkeypa
     window = si.resolve_window(dt.date(2026, 9, 25), 8, tmp_path, deep=True)
     assert window == [("лист A", "1"), ("лист B", "2")]
     assert asked[-1] == (dt.date(2026, 9, 27), True)
+
+
+@pytest.mark.parametrize("trouble", [ConnectionError, None])
+def test_calendar_that_did_not_come_is_not_alarming_either(tmp_path, monkeypatch, trouble):
+    """Третий аудит, М67 прогона 2: «тревожимся только за листы групп» держал
+    тест лишь в ветке отказа разбора; ветки «не прочитался» и «пустой ответ»
+    можно было откатить молча."""
+    sheets = visible("Календарный график 2026-2027г.", "расписание групп 01.-05.09")
+    setup_lookup(
+        monkeypatch, sheets,
+        {"Календарный график 2026-2027г.": trouble,
+         "расписание групп 01.-05.09": ("2026-08-24", "2026-08-29")},
+    )
+    # День не покрыт никем: решает только то, до чего не добрались. График —
+    # не повод; берётся ближайший лист групп, а не «добраться не вышло».
+    title, _ = si.resolve_for(DAY, tmp_path)
+    assert title == "расписание групп 01.-05.09"
