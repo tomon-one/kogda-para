@@ -1,9 +1,12 @@
 name: Тесты
 
+# Документы, картинки и описания тестам не нужны.
 on:
   push:
     branches: [master]
+    paths-ignore: ["**.md", "docs/**", "LICENSE", ".github/ISSUE_TEMPLATE/**"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "LICENSE", ".github/ISSUE_TEMPLATE/**"]
 
 permissions:
   contents: read
