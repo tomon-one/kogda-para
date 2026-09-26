@@ -23,7 +23,7 @@ class LessonTextTest {
     )
 
     @Test
-    fun `очная пара называет номер, вид, аудиторию и преподавателя`() {
+    fun `очная пара называет аудиторию первой, потом номер, вид и преподавателя`() {
         val text = LessonAlarms.text(
             alarm(
                 LessonDto(
@@ -36,7 +36,7 @@ class LessonTextTest {
             ),
         )
 
-        assertEquals("3 пара, практика. каб. 272. Трухачев Д. Д.", text)
+        assertEquals("Каб. 272. 3 пара, практика. Трухачев Д. Д.", text)
     }
 
     @Test
@@ -55,13 +55,13 @@ class LessonTextTest {
             ),
         )
 
-        assertEquals("2 пара. Онлайн, комната 12. Старостина Е. А.", text)
+        assertEquals("Онлайн, комната 12. 2 пара. Старостина Е. А.", text)
 
         // Просто «онлайн», без номера — и текст без комнаты.
         val bare = LessonAlarms.text(
             alarm(LessonDto(number = 2, subject = "Английский", online = 1)),
         )
-        assertEquals("2 пара. Онлайн", bare)
+        assertEquals("Онлайн. 2 пара", bare)
     }
 
     @Test
