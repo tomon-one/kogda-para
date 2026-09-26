@@ -51,8 +51,12 @@ data class LessonDto(
 ) {
     val isCancelled: Boolean get() = cancelled != 0
 
-    /** Ссылка без признака — снимок, скачанный до появления поля. */
-    val isOnline: Boolean get() = online != 0 || url != null
+    /**
+     * Ссылка без признака и без аудитории — снимок, скачанный до появления
+     * поля. Ссылка при аудитории — очная пара: «преподаватель на онлайн,
+     * студенты в кабинете 269» (третий аудит, В1 прогона 1).
+     */
+    val isOnline: Boolean get() = online != 0 || (url != null && room == null)
 }
 
 @Serializable
