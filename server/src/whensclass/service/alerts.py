@@ -17,7 +17,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
+import pathlib
 import time
 
 import httpx
@@ -29,6 +31,12 @@ log = logging.getLogger(__name__)
 # Чтобы неудачное обновление раз в двадцать минут не превратилось в поток.
 _QUIET_SECONDS = 6 * 60 * 60
 _last_sent: dict[str, float] = {}
+# Когда ушла тревога каждого вида — по часам, для файла: окно тишины должно
+# пережить перезапуск для всех видов, а не только для тех, что пишет
+# failing.json. Тревога о диске и о ключе после перезапуска посреди той же
+# беды уходила сразу снова (третий аудит, М35 прогона 1).
+_sent_at: dict[str, dt.datetime] = {}
+_state_path: pathlib.Path | None = None
 # Своё, короткое: notify зовётся из _fail под замком обновления, и общий
 # таймаут в минуту держал бы замок ровно тогда, когда всё и так плохо.
 _TIMEOUT = 10.0
@@ -80,8 +88,44 @@ def notify(kind: str, text: str, force: bool = False, good: bool = False) -> boo
         return False
 
     _last_sent[kind] = now
+    _sent_at[kind] = dt.datetime.now(dt.timezone.utc)
+    _save()
     log.info("отправлено оповещение (%s)", kind)
     return True
+
+
+def keep_in(path: pathlib.Path) -> None:
+    """Где помнить окна тишины между перезапусками; поднимает прежние."""
+    global _state_path
+    _state_path = path
+    _sent_at.clear()
+    try:
+        data = json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError):
+        return
+    for kind, at in (data if isinstance(data, dict) else {}).items():
+        try:
+            remember(kind, dt.datetime.fromisoformat(at))
+        except (TypeError, ValueError):
+            continue
+
+
+def sent_recently(kind: str) -> bool:
+    """Тревога этого вида уходила и окно тишины ещё идёт."""
+    last = _last_sent.get(kind)
+    return last is not None and time.monotonic() - last < _QUIET_SECONDS
+
+
+def _save() -> None:
+    if _state_path is None:
+        return
+    data = {kind: _sent_at[kind].isoformat() for kind in _last_sent if kind in _sent_at}
+    try:
+        tmp = _state_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data), "utf-8")
+        tmp.replace(_state_path)
+    except OSError as exc:
+        log.warning("окна тишины не записались: %s", exc)
 
 
 def remember(kind: str, at: dt.datetime) -> None:
@@ -94,8 +138,11 @@ def remember(kind: str, at: dt.datetime) -> None:
     ago = (dt.datetime.now(dt.timezone.utc) - at).total_seconds()
     if 0 <= ago < _QUIET_SECONDS:
         _last_sent[kind] = time.monotonic() - ago
+        _sent_at[kind] = at
 
 
 def forget(kind: str) -> None:
     """Забыть, что об этом уже говорили: беда прошла, следующая — новая."""
-    _last_sent.pop(kind, None)
+    if _last_sent.pop(kind, None) is not None:
+        _sent_at.pop(kind, None)
+        _save()

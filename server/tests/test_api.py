@@ -310,10 +310,11 @@ def test_health_is_503_when_today_is_only_a_skeleton(fixture_csv):
     assert "не дописан" in response.json()["reason"]
 
 
-def test_teacher_waiting_for_rename_confirmation_gets_404_not_free_days(fixture_csv):
+def test_id_waiting_for_rename_confirmation_is_503_not_free_days_or_404(fixture_csv):
     """Третий аудит, В26 прогона 1: переименование, которое книга распознала,
     40 минут ждёт подтверждения — и по старому id шли пустые дни. Телефон
-    писал их поверх своих и слал «убрали пару»."""
+    писал их поверх своих и слал «убрали пару». А 404 через час давал «вас
+    больше нет» — вечером подтверждение ждёт ночи (М20). Теперь «временно»."""
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
     app = FastAPI()
     app.include_router(router)
@@ -322,12 +323,15 @@ def test_teacher_waiting_for_rename_confirmation_gets_404_not_free_days(fixture_
 
     class Renaming(FakeRenames):
         pending_teachers = {"otpusk-o-o": {"to": "otpuskov-o-o", "seen": 1}}
+        pending_groups = {"isp-924-2-staroe": {"to": "isp-924-2", "seen": 1}}
 
     refresher = FakeRefresher()
     refresher.renames = Renaming()
     app.state.refresher = refresher
     client = TestClient(app)
-    assert client.get("/v1/teacher/otpusk-o-o?from=2026-09-07&days=3").status_code == 404
+    assert client.get("/v1/teacher/otpusk-o-o?from=2026-09-07&days=3").status_code == 503
+    assert client.get("/v1/schedule/isp-924-2-staroe?from=2026-09-07").status_code == 503
+    assert client.get("/v1/schedule/nikogda-ne-bylo?from=2026-09-07").status_code == 404
 
 
 # --- Третий аудит, прогон 2: В11 и В12 ---------------------------------------

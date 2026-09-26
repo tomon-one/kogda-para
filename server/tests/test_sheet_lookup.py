@@ -239,3 +239,31 @@ def test_empty_date_skeleton_does_not_count_as_covered(tmp_path, monkeypatch):
     index = si.SheetIndex(tmp_path)
     assert index.known["расписание групп 01.-19.09"]["to"] == "2026-09-26"
     assert index.covering(dt.date(2026, 9, 28)) is None
+
+
+def test_closed_table_during_search_is_closed_not_unreachable(tmp_path, monkeypatch):
+    """Третий аудит, М23 прогона 1: закрытая таблица при поиске листа
+    выглядела «добраться не вышло»."""
+    sheets = visible("расписание групп 28.09-03.10")
+    setup_lookup(monkeypatch, sheets, {"расписание групп 28.09-03.10": si.gsheets.SheetClosed})
+    with pytest.raises(si.gsheets.SheetClosed):
+        si.resolve_for(dt.date(2026, 9, 28), tmp_path, deep=True)
+
+
+def test_next_sheet_is_searched_deep_when_the_refresh_is_deep(tmp_path, monkeypatch):
+    """Третий аудит, М19 прогона 1: поиск следующего листа шёл без deep, и
+    свежий промах прятал только что появившийся лист до ночи."""
+    index = si.SheetIndex(tmp_path)
+    index.remember("лист A", "1", dt.date(2026, 9, 21), dt.date(2026, 9, 26))
+    asked = []
+
+    def resolve_for(day, state_dir, deep=False):
+        asked.append((day, deep))
+        if day == dt.date(2026, 9, 25):
+            return "лист A", "1"
+        return "лист B", "2"
+
+    monkeypatch.setattr(si, "resolve_for", resolve_for)
+    window = si.resolve_window(dt.date(2026, 9, 25), 8, tmp_path, deep=True)
+    assert window == [("лист A", "1"), ("лист B", "2")]
+    assert asked[-1] == (dt.date(2026, 9, 27), True)

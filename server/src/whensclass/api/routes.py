@@ -214,15 +214,19 @@ def teacher(
         )
         if renamed:
             body = build(renamed)
+    if body is None and teacher_id in getattr(refresher.renames, "pending_teachers", {}):
+        # Книга ждёт подтверждения переименования: пустые дни «знакомого»
+        # телефон записывал поверх своих, слал «убрали пару» и снимал
+        # напоминания (третий аудит, В26 прогона 1), а 404 через час давал
+        # «вас больше нет» — вечером подтверждение ждёт ночи (М20). 503 —
+        # «временно»: телефон держит прежнее.
+        return _renaming_response()
     name = store.known_teacher(teacher_id) if body is None else None
-    renaming = teacher_id in getattr(refresher.renames, "pending_teachers", {})
-    if name and (renaming or spelling_twin(store.teachers, name)):
+    if name and spelling_twin(store.teachers, name):
         # Колледж исправил опечатку в имени: тот же человек теперь под другим
         # id, и пустые дни здесь 60 дней говорили бы «пар нет». 404 — и
         # приложение предложит выбрать заново, человек найдёт себя под верным
-        # именем (третий аудит, В19 прогона 1). Пока книга ждёт подтверждения
-        # переименования, — тоже 404, а не пустые дни: телефон записывал их
-        # поверх своих, слал «убрали пару» и снимал напоминания (В26).
+        # именем (третий аудит, В19 прогона 1).
         name = None
     if name:
         # В этом листе у преподавателя нет пар, но он был в прошлых — отпуск,
@@ -237,6 +241,16 @@ def teacher(
         return Response(status_code=404, content='{"error":"преподаватель не найден"}',
                         media_type=JSON)
     return _json_response(request, body)
+
+
+def _renaming_response() -> Response:
+    """Старый id, чьё переименование книга ещё подтверждает: «временно», а
+    не «нет такого» — приложение держит прежнее расписание и не объявляет
+    «вас больше нет в таблице»."""
+    return Response(
+        status_code=503, content='{"error":"id, похоже, переименован — подтверждаю"}',
+        media_type=JSON, headers={"Retry-After": "1200"},
+    )
 
 
 @router.api_route("/v1/schedule/{group_id}", methods=["GET", "HEAD"])
@@ -271,6 +285,9 @@ def schedule(
         renamed = refresher.renames.group(group_id)
         if renamed:
             body = build(renamed)
+    if body is None and group_id in getattr(refresher.renames, "pending_groups", {}):
+        # Переименование ждёт подтверждения (М20): не 404, а «временно».
+        return _renaming_response()
     if body is None:
         return Response(status_code=404, content='{"error":"группа не найдена"}',
                         media_type=JSON)

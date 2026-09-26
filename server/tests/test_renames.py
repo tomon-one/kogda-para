@@ -363,3 +363,35 @@ def test_teacher_rename_on_the_border_of_two_sheets(tmp_path, snapshot):
     book = RenameBook(tmp_path)
     book.record(both, new_sheet, build_index(both), build_index(new_sheet))
     assert book.pending_teachers[teacher_id(teacher)]["to"] == teacher_id(fixed)
+
+
+def test_rename_on_the_border_seen_without_a_merged_snapshot(tmp_path, snapshot):
+    """Третий аудит, М21 прогона 1: новый лист прочитан впервые, когда старый
+    уже ушёл, — склейки не было, и стык не был виден."""
+    first, last = dt.date(2026, 9, 2), dt.date(2026, 9, 5)
+    old_sheet = _week(snapshot, first, last, gid="старый")
+    new_sheet = _week(snapshot, first, last, shift_days=7,
+                      rename=("ИСП-924/2", "ИСП-924/2а"), gid="новый")
+    book = RenameBook(tmp_path)
+    book.record(old_sheet, new_sheet, build_index(old_sheet), build_index(new_sheet))
+    assert book.pending_groups["isp-924-2"]["to"] == "isp-924-2a"
+
+    plain = _week(snapshot, first, last, shift_days=7, gid="новый")
+    quiet = RenameBook(tmp_path / "другая")
+    (tmp_path / "другая").mkdir()
+    quiet.record(old_sheet, plain, build_index(old_sheet), build_index(plain))
+    assert quiet.pending_groups == {}
+
+
+def test_confirmation_does_not_miss_the_forty_minute_refresh(tmp_path, snapshot, monkeypatch):
+    """Третий аудит, М20 прогона 1: заход T+40 звал подтверждение на секунды
+    раньше сорока минут от записи, и оно уезжало на T+60, а вечером — на ночь."""
+    from whensclass.service import renames
+
+    after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
+    book = RenameBook(tmp_path)
+    book.record(snapshot, after, build_index(snapshot), build_index(after))
+    almost = renames._now() + renames.CONFIRM_AFTER - dt.timedelta(seconds=5)
+    monkeypatch.setattr(renames, "_now", lambda: almost)
+    book.tick()
+    assert book.group("isp-924-2") == "isp-924-2a"

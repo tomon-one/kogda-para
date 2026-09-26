@@ -33,7 +33,7 @@ class SnapshotStore:
         self.previous = state_dir / "snapshot.prev.json"
         self.seen_path = state_dir / "teachers_seen.json"
         self._seen: dict[str, dict] | None = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # повторный: put зовёт teachers под ним
         self._snapshot: Snapshot | None = None
         self._generated: dt.datetime | None = None
         self._teachers: TeacherIndex | None = None
@@ -49,11 +49,15 @@ class SnapshotStore:
     @property
     def teachers(self) -> TeacherIndex | None:
         """Расписание преподавателей — перевёрнутый снимок, считается один раз."""
-        if self._snapshot is None:
-            return None
-        if self._teachers is None:
-            self._teachers = build_index(self._snapshot)
-        return self._teachers
+        with self._lock:
+            # Под замком: поток запроса, строивший индекс по снимку до
+            # перезапуска, мог записать его поверх индекса нового снимка из
+            # put (третий аудит, М46 прогона 1).
+            if self._snapshot is None:
+                return None
+            if self._teachers is None:
+                self._teachers = build_index(self._snapshot)
+            return self._teachers
 
     def put(
         self, snapshot: Snapshot, generated: dt.datetime, teachers: TeacherIndex | None = None
