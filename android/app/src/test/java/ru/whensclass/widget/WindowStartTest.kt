@@ -80,4 +80,30 @@ class WindowStartTest {
 
         assertEquals(0, start)
     }
+
+    /** Настоящий день: две пары утром, четыре после полудня. */
+    private val realDay = mapOf(
+        "1" to listOf("08:00", "09:00"),
+        "2" to listOf("09:10", "10:10"),
+        "3" to listOf("12:30", "13:30"),
+        "4" to listOf("13:40", "14:40"),
+        "5" to listOf("14:50", "15:50"),
+        "6" to listOf("16:00", "17:00"),
+    )
+
+    @Test
+    fun `сегодня в середине дня — окно с первой некончившейся`() {
+        // Ради этого случая функция и написана; раньше тестов на него не было,
+        // и «return 0» или «return index» проходили все (третий аудит, М62
+        // прогона 2).
+        assertEquals(2, windowStart(lessons(6), realDay, today, fits = 2, now = now))
+        assertEquals(2, windowStart(lessons(6), realDay, today, fits = 3, now = now))
+    }
+
+    @Test
+    fun `сегодня под вечер — окно упирается в последнюю пару, без пустоты снизу`() {
+        val evening = today.atTime(16, 30)
+        // Кончились пять из шести, влезает три: 4-я, 5-я, 6-я, а не одна 6-я.
+        assertEquals(3, windowStart(lessons(6), realDay, today, fits = 3, now = evening))
+    }
 }

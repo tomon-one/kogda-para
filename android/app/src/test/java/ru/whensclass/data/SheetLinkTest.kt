@@ -25,18 +25,18 @@ class SheetLinkTest {
 
     @Test
     fun `ссылка ведёт к ячейке своей колонки в строке дня`() {
-        assertEquals("$base&range=EQ139:EU144", sheetLink(schedule(), LocalDate.of(2026, 9, 14), null))
+        assertEquals("$base&range=EQ139:ET150", sheetLink(schedule(), LocalDate.of(2026, 9, 14), null))
     }
 
     @Test
     fun `в воскресенье — к ближайшему следующему дню`() {
-        assertEquals("$base&range=EQ139:EU144", sheetLink(schedule(), LocalDate.of(2026, 9, 13), null))
+        assertEquals("$base&range=EQ139:ET150", sheetLink(schedule(), LocalDate.of(2026, 9, 13), null))
     }
 
     @Test
     fun `у преподавателя колонка берётся из первой пары дня`() {
         val teacher = schedule(column = null)
-        assertEquals("$base&range=EQ151:EU156", sheetLink(teacher, LocalDate.of(2026, 9, 15), null))
+        assertEquals("$base&range=EQ151:ET162", sheetLink(teacher, LocalDate.of(2026, 9, 15), null))
         // Пар в этот день нет — хотя бы строка дня.
         assertEquals("$base&range=A139", sheetLink(teacher, LocalDate.of(2026, 9, 14), null))
     }

@@ -79,6 +79,31 @@ class MainActivity : ComponentActivity() {
     // второй запрос подряд там ни к чему.
     private var started = false
 
+    /**
+     * С чем открыли: день из виджета, настройки из уведомления о версии.
+     * [seq] растёт на каждое нажатие по живому экрану: виджет и уведомления
+     * зовут с SINGLE_TOP, и экран не пересоздаётся, а получает onNewIntent.
+     * Раньше каждое нажатие уничтожало и создавало экран заново — пустой
+     * кадр, лишние запросы, сброшенные вкладка, поиск и прокрутка (третий
+     * аудит, М32 прогона 2).
+     */
+    private data class Opened(val day: String?, val update: Boolean, val seq: Int)
+
+    private val opened = mutableStateOf(Opened(null, false, 0))
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        opened.value = Opened(
+            intent.getStringExtra(EXTRA_DAY),
+            intent.getBooleanExtra(EXTRA_UPDATE, false),
+            opened.value.seq + 1,
+        )
+        // Ответ — тот же, что при открытии заново: счёт ответов не должен
+        // потерять нажатия оттого, что экран теперь не пересоздаётся.
+        lifecycleScope.launch { AppContainer.get(applicationContext).store.countOpen() }
+    }
+
     override fun onResume() {
         super.onResume()
         // Часы экрана пересчитываются при каждом возвращении: см. rememberNow.
@@ -118,12 +143,17 @@ class MainActivity : ComponentActivity() {
 
         // Виджет мог попросить открыть конкретный день, а уведомление о
         // новой версии — сразу настройки с кнопкой установки.
-        val day = intent?.getStringExtra(EXTRA_DAY)
-        val update = intent?.getBooleanExtra(EXTRA_UPDATE, false) == true
+        opened.value = Opened(
+            intent?.getStringExtra(EXTRA_DAY),
+            intent?.getBooleanExtra(EXTRA_UPDATE, false) == true,
+            0,
+        )
         setContent {
+            val open = opened.value
             App(
-                startDay = day,
-                openUpdate = update,
+                startDay = open.day,
+                openUpdate = open.update,
+                openSeq = open.seq,
                 exactAlarms = exactAlarms.value,
                 notifications = notifications.value,
                 phone = phone.value,
@@ -181,6 +211,7 @@ private val LightScheme = lightColorScheme(
 private fun App(
     startDay: String? = null,
     openUpdate: Boolean = false,
+    openSeq: Int = 0,
     exactAlarms: Boolean = false,
     notifications: Boolean = true,
     phone: ru.whensclass.notify.PhoneState = ru.whensclass.notify.PhoneState(),
@@ -290,7 +321,21 @@ private fun App(
         container.updates.taken()
     }
 
-    LaunchedEffect(screen, reloadKey) {
+    // Новое нажатие по живому экрану: к дню из виджета или к обновлению.
+    LaunchedEffect(openSeq) {
+        if (openSeq == 0) return@LaunchedEffect
+        if (openUpdate) {
+            focusUpdate = true
+            screen = Screen.SETTINGS
+        } else if (startDay != null) {
+            screen = Screen.TODAY
+        }
+    }
+
+    // И на каждое возвращение в приложение, пока свежих списков нет: на
+    // первом запуске без связи экран выбора сам не менялся, и список не
+    // перечитывался до перезапуска (третий аудит, В3 прогона 2).
+    LaunchedEffect(screen, reloadKey, ScreenClock.resumes) {
         val repository = container.repository
         // Сохранённые — сразу, без сети: экран открывается и в метро.
         // Свежие — следом и оба разом, а не по очереди (М31 прогона 2).
@@ -434,6 +479,7 @@ private fun App(
                     Screen.GROUPS -> if (pickSecond) {
                         GroupPickerScreen(
                             groups = groups,
+                            onRetry = { reloadKey++ },
                             canGoBack = true,
                             onBack = {
                                 pickSecond = false
@@ -455,6 +501,7 @@ private fun App(
                         // мгновение показывается чужое расписание.
                         SelfPickerScreen(
                             teachers = teachers,
+                            onRetry = { reloadKey++ },
                             loadDiagnostics = { container.repository.diagnostics() },
                             canGoBack = chosenName != null,
                             onBack = {
@@ -469,6 +516,7 @@ private fun App(
                     } else {
                         GroupPickerScreen(
                             groups = groups,
+                            onRetry = { reloadKey++ },
                             loadDiagnostics = { container.repository.diagnostics() },
                             canGoBack = chosenName != null,
                             onBack = {
@@ -580,6 +628,7 @@ private fun App(
 
                     Screen.TODAY -> TodayScreen(
                         startDay = startDay,
+                        startKey = openSeq,
                         groupName = chosenName.orEmpty(),
                         teacherMode = teacherMode,
                         teachers = teachers,

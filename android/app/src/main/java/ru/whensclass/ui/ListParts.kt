@@ -34,7 +34,7 @@ private fun searchKey(text: String): String =
  * преподавателя адреса не было вовсе (третий аудит, М76 прогона 2).
  */
 @Composable
-internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?) {
+internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?, onRetry: (() -> Unit)? = null) {
     val context = LocalContext.current
     Column(modifier = Modifier.padding(16.dp)) {
         Text(
@@ -57,6 +57,9 @@ internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?) 
                 }
                 .padding(vertical = 4.dp),
         )
+        // Связь вернулась — повторить здесь же, а не перезапуском (В3
+        // прогона 2).
+        onRetry?.let { ActionButton(label = "Повторить", onClick = it) }
         loadDiagnostics?.let { ReportLink(it) }
     }
 }

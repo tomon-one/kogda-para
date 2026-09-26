@@ -12,7 +12,8 @@ class DayFormatTest {
 
     @Test
     fun `ближайшие дни называются словами`() {
-        val today = LocalDate.now()
+        // «Сегодня» — колледжа, а не машины, где гоняют тесты (М61 прогона 2).
+        val today = collegeToday()
         assertTrue(formatDayTitle(today).startsWith("сегодня"))
         assertTrue(formatDayTitle(today.plusDays(1)).startsWith("завтра"))
         // Прошедшие дни остаются в списке, поэтому вчерашний назван словом.
@@ -167,12 +168,24 @@ class DayFormatTest {
 
     @Test
     fun `давность сбоя — по-русски и по местному времени`() {
+        // Тесты идут в UTC (build.gradle.kts): «местное» — часы телефона, а
+        // не колледжа; ожидание — числом, а не той же формулой, что код.
         val since = java.time.Instant.parse("2026-09-11T04:00:00Z")
-        val local = java.time.LocalDateTime.ofInstant(since, java.time.ZoneId.systemDefault())
-        val prefix = local.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM, HH:mm", java.util.Locale("ru")))
+        val prefix = "11 сентября, 04:00"
         assertEquals("$prefix — уже 40 минут", formatSince("2026-09-11T04:00:00Z", since.plusSeconds(40 * 60)))
         assertEquals("$prefix — уже 3 часа", formatSince("2026-09-11T04:00:00Z", since.plusSeconds(3 * 3600 + 5)))
         assertEquals("$prefix — уже 2 дня", formatSince("2026-09-11T04:00:00Z", since.plusSeconds(50 * 3600)))
         assertEquals("не дата", formatSince("не дата"))
+    }
+
+    @Test
+    fun `время колледжа — в абсолютное по Новосибирску, в любом поясе телефона`() {
+        // Будильники напоминаний и звонков ставятся через millisOf: 09:00 по
+        // колледжу — это 02:00 UTC, где бы ни шёл тест (М61 прогона 2).
+        assertEquals(
+            java.time.Instant.parse("2026-09-08T02:00:00Z").toEpochMilli(),
+            millisOf(java.time.LocalDateTime.of(2026, 9, 8, 9, 0)),
+        )
+        assertEquals("UTC", java.util.TimeZone.getDefault().id)
     }
 }

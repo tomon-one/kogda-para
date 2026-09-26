@@ -51,6 +51,7 @@ import ru.whensclass.widget.plural
 fun SelfPickerScreen(
     teachers: List<GroupDto>?,
     onPick: (GroupDto) -> Unit,
+    onRetry: (() -> Unit)? = null,
     canGoBack: Boolean = false,
     onBack: () -> Unit = {},
     onStudentMode: () -> Unit = {},
@@ -106,7 +107,7 @@ fun SelfPickerScreen(
 
                 // До настроек отсюда не дойти: себя ещё не выбрали — адрес
                 // и отчёт здесь же (М76 прогона 2).
-                teachers.isEmpty() -> LoadFailed("Список преподавателей", loadDiagnostics)
+                teachers.isEmpty() -> LoadFailed("Список преподавателей", loadDiagnostics, onRetry)
 
                 else -> {
                     val filtered = remember(teachers, query) {
