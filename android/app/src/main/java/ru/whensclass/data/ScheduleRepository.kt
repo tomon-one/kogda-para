@@ -57,6 +57,20 @@ internal data class Subject(
     val second: String?,
 )
 
+/**
+ * Записать ответ, только если он всё ещё про то, о чём спрашивали.
+ *
+ * Кто выбран сейчас, спрашиваем заново прямо перед записью, и всё, что пишет
+ * на телефон, — внутри [write]. Подгруппа входит в сравнение наравне с ролью и
+ * группой: запрос, начатый до её смены, приносил склейку с прежней соседкой и
+ * записывал её поверх новой. `null` — ответ чужой, записано ничего не было.
+ */
+internal suspend fun <T : Any> writeIfStillAsked(
+    asked: Subject,
+    current: suspend () -> Subject,
+    write: suspend () -> T,
+): T? = if (current() == asked) write() else null
+
 /** Что случилось при обновлении — приложению есть что показать, виджету нет. */
 sealed interface RefreshResult {
     data object Updated : RefreshResult
@@ -81,9 +95,6 @@ const val UNREACHABLE_BROKEN_AFTER_MILLIS = 30L * 60 * 1000
 /** Состояние, которое телефон ставит сам, когда сервер не отвечает. */
 const val STATUS_UNREACHABLE = "unreachable"
 
-/** Свои пары: без пришедших из соседней подгруппы. */
-internal fun ScheduleDto.ownOnly(): ScheduleDto =
-    copy(days = days.map { day -> day.copy(lessons = day.lessons.filter { it.groups == null }) })
 
 class ScheduleRepository(
     private val context: Context,
@@ -139,11 +150,13 @@ class ScheduleRepository(
      * Молчим, когда меняется что-то далёкое: про послезавтрашнюю замену
      * сообщать посреди пары — только раздражать.
      */
-    private suspend fun announceChanges(old: ScheduleDto?, fresh: ScheduleDto) {
+    private suspend fun announceChanges(old: ScheduleDto?, fresh: ScheduleDto, adopted: Boolean = false) {
         if (!store.notifyChangesEnabled()) return
         val today = ru.whensclass.widget.collegeToday()
         val soon = setOf(today.toString(), today.plusDays(1).toString())
-        val changes = ScheduleDiff.compare(old, fresh).filter { it.day in soon }
+        // Id сменил сервер (переименование), а не человек — это тот же субъект.
+        val changes = ScheduleDiff.compare(old, fresh, sameSubject = adopted.takeIf { it })
+            .filter { it.day in soon }
         if (changes.isEmpty()) return
 
         // День — словами и датой, а не «Завтра»: уведомление висит в шторке до
@@ -329,11 +342,7 @@ class ScheduleRepository(
      */
     suspend fun selectSecondGroup(group: GroupDto?) {
         val saved = schedule.first()
-        val ownOnly = saved?.takeIf { !store.teacherMode() }?.let { dto ->
-            json.encodeToString(
-                dto.copy(days = dto.days.map { day -> day.copy(lessons = day.lessons.filter { it.groups == null }) })
-            )
-        }
+        val ownOnly = saved?.takeIf { !store.teacherMode() }?.let { json.encodeToString(it.ownOnly()) }
         store.setSecondGroup(group?.id, group?.name, ownOnly)
         afterSelection()
     }
@@ -465,72 +474,72 @@ class ScheduleRepository(
             // Пока шёл запрос, человек мог сменить группу, роль или подгруппу.
             // Тогда пришедшее расписание — чужое, и записывать его нельзя: оно
             // молча возвращало на экран прежние пары поверх только что выбранных.
-            // Подгруппа входит в сравнение наравне с ролью и группой: запрос,
-            // начатый до её смены, приносил склейку с прежней соседкой и
-            // записывал её поверх новой.
-            if (subject() != asked) return@withContext RefreshResult.AlreadyFresh
-
-            // Ответ пришёл под другим id: группу или преподавателя переименовали
-            // в таблице, и сервер ответил по памяти о старом имени. Переписываем
-            // выбор у себя — после сверки, иначе она сочла бы его чужим.
-            if (fresh.groupId != subject) {
-                if (teacherMode) store.adoptTeacher(fresh.groupId, fresh.groupName)
-                else store.adoptGroup(fresh.groupId, fresh.groupName)
-            }
-            merged.secondRenamed?.let { (id, name) -> store.adoptSecondGroup(id, name) }
-            merged.secondGone?.let { name ->
-                // Не стираем выбор, а отмечаем: вернётся соседка — вернутся и
-                // её пары (М41 прогона 1). Сказать — один раз, своим
-                // уведомлением и только тому, кто просил сообщать (М15).
-                if (store.markSecondGone() && store.notifyChangesEnabled()) {
-                    Notifications.subgroupGone(
-                        context,
-                        "Подгруппы $name сейчас нет в таблице",
-                        "Её пары не показываются рядом с вашими. Появится снова — " +
-                            "вернутся сами; если подгруппу переименовали — выберите её " +
-                            "заново в настройках.",
-                    )
+            // Всё, что пишет, — внутри writeIfStillAsked: сверку не забыть и не
+            // переставить за запись (третий аудит, В17 прогона 2).
+            writeIfStillAsked(asked, ::subject) {
+                // Ответ пришёл под другим id: группу или преподавателя переименовали
+                // в таблице, и сервер ответил по памяти о старом имени. Переписываем
+                // выбор у себя — после сверки, иначе она сочла бы его чужим.
+                val adopted = fresh.groupId != subject
+                if (adopted) {
+                    if (teacherMode) store.adoptTeacher(fresh.groupId, fresh.groupName)
+                    else store.adoptGroup(fresh.groupId, fresh.groupName)
                 }
-            }
-
-            val previous = schedule.first()
-            val previousPartial = store.schedulePartial()
-            // Окна не было — снимок записан сборкой до 81-й, где обрубок не
-            // помечался: сравнивать с ним нельзя, «добавилась пара» было бы
-            // ложным (третий аудит, М43 прогона 1).
-            val comparable = store.windowFrom() != null
-            store.putSchedule(
-                json.encodeToString(full), full.generatedAt,
-                partial = !merged.whole, windowFrom = from.toString(),
-            )
-            // Записанное — уже на телефоне. Объявить и переставить будильники
-            // надо и тогда, когда корутину отменили посреди (ушли из
-            // приложения): раньше это глоталось как Failed, изменение не
-            // объявлялось никогда, а будильник об отменённой паре срабатывал
-            // (третий аудит, М9 прогона 2).
-            withContext(NonCancellable) {
-                updateWidgets()
-                // Об изменениях — только по сопоставимому. Обрубок без пар
-                // соседней подгруппы отличается от целого так же, как отмена:
-                // сравнивать целое с обрубком нельзя. Раньше обрубок
-                // записывался, а следующее целое объявляло давние пары соседки
-                // «добавившимися» (второй аудит, В10). Если прежнее — обрубок
-                // или соседка пропала, сравниваем свои пары со своими: так и
-                // при её пропаже говорим об отменах своих (В17; М15 прогона 1).
-                when {
-                    !comparable -> Unit
-                    previousPartial || merged.secondGone != null ->
-                        announceChanges(previous?.ownOnly(), fresh)
-                    merged.whole -> announceChanges(previous, full)
+                merged.secondRenamed?.let { (id, name) -> store.adoptSecondGroup(id, name) }
+                merged.secondGone?.let { name ->
+                    // Не стираем выбор, а отмечаем: вернётся соседка — вернутся и
+                    // её пары (М41 прогона 1). Сказать — один раз, своим
+                    // уведомлением и только тому, кто просил сообщать (М15).
+                    if (store.markSecondGone() && store.notifyChangesEnabled()) {
+                        Notifications.subgroupGone(
+                            context,
+                            "Подгруппы $name сейчас нет в таблице",
+                            "Её пары не показываются рядом с вашими. Появится снова — " +
+                                "вернутся сами; если подгруппу переименовали — выберите её " +
+                                "заново в настройках.",
+                        )
+                    }
                 }
-                LessonAlarms.reschedule(context)
-                // И будильник к звонку: он считается по сетке из снимка, а при
-                // первом запуске её ещё нет. Взведённый в WhensClassApp по
-                // пустой сетке, он не ставился вовсе — и подсветка «идёт
-                // сейчас» до следующего запуска процесса сама не появлялась.
-                MidnightUpdater.schedule(context)
-            }
-            RefreshResult.Updated
+
+                val previous = schedule.first()
+                val previousPartial = store.schedulePartial()
+                // Окна не было — снимок записан сборкой до 81-й, где обрубок не
+                // помечался: сравнивать с ним нельзя, «добавилась пара» было бы
+                // ложным (третий аудит, М43 прогона 1).
+                val comparable = store.windowFrom() != null
+                store.putSchedule(
+                    json.encodeToString(full), full.generatedAt,
+                    partial = !merged.whole, windowFrom = from.toString(),
+                )
+                // Записанное — уже на телефоне. Объявить и переставить будильники
+                // надо и тогда, когда корутину отменили посреди (ушли из
+                // приложения): раньше это глоталось как Failed, изменение не
+                // объявлялось никогда, а будильник об отменённой паре срабатывал
+                // (третий аудит, М9 прогона 2).
+                withContext(NonCancellable) {
+                    updateWidgets()
+                    // Об изменениях — только по сопоставимому. Обрубок без пар
+                    // соседней подгруппы отличается от целого так же, как отмена:
+                    // сравнивать целое с обрубком нельзя. Раньше обрубок
+                    // записывался, а следующее целое объявляло давние пары соседки
+                    // «добавившимися» (второй аудит, В10). Если прежнее — обрубок
+                    // или соседка пропала, сравниваем свои пары со своими: так и
+                    // при её пропаже говорим об отменах своих (В17; М15 прогона 1).
+                    when {
+                        !comparable -> Unit
+                        previousPartial || merged.secondGone != null ->
+                            announceChanges(previous?.ownOnly(), fresh, adopted)
+                        merged.whole -> announceChanges(previous, full, adopted)
+                    }
+                    LessonAlarms.reschedule(context)
+                    // И будильник к звонку: он считается по сетке из снимка, а при
+                    // первом запуске её ещё нет. Взведённый в WhensClassApp по
+                    // пустой сетке, он не ставился вовсе — и подсветка «идёт
+                    // сейчас» до следующего запуска процесса сама не появлялась.
+                    MidnightUpdater.schedule(context)
+                }
+                RefreshResult.Updated
+            } ?: RefreshResult.AlreadyFresh
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {

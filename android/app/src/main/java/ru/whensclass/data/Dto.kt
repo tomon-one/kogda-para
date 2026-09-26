@@ -25,6 +25,25 @@ data class ScheduleDto(
     @SerialName("kind") val kind: String? = null,
 ) {
     val isTeacher: Boolean get() = kind == "teacher"
+
+    /**
+     * Пара пришла из соседней подгруппы. Склейка подписывает на общем номере
+     * и свою пару — своим именем, поэтому «есть подпись» ещё не значит
+     * «чужая»; у преподавателя подпись группы стоит у каждой пары, и чужих
+     * там нет.
+     */
+    fun isNeighbours(lesson: LessonDto): Boolean =
+        !isTeacher && lesson.groups != null && lesson.groups != groupName
+
+    /** Свои пары: без пришедших из соседней подгруппы и без своей подписи. */
+    fun ownOnly(): ScheduleDto = copy(
+        days = days.map { day ->
+            day.copy(
+                lessons = day.lessons.filterNot(::isNeighbours)
+                    .map { if (it.groups == groupName) it.copy(groups = null) else it },
+            )
+        },
+    )
 }
 
 @Serializable

@@ -213,8 +213,7 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
     // настоящей первой (третий аудит, В1 прогона 2); пара соседней подгруппы
     // выдавалась за свою ближайшую (В5). У преподавателя подпись группы — у
     // каждой пары, там свои все.
-    fun mine(lesson: LessonDto) =
-        !lesson.isCancelled && (schedule.isTeacher || lesson.groups == null)
+    fun mine(lesson: LessonDto) = !lesson.isCancelled && !schedule.isNeighbours(lesson)
     val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }
         ?.lessons.orEmpty().filter(::mine)
 

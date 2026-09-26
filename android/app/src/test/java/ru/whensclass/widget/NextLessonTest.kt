@@ -56,6 +56,15 @@ class NextLessonTest {
     }
 
     @Test
+    fun `своя пара с подписью своей группы — своя`() {
+        // На общем номере склейка подписывает и свою пару.
+        val s = schedule(
+            tuesday to listOf(lesson(1, "Физика", groups = "ИСП-924/1"), lesson(1, "Химия", groups = "ИСП-924/2")),
+        )
+        assertEquals("Физика", nextLesson(s, tuesday.atTime(8, 0))?.lesson?.subject)
+    }
+
+    @Test
     fun `у преподавателя подпись группы у каждой пары — все свои`() {
         val s = schedule(
             tuesday to listOf(lesson(1, "Физика", groups = "ИСП-924/1")),
