@@ -24,6 +24,14 @@ const val DEFAULT_NOTIFY_BEFORE = 20
  * работает в метро и при выключенном сервере, а обновление всего лишь меняет
  * содержимое хранилища.
  */
+/**
+ * Выключатель, отделённый от «изменений»: пока человек его не трогал, он
+ * повторяет «изменения» — сбой сервера и пропажа подгруппы раньше шли под
+ * ними, и кто гасил изменения, гасил и их.
+ */
+internal fun notifyFlag(own: String?, changes: String?): Boolean =
+    own?.let { it != "0" } ?: (changes != "0")
+
 class ScheduleStore(private val context: Context) {
 
     /**
@@ -222,6 +230,31 @@ class ScheduleStore(private val context: Context) {
 
     suspend fun setNotifyChanges(enabled: Boolean) {
         context.dataStore.edit { it[KEY_NOTIFY_CHANGES] = if (enabled) "1" else "0" }
+    }
+
+    /**
+     * Сообщать ли о сбое сервера — своим выключателем, а не «изменениями»
+     * (просьба Tomon 27.09: у каждого вида уведомлений свой).
+     */
+    val notifyServer: Flow<Boolean> = context.dataStore.data.map {
+        notifyFlag(it[KEY_NOTIFY_SERVER], it[KEY_NOTIFY_CHANGES])
+    }
+
+    suspend fun notifyServerEnabled(): Boolean = notifyServer.first()
+
+    suspend fun setNotifyServer(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFY_SERVER] = if (enabled) "1" else "0" }
+    }
+
+    /** Сообщать ли о пропаже соседней подгруппы из таблицы. */
+    val notifySubgroup: Flow<Boolean> = context.dataStore.data.map {
+        notifyFlag(it[KEY_NOTIFY_SUBGROUP], it[KEY_NOTIFY_CHANGES])
+    }
+
+    suspend fun notifySubgroupEnabled(): Boolean = notifySubgroup.first()
+
+    suspend fun setNotifySubgroup(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFY_SUBGROUP] = if (enabled) "1" else "0" }
     }
 
     /**
@@ -662,6 +695,8 @@ class ScheduleStore(private val context: Context) {
         val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
         val KEY_NOTIFY_ON = stringPreferencesKey("notify_on")
         val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")
+        val KEY_NOTIFY_SERVER = stringPreferencesKey("notify_server")
+        val KEY_NOTIFY_SUBGROUP = stringPreferencesKey("notify_subgroup")
         val KEY_PINNED_TEACHERS = stringPreferencesKey("pinned_teachers")
         val KEY_PINNED_GROUPS = stringPreferencesKey("pinned_groups")
         val KEY_ROLE = stringPreferencesKey("role")

@@ -87,6 +87,8 @@ internal suspend fun collectDiagnostics(
     val off = listOfNotNull(
         "«Скоро пара»".takeIf { phone.lessonChannelOff },
         "«Изменения»".takeIf { phone.changesChannelOff },
+        "«Сбои сервера»".takeIf { phone.serverChannelOff },
+        "«Соседняя подгруппа»".takeIf { phone.subgroupChannelOff },
     )
     if (off.isNotEmpty()) lines += "Каналы выключены в телефоне: ${off.joinToString(", ")}"
     lines += "Фон: " + phone.backgroundLimits.joinToString("; ").ifEmpty { "ограничений не видно" }

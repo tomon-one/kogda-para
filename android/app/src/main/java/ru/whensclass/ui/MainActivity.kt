@@ -253,6 +253,8 @@ private fun App(
     val notifyEnabled by container.store.notifyEnabled.collectAsState(initial = false)
     val notifyChanges by container.store.notifyChanges.collectAsState(initial = true)
     val notifyUpdates by container.store.notifyUpdates.collectAsState(initial = true)
+    val notifyServer by container.store.notifyServer.collectAsState(initial = true)
+    val notifySubgroup by container.store.notifySubgroup.collectAsState(initial = true)
     val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
     val teacherMode by container.store.isTeacher.collectAsState(initial = false)
     val serverStatus by container.store.serverStatus.collectAsState(initial = "ok")
@@ -563,6 +565,8 @@ private fun App(
                         notifyEnabled = notifyEnabled,
                         notifyChanges = notifyChanges,
                         notifyUpdates = notifyUpdates,
+                        notifyServer = notifyServer,
+                        notifySubgroup = notifySubgroup,
                         exactAlarms = exactAlarms,
                         notifications = notifications,
                         phone = phone,
@@ -583,6 +587,12 @@ private fun App(
                         },
                         onNotifyUpdates = { on ->
                             scope.launch { container.store.setNotifyUpdates(on) }
+                        },
+                        onNotifyServer = { on ->
+                            scope.launch { container.store.setNotifyServer(on) }
+                        },
+                        onNotifySubgroup = { on ->
+                            scope.launch { container.store.setNotifySubgroup(on) }
                         },
                         focusUpdate = focusUpdate,
                         checkingUpdate = checkingUpdate,

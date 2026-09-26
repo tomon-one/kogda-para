@@ -27,6 +27,10 @@ object Notifications {
     const val CHANNEL_LESSON = "lesson_soon"
     const val CHANNEL_CHANGES = "schedule_changes"
     const val CHANNEL_UPDATE = "app_update"
+    // Свои каналы у сбоя сервера и у пропажи подгруппы: раньше они шли
+    // каналом изменений, и выключить одно, не тронув другое, было нельзя.
+    const val CHANNEL_SERVER = "server_down"
+    const val CHANNEL_SUBGROUP = "subgroup_gone"
 
     private const val ID_LESSON = 1
     private const val ID_CHANGES = 2
@@ -53,9 +57,21 @@ object Notifications {
                 CHANNEL_CHANGES,
                 "Изменения в расписании",
                 NotificationManager.IMPORTANCE_DEFAULT,
-            // Этим каналом идут и сбой сервера, и пропажа подгруппы: выключая
-            // его, человек должен знать, что выключает.
-            ).apply { description = "Отмены и замены, пропажа подгруппы, сбои сервера" },
+            ).apply { description = "Отмены и замены на сегодня и завтра" },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_SERVER,
+                "Сбои сервера",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply { description = "Сервер не обновляет расписание дольше двух часов" },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_SUBGROUP,
+                "Соседняя подгруппа",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply { description = "Соседней подгруппы не стало в таблице" },
         )
         manager.createNotificationChannel(
             NotificationChannel(
@@ -98,17 +114,17 @@ object Notifications {
     }
 
     fun subgroupGone(context: Context, title: String, text: String) {
-        show(context, CHANNEL_CHANGES, ID_SUBGROUP, title, text, day = null)
+        show(context, CHANNEL_SUBGROUP, ID_SUBGROUP, title, text, day = null)
     }
 
     /**
-     * Сервер лежит дольше двух часов — канал тот же, что у изменений, id свой.
+     * Сервер лежит дольше двух часов — свой канал и свой id.
      * true — показано: засчитывать сбой объявленным можно только тогда, иначе
      * после выдачи разрешения посреди сбоя уведомление не приходило никогда
      * (третий аудит, М32 прогона 1).
      */
     fun serverDown(context: Context, title: String, text: String): Boolean =
-        show(context, CHANNEL_CHANGES, ID_SERVER, title, text, day = null) && !channelOff(context, CHANNEL_CHANGES)
+        show(context, CHANNEL_SERVER, ID_SERVER, title, text, day = null) && !channelOff(context, CHANNEL_SERVER)
 
     /**
      * Сервер починился — снять «не обновляется»: оно висело в шторке рядом со
