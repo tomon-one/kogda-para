@@ -37,7 +37,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import kotlinx.coroutines.launch
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.withStateAtLeast
 import ru.whensclass.AppContainer
 import ru.whensclass.data.sheetLink
 import ru.whensclass.data.AppUpdate
@@ -121,10 +124,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Приветствие показывается один раз. Поставить true, чтобы обкатать его текст,
-// не переустанавливая приложение.
-private const val ALWAYS_SHOW_WELCOME = false
-
 /** Экраны приложения. Их четыре, поэтому обходимся без библиотеки навигации. */
 // Порядок важен: по нему считается, куда «едет» экран при переходе.
 private enum class Screen { WELCOME, GROUPS, TODAY, SETTINGS }
@@ -173,6 +172,7 @@ private fun App(
     notifications: Boolean = true,
 ) {
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val container = remember { AppContainer.get(context) }
     val scope = rememberCoroutineScope()
 
@@ -289,11 +289,9 @@ private fun App(
     // И сразу забираем свежее расписание: после установки новой версии старые
     // данные на экране выглядят как поломка.
     LaunchedEffect(Unit) { container.repository.refresh() }
-    var welcomeDone by remember { mutableStateOf(false) }
     // Кого показываем — зависит от роли: группу или самого преподавателя.
     val chosenName = if (teacherMode) teacherName else groupName
     val current = when {
-        ALWAYS_SHOW_WELCOME && !welcomeDone -> Screen.WELCOME
         !welcomeSeen -> Screen.WELCOME
         chosenName == null -> Screen.GROUPS
         else -> screen
@@ -344,7 +342,6 @@ private fun App(
                 when (target) {
                     Screen.WELCOME -> WelcomeScreen(
                         onContinue = {
-                            welcomeDone = true
                             scope.launch { container.store.markWelcomeSeen() }
                         },
                     )
@@ -474,9 +471,16 @@ private fun App(
                                 scope.launch {
                                     installing = true
                                     updateError = null
-                                    val result = container.updates.downloadAndInstall(release)
-                                    if (result is AppUpdate.Result.Failed) {
-                                        updateError = result.why
+                                    when (val result = container.updates.downloadAndInstall(release)) {
+                                        is AppUpdate.Result.Failed -> updateError = result.why
+                                        // Ушёл из приложения, пока качалось, — установщик
+                                        // откроется, когда вернётся: из фона Android 10+
+                                        // его молча не пускал (М49 прогона 1).
+                                        is AppUpdate.Result.Ready ->
+                                            lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) {
+                                                runCatching { context.startActivity(result.intent) }
+                                                    .onFailure { updateError = "не нашёл установщик Android" }
+                                            }
                                     }
                                     installing = false
                                 }

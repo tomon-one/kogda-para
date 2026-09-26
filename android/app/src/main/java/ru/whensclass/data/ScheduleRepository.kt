@@ -118,7 +118,6 @@ class ScheduleRepository(
         .flowOn(Dispatchers.Default)
 
     val fetchedAt: Flow<Long> = store.fetchedAt
-    val groupName: Flow<String?> = store.groupName
 
     /**
      * Чьё расписание мы сейчас просим: роль, выбранный и соседняя подгруппа.

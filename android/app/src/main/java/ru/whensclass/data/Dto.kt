@@ -114,6 +114,7 @@ data class MetaDto(
     @SerialName("src_url") val sourceUrl: String? = null,
     /** С какого момента сервер не обновляется — только при `status` не `ok`. */
     @SerialName("since") val since: String? = null,
-    /** Почему — словами разборщика. */
-    @SerialName("err") val error: String? = null,
+    // `err` (почему — словами разборщика) приложение не читает: человеку
+    // «формат таблицы изменился» ничего не даёт, а поле без чтения путало
+    // (третий аудит, М45 прогона 2).
 )

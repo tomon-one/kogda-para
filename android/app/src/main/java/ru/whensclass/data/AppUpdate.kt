@@ -1,17 +1,14 @@
 package ru.whensclass.data
 
-import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import androidx.core.content.FileProvider
 import java.io.File
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -29,6 +26,55 @@ data class ReleaseDto(
     @SerialName("size") val size: Long = 0,
     @SerialName("notes") val notes: String = "",
 )
+
+/**
+ * Объявлять ли сборку. Про одну и ту же — один раз, но «уже объявлено»
+ * сверяется на равенство, а не «не меньше»: номер приходит с сервера без
+ * проверки, и один ответ с versionCode 2147483647 навсегда глушил объявления
+ * настоящих сборок (третий аудит, М53 прогона 1).
+ */
+internal fun shouldAnnounce(release: Int, installed: Int, announced: Int): Boolean =
+    release > installed && release != announced
+
+/**
+ * Годится ли подпись скачанного файла. Нынешний сертификат установленного
+ * приложения должен быть среди сертификатов файла — так судит и сам Android.
+ * У сборки с ротацией ключа в файле история [старый, новый], и прежняя
+ * сверка «история файла внутри истории установленного» отвергала её, хотя
+ * установщик бы принял (третий аудит, М55 прогона 1). Подделать историю без
+ * нашего ключа нельзя.
+ */
+internal fun signedAlike(installedCurrent: Set<String>, archiveAll: Set<String>): Boolean =
+    installedCurrent.isNotEmpty() && archiveAll.containsAll(installedCurrent)
+
+/**
+ * Почему загрузка не удалась — словами человека. Раньше на всё, кроме пары
+ * случаев, показывался сырой английский текст Java: «write failed: ENOSPC»,
+ * «unexpected end of stream», «Trust anchor for certification path not
+ * found» (третий аудит, В27 и М56 прогона 1).
+ */
+internal fun updateFailure(error: Throwable): String {
+    val chain = generateSequence(error) { it.cause }.take(8).toList()
+    return when {
+        // 429 — предел скачиваний с одного адреса в nginx; за общим адресом
+        // оператора или Wi-Fi колледжа в день раздачи он реален.
+        error is HttpFailure && (error.code == 429 || error.code == 503) ->
+            "сервер занят, попробуйте через минуту"
+        error is HttpFailure -> "сервер ответил ${error.code}"
+        error is TooLarge -> "файл больше объявленного — загрузка остановлена"
+        chain.any { it.message.orEmpty().let { m -> "ENOSPC" in m || "No space left" in m } } ->
+            "на телефоне не хватает места"
+        error is java.net.UnknownHostException -> "нет связи с сервером"
+        // SocketTimeoutException — частный случай; общий срок загрузки OkHttp
+        // бросает голым InterruptedIOException("timeout").
+        error is java.io.InterruptedIOException -> "сервер не ответил вовремя"
+        chain.any { it is javax.net.ssl.SSLException || it is java.security.cert.CertificateException } ->
+            "защищённое соединение не удалось: сеть подменяет сертификат (вход в Wi-Fi?). " +
+                "Попробуйте через мобильную сеть"
+        error is java.io.IOException -> "связь оборвалась, попробуйте ещё раз"
+        else -> "не удалось скачать"
+    }
+}
 
 /**
  * Проверка и установка обновлений.
@@ -49,6 +95,9 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     private companion object {
         /** Куда кладём скачанное. Внутренняя память: снаружи туда не залезть. */
         const val DIR = "updates"
+        const val APK = "application/vnd.android.package-archive"
+        /** Больше этого сборка не бывает: 81-я весит 2,6 МБ. */
+        const val MAX_SIZE = 64L * 1024 * 1024
     }
 
     /**
@@ -85,7 +134,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     suspend fun announceIfNew(store: ScheduleStore) {
         if (!store.notifyUpdatesEnabled()) return
         val release = (check() as? Check.Available)?.release ?: return
-        if (store.announcedVersion() >= release.versionCode) return
+        if (!shouldAnnounce(release.versionCode, BuildConfig.VERSION_CODE, store.announcedVersion())) return
 
         val shown = Notifications.newVersion(
             context,
@@ -100,12 +149,18 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
     /** Чем кончилась попытка обновиться. */
     sealed interface Result {
-        data object Started : Result
+        /**
+         * Файл скачан и проверен; [intent] открывает системный установщик.
+         * Открывает экран, а не мы: из фона Android 10+ запуск молча
+         * отбрасывал, если человек ушёл из приложения, пока шла загрузка
+         * (третий аудит, М49 прогона 1).
+         */
+        data class Ready(val intent: Intent) : Result
         data class Failed(val why: String) : Result
     }
 
     /**
-     * Скачивает обновление и открывает установщик, когда файл готов.
+     * Скачивает обновление и готовит установщик, когда файл готов.
      *
      * Раньше загрузка и установка были двумя нажатиями: первое ставило файл в
      * очередь, второе — открывало установщик. Со стороны это выглядело как
@@ -116,6 +171,12 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     }
 
     private suspend fun fetchAndInstall(release: ReleaseDto): Result {
+        if (release.size <= 0 || release.size > MAX_SIZE) {
+            return Result.Failed("сервер не сообщил толком размер сборки")
+        }
+        if (!api.isOurs(release.url)) {
+            return Result.Failed("адрес файла — не наш сервер")
+        }
         val file = File(dir(), name(release))
         if (!ready(file, release)) {
             // Недокачанный файл раньше считался готовым: проверки было ровно
@@ -126,10 +187,10 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             file.delete()
             val partial = File(dir(), name(release) + ".part")
             partial.delete()
-            val written = runCatching { api.downloadTo(release.url, partial) }
+            val written = runCatching { api.downloadTo(release.url, partial, release.size) }
                 .getOrElse { error ->
                     partial.delete()
-                    return Result.Failed(reason(error))
+                    return Result.Failed(updateFailure(error))
                 }
             if (!ready(partial, release) || !partial.renameTo(file)) {
                 partial.delete()
@@ -145,8 +206,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             return Result.Failed(why)
         }
         sweep(file)
-        install(file)
-        return Result.Started
+        return Result.Ready(installIntent(file))
     }
 
     /** null — файл наш: тот же пакет, та же подпись, объявленный номер. Иначе — почему нет. */
@@ -159,9 +219,9 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         if (versionCode(archive) != release.versionCode.toLong()) {
             return "в файле сборка ${versionCode(archive)}, а объявлена ${release.versionCode}"
         }
-        val mine = certificates(runCatching { installedInfo(pm) }.getOrNull())
-        val theirs = certificates(archive)
-        if (theirs.isEmpty() || mine.isEmpty() || !mine.containsAll(theirs)) {
+        val mine = certificates(runCatching { installedInfo(pm) }.getOrNull(), currentOnly = true)
+        val theirs = certificates(archive, currentOnly = false)
+        if (!signedAlike(mine, theirs)) {
             return "подпись скачанного файла не совпадает с установленным приложением"
         }
         return null
@@ -186,12 +246,20 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
         }
 
+    /**
+     * Отпечатки сертификатов. [currentOnly] — только нынешний: история
+     * ротированного ключа идёт от старого к новому, нынешний последний.
+     */
     @Suppress("DEPRECATION")
-    private fun certificates(info: PackageInfo?): Set<String> {
+    private fun certificates(info: PackageInfo?, currentOnly: Boolean): Set<String> {
         if (info == null) return emptySet()
         val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && info.signingInfo != null) {
             val signing = info.signingInfo!!
-            if (signing.hasMultipleSigners()) signing.apkContentsSigners else signing.signingCertificateHistory
+            when {
+                signing.hasMultipleSigners() -> signing.apkContentsSigners
+                currentOnly -> signing.signingCertificateHistory?.takeLast(1)?.toTypedArray()
+                else -> signing.signingCertificateHistory
+            }
         } else {
             info.signatures
         }
@@ -204,20 +272,6 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     @Suppress("DEPRECATION")
     private fun versionCode(info: PackageInfo): Long =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
-
-    private fun reason(error: Throwable): String = when (error) {
-        // 429 — предел одновременных скачиваний с одного адреса в nginx; за
-        // общим адресом оператора в день раздачи он реален (второй аудит, М43).
-        is HttpFailure -> if (error.code == 429 || error.code == 503) {
-            "сервер занят, попробуйте через минуту"
-        } else {
-            "сервер ответил ${error.code}"
-        }
-        is java.net.UnknownHostException -> "нет связи с сервером"
-        is java.net.SocketTimeoutException -> "сервер не ответил вовремя"
-        is java.io.IOException -> error.message ?: "не удалось скачать"
-        else -> "не удалось скачать"
-    }
 
     /**
      * Готов ли файл к установке.
@@ -242,18 +296,23 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         }
     }
 
-    /** Открывает системный установщик для уже скачанного файла. */
-    private fun install(file: File) {
-        val uri = FileProvider.getUriForFile(
-            context, "${context.packageName}.files", file,
-        )
+    /**
+     * Намерение для системного установщика — явное. Неявное ACTION_VIEW с
+     * правом чтения получало любое приложение с фильтром на APK — однажды
+     * выбранное «Всегда» для файлов из мессенджера, — и то могло изобразить
+     * установку (третий аудит, М48 прогона 1). Системного не нашлось —
+     * остаётся неявное: без установщика не обновиться вовсе.
+     */
+    private fun installIntent(file: File): Intent {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
         val intent = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, "application/vnd.android.package-archive")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+            .setDataAndType(uri, APK)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        @Suppress("DEPRECATION")
+        context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_SYSTEM_ONLY)
+            .map { it.activityInfo }
+            .firstOrNull { it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0 }
+            ?.let { intent.setClassName(it.packageName, it.name) }
+        return intent
     }
-
-    /** Уже скачанный и проверенный файл этой версии, если он есть. */
-    fun downloaded(release: ReleaseDto): File? =
-        File(dir(), name(release)).takeIf { ready(it, release) }
 }
