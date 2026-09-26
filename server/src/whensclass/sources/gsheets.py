@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
 from dataclasses import dataclass
 
 import httpx
@@ -47,6 +49,56 @@ def _client() -> httpx.Client:
     )
 
 
+def _via_exit(*args: str, stdin: str | None = None) -> str:
+    """Тот же запрос к Google — с машины exit, по ssh.
+
+    Запасной путь на случай, когда с сервера Google не отвечает. На exit ключ
+    службы вызывает только wc-fetch (server/deploy/exit/wc-fetch): тот знает
+    одну эту таблицу, берёт у службы лишь gid или ключ API и отдаёт тело
+    ответа. Ни проброса портов, ни оболочки у ключа нет. Ключ API идёт на
+    stdin, а не в аргументах: так его не видно в списке процессов ни здесь,
+    ни там.
+    """
+    target, _, port = (settings.exit_ssh or "").rpartition(":")
+    command = [
+        "ssh", "-F", "/dev/null", "-p", port, "-i", settings.exit_key,
+        "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
+        "-o", "StrictHostKeyChecking=yes", "-o", f"UserKnownHostsFile={settings.exit_known_hosts}",
+        "-o", "GlobalKnownHostsFile=/dev/null", "-o", "ConnectTimeout=15",
+        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2", "-o", "LogLevel=ERROR",
+        target, *args,
+    ]
+    result = subprocess.run(
+        command, input=(stdin or "").encode(), capture_output=True, timeout=settings.http_timeout + 60,
+    )
+    if result.returncode != 0:
+        why = result.stderr.decode("utf-8", "replace").strip()[:300]
+        raise OSError(f"exit: ssh вернул {result.returncode}: {why}")
+    return result.stdout.decode("utf-8")
+
+
+def _direct_or_exit(direct, *args: str, stdin: str | None = None) -> tuple[str | None, httpx.Response | None]:
+    """Запрос напрямую; не ответил Google на уровне сети — через exit.
+
+    Возвращает (текст через exit, None) или (None, ответ напрямую). Ответ
+    Google с кодом ошибки — не повод идти в обход: закрытую таблицу или
+    мёртвый ключ exit не починит. Не вышло и через exit — наверх уходит
+    исходная ошибка, чтобы причина сбоя осталась прежней.
+    """
+    try:
+        return None, direct()
+    except httpx.TransportError as error:
+        if not settings.exit_ssh:
+            raise
+        try:
+            text = _via_exit(*args, stdin=stdin)
+        except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError) as fallback:
+            log.warning("Google не ответил (%s), и через exit тоже: %s", error, fallback)
+            raise error from None
+        log.warning("Google не ответил напрямую (%s) — взято через exit", error)
+        return text, None
+
+
 def fetch_sheet_csv(gid: str | None = None, title: str | None = None) -> str:
     """Забирает лист сырым CSV — `export?format=csv&gid=`.
 
@@ -67,12 +119,19 @@ def fetch_sheet_csv(gid: str | None = None, title: str | None = None) -> str:
             f"лист {title!r} без gid не прочитать: сырой экспорт знает только gid "
             "(нужен ключ Sheets API или WHENSCLASS_SHEET_GID)"
         )
-    with _client() as client:
-        response = client.get(f"{_base()}/export", params={"format": "csv", "gid": gid})
-    response.raise_for_status()
-    kind = response.headers.get("content-type", "")
+    def direct() -> httpx.Response:
+        with _client() as client:
+            return client.get(f"{_base()}/export", params={"format": "csv", "gid": gid})
+
+    relayed, response = _direct_or_exit(direct, "csv", gid)
+    if response is not None:
+        response.raise_for_status()
+        kind = response.headers.get("content-type", "")
+        text = response.text
+    else:
+        kind, text = "", relayed or ""
     # Экспорт приходит с BOM.
-    text = response.text.lstrip("\ufeff")
+    text = text.lstrip("\ufeff")
     if "html" in kind.lower() or text.lstrip()[:15].lower().startswith(("<!doctype", "<html")):
         raise SheetClosed(f"по gid {gid} пришла страница {kind or 'без типа'}, а не CSV")
     return text
@@ -82,11 +141,18 @@ def list_sheets_via_api(key: str) -> list[SheetInfo]:
     """Список листов через Sheets API. Даёт настоящие gid и полные имена."""
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{settings.spreadsheet_id}"
     params = {"key": key, "fields": "sheets.properties(sheetId,title,hidden)"}
-    with _client() as client:
-        response = client.get(url, params=params)
-    response.raise_for_status()
+    def direct() -> httpx.Response:
+        with _client() as client:
+            return client.get(url, params=params)
+
+    relayed, response = _direct_or_exit(direct, "sheets", stdin=key + "\n")
+    if response is not None:
+        response.raise_for_status()
+        data = response.json()
+    else:
+        data = json.loads(relayed or "{}")
     out = []
-    for item in response.json().get("sheets", []):
+    for item in data.get("sheets", []):
         props = item.get("properties", {})
         out.append(
             SheetInfo(
