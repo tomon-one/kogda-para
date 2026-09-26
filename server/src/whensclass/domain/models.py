@@ -11,6 +11,21 @@ from dataclasses import dataclass, field
 from datetime import date
 
 
+def a1_column(column: int) -> str:
+    """Номер колонки с нуля -> буквы, как в Sheets: 0 -> A, 26 -> AA, 664 -> YO.
+
+    И в ссылке приложения, и в сообщениях разбора: «в колонке 146» вело
+    человека на колонку левее — в Sheets счёт с единицы (третий аудит, М6
+    прогона 1).
+    """
+    letters = ""
+    n = column + 1
+    while n:
+        n, rem = divmod(n - 1, 26)
+        letters = chr(65 + rem) + letters
+    return letters
+
+
 class SourceFormatChanged(Exception):
     """Таблица перестала соответствовать разобранному формату.
 

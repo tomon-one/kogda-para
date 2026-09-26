@@ -17,6 +17,10 @@ from .models import Lesson, Snapshot
 
 log = logging.getLogger(__name__)
 
+# Имя-отчество без фамилии («Анастасия Дмитриевна») и сокращение («СПТ»).
+PATRONYMIC_RE = re.compile(r"^[А-ЯЁ][а-яё]+\s+[А-ЯЁ][а-яё]+(?:вич|вна|ична|инична|ич)$")
+ABBREVIATION_RE = re.compile(r"^[А-ЯЁA-Z]{2,6}$")
+
 
 @dataclass
 class TeacherLesson:
@@ -40,6 +44,9 @@ class TeacherIndex:
     # id -> id групп, у которых он ведёт пары хоть раз в листе: день
     # преподавателя выложен, только когда колледж дописал все его группы
     groups: dict[str, set[str]] = field(default_factory=dict)
+    # id краткой записи («Мисюрова Е.С.») -> id полной, к которой она сведена:
+    # по старому id отвечает полная (третий аудит, М5 прогона 1)
+    aliases: dict[str, str] = field(default_factory=dict)
 
     def days(self, teacher: str) -> dict[dt.date, list[TeacherLesson]]:
         return self.schedule.get(teacher, {})
@@ -48,6 +55,14 @@ class TeacherIndex:
 def teacher_id(name: str) -> str:
     """Слаг преподавателя. Правила те же, что у групп."""
     return group_id(name)
+
+
+def not_a_person(name: str) -> bool:
+    """«Анастасия Дмитриевна» без фамилии и «СПТ» — в ячейке их видно, но
+    преподавателем в списке они не становятся: id пропал бы с первой правкой
+    ячейки, а выбравший его получил бы «вас больше нет» (третий аудит, М4
+    прогона 1)."""
+    return bool(PATRONYMIC_RE.match(name) or ABBREVIATION_RE.match(name))
 
 
 def _surname_initials(name: str) -> tuple[str, str]:
@@ -77,6 +92,41 @@ def spelling_twin(index: TeacherIndex | None, name: str) -> str | None:
     return None
 
 
+def _short(name: str) -> bool:
+    """«Мисюрова Е.С.», «Иванов И. И.» — фамилия и одни инициалы."""
+    words = [w for w in re.split(r"[\s.]+", name) if w]
+    return len(words) >= 2 and all(len(w) == 1 for w in words[1:])
+
+
+def _full_names(snapshot: Snapshot) -> dict[str, str]:
+    """Краткая запись -> полное имя, если полное с теми же инициалами одно.
+
+    В одном листе «Мисюрова Е.С.» и «Мисюрова Евгения Сергеевна» — два id, и
+    пары поделены между ними поровну: выбравший первый с 14.09 видел «пар
+    нет» (третий аудит, М5 прогона 1). Книга переименований тут не поможет:
+    оба написания живут в листе одновременно.
+    """
+    names = {
+        name.strip()
+        for by_date in snapshot.schedule.values()
+        for lessons in by_date.values()
+        for lesson in lessons
+        for name in lesson.teachers
+        if name.strip()
+    }
+    full: dict[tuple[str, str], list[str]] = {}
+    for name in names:
+        if not _short(name):
+            full.setdefault(_surname_initials(name), []).append(name)
+    out = {}
+    for name in names:
+        if _short(name):
+            candidates = full.get(_surname_initials(name), [])
+            if len(candidates) == 1:
+                out[name] = candidates[0]
+    return out
+
+
 def build_index(snapshot: Snapshot) -> TeacherIndex:
     """Переворачивает снимок: из «пары группы» получаются «пары преподавателя».
 
@@ -103,6 +153,7 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
     columns: dict[Key, int] = {}
 
     by_id = {g.id: g for g in snapshot.groups}
+    full_names = _full_names(snapshot)
     for gid, by_date in snapshot.schedule.items():
         group = by_id.get(gid)
         if group is None:
@@ -111,8 +162,14 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
             for lesson in lessons:
                 for teacher in lesson.teachers:
                     name = teacher.strip()
-                    if not name:
+                    if not name or not_a_person(name):
                         continue
+                    if name in full_names:
+                        try:
+                            index.aliases[teacher_id(name)] = teacher_id(full_names[name])
+                        except ValueError:
+                            pass
+                        name = full_names[name]
                     try:
                         tid = teacher_id(name)
                     except ValueError:

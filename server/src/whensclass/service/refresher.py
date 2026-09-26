@@ -18,9 +18,8 @@ import zoneinfo
 
 import httpx
 
-from ..api.payloads import a1_column
 from ..config import settings
-from ..domain.models import SheetTooSmall, SourceFormatChanged
+from ..domain.models import SheetTooSmall, SourceFormatChanged, a1_column
 from ..domain.teachers import build_index
 from ..parser.csv_schedule import Limits, _check_shift, parse_export, shift_seed
 from ..sources import gsheets, sheet_index

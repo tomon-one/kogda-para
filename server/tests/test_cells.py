@@ -358,3 +358,66 @@ def test_students_in_a_room_is_an_offline_lesson_with_a_link(subject, room):
     assert lesson.online is False
     assert "студент" not in lesson.subject and "онлайн" not in lesson.subject
     assert lesson.kind in ("Лек", "Пр")
+
+
+# --- Третий аудит, мелочи прогона 1: М1–М4, М9 -------------------------------
+
+def test_lesson_handed_to_curator_hour_is_a_replacement_not_a_cancellation():
+    """М1: «X (Лек) Отмена Кураторский час» — час идёт, пару отдали ему."""
+    lesson = parse_lesson(
+        3, "Организация социально-культурной деятельности (Лек) Отмена Кураторский час",
+        "262", "Мисюрова Е.С. Антонов Артем Юрьевич",
+    )
+    assert not lesson.cancelled
+    assert lesson.subject == "Кураторский час" and lesson.room == "262"
+    assert lesson.note == "вместо: Организация социально-культурной деятельности"
+    assert lesson.teachers == ("Антонов Артем Юрьевич",)
+    # Настоящая отмена с причиной — по-прежнему отмена.
+    real = parse_lesson(1, "Физика (Лек) Отмена преподаватель заболел", "262", "")
+    assert real.cancelled and real.note == "преподаватель заболел"
+
+
+@pytest.mark.parametrize("room", ["онлай", "ондлайн", "онлдайн", "онлай 12"])
+def test_typo_in_online_is_still_online(room):
+    """М8: опечатка делала пару очной с аудиторией-словом, а исправление —
+    ложным «пара стала онлайн»."""
+    lesson = parse_lesson(3, "Физика (Пр)", room, "")
+    assert lesson.online and lesson.room in (None, "12")
+
+
+@pytest.mark.parametrize("room", ["Спортзал 8", "Восход 222", "онлайн-центр"])
+def test_rooms_that_only_look_like_online_stay_rooms(room):
+    assert not parse_lesson(3, "Физика (Пр)", room, "").online
+
+
+def test_reason_on_the_line_below_cancellation_is_a_note_not_a_room():
+    """М3: «отмена» / «преподаватель заболел» строкой ниже в колонке аудитории."""
+    lesson = parse_lesson(
+        5, "Коммуникативный тренинг (Пр)", "отмена\nпреподаватель заболел", ""
+    )
+    assert lesson.cancelled and lesson.room is None and lesson.note == "преподаватель заболел"
+    with_room = parse_lesson(5, "Физика", "ОТМЕНА\nпреподаватель заболел\n279", "")
+    assert with_room.room == "279" and with_room.note == "преподаватель заболел"
+
+
+def test_second_curator_without_surname_is_a_person_but_not_a_teacher_id():
+    """М4: «Щетинкин Артем Сергеевич Анастасия Дмитриевна» — два куратора;
+    у второй нет фамилии, в ячейке её видно, но id она не заводит — как и «СПТ»."""
+    from whensclass.domain.teachers import not_a_person
+
+    lesson = parse_lesson(
+        4, "Кураторский час", "454", "Щетинкин Артем Сергеевич Анастасия Дмитриевна"
+    )
+    assert lesson.teachers == ("Щетинкин Артем Сергеевич", "Анастасия Дмитриевна")
+    assert not_a_person("Анастасия Дмитриевна") and not_a_person("СПТ")
+    assert not not_a_person("Щетинкин Артем Сергеевич") and not not_a_person("Ли")
+
+
+@pytest.mark.parametrize(
+    "subject, room", [("—", ""), ("-", ""), ("нет", ""), ("", "-"), ("", "нет")]
+)
+def test_dash_or_no_is_nothing(subject, room):
+    """М9: прочерк или «нет» — пусто, а не пара «—» в 9:00 и не «каб. -»."""
+    assert parse_lesson(1, subject, room, "") is None
+    lesson = parse_lesson(1, "Физика", room or "-", "")
+    assert lesson.room is None

@@ -16,7 +16,7 @@ import re
 from collections.abc import Callable
 
 from ..domain.ids import group_id
-from ..domain.models import GroupRef, SourceFormatChanged
+from ..domain.models import GroupRef, SourceFormatChanged, a1_column
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +49,10 @@ def _has_id(name: str) -> bool:
     try:
         group_id(name)
     except ValueError:
-        log.warning("вместо имени группы %r — считаю колонку безымянной", name)
+        # Раз на процесс: это состояние листа, а не событие (М24).
+        _warn_once(
+            ("без id", name), "вместо имени группы %r — считаю колонку безымянной", name
+        )
         return False
     return True
 
@@ -108,17 +111,21 @@ def build_column_map(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> lis
     if steps != {_BLOCK_WIDTH}:
         # Шаг 8 — блок без имени группы: пропуск, не сдвиг. Колонка
         # аудитории соседа остаётся на своём месте.
-        log.warning("между блоками групп есть пропуски: шаги %s", sorted(steps))
+        _warn_once(
+            ("шаги", tuple(sorted(steps))), "между блоками групп есть пропуски: шаги %s",
+            sorted(steps),
+        )
 
     for col in starts:
         mark = (row[col + 3] if col + 3 < len(row) else "").strip()
         if not mark.startswith(_ROOM_MARK):
             if mark.casefold().startswith("ауд"):
                 # «Ауд», «ауд.», «АУД.» — то же слово, набранное иначе.
-                log.warning("в колонке %d «%s» вместо «%s»", col + 3, mark, _ROOM_MARK)
+                _warn_once(("ауд", col, mark), "в колонке %s «%s» вместо «%s»",
+                           a1_column(col + 3), mark, _ROOM_MARK)
                 continue
             raise SourceFormatChanged(
-                f"в колонке {col + 3} ожидалась «{_ROOM_MARK}», а там {mark!r}"
+                f"в колонке {a1_column(col + 3)} ожидалась «{_ROOM_MARK}», а там {mark!r}"
             )
 
     # Имя в двух колонках — опечатка в одной из них («ИСП-924/1» над
@@ -283,24 +290,25 @@ def _check_columnar(
             continue
         _warn_once(
             ("rename", col, tuple(declared)),
-            "повторный заголовок: в колонке %d стоит %s, а по главному заголовку там "
+            "повторный заголовок: в колонке %s стоит %s, а по главному заголовку там "
             "%s — такого имени нет больше нигде, считаю переименованием и верю "
             "главному заголовку",
-            col, declared, sorted(known),
+            a1_column(col), declared, sorted(known),
         )
 
     if len(strangers) >= COLUMNAR_STRANGERS_TO_REJECT:
         col, declared, gid, known = strangers[0]
         here = f"здесь же {sorted(known)}" if known else "здесь в главном заголовке пусто"
         raise SourceFormatChanged(
-            f"повторный заголовок в {where}: в колонке {col} стоит {declared}, а по "
-            f"главному заголовку {gid!r} живёт в колонке {column_of[gid]}, {here}; "
+            f"повторный заголовок в {where}: в колонке {a1_column(col)} стоит {declared}, "
+            f"а по главному заголовку {gid!r} живёт в колонке {a1_column(column_of[gid])}, "
+            f"{here}; "
             f"таких колонок {len(strangers)}"
         )
     for col, declared, gid, known in strangers:
         _warn_once(
             ("stranger", col, tuple(declared)),
-            "повторный заголовок: в колонке %d стоит %s, а по главному заголовку %r "
-            "живёт в колонке %d — одно такое имя считаю опечаткой, не сдвигом",
-            col, declared, gid, column_of[gid],
+            "повторный заголовок: в колонке %s стоит %s, а по главному заголовку %r "
+            "живёт в колонке %s — одно такое имя считаю опечаткой, не сдвигом",
+            a1_column(col), declared, gid, a1_column(column_of[gid]),
         )
