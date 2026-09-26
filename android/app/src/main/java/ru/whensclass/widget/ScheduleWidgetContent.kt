@@ -39,6 +39,7 @@ import java.time.temporal.ChronoUnit
 import ru.whensclass.R
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.isKnownWebinar
 import ru.whensclass.data.sheetLink
 import ru.whensclass.ui.MainActivity
 
@@ -70,7 +71,10 @@ fun ScheduleWidgetContent(
     val size = LocalSize.current
     // Оболочки вроде Nova дают сжать виджет ниже объявленного минимума. Ругаться
     // на это некому — просто убираем то, без чего можно, начиная с логотипа.
-    val fit = Fit(narrow = size.width < 220.dp, dense = size.height < 120.dp)
+    // Узко — и от крупного шрифта: время в sp, колонка в dp, и конец пары
+    // уходил в многоточие (третий аудит, М28 прогона 2).
+    val scale = fontScale()
+    val fit = Fit(narrow = size.width < 220.dp * scale, dense = size.height < 120.dp, scale = scale)
 
     Column(
         modifier = modifier
@@ -89,6 +93,7 @@ fun ScheduleWidgetContent(
             day,
             offset,
             fetchedAt,
+            millisOf(now),
             firstOffset(schedule, now.toLocalDate()),
             lastOffset(schedule, now.toLocalDate()),
             busy,
@@ -103,7 +108,12 @@ fun ScheduleWidgetContent(
 
         val today = schedule?.days?.firstOrNull { it.date == day.toString() }
         when {
-            groupName == null -> MissingHint("Откройте приложение и выберите свою группу", colors)
+            // Обновлять нечего: нажатие ведёт в приложение, а не в
+            // «обновлено» (третий аудит, М14 прогона 2).
+            groupName == null -> MissingHint(
+                "Откройте приложение и выберите свою группу", colors,
+                open = actionStartActivity(openDay(context, day)),
+            )
             schedule == null -> MissingHint("Расписание ещё не загружено", colors)
             today == null -> {
                 val missing = missingDay(schedule, day, fetchedAt, serverBroken)
@@ -156,6 +166,7 @@ private fun Header(
     day: LocalDate,
     offset: Int,
     fetchedAt: Long,
+    nowMillis: Long,
     firstDay: Int,
     lastDay: Int,
     busy: Boolean,
@@ -211,7 +222,11 @@ private fun Header(
                     if (groupName.count { it == ' ' } >= 2) shortenName(groupName) else groupName,
                     maxLines = 1,
                     style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                    modifier = GlanceModifier.clickable(openApp),
+                    // Имя уступает: статус и ⟳ меряются первыми. Раньше имя
+                    // шло без веса, и на узком виджете «нет в таблице»
+                    // резалось, а ⟳ пропадал вовсе (третий аудит, М27
+                    // прогона 2). Своё имя и так знают наизусть.
+                    modifier = GlanceModifier.defaultWeight().clickable(openApp),
                 )
                 // Время последней проверки — служебная мелочь, поэтому тем же
                 // приглушённым цветом; краснеет, только когда данные протухли.
@@ -235,13 +250,13 @@ private fun Header(
                         // в приложении.
                         serverBroken -> " · сбой"
                         done -> " · обновлено"
-                        else -> " · " + formatFetchedShort(fetchedAt)
+                        else -> " · " + formatFetchedShort(fetchedAt, nowMillis)
                     },
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || serverBroken || gone || isStale(fetchedAt) -> colors.error
+                            failed || serverBroken || gone || isStale(fetchedAt, nowMillis) -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },
@@ -383,7 +398,9 @@ private fun Lessons(
             // вмещает не больше десяти детей, и по два на пару их не хватало бы
             // на длинный день.
             Column(modifier = GlanceModifier.fillMaxWidth()) {
-                LessonRow(lesson, bells, isNow = lesson.number == current, fit, colors)
+                // Отменённая пара в своё время — не «идёт сейчас» (третий
+                // аудит, М17 прогона 2).
+                LessonRow(lesson, day, bells, isNow = lesson.number == current && !lesson.isCancelled, fit, colors)
                 Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 4.dp))
             }
         }
@@ -501,7 +518,7 @@ internal fun windowStart(
 }
 
 /** Насколько тесно виджету — от этого зависит, что показывать. */
-private data class Fit(val narrow: Boolean, val dense: Boolean)
+private data class Fit(val narrow: Boolean, val dense: Boolean, val scale: Float = 1f)
 
 /** Приложение открывается на том же дне, что показывает виджет. */
 internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
@@ -515,6 +532,7 @@ internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
 @Composable
 private fun LessonRow(
     lesson: LessonDto,
+    day: LocalDate,
     bells: Map<String, List<String>>,
     isNow: Boolean,
     fit: Fit,
@@ -531,7 +549,7 @@ private fun LessonRow(
         // Ширины хватает на «09:00–10:30» одной строкой: время, переносимое
         // пополам, читается как опечатка. На узком виджете диапазон не влезает —
         // тогда показываем только начало пары.
-        Column(modifier = GlanceModifier.width(if (fit.narrow) 48.dp else 72.dp)) {
+        Column(modifier = GlanceModifier.width((if (fit.narrow) 48.dp else 72.dp) * fit.scale)) {
             // У текущей пары номер уступает место словам: номер и так виден по
             // времени рядом, а «идёт сейчас» ищут глазами первым. Строка та же,
             // поэтому высота пары не меняется.
@@ -573,13 +591,13 @@ private fun LessonRow(
                     textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
                 ),
             )
-            Details(lesson, colors)
+            Details(lesson, day, colors)
         }
     }
 }
 
 @Composable
-private fun Details(lesson: LessonDto, colors: Palette) {
+private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
     // Одной строкой, а не тремя. Раньше тип, место и преподаватель занимали по
     // строке каждый, пара выходила в четыре строки высотой, и в виджет помещалась
     // одна — при том что смотрят в него ради двух ближайших.
@@ -596,46 +614,68 @@ private fun Details(lesson: LessonDto, colors: Palette) {
     if (parts.isEmpty()) return
 
     val line = GlanceModifier.fillMaxWidth()
+    val context = LocalContext.current
+    // Ссылка на чужой адрес одним нажатием не копируется: без хоста и без
+    // пометки её вставляли в браузер, не глядя. Нажатие ведёт на экран пары,
+    // где хост назван (третий аудит, М40 прогона 1).
+    val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
     Text(
         // Значок впереди строки, а не в хвосте: строка одна и обрезается
         // справа, так что длинная фамилия преподавателя утаскивала за край
         // единственную кнопку, ради которой на пару и нажимают.
-        if (lesson.url != null) "⧉  " + parts.joinToString(" · ") else parts.joinToString(" · "),
+        when {
+            foreign -> "⚠ чужой адрес · " + parts.joinToString(" · ")
+            lesson.url != null -> "⧉  " + parts.joinToString(" · ")
+            else -> parts.joinToString(" · ")
+        },
         maxLines = 1,
         style = TextStyle(
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
             color = when {
-                lesson.isCancelled -> colors.error
+                lesson.isCancelled || foreign -> colors.error
                 lesson.isOnline -> colors.accent
                 else -> colors.text
             },
         ),
-        modifier = lesson.url?.let { url ->
-            val context = LocalContext.current
-            line.clickable(actionStartActivity(CopyLinkActivity.intent(context, url)))
-        } ?: line,
+        modifier = when {
+            foreign -> line.clickable(actionStartActivity(openDay(context, day)))
+            lesson.url != null ->
+                line.clickable(actionStartActivity(CopyLinkActivity.intent(context, lesson.url)))
+            else -> line
+        },
     )
 }
 
+/**
+ * Надпись вместо пар. [open] — нажатие открывает приложение, а не обновляет:
+ * когда обновлять нечего (группа не выбрана).
+ */
 @Composable
-internal fun MissingHint(text: String, colors: Palette, sourceUrl: String? = null) {
+internal fun MissingHint(
+    text: String,
+    colors: Palette,
+    sourceUrl: String? = null,
+    open: androidx.glance.action.Action? = null,
+) {
     Column(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .clickable(actionRunCallback<RefreshAction>()),
+            .clickable(open ?: actionRunCallback<RefreshAction>()),
     ) {
         Text(
             text,
             style = TextStyle(fontSize = 13.sp, color = colors.textDim),
             modifier = GlanceModifier.padding(vertical = 8.dp),
         )
-        if (sourceUrl == null) {
+        // «Нажмите, чтобы обновить» под «откройте приложение» спорило с ним
+        // самим (М14 прогона 2).
+        if (open == null && sourceUrl == null) {
             Text(
                 "нажмите, чтобы обновить",
                 style = TextStyle(fontSize = 11.sp, color = colors.accent),
             )
-        } else {
+        } else if (sourceUrl != null) {
             // Второй строкой ровно одна подсказка, а не две: обновление
             // здесь уже ничего не изменит — сервер сказал всё, что знает.
             // На узком виджете третья строка к тому же не поместилась бы.

@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
+import ru.whensclass.data.isKnownWebinar
 import ru.whensclass.ui.copyToClipboard
 
 /**
@@ -27,6 +29,12 @@ class CopyLinkActivity : Activity() {
 
     private fun copy(url: String?) {
         if (url.isNullOrBlank()) return
+        // Виджеты чужой адрес сюда не шлют; если всё же пришёл — не копируем
+        // молча (третий аудит, М40 прогона 1).
+        if (!isKnownWebinar(url)) {
+            Toast.makeText(this, "Ссылка на чужой адрес — откройте пару в приложении", Toast.LENGTH_LONG).show()
+            return
+        }
         // Через общую функцию: здесь та же логика была набрана заново, и при
         // копировании в неё дважды попала одна и та же проверка версии —
         // вложенная сама в себя.

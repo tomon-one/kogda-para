@@ -33,6 +33,7 @@ import java.time.LocalDateTime
 import ru.whensclass.AppContainer
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.isKnownWebinar
 import ru.whensclass.ui.MainActivity
 
 /**
@@ -109,7 +110,7 @@ class NextLessonWidget : GlanceAppWidget() {
                         when {
                             busy -> "обновляю…"
                             failed -> "не вышло ⟳"
-                            gone -> "нет в таблице ⟳"
+                            gone -> "нет в таблице"
                             broken -> "сбой ⟳"
                             done -> "обновлено"
                             else -> formatFetchedShort(state?.fetchedAt ?: 0L) + " ⟳"
@@ -122,7 +123,16 @@ class NextLessonWidget : GlanceAppWidget() {
                                 else -> colors.textDim
                             },
                         ),
-                        modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+                        // Группы нет в таблице — обновление ничего не даст: в
+                        // приложение, к «выбрать заново», как на дневном
+                        // виджете (третий аудит, М40 прогона 2).
+                        modifier = GlanceModifier.clickable(
+                            if (gone) {
+                                actionStartActivity(openDay(LocalContext.current, today))
+                            } else {
+                                actionRunCallback<RefreshAction>()
+                            },
+                        ),
                     )
                     return@Column
                 }
@@ -178,15 +188,23 @@ class NextLessonWidget : GlanceAppWidget() {
                     ),
                     modifier = GlanceModifier.fillMaxWidth(),
                 )
+                // Ссылка на чужой адрес не копируется одним нажатием: нажатие
+                // ведёт на экран пары, где хост назван (третий аудит, М40
+                // прогона 1).
+                val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
                 if (!tight) Text(
-                    place(lesson),
+                    if (foreign) "⚠ чужой адрес · " + place(lesson).removeSuffix("  ⧉") else place(lesson),
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (lesson.isOnline) colors.accent else colors.text,
+                        color = when {
+                            foreign -> colors.error
+                            lesson.isOnline -> colors.accent
+                            else -> colors.text
+                        },
                     ),
-                    modifier = lesson.url?.let { url ->
+                    modifier = lesson.url?.takeUnless { foreign }?.let { url ->
                         val context = LocalContext.current
                         GlanceModifier.fillMaxWidth()
                             .clickable(actionStartActivity(CopyLinkActivity.intent(context, url)))

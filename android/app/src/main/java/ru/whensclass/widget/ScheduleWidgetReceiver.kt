@@ -14,7 +14,11 @@ class ScheduleWidgetReceiver : GlanceAppWidgetReceiver() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        val ids = ownIds(context, appWidgetManager, appWidgetIds)
+        // Чужая рассылка без наших id не должна и дёргать сеть: каждое
+        // SyncWorker.now отменяло идущее обновление.
+        if (ids.isEmpty()) return
+        super.onUpdate(context, appWidgetManager, ids)
         // Виджет только что поставили на экран — не заставлять человека ждать
         // ближайшего часового обновления.
         SyncWorker.now(context)
