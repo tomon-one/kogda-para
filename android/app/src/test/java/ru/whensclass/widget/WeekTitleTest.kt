@@ -65,4 +65,11 @@ class WeekTitleTest {
 
         assertEquals("Неделя 28 сент. – 3 окт.", formatWeekRange(from, to))
     }
+
+    @Test
+    fun `на телефоне две недели, а в заголовке — неделя вперёд`() {
+        // Окно с 27.09 — 14 дней; виджет показывает сегодня и шесть дней
+        // вперёд, заголовок — по ним же.
+        assertEquals(weekTitle(days(0, 6), today), weekTitle(days(0, 3, 6, 7, 10, 13), today))
+    }
 }

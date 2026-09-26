@@ -377,11 +377,14 @@ internal fun weekTitle(days: List<DayDto>, today: LocalDate): String {
     // над списком, который начинается со вторника, сбивает с толку.
     val dates = days
         .mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
-        .filterNot { it.isBefore(today) }
+        .filterNot { it.isBefore(today) || it.isAfter(today.plusDays(WEEK_AHEAD)) }
     val from = dates.minOrNull()
     val to = dates.maxOrNull()
     return if (from == null || to == null) "Неделя" else formatWeekRange(from, to)
 }
+
+/** Недельный виджет — сегодня и шесть дней вперёд. */
+internal const val WEEK_AHEAD = 6L
 
 /** Шапка с логотипом и группой плюс отступы — то, что списку не достаётся. */
 private val HEADER_SPACE = 62.dp
@@ -612,6 +615,9 @@ private fun weekDays(days: List<DayDto>, today: LocalDate): List<WeekDay> {
         // Прожитые дни в недельном виджете не показываем: места мало, а к
         // пятнице понедельник занимает верх экрана и вытесняет нужное.
         if (date.isBefore(today)) return@mapNotNull null
+        // И не дальше недели вперёд: на телефоне теперь две недели, а
+        // виджет — «Неделя» (27.09).
+        if (date.isAfter(today.plusDays(WEEK_AHEAD))) return@mapNotNull null
         WeekDay(date, formatWeekDay(date), date == today, day.lessons, day.absent)
     }
 }
