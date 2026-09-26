@@ -445,3 +445,98 @@ def test_freeze_is_stale_at_once_without_touching_the_sheet(
     assert r.status == "stale" and "заморожено" in r.last_error
     assert store.snapshot is before and sent == []
     assert r.look_for_new_sheet() is False
+
+
+# --- Третий аудит, прогон 2: В13 и В14 ---------------------------------------
+
+SECRET = "AIzaSyD-секретный-ключ"
+
+
+def test_key_never_reaches_alert_or_log(monkeypatch, sent, caplog):
+    """В14 прогона 2: исключение httpx несёт полный адрес вместе с ?key=…;
+    прежний тест подсовывал исключение без ключа и проверял пустоту."""
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", SECRET)
+    monkeypatch.setattr(sheet_index, "_api_failures", 0)
+
+    def dead(key):
+        raise RuntimeError(
+            "Client error '403 Forbidden' for url "
+            f"'https://sheets.googleapis.com/v4/spreadsheets/x?key={SECRET}&fields=sheets'"
+        )
+
+    monkeypatch.setattr(gsheets, "list_sheets_via_api", dead)
+    monkeypatch.setattr(gsheets, "list_sheets_via_xlsx", lambda: [])
+    monkeypatch.setattr(sheet_index, "_last_xlsx", None)
+    with caplog.at_level("WARNING"):
+        sheet_index.list_sheets()
+        sheet_index.list_sheets()
+    assert len(sent) == 1
+    assert SECRET not in sent[0]["message"] and SECRET not in caplog.text
+
+
+def test_key_in_unexpected_error_does_not_leak(tmp_path, sheet, sent, monkeypatch, caplog):
+    """То же для «служба споткнулась»: текст исключения идёт в err, тревогу и
+    журнал."""
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError(f"GET https://sheets.googleapis.com/?key={SECRET} упал")
+
+    monkeypatch.setattr(refresher_mod, "build_index", boom)
+    with caplog.at_level("ERROR"):
+        assert r.refresh(today=TODAY) is False
+    assert SECRET not in (r.last_error or "")
+    assert all(SECRET not in m["message"] for m in sent)
+
+
+def _shift_one_day(text: str, column: int) -> str:
+    """«Вставить ячейки, сдвиг вправо» на блок — на строках первого дня листа."""
+    import csv
+    import io
+
+    from whensclass.parser.csv_schedule import date_rows
+
+    rows = read_csv(text)
+    starts = sorted(date_rows([r[0] if r else "" for r in rows]).values())
+    for i in range(starts[0] - 1, starts[1] - 1):
+        rows[i][column:column] = [""] * 4
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(rows)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("gate", ["группы", "сдвиг", "объём"])
+def test_refresher_gates_keep_the_previous_snapshot(
+    tmp_path, sheet, sent, fixture_csv, monkeypatch, gate
+):
+    """В13 прогона 2: ворота проверялись как отдельные функции — убери их из
+    Refresher, и тесты зелёные. Здесь — через заход: отказ, stale, тревога и
+    прежний снимок на месте."""
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    assert r.refresh(today=TODAY) is True
+    before = store.snapshot
+    if gate == "группы":
+        # Два блока из пяти (две группы из шести) удалены целиком — треть.
+        import csv
+        import io
+
+        rows = read_csv(fixture_csv)
+        for row in rows:
+            del row[6:14]
+        buf = io.StringIO()
+        csv.writer(buf, lineterminator="\n").writerows(rows)
+        sheet["text"] = buf.getvalue()
+        reason = "пропало 2 групп"
+    elif gate == "сдвиг":
+        sheet["text"] = _shift_one_day(fixture_csv, 6)
+        reason = "сдвиг"
+    else:
+        from whensclass.parser.csv_schedule import Limits
+
+        monkeypatch.setattr(refresher_mod, "_limits", lambda: Limits(3, 2, 10**6))
+        reason = "ожидал не меньше 1000000"
+    assert r.refresh(today=TODAY, force=True) is False
+    assert r.status == "stale" and store.snapshot is before
+    assert reason in r.last_error and sent, r.last_error
