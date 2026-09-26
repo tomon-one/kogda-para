@@ -83,8 +83,9 @@ object Notifications {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun lessonSoon(context: Context, title: String, text: String, day: String?) {
-        show(context, CHANNEL_LESSON, ID_LESSON, title, text, day)
+    /** `until` — конец пары: к нему напоминание снимается само. */
+    fun lessonSoon(context: Context, title: String, text: String, day: String?, until: Long? = null) {
+        show(context, CHANNEL_LESSON, ID_LESSON, title, text, day, until = until)
     }
 
     /**

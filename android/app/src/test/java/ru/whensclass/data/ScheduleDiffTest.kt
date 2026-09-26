@@ -51,7 +51,7 @@ class ScheduleDiffTest {
             lesson(4, "Физика", room = "101", cancelled = true),
         )
         val texts = ScheduleDiff.compare(was, now).map { it.text }
-        assertTrue(texts.contains("3 пара переехала в 355"))
+        assertTrue(texts.contains("3 пара переехала в каб. 355"))
         assertTrue(texts.contains("отменили 4 пару: Физика"))
     }
 
@@ -209,7 +209,7 @@ class ScheduleDiffTest {
             lesson(2, "Физика", room = "102", groups = "ИСП-924/1"),
         )
         val now = schedule(lesson(2, "Физика", room = "101"))
-        assertEquals(listOf("2 пара переехала в 101"), texts(was, now))
+        assertEquals(listOf("2 пара переехала в каб. 101"), texts(was, now))
     }
 
     @Test
@@ -241,7 +241,7 @@ class ScheduleDiffTest {
                 lesson(2, "Физика", groups = "ИСП-924/2", cancelled = true),
             )
             val now = schedule(*(if (order) parts else parts.reversed()).toTypedArray(), kind = "teacher")
-            assertEquals(listOf("отменили 2 пару у ИСП-924/2: Физика"), texts(was, now))
+            assertEquals(listOf("отменили 2 пару (ИСП-924/2): Физика"), texts(was, now))
         }
     }
 
@@ -263,5 +263,29 @@ class ScheduleDiffTest {
         val was = schedule(lesson(3, "Информатика", room = "5", online = true))
         val now = schedule(lesson(3, "Информатика", room = "12", online = true))
         assertEquals(listOf("у 3 пары онлайн-комната 12"), ScheduleDiff.compare(was, now).map { it.text })
+    }
+
+    @Test
+    fun `замена — одной строкой, а не «добавилась» и «убрали»`() {
+        // Сервер помечает замену примечанием «вместо: X». Двумя строками
+        // первая в свёрнутом уведомлении читалась как лишняя пара (разбор
+        // текстов 27.09).
+        val was = schedule(lesson(3, "Математика", room = "272"))
+        val now = schedule(
+            LessonDto(number = 3, subject = "Физика", room = "272", note = "вместо: Математика"),
+        )
+        assertEquals(listOf("замена 3 пары: Математика → Физика"), texts(was, now))
+    }
+
+    @Test
+    fun `переезд не теряется за сменой преподавателя`() {
+        // Одна ветка when на пару: «другой преподаватель» закрывал собой
+        // «переехала», и человек шёл в старый кабинет (разбор текстов 27.09).
+        val was = schedule(LessonDto(number = 2, subject = "Физика", room = "101", teachers = listOf("Иванов И. И.")))
+        val now = schedule(LessonDto(number = 2, subject = "Физика", room = "205", teachers = listOf("Петров П. П.")))
+        assertEquals(
+            listOf("у 2 пары другой преподаватель: Петров П. П.", "2 пара переехала в каб. 205"),
+            texts(was, now),
+        )
     }
 }

@@ -7,7 +7,7 @@
     <string name="widget_day_label">Когда пара? — День</string>
     <string name="widget_week_label">Когда пара? — Неделя</string>
     <string name="widget_next_label">Когда пара? — Ближайшая пара</string>
-    <string name="widget_description">Пары вашей группы на сегодня</string>
+    <string name="widget_description">Пары на день: сегодня, стрелками — другие дни</string>
     <string name="widget_small_description">Одна пара: та, что идёт, или ближайшая</string>
-    <string name="widget_week_description">Вся неделя: когда окно и что в четверг</string>
+    <string name="widget_week_description">Остаток недели: когда окно и что в четверг</string>
 </resources>

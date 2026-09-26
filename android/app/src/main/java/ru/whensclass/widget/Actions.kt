@@ -80,10 +80,10 @@ class RefreshAction : ActionCallback {
         if (repository.refreshing) return
         mark(context, glanceId, busy = true, done = false, failed = false)
         val result = repository.refresh(force = true)
-        // «Обновлено» на пару секунд: время в шапке меняется, только когда
-        // расписание и правда другое, а нажавшему нужен ответ в любом случае.
-        // Но ответ должен быть честным: раньше «обновлено» загоралось и после
-        // неудачи, потому что на результат никто не смотрел.
+        // «Обновлено» на пару секунд: нажавшему нужен ответ и тогда, когда
+        // расписание не изменилось (время в шапке — время проверки, и оно
+        // сдвигается при каждом удачном ответе). Но ответ должен быть честным:
+        // раньше «обновлено» загоралось и после неудачи.
         val failed = result is RefreshResult.Failed
         mark(context, glanceId, busy = false, done = !failed, failed = failed)
         delay(DONE_MS)

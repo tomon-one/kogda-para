@@ -57,6 +57,8 @@ fun GroupPickerScreen(
     groups: List<GroupDto>?,
     onPick: (GroupDto) -> Unit,
     onRetry: (() -> Unit)? = null,
+    /** Заголовок: при выборе соседней подгруппы — не «Выберите группу», это не смена своей. */
+    title: String = "Выберите группу",
     canGoBack: Boolean = false,
     onBack: () -> Unit = {},
     onTeacherMode: (() -> Unit)? = null,
@@ -70,7 +72,7 @@ fun GroupPickerScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Выберите группу",
+                        title,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )

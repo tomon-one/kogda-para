@@ -70,9 +70,10 @@ object ScheduleDiff {
         // Чья пара: у преподавателя — «у ИСП-924/2», у студента пара соседней
         // подгруппы — «(ИСП-924/2)», своя — без подписи (третий аудит, В22,
         // В23 прогона 1).
+        // У преподавателя тоже в скобках: « у ИСП-924/2» давало «у 3 пары у
+        // ИСП-924/2 появилась ссылка».
         fun whose(lesson: LessonDto): String = when {
             lesson.groups == null || lesson.groups == fresh.groupName && !fresh.isTeacher -> ""
-            fresh.isTeacher -> " у ${lesson.groups}"
             else -> " (${lesson.groups})"
         }
         fun say(text: String) = changes.add(Change(day, text))
@@ -82,7 +83,23 @@ object ScheduleDiff {
         // Что от прежнего набора ещё не нашло себе пару в новом.
         val unmatched = was.toMutableList()
 
+        // Замена — одной строкой: «добавилась 3 пара: Физика» первой строкой
+        // свёрнутого уведомления читалась как лишняя пара, а «убрали» — ниже.
+        // Сервер помечает её примечанием «вместо: X».
+        val replaced = mutableSetOf<LessonDto>()
         for (lesson in now) {
+            val instead = lesson.replaces ?: continue
+            if (lesson.isCancelled || was.any { it.subject == lesson.subject }) continue
+            val index = unmatched.indexOfFirst { it.subject == instead }
+            if (index < 0) continue
+            unmatched.removeAt(index)
+            replaced += lesson
+            // Стрелкой, а не «вместо»: названия предметов не склоняются сами.
+            say("замена $number пары${whose(lesson)}: $instead → ${lesson.subject}")
+        }
+
+        for (lesson in now) {
+            if (lesson in replaced) continue
             // Сначала — тот же предмет у тех же групп, потом у пересекающихся
             // (у преподавателя «ИСП-924/1, ИСП-924/2» распалась на две записи),
             // потом просто тот же предмет. Раньше — только по названию, и
@@ -137,14 +154,23 @@ object ScheduleDiff {
                 // не замена: преподавателей часто вписывают позже.
                 lesson.teachers.isNotEmpty() && previous.teachers != lesson.teachers ->
                     say("у $number пары$tag другой преподаватель: ${lesson.teachers.joinToString(", ")}")
-
-                // Номер онлайн-комнаты — не аудитория: «переехала в 12» звало
-                // бы в кабинет 12 (второй аудит, М22).
-                previous.room != lesson.room && lesson.room != null && lesson.isOnline ->
-                    say("у $number пары$tag онлайн-комната ${lesson.room}")
-
-                previous.room != lesson.room && lesson.room != null ->
-                    say("$number пара$tag переехала в ${lesson.room}")
+            }
+            // Кабинет — своей проверкой: смена преподавателя в том же
+            // обновлении закрывала собой переезд, и человек шёл в старый
+            // кабинет. Онлайн-комната — не аудитория: «переехала в 12» звало
+            // бы в кабинет 12 (второй аудит, М22). Отменённой — не до
+            // кабинета.
+            if (!lesson.isCancelled && lesson.room != null && previous.room != lesson.room) {
+                when {
+                    lesson.isOnline -> say("у $number пары$tag онлайн-комната ${lesson.room}")
+                    else -> {
+                        // «в каб. 355», а не «в 355»: голое число читается как
+                        // номер пары; словесное место — через двоеточие.
+                        val place = ru.whensclass.widget.roomLabel(lesson.room) ?: lesson.room
+                        say(if (place.startsWith("каб.")) "$number пара$tag переехала в $place"
+                            else "$number пара$tag переехала: $place")
+                    }
+                }
             }
             // Ссылка — своей проверкой, а не веткой того же when: смена
             // преподавателя в том же обновлении закрывала собой смену ссылки,

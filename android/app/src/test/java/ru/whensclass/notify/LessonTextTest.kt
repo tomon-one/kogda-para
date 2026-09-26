@@ -55,13 +55,13 @@ class LessonTextTest {
             ),
         )
 
-        assertEquals("2 пара. Занятие онлайн, комната 12. Старостина Е. А.", text)
+        assertEquals("2 пара. Онлайн, комната 12. Старостина Е. А.", text)
 
         // Просто «онлайн», без номера — и текст без комнаты.
         val bare = LessonAlarms.text(
             alarm(LessonDto(number = 2, subject = "Английский", online = 1)),
         )
-        assertEquals("2 пара. Занятие онлайн", bare)
+        assertEquals("2 пара. Онлайн", bare)
     }
 
     @Test

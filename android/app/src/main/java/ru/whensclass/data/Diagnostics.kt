@@ -67,10 +67,13 @@ internal suspend fun collectDiagnostics(
         // «получено» здесь и там стояло у разных дат (третий аудит, М74
         // прогона 2).
         lines += "Расписание: телефон проверял ${stamp(store.fetchedAt.first(), zone)}, " +
-            "последняя правка таблицы у сервера ${stamp(schedule.generatedAt, zone)}"
+            // gen — не обязательно правка: сервер пишет новый и после
+            // перезапуска и ночного поиска листа (разбор текстов 27.09).
+            "снимок сервера от ${stamp(schedule.generatedAt, zone)}"
         schedule.sheet?.let { lines += "Лист: $it" }
         if (schedule.coverage.size == 2) {
-            lines += "Дни листа: ${schedule.coverage[0]} — ${schedule.coverage[1]}"
+            // cov в ответе расписания — край группы, а не листа.
+            lines += "Дни группы: ${schedule.coverage[0]} — ${schedule.coverage[1]}"
         }
         lines += "Дней на телефоне: ${schedule.days.size}"
     }

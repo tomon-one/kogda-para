@@ -109,8 +109,8 @@ class NextLessonWidget : GlanceAppWidget() {
                     val done = currentState(ScheduleWidget.KEY_DONE) == true
                     Text(
                         when {
-                            busy -> "обновляю…"
-                            failed -> "не вышло ⟳"
+                            busy -> "обновление…"
+                            failed -> "не обновилось ⟳"
                             gone -> "нет в таблице"
                             broken -> "сбой ⟳"
                             done -> "обновлено"
@@ -154,9 +154,14 @@ class NextLessonWidget : GlanceAppWidget() {
                 // здесь значит соврать. Первым словом, а не хвостом: в хвосте
                 // однострочной шапки «сбой» уходил в многоточие, и оставался
                 // красный цвет без причины (третий аудит, В6 прогона 2).
+                // Несвежие данные — тоже первым словом: дневной и недельный
+                // красят время в шапке, а маленький уверенно показывал пару из
+                // позавчерашнего снимка (разбор текстов 27.09).
+                val stale = isStale(state?.fetchedAt ?: 0L)
                 val status = when {
                     gone -> "нет в таблице · "
                     broken -> "сбой · "
+                    stale -> "устарело · "
                     else -> ""
                 }
                 val head = status + nextLessonHead(time, when_, ongoing, lesson.groups)
@@ -171,7 +176,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            broken || gone -> colors.error
+                            broken || gone || stale -> colors.error
                             ongoing -> colors.accent
                             else -> colors.textDim
                         },
@@ -194,7 +199,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 // прогона 1).
                 val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
                 if (!tight) Text(
-                    if (foreign) "⚠ чужой адрес · " + place(lesson).removeSuffix("  ⧉") else place(lesson),
+                    if (foreign) "⚠ чужая ссылка · " + place(lesson).removeSuffix("  ⧉") else place(lesson),
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 12.sp,
@@ -269,13 +274,19 @@ internal fun noNextLesson(
     fetchedAt: Long,
     broken: Boolean,
 ): String {
-    if (groupName == null) return "Откройте приложение и выберите свою группу"
+    // «…группу или себя»: виджет ставит и преподаватель (разбор текстов 27.09).
+    if (groupName == null) return "Откройте приложение и выберите группу или себя"
     if (schedule == null) return "Расписание не загружено"
     if (broken) return "Сбой: расписание не обновляется"
     if (isStale(fetchedAt)) return "Данные устарели"
     val end = schedule.coverage.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     if (end == null || end.isBefore(today.plusDays(6))) return "Дальше расписание ещё не опубликовано"
-    return "Дальше пар нет"
+    // Пары ищутся только в скачанной неделе, а лист идёт дальше и там пары
+    // есть: «Дальше пар нет» было неправдой (разбор текстов 27.09). Честно —
+    // до какого дня их нет.
+    val last = schedule.days.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }.maxOrNull()
+    if (last == null || last.isBefore(today)) return "Расписание на эти дни не загружено"
+    return "Пар нет по ${formatWeekDay(last)}"
 }
 
 /**
@@ -293,6 +304,9 @@ internal fun nextLessonHead(time: String, whenWord: String, ongoing: Boolean, gr
 private const val TIGHT_HEIGHT_SP = 52
 
 private fun place(lesson: LessonDto, withKind: Boolean = true): String = buildString {
+    // Замена — первым словом: другой предмет без пометки похож на ошибку
+    // виджета, а экран пишет «Вместо: …» (разбор текстов 27.09).
+    if (lesson.replaces != null && !lesson.isCancelled) append("замена · ")
     // Место — первым, тип — после: строка одна и обрезается справа, и
     // «Практика · …» уводила в многоточие номер кабинета (третий аудит, В7
     // прогона 2).
@@ -302,7 +316,7 @@ private fun place(lesson: LessonDto, withKind: Boolean = true): String = buildSt
         append(onlineLabel(lesson))
         if (lesson.url != null) append("  ⧉")
     } else {
-        append(roomLabel(lesson.room) ?: "не указано")
+        append(roomLabel(lesson.room) ?: "место не указано")
     }
     if (withKind) kindName(lesson.kind)?.let { append(" · ").append(it) }
 }

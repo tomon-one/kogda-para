@@ -13,7 +13,8 @@ class ScreenWordsTest {
     fun `503 — расписания ещё нет, а не «сервер занят»`() {
         assertEquals("Сервер занят, попробуйте через минуту", refreshFailure(HttpFailure(429, "/v1/meta")))
         assertEquals(
-            "На сервере пока нет расписания. Не появится за несколько минут — напишите @toomonn",
+            "Сервер сейчас не отдаёт это расписание, на экране прежнее. Не пройдёт за час — " +
+                "напишите автору в Telegram: @toomonn",
             refreshFailure(HttpFailure(503, "/v1/meta")),
         )
         assertEquals("Не удалось обновить: нет связи с сервером", refreshFailure(java.io.IOException()))

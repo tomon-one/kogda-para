@@ -64,7 +64,7 @@ fun SelfPickerScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Найдите себя",
+                        "Найдите себя в списке",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )

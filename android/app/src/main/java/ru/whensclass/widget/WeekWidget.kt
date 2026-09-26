@@ -114,7 +114,7 @@ class WeekWidget : GlanceAppWidget() {
                     // Обновлять нечего — нажатие ведёт в приложение (третий
                     // аудит, М14 прогона 2).
                     state?.groupName == null -> MissingHint(
-                        "Откройте приложение и выберите свою группу", colors,
+                        "Откройте приложение и выберите группу или себя", colors,
                         open = actionStartActivity(openDay(context, today)),
                     )
 
@@ -135,6 +135,7 @@ class WeekWidget : GlanceAppWidget() {
                         MissingHint(
                             missing.text, colors,
                             if (missing.toSource) sheetLink(schedule, today, state?.sourceUrl) else null,
+                            open = if (missing.off) actionStartActivity(openDay(context, today)) else null,
                         )
                     }
                     // Долю высоты список получает здесь, из Column:
@@ -208,8 +209,8 @@ private fun Header(
                 )
                 Text(
                     when {
-                        busy -> " · обновляю…"
-                        failed -> " · не вышло"
+                        busy -> " · обновление…"
+                        failed -> " · не обновилось"
                         // Сбой и пропажа группы — раньше «обновлено»: см. дневной виджет.
                         gone -> " · нет в таблице"
                         // О сбое на сервере говорят все три виджета, а не только
@@ -572,12 +573,23 @@ private fun LessonLine(
             ),
             modifier = GlanceModifier.defaultWeight(),
         )
+        // У отменённой — «отменена», а не прежний кабинет: тонкое зачёркивание
+        // серого за секунду не видно, и оставался номер кабинета, куда идти не
+        // надо (разбор текстов 27.09).
         Text(
-            if (lesson.isOnline) onlineLabel(lesson) else lesson.room?.trim().orEmpty(),
+            when {
+                lesson.isCancelled -> "отменена"
+                lesson.isOnline -> onlineLabel(lesson)
+                else -> lesson.room?.trim().orEmpty()
+            },
             maxLines = 1,
             style = TextStyle(
                 fontSize = 11.sp,
-                color = if (lesson.isOnline) colors.accent else colors.textDim,
+                color = when {
+                    lesson.isCancelled -> colors.error
+                    lesson.isOnline -> colors.accent
+                    else -> colors.textDim
+                },
             ),
             modifier = GlanceModifier.padding(start = 4.dp),
         )

@@ -333,7 +333,12 @@ fun TodayScreen(
                     // при days=[] преподаватель видел пустой экран, а при
                     // schedule==null — чужие фамилии вместо своего (второй
                     // аудит, В13).
-                    if (teacherMode && explainMissing(schedule, today, sourceUrl)) return@Column
+                    // «Загружается», а не «проверьте интернет» сразу после выбора
+                    // себя: правка М2 прогона 2 до этой ветки не дошла (разбор
+                    // текстов 27.09).
+                    if (teacherMode && explainMissing(schedule, today, sourceUrl, loading = refreshing)) {
+                        return@Column
+                    }
                     TeacherScreen(
                         teachers = teachers,
                         loadSchedule = loadTeacherSchedule,
@@ -437,7 +442,9 @@ enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String =
     // читается как недоделка, со сроком — как план. Про пересдачи важно
     // сказать сразу, что личных не будет: в листе колледжа нет колонки
     // группы, и собрать их оттуда нельзя ни при каком разборе.
-    RETAKES("Пересдачи", false, "Будут списком по предметам: в листе не написано, чьи они"),
+    // Строки листа пересдач — предмет и преподаватель, групп нет: своё
+    // преподаватель найдёт, студент — только по предмету (разбор текстов 27.09).
+    RETAKES("Пересдачи", false, "Будут списком по предметам и преподавателям: групп в таблице колледжа нет"),
     EXAMS("Экзамены", false, "Появятся к сессии — колледж выкладывает их в декабре"),
 }
 
@@ -621,7 +628,7 @@ fun ScheduleDays(
     ) {
         header?.let { item(key = "header") { it() } }
         items(days, key = { it.date }) { day ->
-            DayCard(day, schedule.bells, now)
+            DayCard(day, schedule.bells, now, teacher = schedule.isTeacher)
         }
     }
 }
@@ -679,6 +686,7 @@ private fun DayCard(
     day: DayDto,
     bells: Map<String, List<String>>,
     now: LocalDateTime,
+    teacher: Boolean = false,
 ) {
     val today = now.toLocalDate()
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
@@ -721,7 +729,9 @@ private fun DayCard(
                 // больше нечего.
                 if (day.lessons.all { it.isCancelled }) {
                     Text(
-                        "Всё отменили. Повезло",
+                        // Преподавателю отмена всех пар — сорванные часы, не
+                        // удача (разбор текстов 27.09).
+                        if (teacher) "Все пары отменены" else "Всё отменили. Повезло",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -758,7 +768,8 @@ private fun freeDay(date: String): String {
  */
 private fun absentDay(date: String): String {
     val day = runCatching { LocalDate.parse(date) }.getOrNull()
-    return if (day?.dayOfWeek == DayOfWeek.SUNDAY) "Выходной" else "Выходной: пар в этот день нет"
+    // Просто «Выходной»: «пар в этот день нет» повторяло его же.
+    return "Выходной"
 }
 
 /** Про будни, у которых пар не оказалось. Редкая новость, и хорошая. */
@@ -1008,9 +1019,10 @@ private fun ServerBroken(
                 color = MaterialTheme.colorScheme.error,
             )
             Text(
-                (if (unreachable) "Телефон не достучался до сервера, "
-                else "Не удалось прочитать таблицу, ") +
-                    "приложение показывает последнее, что пришло. Пары могли поменяться.",
+                // Что на экране — прежнее, говорит строка со временем сбоя ниже;
+                // здесь это было вторым разом (разбор текстов 27.09).
+                (if (unreachable) "Телефон не достучался до сервера. "
+                else "Не удалось прочитать таблицу. ") + "Пары могли поменяться.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1064,10 +1076,12 @@ private fun Gone(groupName: String, teacherMode: Boolean, onRepick: () -> Unit) 
                 color = MaterialTheme.colorScheme.error,
             )
             Text(
-                (if (teacherMode) "Имени «$groupName» в таблице колледжа больше нет: "
-                 else "Группы «$groupName» в таблице колледжа больше нет: ") +
-                    "переименовали, разделили или убрали. На экране — последнее, " +
-                    "что было.",
+                // Без повтора заголовка; «разделили» о человеке — нелепица, а
+                // 404 преподавателю приходит при другом написании имени или если
+                // его нет 60 дней (разбор текстов 27.09).
+                (if (teacherMode) "Имя «$groupName» в таблице записали иначе или убрали. "
+                 else "Группу «$groupName» переименовали, разделили или убрали. ") +
+                    "На экране — последнее, что было.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1097,7 +1111,10 @@ private fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss:
     // тут же переписавшее себя, выглядит поломкой.
     val counted = tally ?: return
 
-    val total = counted.opens + counted.draws
+    // Крупное число — только открытия приложения: виджеты перерисовываются
+    // и тогда, когда на них никто не смотрит, а до сборки 82 считалась каждая
+    // техническая перерисовка (разбор текстов 27.09).
+    val total = counted.opens
     val seconds = total * SHEET_SECONDS
     val spent = if (seconds < 60) {
         plural(seconds.toInt(), "секунду", "секунды", "секунд")
@@ -1117,11 +1134,9 @@ private fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss:
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    // «3 раза», а не «3 раз» (третий аудит, М25 прогона 2).
-                    // Без «каждый раз это было вместо таблицы»: до сборки 82
-                    // виджеты засчитывали и технические перерисовки.
-                    plural(counted.opens.toInt(), "раз", "раза", "раз") + " ответило приложение, " +
-                        "${counted.draws} — виджеты.",
+                    "Столько раз вместо неё ответило приложение. Виджеты сверх того " +
+                        "перерисовывались ${plural(counted.draws.toInt(), "раз", "раза", "раз")} — " +
+                        "смотрели на них или нет.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -1273,7 +1288,7 @@ internal fun explainMissing(
 ): Boolean {
     if (schedule == null && loading) {
         Explanation(
-            title = "Загружаю расписание",
+            title = "Расписание загружается",
             text = "Обычно это несколько секунд.",
             busy = true,
         )
@@ -1282,7 +1297,7 @@ internal fun explainMissing(
     if (schedule == null) {
         Explanation(
             title = "Расписание ещё не загружено",
-            text = "Проверьте интернет и нажмите ⟳ вверху. Не помогает — напишите @toomonn.",
+            text = "Проверьте интернет и нажмите ⟳ вверху. Не помогает — напишите автору в Telegram: @toomonn.",
         )
         return true
     }

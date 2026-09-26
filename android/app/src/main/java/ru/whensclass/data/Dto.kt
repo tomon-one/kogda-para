@@ -86,6 +86,14 @@ data class LessonDto(
      * студенты в кабинете 269» (третий аудит, В1 прогона 1).
      */
     val isOnline: Boolean get() = online != 0 || (url != null && room == null)
+
+    /** Какую пару эта заменила — из примечания сервера «вместо: X»; null — не замена. */
+    val replaces: String?
+        get() = note?.takeIf { it.startsWith(INSTEAD) }?.removePrefix(INSTEAD)?.trim()?.ifEmpty { null }
+
+    private companion object {
+        const val INSTEAD = "вместо: "
+    }
 }
 
 @Serializable

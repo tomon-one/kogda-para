@@ -184,8 +184,7 @@ class ScheduleRepository(
         // послезавтра. Снимается само к концу последнего дня, о котором
         // говорит (третий аудит, М71 прогона 2).
         val text = lines.joinToString("\n") { (day, change) ->
-            val date = java.time.LocalDate.parse(day)
-            "${ru.whensclass.widget.formatDayTitleShort(date)}: $change"
+            "${ru.whensclass.widget.formatDayDate(java.time.LocalDate.parse(day))}: $change"
         }
         val lastDay = lines.maxOf { java.time.LocalDate.parse(it.first) }
         val until = lastDay.plusDays(1).atStartOfDay(ru.whensclass.widget.COLLEGE_ZONE)
@@ -217,9 +216,9 @@ class ScheduleRepository(
         val shown = Notifications.serverDown(
             context,
             if (silent) "Сервер расписания не отвечает" else "Сервер расписания не обновляется",
-            "Сбой с ${ru.whensclass.widget.formatSince(sinceIso)}. " +
-                "На экране — последнее, что пришло; пары могли поменяться. " +
-                "Таблица колледжа — в приложении.",
+            "Сбой с ${ru.whensclass.widget.formatSinceMoment(sinceIso)}. " +
+                "Приложение и виджеты показывают прежнее, пары могли поменяться. " +
+                "Таблицу колледжа можно открыть из приложения.",
         )
         if (shown) store.setStaleNotifiedFor(sinceIso)
     }
@@ -538,7 +537,7 @@ class ScheduleRepository(
                     if (store.markSecondGone() && store.notifyChangesEnabled()) {
                         Notifications.subgroupGone(
                             context,
-                            "Подгруппы $name сейчас нет в таблице",
+                            "Соседней подгруппы $name сейчас нет в таблице",
                             "Её пары пока не показываются и вернутся сами, когда она " +
                                 "появится. Если её переименовали — выберите заново в настройках.",
                         )

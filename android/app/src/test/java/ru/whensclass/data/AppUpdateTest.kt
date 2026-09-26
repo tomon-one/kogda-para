@@ -99,7 +99,7 @@ class AppUpdateTest {
         assertTrue(
             updateFailure(
                 javax.net.ssl.SSLHandshakeException("Trust anchor for certification path not found."),
-            ).startsWith("защищённое соединение не удалось"),
+            ).startsWith("эта сеть не пускает к серверу"),
         )
         assertEquals("связь оборвалась, попробуйте ещё раз", updateFailure(java.io.IOException("unexpected end of stream")))
         assertEquals("сервер ответил 404", updateFailure(HttpFailure(404, "загрузку")))
