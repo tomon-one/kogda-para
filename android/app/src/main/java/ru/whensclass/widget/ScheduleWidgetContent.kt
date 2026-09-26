@@ -111,7 +111,7 @@ fun ScheduleWidgetContent(
             // Обновлять нечего: нажатие ведёт в приложение, а не в
             // «обновлено» (третий аудит, М14 прогона 2).
             groupName == null -> MissingHint(
-                "Откройте приложение и выберите свою группу", colors,
+                "Откройте приложение и выберите группу или себя", colors,
                 open = actionStartActivity(openDay(context, day)),
             )
             schedule == null -> MissingHint("Расписание ещё не загружено", colors)
@@ -119,9 +119,17 @@ fun ScheduleWidgetContent(
                 val missing = missingDay(schedule, day, fetchedAt, serverBroken)
                 // К своей колонке и к этому дню, а не в книгу целиком.
                 val link = sheetLink(schedule, day, sourceUrl)
-                MissingHint(missing.text, colors, if (missing.toSource) link else null)
+                MissingHint(
+                    missing.text, colors, if (missing.toSource) link else null,
+                    // Выходной — не повод «нажмите, чтобы обновить».
+                    open = if (missing.off) actionStartActivity(openDay(context, day)) else null,
+                )
             }
-            today.lessons.isEmpty() -> MissingHint("Пар нет", colors)
+            // Свободный день: подсказка «нажмите, чтобы обновить» читалась как
+            // «не загрузилось» (разбор текстов 27.09) — нажатие ведёт в приложение.
+            today.lessons.isEmpty() -> MissingHint(
+                "Пар нет", colors, open = actionStartActivity(openDay(context, day)),
+            )
             else -> Lessons(
                 today.lessons,
                 schedule.bells,
@@ -232,8 +240,8 @@ private fun Header(
                 // приглушённым цветом; краснеет, только когда данные протухли.
                 Text(
                     when {
-                        busy -> " · обновляю…"
-                        failed -> " · не вышло"
+                        busy -> " · обновление…"
+                        failed -> " · не обновилось"
                         // Сбой и пропажа группы — раньше «обновлено»: ответ
                         // сервера пришёл, но расписание в нём прежнее, и
                         // «обновлено» на секунду перед «сбой» читалось как
@@ -431,7 +439,7 @@ private fun HiddenLine(text: String, day: LocalDate, colors: Palette) {
  * Воскресенье внутри опубликованного листа объявлялось неопубликованным, а
  * недельной давности данные — тоже.
  */
-internal data class Missing(val text: String, val toSource: Boolean = false)
+internal data class Missing(val text: String, val toSource: Boolean = false, val off: Boolean = false)
 
 internal fun missingDay(
     schedule: ScheduleDto,
@@ -451,12 +459,14 @@ internal fun missingDay(
     // (третий аудит, В20 прогона 1; М13 прогона 2).
     val dates = schedule.days.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
     val inWindow = dates.isNotEmpty() && !day.isBefore(dates.min()) && !day.isAfter(dates.max())
-    val off = if (week) "Выходной: пар в эти дни нет" else "Выходной: пар в этот день нет"
+    val off = Missing("Выходной", off = true)
     return when {
         // Воскресений в листах не бывает: это выходной всегда, и при cov,
-        // который кончается субботой (М17 прогона 1).
-        day.dayOfWeek == java.time.DayOfWeek.SUNDAY -> Missing(off)
-        covered && inWindow -> Missing(off)
+        // который кончается субботой (М17 прогона 1). Но не для недели:
+        // пустая неделя в воскресенье — это «следующая не выложена», а не
+        // «выходной» без выхода к таблице (разбор текстов 27.09).
+        day.dayOfWeek == java.time.DayOfWeek.SUNDAY && !week -> off
+        covered && inWindow -> off
         // Сбой проверяем раньше несвежести. Данные при сбое всегда рано
         // или поздно стареют, и «нажмите на время в шапке» отправляло
         // человека жать кнопку, которая в этом случае помочь не может.
@@ -464,12 +474,13 @@ internal fun missingDay(
         // Пустой день и наша поломка выглядели одинаково, и человек
         // спокойно ждал расписания, которого мы уже не принесём.
         serverBroken -> Missing("Сбой: расписание не обновляется", toSource = true)
-        isStale(fetchedAt) -> Missing("Данные устарели. Нажмите на время в шапке")
+        // Без «нажмите на время в шапке»: ниже и так «нажмите, чтобы
+        // обновить», и обновляет нажатие на саму надпись.
+        isStale(fetchedAt) -> Missing("Данные устарели")
         // Лист этот день покрывает, а на телефоне его нет — окно не то.
         // Утверждать «выходной» или «не опубликовано» нечем.
         covered -> Missing(
-            if (week) "Расписание на эти дни не загружено. Нажмите на время в шапке"
-            else "Расписание на этот день не загружено. Нажмите на время в шапке",
+            if (week) "Расписание на эти дни не загружено" else "Расписание на этот день не загружено",
         )
         // Единственное объяснение, которое приложение проверить не может:
         // ровно так же выглядит наш собственный промах с поиском листа.
@@ -610,7 +621,9 @@ private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
         if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
         // Место — раньше типа: строка одна, и тип вытеснял кабинет в
         // многоточие (третий аудит, В7 прогона 2).
-        add(if (lesson.isOnline) onlineLabel(lesson) else roomLabel(lesson.room) ?: "не указано")
+        // Замена — первым словом, как «Вместо: …» на экране (разбор текстов 27.09).
+        if (lesson.replaces != null && !lesson.isCancelled) add("замена")
+        add(if (lesson.isOnline) onlineLabel(lesson) else roomLabel(lesson.room) ?: "место не указано")
         kindName(lesson.kind)?.let { add(it) }
         // В расписании преподавателя вместо его имени — группы, которым читается
         // пара: сам он и так знает, кто ведёт.
@@ -629,7 +642,7 @@ private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
         // справа, так что длинная фамилия преподавателя утаскивала за край
         // единственную кнопку, ради которой на пару и нажимают.
         when {
-            foreign -> "⚠ чужой адрес · " + parts.joinToString(" · ")
+            foreign -> "⚠ чужая ссылка · " + parts.joinToString(" · ")
             lesson.url != null -> "⧉  " + parts.joinToString(" · ")
             else -> parts.joinToString(" · ")
         },

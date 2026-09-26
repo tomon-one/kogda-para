@@ -75,10 +75,12 @@ internal fun updateFailure(error: Throwable): String {
         // бросает голым InterruptedIOException("timeout").
         error is java.io.InterruptedIOException -> "сервер не ответил вовремя"
         chain.any { it is javax.net.ssl.SSLException || it is java.security.cert.CertificateException } ->
-            "защищённое соединение не удалось: сеть подменяет сертификат (вход в Wi-Fi?). " +
+            // «Сертификат» новичку ничего не говорит (разбор текстов 27.09).
+            "эта сеть не пускает к серверу — возможно, Wi-Fi ждёт входа на своей странице. " +
                 "Попробуйте через мобильную сеть"
         error is java.io.IOException -> "связь оборвалась, попробуйте ещё раз"
-        else -> "не удалось скачать"
+        // Показывается как «Не удалось: …» — не «не удалось скачать» второй раз.
+        else -> "причина неизвестна"
     }
 }
 
@@ -258,7 +260,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             // сервера стоял рядом — тот, кто завладел сервером, этим уводил
             // людей на свою сборку (третий аудит, В29 прогона 1).
             return "подпись файла не та. Не удаляйте приложение ради этого " +
-                "обновления и не ставьте файл по ссылкам из его текста — напишите @toomonn"
+                "обновления и не ставьте файл по ссылкам из его текста — напишите автору в " +
+                "Telegram: @toomonn"
         }
         return null
     }

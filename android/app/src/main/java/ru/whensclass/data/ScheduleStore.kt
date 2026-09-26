@@ -637,8 +637,13 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUP2_GONE = stringPreferencesKey("group2_gone")
         val KEY_UNREACHABLE_LAST = stringPreferencesKey("unreachable_last")
         val KEY_DRAW_COUNTED = stringPreferencesKey("draw_counted")
-        /** Неудачи, разделённые таким перерывом, — не одна беда. */
-        val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(1)
+        /**
+         * Неудачи, разделённые таким перерывом, — не одна беда. Три часа, а не
+         * час: фоновый заход бывает раз в час с хвостиком, и при часе цепочка
+         * рвалась каждый раз — «сервер не отвечает» без открытия приложения
+         * не наступал никогда (разбор текстов 27.09; регресс М12 прогона 1).
+         */
+        val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(3)
         /** Счёт показов виджета — не чаще раза в столько. */
         const val DRAW_COUNT_GAP_MILLIS = 3L * 60 * 60 * 1000
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")

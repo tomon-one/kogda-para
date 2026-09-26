@@ -38,7 +38,7 @@ internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?, 
     val context = LocalContext.current
     Column(modifier = Modifier.padding(16.dp)) {
         Text(
-            "$what не загрузился. Проверьте интернет или напишите",
+            "$what не загрузился. Проверьте интернет или напишите автору в Telegram:",
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(

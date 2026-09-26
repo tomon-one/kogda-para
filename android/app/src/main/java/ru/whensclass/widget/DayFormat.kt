@@ -97,15 +97,25 @@ fun formatDayTitle(day: LocalDate): String {
 }
 
 fun formatFetchedAt(millis: Long): String {
-    if (millis <= 0) return "ещё не обновлялось"
+    // «Проверено», а не «обновлено»: время ставится при каждой удачной
+    // проверке, и в сбой «обновлено 5 минут назад» стояло над плашкой «сбой с
+    // позавчера» (разбор текстов 27.09).
+    if (millis <= 0) return "ещё не проверялось"
     val moment = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
     val time = moment.format(DateTimeFormatter.ofPattern("HH:mm", RU))
     return when (moment.toLocalDate()) {
-        LocalDate.now() -> "обновлено в $time"
-        LocalDate.now().minusDays(1) -> "обновлено вчера в $time"
-        else -> "обновлено " + moment.format(DateTimeFormatter.ofPattern("d MMMM в HH:mm", RU))
+        LocalDate.now() -> "проверено в $time"
+        LocalDate.now().minusDays(1) -> "проверено вчера в $time"
+        else -> "проверено " + moment.format(DateTimeFormatter.ofPattern("d MMMM в HH:mm", RU))
     }
 }
+
+/**
+ * «вс, 27 сентября» — день без «сегодня» и «завтра». Для уведомлений: они
+ * висят и после полуночи, и утром «завтра, 28» — это уже сегодня (разбор
+ * текстов 27.09; недоделка М71 прогона 2).
+ */
+fun formatDayDate(day: LocalDate): String = day.format(DateTimeFormatter.ofPattern("EEE, d MMMM", RU))
 
 /**
  * То же время, но коротко — для шапки виджета, где на счету каждый пиксель.
@@ -298,6 +308,16 @@ fun formatSince(iso: String, now: Instant = Instant.now()): String {
         else -> plural((minutes / 60 / 24).toInt(), "день", "дня", "дней")
     }
     return "$when_ — уже $ago"
+}
+
+/**
+ * Начало сбоя без «уже N часов» — для уведомления: оно выходит один раз и
+ * висит сутками, и «уже 2 часа» через день было неправдой (разбор текстов 27.09).
+ */
+fun formatSinceMoment(iso: String): String {
+    val since = runCatching { Instant.parse(iso) }.getOrNull() ?: return iso
+    return LocalDateTime.ofInstant(since, ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale("ru")))
 }
 
 /** «6 пар», «2 пары», «1 пара» — счёт занятий по-русски. */

@@ -5,46 +5,39 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Заголовок напоминания.
- *
- * Проверяем не текст ради текста: раньше остаток брался из настройки, и
- * уведомление обещало «через 20 минут» независимо от того, когда система
- * соизволила разбудить телефон.
+ * Заголовок напоминания: время начала пары. Раньше — «через 20 минут», и
+ * уведомление, висящее полчаса, врало, а времени начала в нём не было вовсе
+ * (разбор текстов 27.09).
  */
 class LessonAlarmsTest {
 
     private val start = LocalDateTime.of(2026, 9, 8, 12, 30)
 
     @Test
-    fun `остаток считается от текущего времени, а не от настройки`() {
-        assertEquals(
-            "Через 20 минут — Физика",
-            LessonAlarms.title("Физика", start, start.minusMinutes(20)),
-        )
-        // Будильник разбудил телефон с опозданием — текст обязан это заметить.
-        assertEquals(
-            "Через 3 минуты — Физика",
-            LessonAlarms.title("Физика", start, start.minusMinutes(3)),
-        )
-    }
-
-    @Test
-    fun `часы называются часами`() {
-        assertEquals(
-            "Через 3 часа 5 минут — Английский",
-            LessonAlarms.title("Английский", start, start.minusMinutes(185)),
-        )
+    fun `в заголовке время начала — сколько бы ни висело уведомление`() {
+        assertEquals("12:30 — Физика", LessonAlarms.title("Физика", start, start.minusMinutes(20)))
+        assertEquals("12:30 — Английский", LessonAlarms.title("Английский", start, start.minusMinutes(185)))
+        assertEquals("12:30 — Физика", LessonAlarms.title("Физика", start, start))
     }
 
     @Test
     fun `опоздавшее напоминание не обещает будущего`() {
-        assertEquals(
-            "Пара начинается — Физика",
-            LessonAlarms.title("Физика", start, start.minusSeconds(10)),
+        assertEquals("Пара уже идёт — Физика", LessonAlarms.title("Физика", start, start.plusMinutes(15)))
+    }
+
+    @Test
+    fun `напоминание снимается к концу пары`() {
+        val schedule = ru.whensclass.data.ScheduleDto(
+            groupId = "g", groupName = "Г", generatedAt = "2026-09-08T00:00:00Z",
+            bells = mapOf("3" to listOf("12:30", "14:00")),
+            days = listOf(
+                ru.whensclass.data.DayDto(
+                    date = "2026-09-08",
+                    lessons = listOf(ru.whensclass.data.LessonDto(number = 3, subject = "Физика")),
+                ),
+            ),
         )
-        assertEquals(
-            "Пара уже идёт — Физика",
-            LessonAlarms.title("Физика", start, start.plusMinutes(15)),
-        )
+        val alarm = LessonAlarms.plan(schedule, minutes = 20, now = start.minusHours(3)).single()
+        assertEquals(LocalDateTime.of(2026, 9, 8, 14, 0), alarm.end)
     }
 }

@@ -101,8 +101,10 @@ class DayFormatTest {
 
     @Test
     fun `время обновления показывается по-человечески`() {
-        assertEquals("ещё не обновлялось", formatFetchedAt(0))
-        assertTrue(formatFetchedAt(System.currentTimeMillis()).startsWith("обновлено в"))
+        // «Проверено»: время ставится при каждой удачной проверке, даже когда
+        // ничего не обновилось (разбор текстов 27.09).
+        assertEquals("ещё не проверялось", formatFetchedAt(0))
+        assertTrue(formatFetchedAt(System.currentTimeMillis()).startsWith("проверено в"))
     }
 
     @Test

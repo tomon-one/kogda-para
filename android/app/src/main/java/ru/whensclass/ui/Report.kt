@@ -85,7 +85,7 @@ private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
                     // настройки (третий аудит, контроль 10 прогона 1).
                     // Что уходит — видно ниже целиком, перечень его только
                     // повторял; куда слать — не было сказано вовсе.
-                    "Пришлите это @toomonn вместе с жалобой. Всё, что уйдёт, — " +
+                    "Пришлите это автору в Telegram: @toomonn — вместе с жалобой. Всё, что уйдёт, — " +
                         "ниже: посмотрите перед отправкой.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -96,7 +96,7 @@ private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 ) {
                     Text(
-                        text ?: "Собираю…",
+                        text ?: "Сбор сведений…",
                         style = MaterialTheme.typography.bodySmall,
                         // Ровными столбцами: так видно, что это выписка, а не
                         // рассказ, и её надо переслать целиком.

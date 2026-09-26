@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -18,7 +17,6 @@ import ru.whensclass.AppContainer
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.widget.ScheduleWidget
-import ru.whensclass.widget.formatDurationLong
 import ru.whensclass.widget.kindName
 import ru.whensclass.widget.roomLabel
 
@@ -93,7 +91,7 @@ object LessonAlarms {
 
                 if (duringPrevious) continue
                 if (fireAt.isBefore(now)) continue
-                out.add(Alarm(fireAt, lesson, minutes, date.toString()))
+                out.add(Alarm(fireAt, lesson, minutes, date.toString(), busyUntil))
             }
         }
         return out.sortedBy { it.at }
@@ -104,6 +102,8 @@ object LessonAlarms {
         val lesson: LessonDto,
         val minutes: Int,
         val day: String,
+        /** Конец пары — к нему напоминание снимается само. */
+        val end: LocalDateTime? = null,
     ) {
         /** Когда пара начнётся: будильник стоит настолько же раньше. */
         val start: LocalDateTime get() = at.plusMinutes(minutes.toLong())
@@ -118,6 +118,7 @@ object LessonAlarms {
             .putExtra(EXTRA_START, alarm.start.toString())
             .putExtra(EXTRA_TEXT, text(alarm))
             .putExtra(EXTRA_DAY, alarm.day)
+            .putExtra(EXTRA_END, alarm.end?.toString())
         val pending = PendingIntent.getBroadcast(
             context,
             index,
@@ -162,30 +163,26 @@ object LessonAlarms {
     }
 
     /**
-     * Заголовок напоминания.
-     *
-     * Остаток считается сейчас, а не при постановке будильника: будильник может
-     * сработать позже назначенного, и обещание «через двадцать минут», данное
-     * заранее, к моменту показа успевает соврать.
+     * Заголовок напоминания: время начала, а не «через 20 минут». Уведомление
+     * висит, и через полчаса «через 20 минут» врало, а времени начала в нём не
+     * было вовсе (разбор текстов 27.09). Что пара уже идёт — считается при
+     * показе: будильник может сработать позже назначенного.
      */
     fun title(
         subject: String,
         start: LocalDateTime,
         now: LocalDateTime = ru.whensclass.widget.collegeNow(),
-    ): String {
-        val left = Math.round(Duration.between(now, start).seconds / 60.0).toInt()
-        return when {
-            left > 0 -> "Через ${formatDurationLong(left)} — $subject"
-            left == 0 -> "Пара начинается — $subject"
-            else -> "Пара уже идёт — $subject"
-        }
+    ): String = if (now.isAfter(start)) {
+        "Пара уже идёт — $subject"
+    } else {
+        start.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + " — $subject"
     }
 
     fun text(alarm: Alarm): String = buildString {
         append("${alarm.lesson.number} пара")
         kindName(alarm.lesson.kind)?.let { append(", ${it.lowercase()}") }
         if (alarm.lesson.isOnline) {
-            append(". Занятие онлайн")
+            append(". Онлайн")
             alarm.lesson.room?.trim()?.takeIf { it.isNotEmpty() }?.let { append(", комната $it") }
         } else {
             roomLabel(alarm.lesson.room)?.let { append(". $it") }
@@ -202,6 +199,7 @@ object LessonAlarms {
     const val EXTRA_START = "start"
     const val EXTRA_TEXT = "text"
     const val EXTRA_DAY = "day"
+    const val EXTRA_END = "end"
 }
 
 /** Показывает напоминание и заодно переставляет будильники на следующие пары. */
@@ -211,11 +209,14 @@ class LessonAlarmReceiver : BroadcastReceiver() {
         val start = intent.getStringExtra(LessonAlarms.EXTRA_START)
             ?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return
         val text = intent.getStringExtra(LessonAlarms.EXTRA_TEXT).orEmpty()
+        val end = intent.getStringExtra(LessonAlarms.EXTRA_END)
+            ?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
         Notifications.lessonSoon(
             context,
             LessonAlarms.title(subject, start),
             text,
             intent.getStringExtra(LessonAlarms.EXTRA_DAY),
+            until = end?.let { ru.whensclass.widget.millisOf(it) },
         )
         LessonAlarms.reschedule(context)
     }

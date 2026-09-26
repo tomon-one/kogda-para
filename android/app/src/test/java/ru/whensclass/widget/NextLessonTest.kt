@@ -83,9 +83,13 @@ class NextLessonTest {
         assertEquals("Дальше расписание ещё не опубликовано", noNextLesson("ИСП-924/1", endOfSheet, now, fresh, false))
         assertEquals("Сбой: расписание не обновляется", noNextLesson("ИСП-924/1", endOfSheet, now, fresh, true))
         assertEquals("Данные устарели", noNextLesson("ИСП-924/1", endOfSheet, now, old, false))
-        assertEquals("Дальше пар нет", noNextLesson("ИСП-924/1", schedule(cov = "2026-10-10"), now, fresh, false))
+        // Лист идёт дальше скачанной недели, а в ней пар больше нет: не «дальше
+        // пар нет» (за краем недели они есть), а до какого дня их нет (разбор
+        // текстов 27.09).
+        val window = schedule(now to emptyList(), now.plusDays(2) to emptyList(), cov = "2026-10-10")
+        assertEquals("Пар нет по пн, 28 сент.", noNextLesson("ИСП-924/1", window, now, fresh, false))
         assertEquals(
-            "Откройте приложение и выберите свою группу",
+            "Откройте приложение и выберите группу или себя",
             noNextLesson(null, null, now, fresh, false),
         )
     }

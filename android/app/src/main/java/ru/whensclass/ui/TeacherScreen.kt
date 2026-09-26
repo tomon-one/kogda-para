@@ -276,7 +276,10 @@ private fun ChosenTeacher(
         when {
             loading -> Centered { CircularProgressIndicator() }
             schedule == null -> Centered {
-                Text("Расписание не загрузилось", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Расписание не загрузилось. Проверьте интернет и нажмите ⟳ вверху.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
             // Дней нет — не пустой экран, а объяснение с выходом к таблице,
             // как у своего расписания (третий аудит, М27 прогона 1).

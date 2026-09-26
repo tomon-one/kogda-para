@@ -42,7 +42,7 @@ class MissingDayTest {
         val answer = missingDay(
             schedule("2026-09-02", "2026-09-19", "2026-09-12", "2026-09-19"), monday, fresh, false,
         )
-        assertEquals("Выходной: пар в этот день нет", answer.text)
+        assertEquals("Выходной", answer.text)
         assertFalse("колледж уже ответил про этот день", answer.toSource)
     }
 
@@ -51,7 +51,7 @@ class MissingDayTest {
         // cov кончается субботой — так каждое воскресенье до новой недели
         // (третий аудит, М17 прогона 1).
         val answer = missingDay(schedule("2026-09-07", "2026-09-12"), sunday, fresh, false)
-        assertEquals("Выходной: пар в этот день нет", answer.text)
+        assertEquals("Выходной", answer.text)
     }
 
     @Test
@@ -61,7 +61,7 @@ class MissingDayTest {
         val tuesday = LocalDate.of(2026, 9, 15)
         val window = schedule("2026-09-02", "2026-09-19", "2026-09-07", "2026-09-14")
         assertEquals(
-            "Данные устарели. Нажмите на время в шапке",
+            "Данные устарели",
             missingDay(window, tuesday, old, false).text,
         )
         assertEquals(
@@ -71,7 +71,7 @@ class MissingDayTest {
         // Свежие данные, сервер цел, а дня всё равно нет на телефоне (быстрое
         // «›» за край окна, М13 прогона 2) — «не загружено», не «выходной».
         assertEquals(
-            "Расписание на этот день не загружено. Нажмите на время в шапке",
+            "Расписание на этот день не загружено",
             missingDay(window, tuesday, fresh, false).text,
         )
     }
@@ -103,7 +103,17 @@ class MissingDayTest {
     @Test
     fun `старые данные без сбоя — предлагаем обновиться`() {
         val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, old, false)
-        assertEquals("Данные устарели. Нажмите на время в шапке", answer.text)
+        assertEquals("Данные устарели", answer.text)
         assertFalse("сначала стоит просто обновиться", answer.toSource)
+    }
+
+    @Test
+    fun `неделя в воскресенье без выложенной следующей — не «выходной», а к таблице`() {
+        // Раньше воскресенье отвечало «выходной» первой проверкой и для
+        // недели: «Выходной: пар в эти дни нет» без выхода к таблице (разбор
+        // текстов 27.09).
+        val answer = missingDay(schedule("2026-09-07", "2026-09-12"), sunday, fresh, false, week = true)
+        assertEquals("Расписание на эти дни ещё не опубликовано", answer.text)
+        assertTrue(answer.toSource)
     }
 }
