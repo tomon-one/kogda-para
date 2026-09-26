@@ -37,13 +37,13 @@ CASES = [
         dict(room="279", cancelled=True, note=None),
     ),
     (
-        ("Иностранный язык (Пр)", "https://my.mts-link.ru/j/100000001/20000000040", ""),
-        dict(url="https://my.mts-link.ru/j/100000001/20000000040", room=None),
+        ("Иностранный язык (Пр)", "https://my.mts-link.ru/j/100000001/20000000065", ""),
+        dict(url="https://my.mts-link.ru/j/100000001/20000000065", room=None),
     ),
     (
-        ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 3 (Б.Хмельницкого 3)", ""),
+        ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 8 (Б.Хмельницкого 8)", ""),
         # скобка в конце аудитории — это адрес, а не тип занятия
-        dict(room="Спортзал Б.Хмельницкого 3 (Б.Хмельницкого 3)", kind="Пр"),
+        dict(room="Спортзал Б.Хмельницкого 8 (Б.Хмельницкого 8)", kind="Пр"),
     ),
     (
         ('Технология выполнения работ по профессии "Графический дизайнер" (Пр)',
@@ -119,9 +119,9 @@ def test_room_that_only_starts_with_online_stays_a_room():
 
 
 def test_link_means_online_too():
-    lesson = parse_lesson(1, "Информатика", "https://my.mts-link.ru/j/5/3", "")
+    lesson = parse_lesson(1, "Информатика", "https://my.mts-link.ru/j/5/8", "")
     assert lesson.online is True
-    assert lesson.url == "https://my.mts-link.ru/j/5/3"
+    assert lesson.url == "https://my.mts-link.ru/j/5/8"
 
 
 def test_ordinary_room_is_not_online():
@@ -162,18 +162,18 @@ AUDIT_CASES = [
     ),
     (
         # Ссылка слитно с подписью: ГД-925/3, 04.09, пара 1.
-        ("Иностранный язык", "онлайнhttps://my.mts-link.ru/j/100000001/20000000042", ""),
-        dict(url="https://my.mts-link.ru/j/100000001/20000000042", room=None),
+        ("Иностранный язык", "онлайнhttps://my.mts-link.ru/j/100000001/20000000112", ""),
+        dict(url="https://my.mts-link.ru/j/100000001/20000000112", room=None),
     ),
     (
         # Голая ссылка разбиралась и раньше.
-        ("Информатика", "https://my.mts-link.ru/j/5/3", ""),
-        dict(url="https://my.mts-link.ru/j/5/3", room=None),
+        ("Информатика", "https://my.mts-link.ru/j/5/8", ""),
+        dict(url="https://my.mts-link.ru/j/5/8", room=None),
     ),
     (
         # Ссылка в колонке предмета: УП-926/1, 07.09, пара 4.
-        ("https://my.mts-link.ru/j/5/3", "", "Новиков Вячеслав Сергеевич"),
-        dict(url="https://my.mts-link.ru/j/5/3", subject="Занятие онлайн"),
+        ("https://my.mts-link.ru/j/5/8", "", "Новиков Вячеслав Сергеевич"),
+        dict(url="https://my.mts-link.ru/j/5/8", subject="Занятие онлайн"),
     ),
     (
         # Причина отмены в колонке аудитории: Т-1125, 07.09, пара 4.
@@ -186,9 +186,12 @@ AUDIT_CASES = [
         dict(cancelled=True, room="279", note=None),
     ),
     (
-        # Тип занятия в середине названия: ГД-1126, 03.09, пара 3.
+        # Замена: пара — новая, прежняя — в примечании. Тип «(Лек)» был у
+        # заменённой, у новой он не написан (ГД-1126, 03.09, пара 3; третий
+        # аудит, В8 прогона 1).
         ("Безопасность жизнедеятельности (Лек) Замена Дизайн-проектирование", "453", ""),
-        dict(kind="Лек", subject="Безопасность жизнедеятельности Замена Дизайн-проектирование"),
+        dict(kind=None, subject="Дизайн-проектирование",
+             note="вместо: Безопасность жизнедеятельности"),
     ),
     (
         # Скобки, которые не тип занятия, названием и остаются.
@@ -237,13 +240,13 @@ def test_reason_after_the_subject_is_still_a_reason():
 
 def test_two_line_cancellation_keeps_the_reason_as_a_reason():
     """Вторая строка «Отмена Преподаватель заболел» — причина, а не хвост
-    названия (второй аудит, М3)."""
+    названия (второй аудит, М8)."""
     lesson = parse_lesson(1, "Иностранный язык (Пр)\nОтмена Преподаватель заболел", "", "")
     assert lesson.subject == "Иностранный язык" and lesson.cancelled
     assert lesson.note == "Преподаватель заболел"
 
 
-@pytest.mark.parametrize("room", ["55/1", "171/3", "Восход 222", "Спортзал 3", "279а"])
+@pytest.mark.parametrize("room", ["55/1", "171/3", "Восход 222", "Спортзал 8", "279а"])
 def test_room_after_cancellation_stays_a_room(room):
     """«ОТМЕНА 55/1» — отменена пара в 55/1, а не причина «55/1» (второй аудит, М3)."""
     lesson = parse_lesson(1, "Информатика", f"ОТМЕНА {room}", "")
@@ -280,7 +283,7 @@ def test_online_centre_is_still_a_building():
 ])
 def test_glued_and_service_texts_in_teacher_row(cell, people):
     """Два человека без разделителя и служебная приписка давали фантомов в
-    /v1/teachers, а у настоящих пары пропадали (второй аудит, В3). Пример —
+    /v1/teachers, а у настоящих пары пропадали (второй аудит, В8). Пример —
     живой лист 23.09.2026."""
     assert parse_lesson(1, "Информатика", "", cell).teachers == people
 
@@ -292,3 +295,66 @@ def test_same_sheet_trouble_is_logged_once(caplog):
         for _ in range(3):
             parse_lesson(1, "Информатика", "", "замена")
     assert caplog.text.count("нет имени") == 1
+
+
+# --- Третий аудит, В1 и В8 прогона 1 ---------------------------------------
+
+@pytest.mark.parametrize(
+    "subject, room, teachers, expected",
+    [
+        # МФ-926/8, 25.09, пара 4: тип и преподаватель — новой пары.
+        (
+            "Математика (Пр) ЗАМЕНА Коммуникативный тренинг (Лек)", "351",
+            "Романова Анастасия Юрьевна Звонцов Александр Сергеевич",
+            dict(subject="Коммуникативный тренинг", kind="Лек",
+                 teachers=("Звонцов Александр Сергеевич",), note="вместо: Математика"),
+        ),
+        # Замена отдельной строкой и прописными.
+        (
+            "Коммуникативный тренинг (Лек) ЗАМЕНА КУРАТОРСКИЙ ЧАС", "", "",
+            dict(subject="Кураторский час", kind=None, note="вместо: Коммуникативный тренинг"),
+        ),
+        (
+            "Иностранный язык\n.Английский ячзык (Пр)\nзамена кураторский час", "", "",
+            dict(subject="Кураторский час", note="вместо: Иностранный язык .Английский ячзык"),
+        ),
+        (
+            "Иностранный язык, Английский (Пр) ЗАМЕНА - Биология (пр)", "", "",
+            dict(subject="Биология", kind="Пр"),
+        ),
+        # Отменённая замена: причина и прежняя пара — обе в примечании.
+        (
+            "Информатика (Пр) замена кураторский час", "Отмена", "",
+            dict(subject="Кураторский час", cancelled=True, note="вместо: Информатика"),
+        ),
+    ],
+)
+def test_replacement_takes_the_new_lesson(subject, room, teachers, expected):
+    lesson = parse_lesson(4, subject, room, teachers)
+    for field, value in expected.items():
+        assert getattr(lesson, field) == value, field
+
+
+def test_word_replacement_alone_is_not_a_replacement():
+    lesson = parse_lesson(1, "Замена", "", "")
+    assert lesson.subject == "Замена" and lesson.note is None
+
+
+@pytest.mark.parametrize(
+    "subject, room",
+    [
+        ("Русский язык (Лек) преподаватель на онлайн, студенты в кабинете 269", "269"),
+        ("Русский язык (Лек) преподаватель на онлайн, студенты в кабинет 369", "369"),
+        ("Русский язык (Пр) преподаватель на онлайн, студенты в кабинете 171/8", "171/8"),
+        ("Экономика организации (Лек) студенты в кабинете 351", "351"),
+    ],
+)
+def test_students_in_a_room_is_an_offline_lesson_with_a_link(subject, room):
+    """Л-926/3, 23.09, пара 1: студенты в кабинете, преподаватель по ссылке.
+    Пара очная: кабинет — место, ссылка остаётся, «онлайн» нет."""
+    lesson = parse_lesson(1, subject, "https://my.mts-link.ru/j/5/8", "Московец К. Р.")
+    assert lesson.room == room
+    assert lesson.url == "https://my.mts-link.ru/j/5/8"
+    assert lesson.online is False
+    assert "студент" not in lesson.subject and "онлайн" not in lesson.subject
+    assert lesson.kind in ("Лек", "Пр")

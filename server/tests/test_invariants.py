@@ -40,7 +40,7 @@ def test_date_in_another_format_is_still_a_date(fixture_csv):
     """«07/09/2026» и «понедельник 07.09.2026» — даты, а не текст рядом с датой."""
     rows = rows_of(fixture_csv)
     first, second = date_rows(rows)[:2]
-    rows[first][0] = "понедельник 02.09.2026"
+    rows[first][0] = "среда 02.09.2026"
     rows[second][0] = "03/09/2026"
     snapshot = parse_sheet(rows, "фикстура", FIXTURE)
     assert dt.date(2026, 9, 3) in snapshot.dates
@@ -88,7 +88,7 @@ def test_date_far_ahead_is_rejected_only_when_today_is_known(fixture_csv):
     """Опечатка «2027» растягивала бы лист на год; без «сегодня» проверки нет."""
     rows = rows_of(fixture_csv)
     last = date_rows(rows)[-1]
-    rows[last][0] = rows[last][0].replace("2026", "2027")
+    rows[last][0] = "11.09.2027 суббота"
     with pytest.raises(SourceFormatChanged, match="дальше 60 дней"):
         parse_sheet(rows, "фикстура", FIXTURE, around=dt.date(2026, 9, 8))
     with pytest.raises(SourceFormatChanged, match="больше 25 дней"):
@@ -98,7 +98,7 @@ def test_date_far_ahead_is_rejected_only_when_today_is_known(fixture_csv):
 def test_gap_of_a_month_between_days_is_rejected(fixture_csv):
     rows = rows_of(fixture_csv)
     last = date_rows(rows)[-1]
-    rows[last][0] = rows[last][0].replace(".09.", ".10.")
+    rows[last][0] = "10.10.2026 суббота"
     with pytest.raises(SourceFormatChanged, match="больше 25 дней"):
         parse_sheet(rows, "фикстура", FIXTURE)
 
@@ -243,8 +243,9 @@ def test_room_mark_without_dot_is_tolerated(fixture_csv):
         build_column_map(rows, FIXTURE.min_groups)
 
 
-def test_shift_from_the_second_lesson_is_caught_by_rows():
-    """Выделили диапазон не с начала дня: первая пара своя, остальные — соседа."""
+def test_shift_from_the_second_lesson_is_caught():
+    """Выделили диапазон не с начала дня: первая пара своя, остальные — соседа.
+    Голос у группы за день: чужих три, своя одна — за сдвиг."""
     import copy
 
     from whensclass.parser.csv_schedule import _check_shift
@@ -257,7 +258,7 @@ def test_shift_from_the_second_lesson_is_caught_by_rows():
         neighbour = ids[(i + 1) % len(ids)]
         mine, theirs = honest.schedule[gid][day], honest.schedule[neighbour][day]
         shifted.schedule[gid][day] = mine[:1] + theirs[1:]
-    with pytest.raises(SourceFormatChanged, match="-я пара"):
+    with pytest.raises(SourceFormatChanged, match="сдвиг колонок"):
         _check_shift(shifted)
 
 
@@ -404,12 +405,13 @@ def test_messages_point_to_the_sheet_row(fixture_csv):
 
 def test_winter_holidays_inside_a_sheet_are_not_a_typo(fixture_csv):
     """26.12 → 11.01 — шестнадцать дней: прежний порог в две недели отвергал
-    такой лист целиком (второй аудит, М6). Месяц — по-прежнему опечатка."""
+    такой лист целиком (второй аудит, М6). Месяц — по-прежнему опечатка.
+    Здесь — сдвиг на две недели: разрыв 15–16 дней, дни недели те же."""
     rows = rows_of(fixture_csv)
     later = date_rows(rows)[5:]
     for i in later:
         day = _parse_cell_date(rows[i][0])
-        rows[i][0] = (day + dt.timedelta(days=16)).strftime("%d.%m.%Y")
+        rows[i][0] = (day + dt.timedelta(days=14)).strftime("%d.%m.%Y")
     parse_sheet(rows, "фикстура", FIXTURE)
 
 
@@ -440,3 +442,22 @@ def test_dates_out_of_order_name_the_row(fixture_csv):
     message = str(err.value)
     assert f"в строке {last + 1} листа" in message
     assert "datetime" not in message
+
+
+
+@pytest.mark.parametrize(
+    "cell, match",
+    [
+        ("20.09.2026 понедельник", "воскресенье"),
+        ("20.09.2026", "воскресенье"),
+        ("22.09.2026 понедельник", "помечена как понедельник, а это вторник"),
+    ],
+)
+def test_date_that_contradicts_its_weekday_is_rejected(fixture_csv, cell, match):
+    """Третий аудит, В4 прогона 1: одна цифра в дате — и понедельник уезжал в
+    воскресенье («Выходной» у всех), а неделя без пропуска воскресенья
+    раздавала пары следующего дня. Раньше — «верю числу» в журнал."""
+    rows = rows_of(fixture_csv)
+    rows[date_rows(rows)[-1]][0] = cell
+    with pytest.raises(SourceFormatChanged, match=match):
+        parse_sheet(rows, "фикстура", FIXTURE)

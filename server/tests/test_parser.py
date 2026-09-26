@@ -339,3 +339,66 @@ def test_export_remembers_sheet_rows_of_days(fixture_csv):
     assert rows[:3] == [6, 18, 30]
     assert all(p.gid == "656498718" for p in snapshot.places.values())
 
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        "Дисциплина Преподаватели ГД-1125",
+        "Дисциплина Преподаватель",
+        "Дисциплина Преподаватель —",
+    ],
+)
+def test_broken_name_in_main_header_keeps_the_group(fixture_csv, broken):
+    """Третий аудит, В17 прогона 1: опечатка, прочерк или стёртое имя в одной
+    ячейке главного заголовка молча убирали группу из снимка при ok. Опечатка
+    во втором слове — та же шапка, а имя берётся из повторного заголовка."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    rows[0][10] = broken
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    group = next(g for g in snap.groups if g.name == "ГД-1125")
+    assert group.column == 10
+    assert snap.schedule[group.id], "пары группы на месте"
+    assert [g.column for g in snap.groups] == sorted(g.column for g in snap.groups)
+    assert not snap.unnamed
+
+
+def test_nameless_block_with_lessons_is_reported(fixture_csv):
+    """Имени нет нигде — ни в главном, ни в повторном: блок безымянный, но
+    пары под ним считаются, и служба по ним узнаёт пропавшую группу."""
+    from whensclass.service.refresher import _check_lost_names
+
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+    honest.sheet_columns = {"1": {g.id: g.column for g in honest.groups}}
+    i, _, names_row = _columnar_header(rows)
+    rows[0][10] = "Дисциплина Преподаватель"
+    names_row[10] = ""
+    broken = parse_sheet(rows, "фикстура", FIXTURE)
+    assert "ГД-1125" not in {g.name for g in broken.groups}
+    assert broken.unnamed.get(10, 0) > 0
+    with pytest.raises(SourceFormatChanged, match="пропало имя группы ГД-1125"):
+        _check_lost_names(honest, broken, "1")
+
+    # Пустой блок без имени — колонка под будущую группу, не пропажа.
+    for r in rows[1:]:
+        if len(r) > 10 and r is not names_row:
+            r[10] = ""
+    empty = parse_sheet(rows, "фикстура", FIXTURE)
+    assert not empty.unnamed
+    _check_lost_names(honest, empty, "1")
+
+
+def test_two_neighbour_names_in_repeated_header_are_a_shift(fixture_csv):
+    """Граница — числом: одно чужое имя — опечатка, два — сдвиг. Прежний тест
+    переставлял имена во всех пяти колонках и держал порог только до пяти
+    (третий аудит, В10 прогона 2)."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
+    by_column = {g.column: g.name for g in groups}
+    _, columns, names_row = _columnar_header(rows)
+    ordered = sorted(c for c in columns if c in by_column and c < len(names_row))
+    names_row[ordered[1]] = by_column[ordered[0]]
+    names_row[ordered[2]] = by_column[ordered[1]]
+    with pytest.raises(SourceFormatChanged, match="таких колонок 2"):
+        parse_sheet(rows, "фикстура", FIXTURE)

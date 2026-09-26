@@ -14,6 +14,7 @@ import json
 from fastapi import APIRouter, Query, Request, Response
 
 from ..config import settings
+from ..domain.teachers import spelling_twin
 from ..service.bells import load_bells
 from ..service.refresher import state_dir
 from .releases import latest_release
@@ -199,7 +200,14 @@ def teacher(
         renamed = refresher.renames.teacher(teacher_id)
         if renamed:
             body = build(renamed)
-    if body is None and (name := store.known_teacher(teacher_id)):
+    name = store.known_teacher(teacher_id) if body is None else None
+    if name and spelling_twin(store.teachers, name):
+        # Колледж исправил опечатку в имени: тот же человек теперь под другим
+        # id, и пустые дни здесь 60 дней говорили бы «пар нет». 404 — и
+        # приложение предложит выбрать заново, человек найдёт себя под верным
+        # именем (третий аудит, В19 прогона 1).
+        name = None
+    if name:
         # В этом листе у преподавателя нет пар, но он был в прошлых — отпуск,
         # неделя без часов. Это «пар нет», а не «вас больше нет в таблице»
         # (второй аудит, В18).

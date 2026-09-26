@@ -20,6 +20,15 @@ class SourceFormatChanged(Exception):
     """
 
 
+class SheetTooSmall(SourceFormatChanged):
+    """Лист похож на наш, но мал: дат или пар меньше порога.
+
+    Так выглядит и сломанный лист, и следующий, который колледж только начал.
+    Второй в окне служба пропускает, а не валит из-за него весь набор
+    (третий аудит, В18 прогона 1).
+    """
+
+
 @dataclass(frozen=True)
 class GroupRef:
     """Группа и колонка таблицы, в которой лежат её пары."""
@@ -71,6 +80,9 @@ class Snapshot:
     # gid листа -> id группы -> её колонка в этом листе. У склеенного снимка
     # двух листов раскладка своя у каждого, а в `groups` — колонки первого.
     sheet_columns: dict[str, dict[str, int]] = field(default_factory=dict)
+    # Блоки главного заголовка без имени: колонка -> сколько под ней пар.
+    # Только для проверки при обновлении, на диск не пишется.
+    unnamed: dict[int, int] = field(default_factory=dict)
 
     def column_of(
         self, group: GroupRef, day: date | None = None, gid: str | None = None

@@ -131,3 +131,53 @@ def test_column_follows_the_sheet_of_the_day():
     assert schedule_payload(merged, "a-1", dt.date(2026, 9, 12), 1, generated)["col"] == "C"
     body = schedule_payload(merged, "a-1", dt.date(2026, 9, 14), 1, generated)
     assert body["col"] == "K" and body["src_url"].endswith("#gid=2")
+
+
+def test_spelling_twin_is_the_same_surname_and_initials():
+    """Третий аудит, В19 прогона 1: опечатка в имени, исправленная колледжем, —
+    тот же человек. Однофамилец с другими инициалами — нет."""
+    from whensclass.domain.teachers import TeacherIndex, spelling_twin
+
+    index = TeacherIndex(
+        names={
+            "truhachev-daniil": "Трухачев Даниил Дмитриевич",
+            "misyurova": "Мисюрова Евгения Сергеевна",
+            "kovalev-a": "Ковалев Алексей Петрович",
+        },
+        schedule={"truhachev-daniil": {1: [1]}, "misyurova": {1: [1]}, "kovalev-a": {1: [1]}},
+    )
+    assert spelling_twin(index, "Трухачев Данил Дмитриевич") == "truhachev-daniil"
+    assert spelling_twin(index, "Мисюрова Е.С.") == "misyurova"
+    assert spelling_twin(index, "Ковалев Иван Петрович") is None
+    assert spelling_twin(index, "Трухачев Даниил Дмитриевич") is None, "сам себе не двойник"
+    index.schedule.pop("truhachev-daniil")
+    assert spelling_twin(index, "Трухачев Данил Дмитриевич") is None, "без пар — не замена"
+
+
+def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_days():
+    """Третий аудит, В3 прогона 1: группы нет в следующем листе (переименовали
+    или убрали). Её дни там были «пар нет», а колонка — из чужого листа, где
+    на этом месте другая группа. Теперь дни второго листа за краем её `cov`,
+    а колонки у ссылки на второй лист нет."""
+    from whensclass.api.payloads import schedule_payload
+    from whensclass.domain.models import GroupRef, Lesson, SheetPlace, Snapshot
+
+    saturday, monday = dt.date(2026, 9, 26), dt.date(2026, 9, 28)
+    first = Snapshot(sheet_title="первый", groups=[GroupRef(name="А-1", id="a-1", column=2)],
+                     dates=[saturday])
+    first.schedule = {"a-1": {saturday: [Lesson(number=1, subject="Х")]}}
+    first.places = {saturday: SheetPlace(gid="1", row=5)}
+    first.sheet_columns = {"1": {"a-1": 2}}
+    second = Snapshot(sheet_title="второй", groups=[GroupRef(name="Б-2", id="b-2", column=2)],
+                      dates=[monday])
+    second.schedule = {"b-2": {monday: [Lesson(number=1, subject="У")]}}
+    second.places = {monday: SheetPlace(gid="2", row=5)}
+    second.sheet_columns = {"2": {"b-2": 2}}
+    merged = first.merged_with(second)
+    generated = dt.datetime(2026, 9, 26, tzinfo=dt.timezone.utc)
+
+    body = schedule_payload(merged, "a-1", monday, 1, generated, today=saturday)
+    assert body["days"] == [] and "col" not in body
+    assert body["cov"] == ["2026-09-26", "2026-09-26"]
+    own = schedule_payload(merged, "a-1", saturday, 1, generated, today=saturday)
+    assert own["col"] == "C"

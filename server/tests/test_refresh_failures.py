@@ -332,3 +332,62 @@ def test_single_interrupted_refresh_is_quiet(tmp_path, sheet, sent):
     r = Refresher(SnapshotStore(tmp_path), tmp_path)
     assert r.refresh(today=TODAY) is True
     assert sent == []
+
+
+# --- Третий аудит, В18 прогона 1: недописанный следующий лист ----------------
+
+def _first_day_only(fixture_csv: str, new_date: str) -> str:
+    """Следующий лист, который колледж только начал: шапка и один день."""
+    import csv
+    import io
+
+    from whensclass.parser.csv_schedule import date_rows
+
+    rows = read_csv(fixture_csv)
+    starts = sorted(date_rows([r[0] if r else "" for r in rows]).values())
+    first, second = starts[0] - 1, starts[1] - 1
+    kept = rows[:second]
+    kept[first][0] = new_date
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(kept)
+    return buf.getvalue()
+
+
+def test_half_built_next_sheet_is_left_out_not_fatal(tmp_path, sent, fixture_csv, monkeypatch):
+    """Колледж завёл следующий лист и вписал в него один день. Раньше его
+    отказ по объёму валил весь набор: stale у всех, правки сегодняшнего листа
+    не доходили, а err не называл лист. Теперь он пропускается до поры."""
+    texts = {
+        "лист": fixture_csv,
+        "следующий": _first_day_only(fixture_csv, "14.09.2026 понедельник"),
+    }
+    monkeypatch.setattr(
+        sheet_index, "resolve_window", lambda *a, **k: [("лист", "1"), ("следующий", "2")]
+    )
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
+    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
+
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    assert r.refresh(today=TODAY) is True
+    assert r.status == "ok" and not sent
+    assert max(store.snapshot.dates) < dt.date(2026, 9, 14)
+    rejected = list((tmp_path / "history" / "2").glob("*-rejected.txt"))
+    assert rejected and "недописан" in rejected[0].read_text("utf-8")
+
+    # Правка сегодняшнего листа доходит, пока следующий недописан.
+    name = a_teacher(fixture_csv)
+    texts["лист"] = cell_replace(fixture_csv, name, "Новиков Н. Н.")
+    assert r.refresh(today=TODAY) is True
+    assert "Новиков Н. Н." in store.teachers.names.values()
+
+
+def test_too_small_current_sheet_still_fails_and_names_itself(
+    tmp_path, sheet, sent, fixture_csv
+):
+    """Мал сам сегодняшний лист — это по-прежнему отказ, и err называет лист."""
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    sheet["text"] = _first_day_only(fixture_csv, "08.09.2026 вторник")
+    assert r.refresh(today=TODAY) is False
+    assert r.status in ("stale", "empty") and "лист 'лист'" in r.last_error

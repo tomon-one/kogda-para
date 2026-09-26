@@ -44,6 +44,23 @@ _URL_RE = re.compile(r"https?://\S+")
 # причину отмены «55/1» (второй аудит, М3).
 _ROOM_RE = re.compile(r"^(?:[А-ЯЁA-Z][\w.]*\s+)?\d{1,4}(?:[а-яА-Я]|/\d{1,3})?$")
 
+# «X (Пр) ЗАМЕНА Y (Лек)»: пару X заменили парой Y. Название, тип и
+# преподаватель — у Y; раньше всё бралось от X, и приложение звало студентов
+# к заменённому преподавателю на практику, а тот видел у себя чужую пару
+# (третий аудит, В2 прогона 1). Слово — целиком: «заменитель» не замена.
+_REPLACED_RE = re.compile(r"\bзамена\b[\s\-–—:,.]*", re.IGNORECASE)
+
+# «преподаватель на онлайн, студенты в кабинете 269»: пара очная — студенты
+# в кабинете, преподаватель на связи по ссылке. Раньше она уходила онлайн без
+# аудитории, а номер оставался в хвосте названия, который виджеты обрезают
+# (третий аудит, В1 прогона 1).
+_STUDENTS_IN_ROOM_RE = re.compile(
+    r"(?:преподавател\w*\s+(?:на\s+)?(?:онлайн\w*|дистанц\w*)\s*[,;.]?\s*)?"
+    r"студент\w*\s+в\s+(?:кабинет\w*|аудитори\w*|ауд\.?)\s*№?\s*"
+    r"([\wА-Яа-яЁё/.\-]+?)[\s.,;]*$",
+    re.IGNORECASE,
+)
+
 # Служебная заглушка колледжа вместо имени: не человек, в списке ей не место.
 _VACANCY_RE = re.compile(r"^вакансия\b", re.IGNORECASE)
 
@@ -59,7 +76,7 @@ _HAS_LETTER = re.compile(r"[^\W\d_]")
 # А.»), давали несуществующего человека в /v1/teachers, а у настоящих пары
 # пропадали из личного расписания (второй аудит, В2).
 _NAME = r"[А-ЯЁ][а-яё]+"
-_FIO_RE = re.compile(
+FIO_RE = re.compile(
     rf"{_NAME}(?:-{_NAME})?\s+(?:{_NAME}\s+{_NAME}|[А-ЯЁ]\.\s*[А-ЯЁ]\.?)"
 )
 
@@ -199,9 +216,9 @@ def _people(text: str) -> list[str]:
     есть, если начинается с заглавной («Смит Джон», «Ли»), а строчная
     приписка без имени («замена», «кураторский час») — не человек.
     """
-    found = [m.group(0) for m in _FIO_RE.finditer(text)]
+    found = [m.group(0) for m in FIO_RE.finditer(text)]
     if len(found) >= 2 or (found and found[0] != text):
-        rest = _FIO_RE.sub(" ", text).strip(" ,;.")
+        rest = FIO_RE.sub(" ", text).strip(" ,;.")
         if rest:
             _warn_once(
                 ("приписка", text, rest),
@@ -212,6 +229,30 @@ def _people(text: str) -> list[str]:
         return [text]
     _warn_once(("нет имени", text), "в строке преподавателей %r нет имени — пропускаю", text, logger=log)
     return []
+
+
+def replaced_subject(subject: str) -> tuple[str, str] | None:
+    """«X (Пр) ЗАМЕНА Y (Лек)» -> (X без типа, «Y (Лек)»); без замены — None."""
+    m = _REPLACED_RE.search(subject)
+    if not m:
+        return None
+    before, after = subject[: m.start()].strip(" ,;.-"), subject[m.end():].strip()
+    if not before or not after:
+        # «Замена» без одной из сторон — приписка, а не замена пары.
+        return None
+    old_name, _ = _split_kind(before)
+    return " ".join(old_name.split()).strip(" ,;.") or before, after
+
+
+_INSTEAD = "вместо: "
+
+
+def replaced_of(lesson: Lesson) -> str | None:
+    """Название заменённой пары, если `lesson` — замена (см. `parse_lesson`)."""
+    for part in (lesson.note or "").split("; "):
+        if part.startswith(_INSTEAD):
+            return part[len(_INSTEAD):]
+    return None
 
 
 def parse_lesson(
@@ -235,7 +276,24 @@ def parse_lesson(
         # не узнает, что пара была (второй аудит, М1).
         return Lesson(number=number, subject=PLACEHOLDER, cancelled=True, note=note)
 
-    subject, kind = _split_kind(subject.replace("\n", " ").strip())
+    subject = subject.replace("\n", " ").strip()
+    replaced = replaced_subject(subject)
+    if replaced is not None:
+        old_name, subject = replaced
+        # Прежний преподаватель — первым, новый — последним. Один на двоих
+        # — чей, разбирает обход листа по остальным ячейкам (`parse_sheet`).
+        teachers = teachers[-1:]
+        instead = f"{_INSTEAD}{old_name}"
+        note = f"{note}; {instead}" if note else instead
+
+    in_room = _STUDENTS_IN_ROOM_RE.search(subject)
+    if in_room:
+        subject = subject[: in_room.start()].strip(" ,;.")
+
+    subject, kind = _split_kind(subject)
+    if replaced is not None and (subject[:1].islower() or subject.isupper()):
+        # «замена кураторский час», «ЗАМЕНА КУРАТОРСКИЙ ЧАС».
+        subject = subject[:1].upper() + subject[1:].lower()
 
     url = None
     room: str | None = None
@@ -263,6 +321,11 @@ def parse_lesson(
             url = found.group(0)
             subject = " ".join(subject.replace(found.group(0), " ").split())
 
+    if in_room:
+        # Очная пара со ссылкой для преподавателя: место — кабинет, а в JSON
+        # у неё нет «o» (docs/api.md).
+        room, online = in_room.group(1).strip(" .,;"), False
+
     if not subject:
         # Пустое название выглядит поломкой, а выдумывать предмет нельзя —
         # говорим то, что знаем точно. Раньше заглушка была только для пары
@@ -277,7 +340,7 @@ def parse_lesson(
         teachers=teachers,
         room=room,
         url=url,
-        online=online or url is not None,
+        online=online or (url is not None and not in_room),
         cancelled=cancelled,
         note=note,
     )

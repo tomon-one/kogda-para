@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 from dataclasses import dataclass, field
 
 from .ids import group_id
@@ -47,6 +48,33 @@ class TeacherIndex:
 def teacher_id(name: str) -> str:
     """Слаг преподавателя. Правила те же, что у групп."""
     return group_id(name)
+
+
+def _surname_initials(name: str) -> tuple[str, str]:
+    """«Трухачев Данил Дмитриевич», «Мисюрова Е.С.» -> (фамилия, инициалы)."""
+    words = [w for w in re.split(r"[\s.]+", name.replace("ё", "е").replace("Ё", "Е")) if w]
+    if not words:
+        return "", ""
+    return words[0].casefold(), "".join(w[0].casefold() for w in words[1:])
+
+
+def spelling_twin(index: TeacherIndex | None, name: str) -> str | None:
+    """Id того же человека под другим написанием, если у него есть пары.
+
+    Та же фамилия и те же инициалы: «Данил» и «Даниил», «Паловна» и
+    «Павловна», «Е.С.» и «Евгения Сергеевна» — в живом листе 24 сентября 2026
+    таких пар пять. Однофамильцы с другими инициалами — разные люди.
+    """
+    if index is None:
+        return None
+    surname, initials = _surname_initials(name)
+    if not surname or not initials:
+        return None
+    for tid, other in index.names.items():
+        same = other != name and _surname_initials(other) == (surname, initials)
+        if same and index.schedule.get(tid):
+            return tid
+    return None
 
 
 def build_index(snapshot: Snapshot) -> TeacherIndex:

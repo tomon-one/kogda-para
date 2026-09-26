@@ -170,9 +170,12 @@ def _lesson(lesson: Lesson) -> dict:
         out["r"] = lesson.room
     if lesson.url:
         out["u"] = lesson.url
-    if lesson.online or lesson.url:
+    if lesson.online or (lesson.url and not lesson.room):
         # Онлайн без ссылки — обычное дело: ссылку дают позже. Поэтому
-        # признак отдельный, а не выводится из наличия «u».
+        # признак отдельный, а не выводится из наличия «u». Ссылка при
+        # кабинете — очная пара, где преподаватель на связи по ссылке, а
+        # студенты в кабинете (третий аудит, В1 прогона 1). У снимков до
+        # поля `online` ссылка без кабинета — онлайн.
         out["o"] = 1
     if lesson.cancelled:
         out["x"] = 1
@@ -311,11 +314,15 @@ def schedule_payload(
         "gn": group.name,
         "gen": _iso(generated),
         "src": snapshot.sheet_title,
-        # Колонка группы в листе, на который ведёт ссылка: вместе с `row` дня
-        # даёт ячейку, к которой ссылка «открыть таблицу» подводит человека.
-        "col": a1_column(snapshot.column_of(group, gid=gid)),
         "days": out_days,
     }
+    # Колонка группы в листе, на который ведёт ссылка: вместе с `row` дня
+    # даёт ячейку, к которой ссылка «открыть таблицу» подводит человека. Если
+    # в этом листе группы нет, колонки нет тоже: колонка другого листа вела в
+    # чужую группу (третий аудит, В3 прогона 1).
+    in_sheet = snapshot.sheet_columns.get(gid) if gid else None
+    if in_sheet is None or group.id in in_sheet:
+        payload["col"] = a1_column(snapshot.column_of(group, gid=gid))
     if gid:
         payload["src_url"] = sheet_url(gid)
     if cov := _cov(shown):

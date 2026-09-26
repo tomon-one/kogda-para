@@ -21,6 +21,10 @@ from ..domain.models import GroupRef, SourceFormatChanged
 log = logging.getLogger(__name__)
 
 _HEADER_PREFIX = "Дисциплина Преподаватель "
+# Шапка блока с опечаткой во втором слове — «Преподаватели» — та же шапка:
+# раньше такая колонка молча выпадала, и группа пропадала из снимка при ok
+# (третий аудит, В17 прогона 1).
+_HEADER_RE = re.compile(r"^Дисциплина\s+Преподавател\S*\s+(.+)$")
 _ROOM_MARK = "Ауд."
 _BLOCK_WIDTH = 4
 _SPLIT_RE = re.compile(r"\s+и\s+")
@@ -55,11 +59,28 @@ def _row_columns(row: list[str]) -> dict[int, list[str]]:
     found: dict[int, list[str]] = {}
     for col, cell in enumerate(row):
         text = (cell or "").replace("\xa0", " ").strip()
-        if text.startswith(_HEADER_PREFIX):
-            names = split_group_names(text[len(_HEADER_PREFIX):])
+        m = _HEADER_RE.match(text)
+        if m:
+            names = split_group_names(m.group(1))
             if names:
                 found[col] = names
     return found
+
+
+def header_blocks(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> set[int]:
+    """Колонки главного заголовка, где начинается блок, — с именем и без.
+
+    Блок без имени («Дисциплина Преподаватель», «… —») бывает и законным —
+    колонка под будущую группу, — и сломанным: имя стёрли или опечатались.
+    Отличает их то, есть ли под ним пары (`Snapshot.unnamed`).
+    """
+    for row in rows:
+        if len(_row_columns(row)) >= min_groups:
+            return {
+                col for col, cell in enumerate(row)
+                if (cell or "").replace("\xa0", " ").strip().startswith("Дисциплина")
+            }
+    return set()
 
 
 def build_column_map(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> list[GroupRef]:
@@ -117,6 +138,7 @@ def find_header_rows(
     groups: list[GroupRef],
     min_groups: int = MIN_GROUPS,
     where: Callable[[int], str] = lambda i: f"строке {i}",
+    adopt: dict[int, list[str]] | None = None,
 ) -> set[int]:
     """Индексы строк, которые надо пропустить при обходе.
 
@@ -124,6 +146,9 @@ def find_header_rows(
     трёхстрочные — по ячейке ровно «Дисциплина» с «Преподаватель» под ней.
     Если повторный заголовок объявляет другую раскладку колонок, считаем
     формат изменившимся: показать чужое расписание хуже, чем упасть.
+
+    В `adopt` складываются имена, которые повторный заголовок даёт колонке,
+    безымянной в главном: их подбирает `parse_sheet`.
     """
     expected = {g.column for g in groups}
     skip: set[int] = set()
@@ -148,7 +173,9 @@ def find_header_rows(
             if c < len(below)
         ):
             # Заголовок «столбиком»: Дисциплина / Преподаватель / имя группы.
-            _check_columnar(where(i), cells, rows[i + 2] if i + 2 < len(rows) else [], groups)
+            _check_columnar(
+                where(i), cells, rows[i + 2] if i + 2 < len(rows) else [], groups, adopt
+            )
             skip.update({i, i + 1, i + 2})
 
     return skip
@@ -174,7 +201,11 @@ def _warn_once(key: tuple, message: str, *args, logger: logging.Logger | None = 
 
 
 def _check_columnar(
-    where: str, cells: set[int], names_row: list[str], groups: list[GroupRef]
+    where: str,
+    cells: set[int],
+    names_row: list[str],
+    groups: list[GroupRef],
+    adopt: dict[int, list[str]] | None = None,
 ) -> None:
     """Сверяет колонки повторного заголовка с главным.
 
@@ -195,11 +226,11 @@ def _check_columnar(
     переименование. 11 сентября 2026 колледж поправил имя одной группы в
     главном заголовке и не тронул его в двух повторных — и из-за одной ячейки
     187 групп два дня сидели без расписания. Колонка та же, пары под ней те
-    же: про такое пишем в журнал и идём дальше, веря главному заголовку. То же
-    — для колонки, которой в главном заголовке нет вовсе, если её имени там
-    нет нигде: это опечатка в главном заголовке («Преподаватели», стёртое
-    имя), блок пропущен как безымянный — отвергать из-за неё весь лист
-    нельзя (В4).
+    же: про такое пишем в журнал и идём дальше, веря главному заголовку. А
+    колонке, у которой в главном заголовке имени нет (стёрли, «—»), если её
+    имени там нет нигде, имя даёт повторный заголовок (`adopt`): отвергать из-за
+    одной ячейки весь лист нельзя (второй аудит, В4), а считать блок
+    безымянным — значит молча потерять группу (третий аудит, В17 прогона 1).
     """
     by_column: dict[int, set[str]] = {}
     column_of: dict[str, int] = {}
@@ -220,12 +251,11 @@ def _check_columnar(
             strangers.append((col, declared, elsewhere[0], known))
             continue
         if known is None:
-            _warn_once(
-                ("gap", col, tuple(declared)),
-                "повторный заголовок: в колонке %d стоит %s, а в главном заголовке этой "
-                "колонки нет и такого имени нет нигде — считаю блок безымянным",
-                col, declared,
-            )
+            # Имя стёрли или испортили в главном заголовке, а здесь оно цело:
+            # колонка та же, берём имя отсюда. Раньше блок считался безымянным,
+            # и группа тихо пропадала (третий аудит, В17 прогона 1).
+            if adopt is not None:
+                adopt.setdefault(col, declared)
             continue
         if ids == known:
             continue
