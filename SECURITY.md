@@ -2,9 +2,9 @@
 
 Нашли уязвимость в приложении или на его сервере — не пишите о ней открыто в
 обсуждениях. Сообщите автору лично: в Telegram [@toomonn](https://t.me/toomonn)
-или кнопкой «Report a vulnerability» на вкладке
-[Security](https://github.com/tomon-one/kogda-para/security). Опишите, что
-нашли и как это повторить. Рассказывать об уязвимости открыто — после
+или кнопкой «Report a vulnerability» в разделе
+[Security → Advisories](https://github.com/tomon-one/kogda-para/security/advisories)
+наверху репозитория. Опишите, что нашли и как это повторить. Рассказывать об уязвимости открыто — после
 исправления.
 
 Сюда входят:
