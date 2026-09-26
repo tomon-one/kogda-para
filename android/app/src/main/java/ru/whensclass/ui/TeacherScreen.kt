@@ -2,6 +2,9 @@ package ru.whensclass.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.selection.toggleable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,10 +27,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
@@ -51,6 +59,8 @@ fun TeacherScreen(
     reloadKey: Int = 0,
     ownSchedule: ScheduleDto? = null,
     searchLabel: String = "Поиск по фамилии",
+    /** Что за список — для «не загрузился»: у преподавателя во вкладке групп стояло «преподавателей» (М18 прогона 2). */
+    listName: String = "Список преподавателей",
     showGroups: Boolean = true,
     selfId: String? = null,
     startDay: String? = null,
@@ -68,7 +78,8 @@ fun TeacherScreen(
 ) {
     // В роли преподавателя его собственное расписание уже лежит на телефоне:
     // показываем сразу, без похода в сеть. Список остальных — по кнопке.
-    var browsing by remember { mutableStateOf(false) }
+    // Выбор и поиск переживают поворот экрана (третий аудит, М30 прогона 2).
+    var browsing by rememberSaveable { mutableStateOf(false) }
     if (ownSchedule != null && !browsing) {
         Column(modifier = Modifier.fillMaxSize()) {
             ScheduleDays(
@@ -87,14 +98,28 @@ fun TeacherScreen(
         return
     }
 
-    var picked by remember { mutableStateOf<GroupDto?>(null) }
+    var pickedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickedName by rememberSaveable { mutableStateOf("") }
+    val picked = pickedId?.let { GroupDto(it, pickedName) }
+    fun pick(teacher: GroupDto?) {
+        pickedId = teacher?.id
+        pickedName = teacher?.name.orEmpty()
+    }
     var schedule by remember { mutableStateOf<ScheduleDto?>(null) }
     var loading by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+
+    // Системное «назад» — к списку и к своему расписанию, как кнопки на
+    // экране: раньше оно закрывало приложение (М16 прогона 2).
+    BackHandler(enabled = picked != null) {
+        pick(null)
+        schedule = null
+    }
+    BackHandler(enabled = picked == null && ownSchedule != null && browsing) { browsing = false }
 
     // reloadKey меняется по нажатию на обновление: перечитываем расписание
     // того преподавателя, который сейчас открыт.
-    LaunchedEffect(picked, reloadKey) {
+    LaunchedEffect(pickedId, reloadKey) {
         val teacher = picked ?: return@LaunchedEffect
         loading = true
         schedule = loadSchedule(teacher.id)
@@ -108,7 +133,7 @@ fun TeacherScreen(
             schedule = schedule,
             loading = loading,
             onBack = {
-                picked = null
+                pick(null)
                 schedule = null
             },
         )
@@ -121,7 +146,8 @@ fun TeacherScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    // Список отступает от клавиатуры (М35 прогона 2).
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -137,7 +163,7 @@ fun TeacherScreen(
 
             list.isEmpty() -> Centered {
                 Text(
-                    "Список преподавателей не загрузился. Проверьте интернет.",
+                    "$listName не загрузился. Проверьте интернет и нажмите ⟳ вверху.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -145,7 +171,7 @@ fun TeacherScreen(
             else -> {
                 val found = remember(list, query) {
                     if (query.isBlank()) list
-                    else list.filter { it.name.contains(query.trim(), ignoreCase = true) }
+                    else list.filter { matchesQuery(it.name, query) }
                 }
                 // Закреплённые — отдельной группой сверху, а не просто первыми
                 // строками: так видно, что это именно закреплённые, и они не
@@ -171,7 +197,7 @@ fun TeacherScreen(
                                 teacher = own,
                                 pinned = own.id in pinned,
                                 isSelf = true,
-                                onOpen = { picked = own },
+                                onOpen = { pick(own) },
                                 onTogglePin = { onTogglePin(own.id) },
                             )
                         }
@@ -187,7 +213,7 @@ fun TeacherScreen(
                                 teacher = teacher,
                                 pinned = true,
                                 isSelf = teacher.id == selfId,
-                                onOpen = { picked = teacher },
+                                onOpen = { pick(teacher) },
                                 onTogglePin = { onTogglePin(teacher.id) },
                             )
                         }
@@ -212,7 +238,7 @@ fun TeacherScreen(
                             teacher = teacher,
                             pinned = false,
                             isSelf = teacher.id == selfId,
-                            onOpen = { picked = teacher },
+                            onOpen = { pick(teacher) },
                             onTogglePin = { onTogglePin(teacher.id) },
                         )
                     }
@@ -251,10 +277,14 @@ private fun ChosenTeacher(
             schedule == null -> Centered {
                 Text("Расписание не загрузилось", style = MaterialTheme.typography.bodyMedium)
             }
-            else -> ScheduleDays(
-                schedule = schedule,
-                today = rememberToday(),
-            )
+            // Дней нет — не пустой экран, а объяснение с выходом к таблице,
+            // как у своего расписания (третий аудит, М27 прогона 1).
+            else -> if (!explainMissing(schedule, rememberToday(), null)) {
+                ScheduleDays(
+                    schedule = schedule,
+                    today = rememberToday(),
+                )
+            }
         }
     }
 }
@@ -301,6 +331,8 @@ private fun TeacherRow(
                     )
                 }
             }
+            // Экранный чтец: что делает звёздочка и в каком она положении —
+            // символ «★» он не объясняет (третий аудит, М19 прогона 2).
             Text(
                 if (pinned) "★" else "☆",
                 style = MaterialTheme.typography.titleMedium,
@@ -308,7 +340,11 @@ private fun TeacherRow(
                 else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .heightIn(min = 48.dp)
-                    .clickable(onClick = onTogglePin)
+                    .toggleable(value = pinned, role = Role.Checkbox, onValueChange = { onTogglePin() })
+                    .semantics {
+                        contentDescription = "Закрепить наверху списка"
+                        stateDescription = if (pinned) "закреплён" else "не закреплён"
+                    }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
             )
     }

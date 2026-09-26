@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -259,6 +261,8 @@ private fun App(
     // пустым до перезапуска приложения, сколько бы человек ни возвращался
     // на вкладку. Поэтому повтор при каждом заходе, пока пусто.
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
+    // Свежие списки за этот заход уже пришли — дальше хватит их.
+    var listsFresh by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
     // Какой список показывать на экране выбора: null — по текущей роли.
     var pickTeacher by rememberSaveable { mutableStateOf<Boolean?>(null) }
@@ -280,8 +284,26 @@ private fun App(
     }
 
     LaunchedEffect(screen, reloadKey) {
-        if (groups.isNullOrEmpty()) groups = container.repository.groups()
-        if (teachers.isNullOrEmpty()) teachers = container.repository.teachers()
+        val repository = container.repository
+        // Сохранённые — сразу, без сети: экран открывается и в метро.
+        // Свежие — следом и оба разом, а не по очереди (М31 прогона 2).
+        if (groups.isNullOrEmpty()) repository.cachedGroups().takeIf { it.isNotEmpty() }?.let { groups = it }
+        if (teachers.isNullOrEmpty()) repository.cachedTeachers().takeIf { it.isNotEmpty() }?.let { teachers = it }
+        if (listsFresh) return@LaunchedEffect
+        val (freshGroups, freshTeachers) = coroutineScope {
+            val g = async { repository.freshGroups() }
+            val t = async { repository.freshTeachers() }
+            g.await() to t.await()
+        }
+        freshGroups?.let { groups = it }
+        freshTeachers?.let { teachers = it }
+        // Ни свежего, ни сохранённого — «не загрузился», а не вечный спиннер.
+        if (groups == null) groups = emptyList()
+        if (teachers == null) teachers = emptyList()
+        if (freshGroups != null && freshTeachers != null) {
+            listsFresh = true
+            repository.followRenamedPins(freshGroups, freshTeachers)
+        }
     }
 
     // Системная кнопка и жест «назад» закрывали приложение с любого экрана:
@@ -310,6 +332,7 @@ private fun App(
     val refreshNow: () -> Unit = {
         scope.launch {
             refreshing = true
+            listsFresh = false
             reloadKey++
             // Напрямую, без WorkManager: он вправе отложить задачу на минуты,
             // а человек только что нажал кнопку и ждёт ответа сейчас.
@@ -403,7 +426,7 @@ private fun App(
 
                     Screen.GROUPS -> if (pickSecond) {
                         GroupPickerScreen(
-                            loadGroups = { container.repository.groups() },
+                            groups = groups,
                             canGoBack = true,
                             onBack = {
                                 pickSecond = false
@@ -438,7 +461,7 @@ private fun App(
                         )
                     } else {
                         GroupPickerScreen(
-                            loadGroups = { container.repository.groups() },
+                            groups = groups,
                             loadDiagnostics = { container.repository.diagnostics() },
                             canGoBack = chosenName != null,
                             onBack = {

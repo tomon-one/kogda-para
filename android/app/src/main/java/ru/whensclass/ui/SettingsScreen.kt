@@ -45,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
@@ -99,7 +101,7 @@ fun SettingsScreen(
     sheetUrl: () -> String?,
     onBack: () -> Unit,
 ) {
-    var askOwnTime by remember { mutableStateOf(false) }
+    var askOwnTime by rememberSaveable { mutableStateOf(false) }
     if (askOwnTime) {
         OwnTimeDialog(
             current = notifyBefore,
@@ -218,8 +220,11 @@ fun SettingsScreen(
                         onPick = { askOwnTime = true },
                     )
                 }
-                ExactAlarms(exactAlarms)
             }
+            // Не только при напоминаниях: звонок для виджетов — подсветка
+            // идущей пары — ждёт того же разрешения, а на Android 14+ его по
+            // умолчанию нет (третий аудит, М5 прогона 2).
+            ExactAlarms(exactAlarms, notifyEnabled)
 
             SwitchRow("Сообщать об изменениях", notifyChanges, onNotifyChanges)
             Text(
@@ -489,7 +494,10 @@ private fun MinutesChip(
         shape = RoundedCornerShape(10.dp),
         color = if (selected) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.padding(end = 6.dp, bottom = 6.dp).clickable(onClick = onPick),
+        // Выбранность — не только цветом: экранный чтец говорил одно число
+        // (третий аудит, М19 прогона 2).
+        modifier = Modifier.padding(end = 6.dp, bottom = 6.dp)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onPick),
     ) {
         Text(
             label,
@@ -561,7 +569,7 @@ private fun ThemeOption(
  * До Android 12 разрешения не существовало — там раздел просто не нужен.
  */
 @Composable
-private fun ExactAlarms(allowed: Boolean) {
+private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
     val context = LocalContext.current
     val open = {
@@ -581,17 +589,20 @@ private fun ExactAlarms(allowed: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text("Точные уведомления", style = MaterialTheme.typography.bodyLarge)
+        Text("Точное время", style = MaterialTheme.typography.bodyLarge)
         Row(verticalAlignment = Alignment.CenterVertically) {
             MinimalCheck(selected = allowed, modifier = Modifier.padding(end = 10.dp))
             ExternalMark(color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+    val what = if (reminders) "напоминание и смену подсветки идущей пары на виджетах"
+    else "смену подсветки идущей пары на виджетах"
     Text(
         if (allowed) {
-            "Напоминание придёт минута в минуту."
+            if (reminders) "Напоминание придёт минута в минуту, подсветка на виджетах сменится со звонком."
+            else "Подсветка идущей пары на виджетах сменится со звонком."
         } else {
-            "Система вправе отложить напоминание, экономя батарею. Нажмите — " +
+            "Система вправе отложить $what, экономя батарею. Нажмите — " +
                 "откроются настройки телефона, разрешение выдаётся там."
         },
         style = MaterialTheme.typography.bodySmall,

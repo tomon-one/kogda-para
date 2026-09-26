@@ -281,35 +281,57 @@ class ScheduleRepository(
         val secondGone: String? = null,
     )
 
-    suspend fun groups(): List<GroupDto> = withContext(Dispatchers.IO) {
-        val cached = store.groupsJson.first()
-        val fromNetwork = runCatching { api.groups() }.getOrNull()
-        if (fromNetwork != null) {
-            store.putGroups(json.encodeToString(fromNetwork))
-            return@withContext fromNetwork.groups
-        }
-        // Список групп открывается и без сети: выбрать группу в метро тоже надо.
-        cached?.let { runCatching { json.decodeFromString<GroupsDto>(it).groups }.getOrNull() }
+    /**
+     * Списки групп и преподавателей: сохранённый — сразу и без сети, свежий —
+     * следом. Раньше сохранённый брался только при ошибке сети, и в плохой
+     * сети спиннер крутился до минуты при списке на телефоне, хотя
+     * комментарий обещал обратное (третий аудит, М31 прогона 2).
+     */
+    suspend fun cachedGroups(): List<GroupDto> = withContext(Dispatchers.IO) {
+        store.groupsJson.first()
+            ?.let { runCatching { json.decodeFromString<GroupsDto>(it).groups }.getOrNull() }
             .orEmpty()
     }
 
-    /**
-     * Список преподавателей.
-     *
-     * Сначала отдаём сохранённый — экран открывается сразу и без сети, а
-     * свежий подтягиваем следом. Раньше он ехал по сети при каждом заходе на
-     * вкладку, и та заметно подтормаживала.
-     */
-    suspend fun teachers(): List<GroupDto> = withContext(Dispatchers.IO) {
-        val cached = store.teachersJson.first()
-            ?.let { runCatching { json.decodeFromString<TeachersDto>(it).teachers }.getOrNull() }
-        val fresh = runCatching { api.teachers() }.getOrNull()
-        if (fresh != null) {
-            store.putTeachers(json.encodeToString(fresh))
-            return@withContext fresh.teachers
-        }
-        cached.orEmpty()
+    /** Свежий список групп; null — сервер не ответил. */
+    suspend fun freshGroups(): List<GroupDto>? = withContext(Dispatchers.IO) {
+        val fresh = runCatching { api.groups() }.getOrNull() ?: return@withContext null
+        store.putGroups(json.encodeToString(fresh))
+        fresh.groups
     }
+
+    suspend fun cachedTeachers(): List<GroupDto> = withContext(Dispatchers.IO) {
+        store.teachersJson.first()
+            ?.let { runCatching { json.decodeFromString<TeachersDto>(it).teachers }.getOrNull() }
+            .orEmpty()
+    }
+
+    /** Свежий список преподавателей; null — сервер не ответил. */
+    suspend fun freshTeachers(): List<GroupDto>? = withContext(Dispatchers.IO) {
+        val fresh = runCatching { api.teachers() }.getOrNull() ?: return@withContext null
+        store.putTeachers(json.encodeToString(fresh))
+        fresh.teachers
+    }
+
+    /**
+     * Закреплённые — за переименованием. Id, которого нет в свежем списке,
+     * спрашиваем у сервера: по памяти о старом имени он отвечает под новым
+     * id, его и закрепляем. Раньше звёздочка молча пропадала, а старый id
+     * оставался в настройках навсегда (третий аудит, М11 прогона 2).
+     */
+    suspend fun followRenamedPins(groups: List<GroupDto>, teachers: List<GroupDto>) =
+        withContext(Dispatchers.IO) {
+            val groupIds = groups.map { it.id }.toSet()
+            for (old in store.pinnedGroups.first().filter { it !in groupIds }) {
+                val now = runCatching { api.schedule(old, days = 1).groupId }.getOrNull() ?: continue
+                if (now != old && now in groupIds) store.replacePinnedGroup(old, now)
+            }
+            val teacherIds = teachers.map { it.id }.toSet()
+            for (old in store.pinnedTeachers.first().filter { it !in teacherIds }) {
+                val now = runCatching { api.teacher(old, days = 1).groupId }.getOrNull() ?: continue
+                if (now != old && now in teacherIds) store.replacePinnedTeacher(old, now)
+            }
+        }
 
     /** Расписание преподавателя — берём по запросу, на телефоне не храним. */
     suspend fun teacherSchedule(teacherId: String): ScheduleDto? = withContext(Dispatchers.IO) {
