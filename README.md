@@ -8,6 +8,7 @@
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84)
 ![версия](https://img.shields.io/github/v/release/tomon-one/kogda-para?include_prereleases&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F)
 ![лицензия AGPL-3.0](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-AGPL--3.0-blue)
+[![тесты](https://github.com/tomon-one/kogda-para/actions/workflows/tests.yml/badge.svg)](https://github.com/tomon-one/kogda-para/actions/workflows/tests.yml)
 
 **[Скачать](https://schedule.edelweiss-alpine-confederation.ru/download/latest.apk)**
 · [все версии](https://github.com/tomon-one/kogda-para/releases)
