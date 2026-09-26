@@ -98,12 +98,11 @@ class NextLessonWidget : GlanceAppWidget() {
                     )
                     if (state?.groupName == null) {
                         // Группа не выбрана — обновлять нечего: нажатие ведёт в
-                        // приложение, а не в «обновлено» (третий аудит, М73
-                        // прогона 2).
+                        // приложение, а не в «обновлено».
                         return@Column
                     }
                     // Отклик на ⟳ — как в шапках двух других виджетов: раньше
-                    // маленький виджет нажатие не замечал ничем (второй аудит, М17).
+                    // маленький виджет нажатие не замечал ничем.
                     val busy = refreshing()
                     val failed = currentState(ScheduleWidget.KEY_FAILED) == true
                     val done = currentState(ScheduleWidget.KEY_DONE) == true
@@ -126,7 +125,7 @@ class NextLessonWidget : GlanceAppWidget() {
                         ),
                         // Группы нет в таблице — обновление ничего не даст: в
                         // приложение, к «выбрать заново», как на дневном
-                        // виджете (третий аудит, М40 прогона 2).
+                        // виджете.
                         modifier = GlanceModifier.clickable(
                             if (gone) {
                                 actionStartActivity(openDay(LocalContext.current, today))
@@ -153,7 +152,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 // пара на экране в этот момент из прежнего снимка, и промолчать
                 // здесь значит соврать. Первым словом, а не хвостом: в хвосте
                 // однострочной шапки «сбой» уходил в многоточие, и оставался
-                // красный цвет без причины (третий аудит, В6 прогона 2).
+                // красный цвет без причины.
                 // Несвежие данные — тоже первым словом: дневной и недельный
                 // красят время в шапке, а маленький уверенно показывал пару из
                 // позавчерашнего снимка (разбор текстов 27.09).
@@ -167,7 +166,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 val head = status + nextLessonHead(time, when_, ongoing, lesson.groups)
                 // Три строки не влезают в низкую клетку при крупном шрифте, и
                 // корпус срезал нижнюю — место. Тогда место — в шапку, а не
-                // долой (третий аудит, М26 прогона 2).
+                // долой.
                 val scale = fontScale()
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
                 Text(
@@ -195,8 +194,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     modifier = GlanceModifier.fillMaxWidth(),
                 )
                 // Ссылка на чужой адрес не копируется одним нажатием: нажатие
-                // ведёт на экран пары, где хост назван (третий аудит, М40
-                // прогона 1).
+                // ведёт на экран пары, где хост назван.
                 val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
                 if (!tight) Text(
                     if (foreign) "⚠ чужая ссылка · " + place(lesson).removeSuffix("  ⧉") else place(lesson),
@@ -234,8 +232,8 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
     val today = now.toLocalDate()
     // Только свои и не отменённые: отменённая пара во время своего слота была
     // «идёт сейчас», а накануне — «завтра · 09:00» зачёркнутой вместо
-    // настоящей первой (третий аудит, В1 прогона 2); пара соседней подгруппы
-    // выдавалась за свою ближайшую (В5). У преподавателя подпись группы — у
+    // настоящей первой; пара соседней подгруппы
+    // выдавалась за свою ближайшую. У преподавателя подпись группы — у
     // каждой пары, там свои все.
     fun mine(lesson: LessonDto) = !lesson.isCancelled && !schedule.isNeighbours(lesson)
     val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }
@@ -264,8 +262,7 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
  * Что сказать, когда ближайшей пары нет. «Дальше пар нет» — только если лист
  * покрывает неделю вперёд: иначе это «ещё не опубликовано», «устарели» или
  * «сбой», как у дневного виджета. Раньше «дальше пар нет» стояло и в субботу
- * перед неопубликованной неделей — ровно то, от чего чинили 24 сентября
- * (третий аудит, В12 прогона 1).
+ * перед неопубликованной неделей — ровно то, от чего чинили 24 сентября.
  */
 internal fun noNextLesson(
     groupName: String?,
@@ -308,8 +305,7 @@ private fun place(lesson: LessonDto, withKind: Boolean = true): String = buildSt
     // виджета, а экран пишет «Вместо: …» (разбор текстов 27.09).
     if (lesson.replaces != null && !lesson.isCancelled) append("замена · ")
     // Место — первым, тип — после: строка одна и обрезается справа, и
-    // «Практика · …» уводила в многоточие номер кабинета (третий аудит, В7
-    // прогона 2).
+    // «Практика · …» уводила в многоточие номер кабинета.
     if (lesson.isOnline) {
         // Значок обещает, что по нажатию скопируется ссылка. Пары без
         // ссылки помечены тем же словом, но нажимать там нечего.

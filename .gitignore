@@ -50,6 +50,7 @@ current.md
 docs/audit-*.md
 docs/hardening-*.md
 docs/deploy.md
+docs/sharing.md
 tools/deploy_server.sh
 tools/publish_apk.py
 tools/pull_state.sh

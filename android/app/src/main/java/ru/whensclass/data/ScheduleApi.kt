@@ -67,8 +67,7 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
      * строкой с моделью телефона и версией прошивки. Нам нужно ровно обратное.
      *
      * Больше [limit] байт не пишем: размер раньше сверялся только после
-     * загрузки, и бесконечный поток десять минут тянул трафик и забивал память
-     * (третий аудит, М54 прогона 1).
+     * загрузки, и бесконечный поток десять минут тянул трафик и забивал память.
      *
      * Возвращает число записанных байт.
      */
@@ -83,7 +82,7 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
             .build()
         downloader.newCall(request).execute().use { response ->
             // HttpFailure, а не голый IOException: иначе «сервер занят» на 429
-            // от предела nginx не срабатывал никогда (третий аудит, В27 прогона 1).
+            // от предела nginx не срабатывал никогда.
             if (!response.isSuccessful) throw HttpFailure(response.code, "загрузку")
             val body = response.body
             if (body.contentLength() > limit) throw TooLarge(limit)
@@ -106,7 +105,7 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
     /**
      * Наш ли это адрес: тот же протокол, хост и порт, что у сервера
      * расписания. Файл обновления качаем только оттуда — адрес из ответа
-     * /v1/app иначе уводил загрузку на любой хост (М54 прогона 1).
+     * /v1/app иначе уводил загрузку на любой хост.
      */
     fun isOurs(url: String): Boolean {
         val base = baseUrl.toHttpUrlOrNull() ?: return false

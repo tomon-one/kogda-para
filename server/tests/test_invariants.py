@@ -37,7 +37,7 @@ def test_duplicated_date_block_is_rejected(fixture_csv):
 
 
 def test_date_copied_further_down_names_both_rows(fixture_csv):
-    """Третий аудит, М8 прогона 1: блок скопирован ниже вместе с датой и
+    """Блок скопирован ниже вместе с датой и
     номерами — отказ называл номера пар настоящего дня и без строки."""
     rows = rows_of(fixture_csv)
     starts = date_rows(rows)
@@ -322,7 +322,7 @@ def test_today_dropping_out_of_the_snapshot_is_not_an_update():
 
 
 def test_shift_of_a_window_of_groups_is_caught_by_neighbours():
-    """Сдвиг хвоста листа на часть групп — не на всю ширину (второй аудит, К1).
+    """Сдвиг хвоста листа на часть групп — не на всю ширину.
 
     Прежняя доля «незнакомых» его не видела: соседи — часто подгруппы с общими
     лекциями, и 40–65 сдвинутых групп из 189 проходили.
@@ -344,7 +344,7 @@ def test_shift_of_a_window_of_groups_is_caught_by_neighbours():
 
 
 def test_honest_edits_are_not_a_shift():
-    """Законные правки колледжа — не сдвиг (второй аудит, В5): прежний детектор
+    """Законные правки колледжа — не сдвиг: прежний детектор
     отвергал их как «сдвиг колонок», и весь лист уходил в stale."""
     import copy
 
@@ -415,7 +415,7 @@ def test_messages_point_to_the_sheet_row(fixture_csv):
 
 def test_winter_holidays_inside_a_sheet_are_not_a_typo(fixture_csv):
     """26.12 → 11.01 — шестнадцать дней: прежний порог в две недели отвергал
-    такой лист целиком (второй аудит, М6). Месяц — по-прежнему опечатка.
+    такой лист целиком. Месяц — по-прежнему опечатка.
     Здесь — сдвиг на две недели: разрыв 15–16 дней, дни недели те же."""
     rows = rows_of(fixture_csv)
     later = date_rows(rows)[5:]
@@ -464,7 +464,7 @@ def test_dates_out_of_order_name_the_row(fixture_csv):
     ],
 )
 def test_date_that_contradicts_its_weekday_is_rejected(fixture_csv, cell, match):
-    """Третий аудит, В4 прогона 1: одна цифра в дате — и понедельник уезжал в
+    """Одна цифра в дате — и понедельник уезжал в
     воскресенье («Выходной» у всех), а неделя без пропуска воскресенья
     раздавала пары следующего дня. Раньше — «верю числу» в журнал."""
     rows = rows_of(fixture_csv)
@@ -475,7 +475,7 @@ def test_date_that_contradicts_its_weekday_is_rejected(fixture_csv, cell, match)
 
 
 def test_empty_date_skeleton_far_ahead_is_cut_not_rejected(fixture_csv):
-    """Третий аудит, В7 прогона 1: колледж вписывает каркас дат на недели
+    """Колледж вписывает каркас дат на недели
     вперёд. Пустые даты за горизонтом — не опечатка, а будущее: их отрезаем,
     а не роняем лист у всех."""
     import csv

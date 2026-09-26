@@ -155,7 +155,7 @@ def test_merge_prefers_the_current_sheet(fixture_csv):
     assert merged.schedule[group.id][day] == current.schedule[group.id][day]
 
 
-# --- Находки аудита 8 сентября: два молчаливых искажения -------------------
+# --- Два молчаливых искажения ----------------------------------------------
 
 
 def test_broken_date_stops_the_parse(fixture_csv):
@@ -225,7 +225,7 @@ def test_repeated_header_with_shifted_columns_stops_the_parse(fixture_csv):
 
 def test_single_neighbour_name_in_repeated_header_is_a_typo(fixture_csv, caplog):
     """Одно чужое имя — опечатка «ИСП-924/1» вместо «ИСП-924/2», а не сдвиг:
-    сдвиг переставляет все имена (второй аудит, В8)."""
+    сдвиг переставляет все имена."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
     by_column = {g.column: g.name for g in groups}
@@ -270,8 +270,7 @@ def test_repeated_header_with_renamed_group_is_tolerated(fixture_csv, caplog):
 def test_repeated_header_with_unknown_column_is_a_broken_main_header(fixture_csv, caplog):
     """Колонка, которой нет в главном заголовке, с именем, которого там нет нигде, —
     опечатка в главном заголовке («Преподаватели», стёртое имя): блок пропущен
-    как безымянный, а весь лист из-за одной ячейки не отвергается (второй
-    аудит, В4). Имя, которое главный заголовок знает в другой колонке, — дело
+    как безымянный, а весь лист из-за одной ячейки не отвергается. Имя, которое главный заголовок знает в другой колонке, — дело
     другое: см. сдвиг выше."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
@@ -350,7 +349,7 @@ def test_export_remembers_sheet_rows_of_days(fixture_csv):
     ],
 )
 def test_broken_name_in_main_header_keeps_the_group(fixture_csv, broken):
-    """Третий аудит, В17 прогона 1: опечатка, прочерк или стёртое имя в одной
+    """Опечатка, прочерк или стёртое имя в одной
     ячейке главного заголовка молча убирали группу из снимка при ok. Опечатка
     во втором слове — та же шапка, а имя берётся из повторного заголовка."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
@@ -391,8 +390,7 @@ def test_nameless_block_with_lessons_is_reported(fixture_csv):
 
 def test_two_neighbour_names_in_repeated_header_are_a_shift(fixture_csv):
     """Граница — числом: одно чужое имя — опечатка, два — сдвиг. Прежний тест
-    переставлял имена во всех пяти колонках и держал порог только до пяти
-    (третий аудит, В10 прогона 2)."""
+    переставлял имена во всех пяти колонках и держал порог только до пяти."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
     by_column = {g.column: g.name for g in groups}
@@ -405,7 +403,7 @@ def test_two_neighbour_names_in_repeated_header_are_a_shift(fixture_csv):
 
 
 def test_neighbour_name_in_the_main_header_is_resolved_by_the_repeated_one(fixture_csv):
-    """Третий аудит, В9 прогона 1: «ИСП-924/1» над ИСП-924/2 в главном
+    """«ИСП-924/1» над ИСП-924/2 в главном
     заголовке давало «объявлена дважды» и отказ у всех. Теперь обе колонки
     безымянны в главном, а имена им даёт повторный заголовок."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
@@ -418,7 +416,7 @@ def test_neighbour_name_in_the_main_header_is_resolved_by_the_repeated_one(fixtu
 
 
 def test_template_placeholder_in_one_cell_is_an_empty_slot(fixture_csv):
-    """Третий аудит, В10 прогона 1: «Дисциплина» / «Преподаватель» в клетке
+    """«Дисциплина» / «Преподаватель» в клетке
     одной группы посреди дня выкидывали три строки у всех групп, и лист
     отвергался. Это заготовка незаполненной клетки — пары там нет."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
@@ -436,7 +434,7 @@ def test_template_placeholder_in_one_cell_is_an_empty_slot(fixture_csv):
 
 
 def test_row_inserted_before_the_bell_row_does_not_steal_the_teachers(fixture_csv):
-    """Третий аудит, В11 прогона 1: строка с припиской между строкой пары и
+    """Строка с припиской между строкой пары и
     строкой времени становилась строкой преподавателей, и у всей строки пары
     они пропадали — а у преподавателей пропадала пара."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)

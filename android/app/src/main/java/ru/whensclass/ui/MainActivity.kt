@@ -84,8 +84,7 @@ class MainActivity : ComponentActivity() {
      * [seq] растёт на каждое нажатие по живому экрану: виджет и уведомления
      * зовут с SINGLE_TOP, и экран не пересоздаётся, а получает onNewIntent.
      * Раньше каждое нажатие уничтожало и создавало экран заново — пустой
-     * кадр, лишние запросы, сброшенные вкладка, поиск и прокрутка (третий
-     * аудит, М32 прогона 2).
+     * кадр, лишние запросы, сброшенные вкладка, поиск и прокрутка.
      */
     private data class Opened(val day: String?, val update: Boolean, val seq: Int)
 
@@ -121,7 +120,7 @@ class MainActivity : ComponentActivity() {
             exactAlarms.value = allowed
             // Разрешение появилось — переставить будильники уже точными: и
             // напоминания, и звонок для виджетов — подсветка идущей пары ждёт
-            // его же (третий аудит, М5 прогона 2).
+            // его же.
             LessonAlarms.reschedule(this)
             lifecycleScope.launch { ru.whensclass.work.MidnightUpdater.schedule(applicationContext) }
         }
@@ -230,7 +229,7 @@ private fun App(
         ActivityResultContracts.RequestPermission(),
     ) { }
     // Один раз, а не на каждое пересоздание экрана: поворот заново
-    // показывал системный запрос (третий аудит, М30 прогона 2).
+    // показывал системный запрос.
     var askedNotifications by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (askedNotifications) return@LaunchedEffect
@@ -273,10 +272,10 @@ private fun App(
 
     // Экран, выбор и загрузка — через rememberSaveable: поворот, разделение
     // экрана и смена темы пересоздают Activity, и человек из настроек или
-    // поиска группы оказывался на «Сегодня» (третий аудит, М30 прогона 2).
+    // поиска группы оказывался на «Сегодня».
     var screen by rememberSaveable { mutableStateOf(if (openUpdate) Screen.SETTINGS else Screen.TODAY) }
     // Откуда пришли к выбору группы: туда и «назад» — и стрелкой, и жестом.
-    // Стрелка вела в настройки, а жест — на главный (М16 прогона 2).
+    // Стрелка вела в настройки, а жест — на главный.
     var groupsFrom by rememberSaveable { mutableStateOf(Screen.SETTINGS) }
     var update by remember { mutableStateOf<ReleaseDto?>(null) }
     // Отдельно от update: «сервер сказал, что новее ничего нет» и «до сервера
@@ -294,8 +293,7 @@ private fun App(
     // Последнее ручное обновление не удалось: кнопка покажет крестик, а не
     // галочку. Раньше результат refresh() здесь выбрасывался, refreshError не
     // присваивался нигде, и при отвалившейся сети загоралась «Расписание
-    // обновлено» (второй аудит, В12; починка М18 первого аудита не была
-    // доведена).
+    // обновлено».
     var refreshFailed by remember { mutableStateOf(false) }
     val download by container.updates.download.collectAsState()
     val installing = download == AppUpdate.Download.Running
@@ -315,7 +313,7 @@ private fun App(
     var pickSecond by rememberSaveable { mutableStateOf(false) }
 
     // Итог загрузки обновления. Установщик открывается, когда человек в
-    // приложении: из фона Android 10+ его молча не пускал (М49 прогона 1).
+    // приложении: из фона Android 10+ его молча не пускал.
     LaunchedEffect(download) {
         val done = download as? AppUpdate.Download.Done ?: return@LaunchedEffect
         when (val result = done.result) {
@@ -345,11 +343,11 @@ private fun App(
 
     // И на каждое возвращение в приложение, пока свежих списков нет: на
     // первом запуске без связи экран выбора сам не менялся, и список не
-    // перечитывался до перезапуска (третий аудит, В3 прогона 2).
+    // перечитывался до перезапуска.
     LaunchedEffect(screen, reloadKey, ScreenClock.resumes) {
         val repository = container.repository
         // Сохранённые — сразу, без сети: экран открывается и в метро.
-        // Свежие — следом и оба разом, а не по очереди (М31 прогона 2).
+        // Свежие — следом и оба разом, а не по очереди.
         if (groups.isNullOrEmpty()) repository.cachedGroups().takeIf { it.isNotEmpty() }?.let { groups = it }
         if (teachers.isNullOrEmpty()) repository.cachedTeachers().takeIf { it.isNotEmpty() }?.let { teachers = it }
         if (listsFresh) return@LaunchedEffect
@@ -387,7 +385,7 @@ private fun App(
 
     // Выбрали группу или себя: сразу на экран расписания, и ⟳ крутится, пока
     // идёт сеть. Раньше на первом запуске экран тут же писал «Проверьте
-    // интернет», а из настроек список полминуты не реагировал (М2 прогона 2).
+    // интернет», а из настроек список полминуты не реагировал.
     val afterPick: (suspend () -> Unit) -> Unit = { select ->
         scope.launch {
             refreshing = true
@@ -412,7 +410,7 @@ private fun App(
             when (result) {
                 is RefreshResult.Failed -> refreshError = refreshFailure(result.error)
                 // Сервер здоров, группы нет: сказать об этом, а не молча
-                // погасить ⟳ крестиком «сервер не смог» (М24 прогона 2).
+                // погасить ⟳ крестиком «сервер не смог».
                 RefreshResult.Gone -> refreshError =
                     if (teacherMode) "Вас больше нет в таблице — выберите себя заново"
                     else "Группы больше нет в таблице — выберите заново"
@@ -457,7 +455,7 @@ private fun App(
         }
         // До Android 10 полосу навигации красит enableEdgeToEdge — по теме
         // системы, а не приложения: тёмная тема приложения на светлой системе
-        // давала белые кнопки на почти белой полосе (М34 прогона 2).
+        // давала белые кнопки на почти белой полосе.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             @Suppress("DEPRECATION")
             window.navigationBarColor = (if (dark) DarkScheme else LightScheme).background.toArgb()
@@ -508,7 +506,7 @@ private fun App(
                             onPick = { group: GroupDto ->
                                 scope.launch {
                                     // Свои пары остаются, пары прежней соседки
-                                    // уходят сразу — и без сети (М1 прогона 2).
+                                    // уходят сразу — и без сети.
                                     container.repository.selectSecondGroup(group)
                                     pickSecond = false
                                     screen = Screen.SETTINGS
@@ -712,7 +710,7 @@ private fun App(
 /**
  * Почему ручное обновление не удалось — словами для плашки. 503 у нас — не
  * «занят», а «расписания на сервере ещё нет» (api.md); занятость nginx
- * отвечает 429 (третий аудит, М78 прогона 2).
+ * отвечает 429.
  */
 internal fun refreshFailure(error: Throwable): String = when (error) {
     is ru.whensclass.data.HttpFailure -> when (error.code) {

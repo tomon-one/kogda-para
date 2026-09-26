@@ -64,8 +64,7 @@ internal suspend fun collectDiagnostics(
         // Две даты, а не одна: расходятся они по-разному. Свежая правка при
         // старой проверке — телефон перестал ходить за расписанием; старые
         // обе — расписание встало у нас. Слова те же, что на плашке сбоя: раньше
-        // «получено» здесь и там стояло у разных дат (третий аудит, М74
-        // прогона 2).
+        // «получено» здесь и там стояло у разных дат.
         lines += "Расписание: телефон проверял ${stamp(store.fetchedAt.first(), zone)}, " +
             // gen — не обязательно правка: сервер пишет новый и после
             // перезапуска и ночного поиска листа (разбор текстов 27.09).
@@ -81,8 +80,7 @@ internal suspend fun collectDiagnostics(
     lines += widgets(context)
     lines += reminders(context, store)
     // То, что телефон делает с приложением сам: раньше отчёт показывал
-    // «всё включено», а настоящей причины в нём не было (третий аудит, В8,
-    // М12, М23 прогона 2).
+    // «всё включено», а настоящей причины в нём не было.
     val phone = ru.whensclass.notify.PhoneState.read(context)
     val off = listOfNotNull(
         "«Скоро пара»".takeIf { phone.lessonChannelOff },
@@ -129,8 +127,7 @@ private suspend fun reminders(context: Context, store: ScheduleStore): String {
     }.getOrDefault(false)
     return "Напоминания: за ${store.notifyBeforeMinutes()} мин, " +
         "уведомления ${if (allowed) "разрешены" else "запрещены"}, " +
-        // Те же слова, что на экране настроек (третий аудит, контроль 3
-        // прогона 2).
+        // Те же слова, что на экране настроек.
         "точное время ${if (LessonAlarms.exactAllowed(context)) "да" else "нет"}"
 }
 

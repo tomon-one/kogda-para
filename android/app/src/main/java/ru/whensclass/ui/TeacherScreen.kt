@@ -59,7 +59,7 @@ fun TeacherScreen(
     reloadKey: Int = 0,
     ownSchedule: ScheduleDto? = null,
     searchLabel: String = "Поиск по фамилии",
-    /** Что за список — для «не загрузился»: у преподавателя во вкладке групп стояло «преподавателей» (М18 прогона 2). */
+    /** Что за список — для «не загрузился»: у преподавателя во вкладке групп стояло «преподавателей». */
     listName: String = "Список преподавателей",
     selfId: String? = null,
     startDay: String? = null,
@@ -78,7 +78,7 @@ fun TeacherScreen(
 ) {
     // В роли преподавателя его собственное расписание уже лежит на телефоне:
     // показываем сразу, без похода в сеть. Список остальных — по кнопке.
-    // Выбор и поиск переживают поворот экрана (третий аудит, М30 прогона 2).
+    // Выбор и поиск переживают поворот экрана.
     var browsing by rememberSaveable { mutableStateOf(false) }
     if (ownSchedule != null && !browsing) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -111,7 +111,7 @@ fun TeacherScreen(
     var query by rememberSaveable { mutableStateOf("") }
 
     // Системное «назад» — к списку и к своему расписанию, как кнопки на
-    // экране: раньше оно закрывало приложение (М16 прогона 2).
+    // экране: раньше оно закрывало приложение.
     BackHandler(enabled = picked != null) {
         pick(null)
         schedule = null
@@ -147,7 +147,7 @@ fun TeacherScreen(
         }
     }
 
-    // Список отступает от клавиатуры (М35 прогона 2).
+    // Список отступает от клавиатуры.
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
         OutlinedTextField(
             value = query,
@@ -282,7 +282,7 @@ private fun ChosenTeacher(
                 )
             }
             // Дней нет — не пустой экран, а объяснение с выходом к таблице,
-            // как у своего расписания (третий аудит, М27 прогона 1).
+            // как у своего расписания.
             else -> if (!explainMissing(schedule, rememberToday(), null)) {
                 ScheduleDays(
                     schedule = schedule,
@@ -336,7 +336,7 @@ private fun TeacherRow(
                 }
             }
             // Экранный чтец: что делает звёздочка и в каком она положении —
-            // символ «★» он не объясняет (третий аудит, М19 прогона 2).
+            // символ «★» он не объясняет.
             Text(
                 if (pinned) "★" else "☆",
                 style = MaterialTheme.typography.titleMedium,

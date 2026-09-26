@@ -87,7 +87,7 @@ class ScheduleStore(private val context: Context) {
                 ?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
             // Неудачи — подряд: между двумя случайными с разницей в несколько
             // часов сервер отвечал, и они не складываются в «не отвечает с
-            // утра» (третий аудит, М12 прогона 1).
+            // утра».
             val streak = known != null && last != null &&
                 java.time.Duration.between(last, now) < UNREACHABLE_STREAK_GAP
             if (streak) first = known!! else prefs[KEY_UNREACHABLE_SINCE] = now.toString()
@@ -106,7 +106,7 @@ class ScheduleStore(private val context: Context) {
     /**
      * Строки непрочитанного «Расписание изменилось»: день и текст. Новое
      * уведомление с тем же id заменяло прежнее, и неосмотренная отмена
-     * пропадала бесследно (третий аудит, В19 прогона 2).
+     * пропадала бесследно.
      */
     suspend fun pendingChanges(): List<Pair<String, String>> =
         context.dataStore.data.first()[KEY_PENDING_CHANGES].orEmpty().split("\n")
@@ -282,7 +282,7 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
-    /** Закреплённый id сменился — переименование (М11 прогона 2). */
+    /** Закреплённый id сменился — переименование. */
     suspend fun replacePinnedGroup(old: String, new: String) = replacePinned(KEY_PINNED_GROUPS, old, new)
 
     suspend fun replacePinnedTeacher(old: String, new: String) = replacePinned(KEY_PINNED_TEACHERS, old, new)
@@ -331,7 +331,7 @@ class ScheduleStore(private val context: Context) {
             it[KEY_TEACHER_ID] = id
             it[KEY_TEACHER_NAME] = name
             // Повторный выбор себя же — не повод стирать своё расписание без
-            // связи (третий аудит, М1 прогона 2).
+            // связи.
             if (unchanged) return@edit
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
@@ -407,7 +407,7 @@ class ScheduleStore(private val context: Context) {
             if (unchanged) return@edit
             // Расписание прошлой группы показывать нельзя ни секунды — и время
             // его загрузки тоже: рядом с «ещё не загружено» стояло «обновлено
-            // в 14:20» прежнего выбора (третий аудит, М3 прогона 2).
+            // в 14:20» прежнего выбора.
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
             it.remove(KEY_FETCHED_AT)
@@ -415,9 +415,9 @@ class ScheduleStore(private val context: Context) {
             it.remove(KEY_PENDING_CHANGES)
             // Соседняя подгруппа была парой к прежней группе, к новой она
             // отношения не имеет. Но та же группа после роли преподавателя —
-            // та же пара подгрупп (М4 прогона 2), а перевыбор после «группы
+            // та же пара подгрупп, а перевыбор после «группы
             // больше нет» — обычно та же группа под новым именем, и соседку
-            // молча стирать нельзя (М6): не найдётся она — скажет сама.
+            // молча стирать нельзя: не найдётся она — скажет сама.
             if (!sameGroup && !wasGone) {
                 it.remove(KEY_GROUP2_ID)
                 it.remove(KEY_GROUP2_NAME)
@@ -471,9 +471,8 @@ class ScheduleStore(private val context: Context) {
      * Соседняя подгруппа выбрана или снята (`id` = null). Свои пары остаются —
      * `ownOnly` это они, без пар прежней соседки, и снимок помечен обрубком: без
      * связи раньше стиралось всё, и экран с виджетами писали «ещё не
-     * загружено» (третий аудит, М1 прогона 2). Отметки о пропаже прежней
-     * соседки — прочь: иначе один 404 новой снимал её без часа проверки (М42
-     * прогона 1).
+     * загружено». Отметки о пропаже прежней
+     * соседки — прочь: иначе один 404 новой снимал её без часа проверки.
      */
     suspend fun setSecondGroup(id: String?, name: String?, ownOnly: String?) {
         context.dataStore.edit {
@@ -536,7 +535,7 @@ class ScheduleStore(private val context: Context) {
     /**
      * Соседки нет в таблице — подтверждено. Выбор не стирается: раньше через
      * час 404 его стирало навсегда, и после починки таблицы её пары сами не
-     * возвращались (третий аудит, М41 прогона 1). true — отметка новая, о ней
+     * возвращались. true — отметка новая, о ней
      * пора сказать.
      */
     suspend fun markSecondGone(): Boolean {
@@ -606,8 +605,7 @@ class ScheduleStore(private val context: Context) {
     /**
      * Показ виджета — не чаще раза в три часа: каждая техническая перерисовка
      * (звонок, полночь, часовой заход) за сутки набирала десятки «ответов
-     * вместо таблицы», даже если на телефон никто не смотрел (третий аудит,
-     * М38 прогона 2).
+     * вместо таблицы», даже если на телефон никто не смотрел.
      */
     suspend fun countWidgetDraw() {
         val now = System.currentTimeMillis()
@@ -674,7 +672,7 @@ class ScheduleStore(private val context: Context) {
          * Неудачи, разделённые таким перерывом, — не одна беда. Три часа, а не
          * час: фоновый заход бывает раз в час с хвостиком, и при часе цепочка
          * рвалась каждый раз — «сервер не отвечает» без открытия приложения
-         * не наступал никогда (разбор текстов 27.09; регресс М12 прогона 1).
+         * не наступал никогда.
          */
         val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(3)
         /** Счёт показов виджета — не чаще раза в столько. */

@@ -6,7 +6,7 @@ import org.junit.Test
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.HttpFailure
 
-/** Слова и позиция экрана расписания. Третий аудит: М33 прогона 1; М25, М78 прогона 2. */
+/** Слова и позиция экрана расписания. */
 class ScreenWordsTest {
 
     @Test

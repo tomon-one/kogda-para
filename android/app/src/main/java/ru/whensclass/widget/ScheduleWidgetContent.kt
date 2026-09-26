@@ -72,7 +72,7 @@ fun ScheduleWidgetContent(
     // Оболочки вроде Nova дают сжать виджет ниже объявленного минимума. Ругаться
     // на это некому — просто убираем то, без чего можно, начиная с логотипа.
     // Узко — и от крупного шрифта: время в sp, колонка в dp, и конец пары
-    // уходил в многоточие (третий аудит, М28 прогона 2).
+    // уходил в многоточие.
     val scale = fontScale()
     val fit = Fit(narrow = size.width < 220.dp * scale, dense = size.height < 120.dp, scale = scale)
 
@@ -109,7 +109,7 @@ fun ScheduleWidgetContent(
         val today = schedule?.days?.firstOrNull { it.date == day.toString() }
         when {
             // Обновлять нечего: нажатие ведёт в приложение, а не в
-            // «обновлено» (третий аудит, М14 прогона 2).
+            // «обновлено».
             groupName == null -> MissingHint(
                 "Откройте приложение и выберите группу или себя", colors,
                 open = actionStartActivity(openDay(context, day)),
@@ -232,8 +232,7 @@ private fun Header(
                     style = TextStyle(fontSize = 11.sp, color = colors.textDim),
                     // Имя уступает: статус и ⟳ меряются первыми. Раньше имя
                     // шло без веса, и на узком виджете «нет в таблице»
-                    // резалось, а ⟳ пропадал вовсе (третий аудит, М27
-                    // прогона 2). Своё имя и так знают наизусть.
+                    // резалось, а ⟳ пропадал вовсе. Своё имя и так знают наизусть.
                     modifier = GlanceModifier.defaultWeight().clickable(openApp),
                 )
                 // Время последней проверки — служебная мелочь, поэтому тем же
@@ -373,7 +372,7 @@ private fun Lessons(
 
     // Сколько целых пар помещается — и не больше. Раньше при месте на одну-две
     // пары (1 ≤ left/rowHeight < 2) виджет всё равно ставил две, и вторую
-    // обрезал корпус (второй аудит, М15; остаток В31 первого аудита). Одна
+    // обрезал корпус. Одна
     // пара — минимум: пустой виджет хуже одной строки.
     fun room(reserved: Dp): Int {
         val left = free - reserved
@@ -406,8 +405,7 @@ private fun Lessons(
             // вмещает не больше десяти детей, и по два на пару их не хватало бы
             // на длинный день.
             Column(modifier = GlanceModifier.fillMaxWidth()) {
-                // Отменённая пара в своё время — не «идёт сейчас» (третий
-                // аудит, М17 прогона 2).
+                // Отменённая пара в своё время — не «идёт сейчас».
                 LessonRow(lesson, day, bells, isNow = lesson.number == current && !lesson.isCancelled, fit, colors)
                 Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 4.dp))
             }
@@ -455,14 +453,13 @@ internal fun missingDay(
     }.getOrDefault(false)
     // «Выходной» — только про день между первым и последним скачанным днём:
     // cov относится ко всему листу, а не к окну на телефоне, и будень новой
-    // недели при окне прошлой назывался выходным, хотя пары у группы есть
-    // (третий аудит, В20 прогона 1; М13 прогона 2).
+    // недели при окне прошлой назывался выходным, хотя пары у группы есть.
     val dates = schedule.days.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
     val inWindow = dates.isNotEmpty() && !day.isBefore(dates.min()) && !day.isAfter(dates.max())
     val off = Missing("Выходной", off = true)
     return when {
         // Воскресений в листах не бывает: это выходной всегда, и при cov,
-        // который кончается субботой (М17 прогона 1). Но не для недели:
+        // который кончается субботой. Но не для недели:
         // пустая неделя в воскресенье — это «следующая не выложена», а не
         // «выходной» без выхода к таблице (разбор текстов 27.09).
         day.dayOfWeek == java.time.DayOfWeek.SUNDAY && !week -> off
@@ -539,7 +536,7 @@ internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
         // клало в стек ещё одну копию экрана, и «назад» пришлось бы жать
         // столько раз, сколько раз человек за день заглянул в виджет. И
         // SINGLE_TOP: без него CLEAR_TOP уничтожал живой экран и создавал
-        // заново (третий аудит, М32 прогона 2).
+        // заново.
         .addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP,
@@ -620,7 +617,7 @@ private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
     val parts = buildList {
         if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
         // Место — раньше типа: строка одна, и тип вытеснял кабинет в
-        // многоточие (третий аудит, В7 прогона 2).
+        // многоточие.
         // Замена — первым словом, как «Вместо: …» на экране (разбор текстов 27.09).
         if (lesson.replaces != null && !lesson.isCancelled) add("замена")
         add(if (lesson.isOnline) onlineLabel(lesson) else roomLabel(lesson.room) ?: "место не указано")
@@ -635,7 +632,7 @@ private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
     val context = LocalContext.current
     // Ссылка на чужой адрес одним нажатием не копируется: без хоста и без
     // пометки её вставляли в браузер, не глядя. Нажатие ведёт на экран пары,
-    // где хост назван (третий аудит, М40 прогона 1).
+    // где хост назван.
     val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
     Text(
         // Значок впереди строки, а не в хвосте: строка одна и обрезается
@@ -687,7 +684,7 @@ internal fun MissingHint(
             modifier = GlanceModifier.padding(vertical = 8.dp),
         )
         // «Нажмите, чтобы обновить» под «откройте приложение» спорило с ним
-        // самим (М14 прогона 2).
+        // самим.
         if (open == null && sourceUrl == null) {
             Text(
                 "нажмите, чтобы обновить",

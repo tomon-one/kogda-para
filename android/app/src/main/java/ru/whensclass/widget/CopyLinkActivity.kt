@@ -30,7 +30,7 @@ class CopyLinkActivity : Activity() {
     private fun copy(url: String?) {
         if (url.isNullOrBlank()) return
         // Виджеты чужой адрес сюда не шлют; если всё же пришёл — не копируем
-        // молча (третий аудит, М40 прогона 1).
+        // молча.
         if (!isKnownWebinar(url)) {
             Toast.makeText(this, "Ссылка на чужой адрес — откройте пару в приложении", Toast.LENGTH_LONG).show()
             return

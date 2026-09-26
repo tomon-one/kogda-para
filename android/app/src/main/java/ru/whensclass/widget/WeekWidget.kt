@@ -92,8 +92,7 @@ class WeekWidget : GlanceAppWidget() {
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
                 // С дырами, как на экране: воскресенье и будень без строки
-                // внутри покрытия — «выходной», а не пропуск без слова (третий
-                // аудит, М68 прогона 2).
+                // внутри покрытия — «выходной», а не пропуск без слова.
                 val days = schedule?.let { daysWithGaps(it) }.orEmpty()
                 Header(
                     days,
@@ -111,8 +110,7 @@ class WeekWidget : GlanceAppWidget() {
                 Spacer(GlanceModifier.height(6.dp))
 
                 when {
-                    // Обновлять нечего — нажатие ведёт в приложение (третий
-                    // аудит, М14 прогона 2).
+                    // Обновлять нечего — нажатие ведёт в приложение.
                     state?.groupName == null -> MissingHint(
                         "Откройте приложение и выберите группу или себя", colors,
                         open = actionStartActivity(openDay(context, today)),
@@ -125,8 +123,7 @@ class WeekWidget : GlanceAppWidget() {
                     // Пустая неделя — как пустой день у дневного виджета: сбой,
                     // устаревшие данные или «не опубликовано» с выходом к таблице.
                     // Раньше всегда «нажмите на время в шапке», хотя при сбое и
-                    // при неопубликованном листе обновление не поможет (второй
-                    // аудит, М19).
+                    // при неопубликованном листе обновление не поможет.
                     weekDays(days, today).isEmpty() -> {
                         val missing = missingDay(
                             schedule, today, state?.fetchedAt ?: 0L,
@@ -186,8 +183,7 @@ private fun Header(
         Spacer(GlanceModifier.width(6.dp))
 
         // Статус — второй строкой, рядом с группой, как в дневном виджете.
-        // В одной строке с заголовком он побеждал: «Неделя 28 сент. – …»
-        // (третий аудит, М27 прогона 2).
+        // В одной строке с заголовком он побеждал: «Неделя 28 сент. – …».
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
                 weekTitle(days, today),
@@ -230,7 +226,7 @@ private fun Header(
                     ),
                     // Группы нет в таблице — обновление ничего не даст: в
                     // приложение, к «выбрать заново», как на дневном
-                    // виджете (третий аудит, М40 прогона 2).
+                    // виджете.
                     modifier = GlanceModifier.clickable(
                         if (gone) openApp else actionRunCallback<RefreshAction>(),
                     ),
@@ -275,8 +271,8 @@ private fun Week(
     val height = LocalSize.current.height
     val scale = fontScale()
     // Даже строки-сводки помещаются не всегда: семь дней или крупный шрифт —
-    // и последний день обрезал корпус, хотя обещано «день не пропадает никогда»
-    // (второй аудит, М14). Тогда хвост недели — одной строкой «и ещё N дней».
+    // и последний день обрезал корпус, хотя обещано «день не пропадает никогда».
+    // Тогда хвост недели — одной строкой «и ещё N дней».
     val fit = remember(all, height, scale) {
         fitWeek(
             all.map { (dayHeight(it) * scale).value },
@@ -315,7 +311,7 @@ private fun Week(
                                 it,
                                 bells,
                                 colors,
-                                // Отменённая — не идущая (М17 прогона 2).
+                                // Отменённая — не идущая.
                                 isNow = day.isToday && it.number == current && !it.isCancelled,
                             )
                         }
@@ -356,8 +352,7 @@ internal const val MAX_CHILDREN = 10
 
 /**
  * «И ещё N» — когда пары в день не поместились в контейнер. Нажатие — на
- * этот день: без своего нажатия оно уходило корню, к сегодняшнему (третий
- * аудит, М34 прогона 1).
+ * этот день: без своего нажатия оно уходило корню, к сегодняшнему.
  */
 @Composable
 private fun MoreLine(date: LocalDate, rest: Int, colors: Palette) {
@@ -416,8 +411,8 @@ internal data class WeekFit(val open: Int, val shown: Int)
  *
  * Сегодняшний — даже ценой хвоста недели в «и ещё N дней»: сводки всех семи
  * дней резервировались первыми, и в понедельник–среду виджет объявленной
- * высоты не разворачивал ни одного дня — ни пар, ни подсветки идущей
- * (третий аудит, М30 прогона 1). Пустой сегодняшний день ради «пар нет»
+ * высоты не разворачивал ни одного дня — ни пар, ни подсветки идущей.
+ * Пустой сегодняшний день ради «пар нет»
  * хвост не сворачивает — сводка скажет то же. [heights] — высота каждого дня
  * парами.
  */
@@ -518,7 +513,7 @@ private fun EmptyLine(date: LocalDate, colors: Palette, absent: Boolean = false)
         if (absent) "выходной" else "пар нет",
         maxLines = 1,
         style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-        // Свой день, а не сегодняшний (М34 прогона 1).
+        // Свой день, а не сегодняшний.
         modifier = GlanceModifier.padding(start = 4.dp, bottom = 2.dp)
             .clickable(actionStartActivity(openDay(context, date))),
     )
@@ -563,7 +558,7 @@ private fun LessonLine(
                 color = if (dim) colors.textDim else colors.text,
             ),
             // Колонка растёт со шрифтом: «09:00» в sp, колонка в dp, и с
-            // крупным шрифтом видно было «09:…» (М28 прогона 2).
+            // крупным шрифтом видно было «09:…».
             modifier = GlanceModifier.width(42.dp * fontScale()),
         )
         Text(

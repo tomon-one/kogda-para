@@ -16,7 +16,7 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- Найти системный установщик: обновление уходит ему явно, а не любому
-         приложению с фильтром на APK (третий аудит, М48 прогона 1). -->
+         приложению с фильтром на APK. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />

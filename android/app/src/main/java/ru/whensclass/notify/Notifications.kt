@@ -36,11 +36,10 @@ object Notifications {
     private const val ID_CHANGES = 2
     private const val ID_UPDATE = 3
     // Своё для «сервер лежит»: с общим ID_CHANGES новое уведомление об
-    // изменениях перезаписывало непрочитанное о сбое и наоборот (второй
-    // аудит, М12).
+    // изменениях перезаписывало непрочитанное о сбое и наоборот.
     private const val ID_SERVER = 4
     // Своё для «подгруппы нет в таблице»: с общим ID_CHANGES оно затирало
-    // непрочитанное «Расписание изменилось» (третий аудит, М15 прогона 1).
+    // непрочитанное «Расписание изменилось».
     private const val ID_SUBGROUP = 5
 
     fun ensureChannels(context: Context) {
@@ -107,7 +106,7 @@ object Notifications {
     /**
      * `until` — когда снять само: новость про сегодняшний день к полуночи
      * устаревает, и наутро висящее «Завтра: добавилась пара» читалось бы как
-     * новость о послезавтра (третий аудит, М71 прогона 2).
+     * новость о послезавтра.
      */
     fun changes(context: Context, title: String, text: String, until: Long? = null) {
         show(context, CHANNEL_CHANGES, ID_CHANGES, title, text, day = null, until = until)
@@ -120,15 +119,14 @@ object Notifications {
     /**
      * Сервер лежит дольше двух часов — свой канал и свой id.
      * true — показано: засчитывать сбой объявленным можно только тогда, иначе
-     * после выдачи разрешения посреди сбоя уведомление не приходило никогда
-     * (третий аудит, М32 прогона 1).
+     * после выдачи разрешения посреди сбоя уведомление не приходило никогда.
      */
     fun serverDown(context: Context, title: String, text: String): Boolean =
         show(context, CHANNEL_SERVER, ID_SERVER, title, text, day = null) && !channelOff(context, CHANNEL_SERVER)
 
     /**
      * Сервер починился — снять «не обновляется»: оно висело в шторке рядом со
-     * свежими данными сколько угодно (М8 прогона 2).
+     * свежими данными сколько угодно.
      */
     fun serverBack(context: Context) {
         runCatching { NotificationManagerCompat.from(context).cancel(ID_SERVER) }
@@ -172,7 +170,7 @@ object Notifications {
 
         val intent = Intent(context, MainActivity::class.java)
             // SINGLE_TOP — живой экран получает onNewIntent, а не
-            // пересоздаётся (третий аудит, М32 прогона 2).
+            // пересоздаётся.
             .addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP,

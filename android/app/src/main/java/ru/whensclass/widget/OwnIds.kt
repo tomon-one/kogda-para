@@ -9,7 +9,7 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
  * Только свои id. Приёмники виджетов экспортированы — иначе система не
  * доставит им обновление, — а APPWIDGET_UPDATE не защищённая рассылка: чужое
  * приложение могло прислать id недельного виджета маленькому приёмнику, и
- * Glance рисовал на месте недели одну строку (третий аудит, М47 прогона 1).
+ * Glance рисовал на месте недели одну строку.
  */
 internal fun GlanceAppWidgetReceiver.ownIds(
     context: Context,

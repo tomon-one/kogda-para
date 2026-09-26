@@ -87,7 +87,7 @@ def _two_groups(first, second):
 
 def test_same_slot_in_different_states_stays_apart():
     """Отменили пару у одной группы — у другой она идёт. Раньше склейка по
-    времени раздавала обеим состояние одной (второй аудит, В1)."""
+    времени раздавала обеим состояние одной."""
     from whensclass.domain.models import Lesson
 
     kept = Lesson(number=2, subject="Физкультура", teachers=("Иванов И. И.",), room="Спортзал")
@@ -112,7 +112,7 @@ def test_same_lesson_for_two_groups_is_still_one_entry():
 
 def test_column_follows_the_sheet_of_the_day():
     """У склеенного снимка двух листов колонка группы — из того листа, на
-    который ведёт ссылка, а не из первого (второй аудит, М28)."""
+    который ведёт ссылка, а не из первого."""
     from whensclass.api.payloads import schedule_payload
     from whensclass.domain.models import GroupRef, Lesson, SheetPlace, Snapshot
 
@@ -134,7 +134,7 @@ def test_column_follows_the_sheet_of_the_day():
 
 
 def test_spelling_twin_is_the_same_surname_and_initials():
-    """Третий аудит, В19 прогона 1: опечатка в имени, исправленная колледжем, —
+    """Опечатка в имени, исправленная колледжем, —
     тот же человек. Однофамилец с другими инициалами — нет."""
     from whensclass.domain.teachers import TeacherIndex, spelling_twin
 
@@ -155,7 +155,7 @@ def test_spelling_twin_is_the_same_surname_and_initials():
 
 
 def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_days():
-    """Третий аудит, В3 прогона 1: группы нет в следующем листе (переименовали
+    """Группы нет в следующем листе (переименовали
     или убрали). Её дни там были «пар нет», а колонка — из чужого листа, где
     на этом месте другая группа. Теперь дни второго листа за краем её `cov`,
     а колонки у ссылки на второй лист нет."""
@@ -184,7 +184,7 @@ def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_da
 
 
 def test_names_without_surname_do_not_become_teachers():
-    """Третий аудит, М4 прогона 1: «Елена Сергеевна» и «СПТ» были в /v1/teachers."""
+    """«Елена Сергеевна» и «СПТ» были в /v1/teachers."""
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
 
     day = dt.date(2026, 9, 17)
@@ -198,7 +198,7 @@ def test_names_without_surname_do_not_become_teachers():
 
 
 def test_initials_are_merged_into_the_single_full_name():
-    """Третий аудит, М5 прогона 1: «Мисюрова Е.С.» и «Мисюрова Евгения
+    """«Мисюрова Е.С.» и «Мисюрова Евгения
     Сергеевна» — один человек, пары делились между двумя id. Краткая запись
     сводится к полной, а её id отвечает полной (новый g перепишет выбор)."""
     from whensclass.domain.models import GroupRef, Lesson, Snapshot

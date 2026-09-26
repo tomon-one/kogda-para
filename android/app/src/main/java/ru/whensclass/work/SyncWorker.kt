@@ -26,8 +26,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         runCatching { container.updates.announceIfNew(container.store) }
         // Повтор с паузой — только у разовой работы. У периодической retry()
         // подменял час экспоненциальной паузой до пяти часов, и после
-        // починки сервера телефон часами держал «сбой» (третий аудит, В15
-        // прогона 1): она придёт сама через час.
+        // починки сервера телефон часами держал «сбой»: она придёт сама через час.
         return when {
             result is RefreshResult.Failed && ONE_SHOT_TAG in tags -> Result.retry()
             else -> Result.success()
@@ -56,7 +55,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
          * Без setExpedited. Срочная работа на Android 8–11 требует
          * getForegroundInfo, а его у нас нет: WorkManager 2.11 валил такую
          * работу до doWork, и обновление при открытии, при установке виджета
-         * и ночью не выполнялось вовсе (второй аудит, В28). Обычная разовая
+         * и ночью не выполнялось вовсе. Обычная разовая
          * работа с сетью и так запускается почти сразу.
          */
         fun now(context: Context) {

@@ -26,8 +26,7 @@ class ShiftDayAction : ActionCallback {
         val step = parameters[KEY_STEP] ?: return
         // Границы — те же, что гасят стрелки: дни, что лежат на телефоне. Раньше
         // ±MAX_OFFSET, и быстрое второе нажатие, пришедшее раньше перерисовки,
-        // уводило за край окна — будень следующей недели назывался «выходным»
-        // (третий аудит, М13 прогона 2).
+        // уводило за край окна — будень следующей недели назывался «выходным».
         val schedule = ScheduleWidget.parse(
             runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()?.scheduleJson
         )
@@ -50,7 +49,7 @@ class ShiftDayAction : ActionCallback {
 
 /**
  * Идёт ли нажатое обновление. Отметка старше [BUSY_LIMIT_MS] — след нажатия,
- * процесс которого умер (М31 прогона 1): её не показываем.
+ * процесс которого умер: её не показываем.
  */
 @androidx.compose.runtime.Composable
 internal fun refreshing(): Boolean {
@@ -76,7 +75,7 @@ class RefreshAction : ActionCallback {
         val repository = AppContainer.get(context).repository
         // Обновление уже идёт (другое нажатие, часовой заход, открытие): второе
         // не запускаем и чужие отметки не трогаем — раньше одно нажатие писало
-        // «обновлено», пока другое ещё шло (третий аудит, М15 прогона 2).
+        // «обновлено», пока другое ещё шло.
         if (repository.refreshing) return
         mark(context, glanceId, busy = true, done = false, failed = false)
         val result = repository.refresh(force = true)
@@ -102,8 +101,7 @@ class RefreshAction : ActionCallback {
             prefs.toMutablePreferences().apply {
                 this[ScheduleWidget.KEY_BUSY] = busy
                 // Момент начала: процесс может умереть посреди нажатия, и
-                // «обновляю…» висело навсегда, пряча «сбой» (третий аудит,
-                // М31 прогона 1). Старше минуты — не считается.
+                // «обновляю…» висело навсегда, пряча «сбой». Старше минуты — не считается.
                 if (busy) this[ScheduleWidget.KEY_BUSY_AT] = System.currentTimeMillis()
                 this[ScheduleWidget.KEY_DONE] = done
                 this[ScheduleWidget.KEY_FAILED] = failed

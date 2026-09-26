@@ -2,8 +2,7 @@
 <resources>
     <string name="app_name">Когда пара?</string>
     <!-- Названия виджетов — те же, что в README и install.md: без них в
-         списке виджетов стояли три одинаковых «Когда пара?» (третий аудит,
-         М72 прогона 2). -->
+         списке виджетов стояли три одинаковых «Когда пара?». -->
     <string name="widget_day_label">Когда пара? — День</string>
     <string name="widget_week_label">Когда пара? — Неделя</string>
     <string name="widget_next_label">Когда пара? — Ближайшая пара</string>
