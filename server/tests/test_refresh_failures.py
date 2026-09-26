@@ -329,11 +329,10 @@ def test_dead_sheets_key_alerts_after_two_failures(monkeypatch, sent):
         raise _google_says(403)
 
     monkeypatch.setattr(gsheets, "list_sheets_via_api", dead)
-    monkeypatch.setattr(gsheets, "list_sheets_via_xlsx", lambda: [])
-    monkeypatch.setattr(sheet_index, "_last_xlsx", None)
-    sheet_index.list_sheets()
+    monkeypatch.setattr(sheet_index, "_last_list", [])
+    _list()
     assert sent == [], "один отказ — чих"
-    sheet_index.list_sheets()
+    _list()
     assert len(sent) == 1 and "Sheets API" in sent[0]["message"]
     assert "ключ" not in sent[0]["message"].split("(")[1].split(")")[0]
 
@@ -364,17 +363,16 @@ def test_network_trouble_is_not_blamed_on_the_key(monkeypatch, sent):
         return []
 
     monkeypatch.setattr(gsheets, "list_sheets_via_api", api)
-    monkeypatch.setattr(gsheets, "list_sheets_via_xlsx", lambda: [])
-    monkeypatch.setattr(sheet_index, "_last_xlsx", None)
+    monkeypatch.setattr(sheet_index, "_last_list", [])
     for _ in range(3):
-        sheet_index.list_sheets()
+        _list()
     assert sent == []
     failure["exc"] = _google_says(403)
-    sheet_index.list_sheets()
-    sheet_index.list_sheets()
+    _list()
+    _list()
     assert len(sent) == 1
     failure["exc"] = None
-    sheet_index.list_sheets()
+    _list()
     assert len(sent) == 2 and "ключ работает" in sent[1]["message"]
 
 
@@ -526,11 +524,10 @@ def test_key_never_reaches_alert_or_log(monkeypatch, sent, caplog):
         )
 
     monkeypatch.setattr(gsheets, "list_sheets_via_api", dead)
-    monkeypatch.setattr(gsheets, "list_sheets_via_xlsx", lambda: [])
-    monkeypatch.setattr(sheet_index, "_last_xlsx", None)
+    monkeypatch.setattr(sheet_index, "_last_list", [])
     with caplog.at_level("WARNING"):
-        sheet_index.list_sheets()
-        sheet_index.list_sheets()
+        _list()
+        _list()
     assert len(sent) == 1
     assert SECRET not in sent[0]["message"] and SECRET not in caplog.text
 
@@ -690,3 +687,75 @@ def test_disk_alert_window_survives_restart_and_recovery_is_told(
     healed = Refresher(fresh, tmp_path)
     assert healed.refresh(today=TODAY, force=True) is True
     assert any("снова записывается" in m["message"] for m in sent)
+
+
+def test_only_the_failing_sheet_is_archived_as_rejected(
+    tmp_path, sent, fixture_csv, monkeypatch
+):
+    """Третий аудит, М39 прогона 2: отказ одного листа окна клал «отвергнутыми»
+    все листы с одной причиной — исправный текущий получал чужое «нашёл всего»."""
+    texts = {"лист": fixture_csv, "следующий": fixture_csv.replace("Дисциплина", "Предмет")}
+    monkeypatch.setattr(
+        sheet_index, "resolve_window", lambda *a, **k: [("лист", "1"), ("следующий", "2")]
+    )
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
+    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
+    r = Refresher(SnapshotStore(tmp_path), tmp_path)
+    assert r.refresh(today=TODAY) is False
+    assert not list((tmp_path / "history" / "1").glob("*-rejected*"))
+    assert list((tmp_path / "history" / "2").glob("*-rejected.txt"))
+
+
+def _list():
+    """list_sheets при сбое API без прежнего списка честно бросает «не найден»."""
+    try:
+        return sheet_index.list_sheets()
+    except sheet_index.SheetNotFound:
+        return None
+
+
+def test_failed_api_keeps_the_last_list_and_there_is_no_xlsx(monkeypatch, sent):
+    """Третий аудит, М43 прогона 2: при сбое API служба качала книгу в xlsx —
+    22 МБ под замком, — а читаемых листов там нет: gid xlsx не даёт. Теперь —
+    прежний список от API, если он свежий, иначе «не найден»."""
+    from whensclass.sources.gsheets import SheetInfo
+
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
+    monkeypatch.setattr(sheet_index, "_last_list", [])
+    state = {"ok": True}
+
+    def api(key):
+        if state["ok"]:
+            return [SheetInfo(title="расписание групп", gid="1")]
+        raise _google_says(503)
+
+    monkeypatch.setattr(gsheets, "list_sheets_via_api", api)
+    assert [s.gid for s in sheet_index.list_sheets()] == ["1"]
+    state["ok"] = False
+    assert [s.gid for s in sheet_index.list_sheets()] == ["1"], "прежний список"
+    monkeypatch.setattr(sheet_index, "_last_list", [])
+    with pytest.raises(sheet_index.SheetNotFound, match="не ответил"):
+        sheet_index.list_sheets()
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", None)
+    with pytest.raises(sheet_index.SheetNotFound, match="ключа Sheets API нет"):
+        sheet_index.list_sheets()
+
+
+def test_watch_baseline_survives_restart(tmp_path, monkeypatch):
+    """Третий аудит, М50 прогона 2: лист, заведённый, пока служба
+    перезапускалась, первый взгляд после запуска клал в базовую линию и не
+    искал — до ночи."""
+    from whensclass.sources.gsheets import SheetInfo
+
+    monkeypatch.setattr(settings, "sheets_api_key", "ключ")
+    books = [[SheetInfo(title="расписание групп 21.-26.09", gid="1")]]
+    monkeypatch.setattr(sheet_index, "list_sheets", lambda: books[-1])
+    monkeypatch.setattr(sheet_index, "candidates", lambda sheets, day: sheets)
+    first = Refresher(SnapshotStore(tmp_path), tmp_path)
+    first.look_for_new_sheet()
+    books.append(books[-1] + [SheetInfo(title="расписание групп 28.09-03.10", gid="2")])
+    restarted = Refresher(SnapshotStore(tmp_path), tmp_path)
+    calls = []
+    monkeypatch.setattr(restarted, "refresh", lambda force=False: calls.append(force) or False)
+    restarted.look_for_new_sheet()
+    assert calls == [True]

@@ -1,7 +1,7 @@
 """Эндпоинты API.
 
-Тела ответов собираются заранее, в момент разбора таблицы, — запрос виджета
-отдаёт готовые байты. ETag считается по этим байтам, поэтому повторный разбор
+Тела ответов собираются на каждый запрос из снимка в памяти — это десятки
+миллисекунд. ETag считается по байтам тела, поэтому повторный разбор
 неизменившейся таблицы не заставляет телефон качать то же самое.
 """
 
@@ -32,6 +32,10 @@ from .payloads import (
 # GET и HEAD: nginx пропускает оба, а сторожа по коду ответа ходят HEAD-ом —
 # на @router.get служба отвечала им 405.
 router = APIRouter()
+
+
+# Лист кончился больше этого назад — каникулы (канарейка — так же).
+HOLIDAY = dt.timedelta(days=7)
 
 
 def _today() -> dt.date:
@@ -91,7 +95,7 @@ def healthz(request: Request) -> Response:
     store, refresher = _state(request)
     snapshot = store.snapshot
     today = _today()
-    reason = None
+    reason = note = None
     if snapshot is None:
         reason = "расписание ещё не загружено"
     elif refresher.status != "ok":
@@ -99,8 +103,13 @@ def healthz(request: Request) -> Response:
     else:
         coverage = snapshot.coverage
         busy, fullest = filling(snapshot)
+        if coverage and today > coverage[1] + HOLIDAY:
+            # Лист кончился больше недели назад, а нового нет — каникулы, а не
+            # авария: раньше 503 держался все учебные дни лета (третий аудит,
+            # М88 прогона 2). 200, но с пометкой.
+            note = f"лист кончился {coverage[1]}, нового нет — похоже, каникулы"
         # Воскресений в листах нет — это не повод для тревоги.
-        if today.weekday() != 6 and coverage and not (coverage[0] <= today <= coverage[1]):
+        elif today.weekday() != 6 and coverage and not (coverage[0] <= today <= coverage[1]):
             reason = f"лист покрывает {coverage[0]}—{coverage[1]}, а сегодня {today}"
         elif today in snapshot.dates and busy[today] < FILLED_SHARE * fullest:
             # Дата в листе есть, а пар почти ни у кого: каркас дат вписан
@@ -114,6 +123,8 @@ def healthz(request: Request) -> Response:
     body = {"ok": reason is None, "status": refresher.status}
     if reason:
         body["reason"] = reason
+    elif note:
+        body["note"] = note
     return Response(
         content=json.dumps(body, ensure_ascii=False),
         status_code=200 if reason is None else 503,
@@ -142,7 +153,7 @@ def app_release(request: Request) -> Response:
         "versionName": release["versionName"],
         "url": f"{base}/download/{release['file']}",
     }
-    for key in ("size", "notes", "published"):
+    for key in ("size", "notes"):
         if release.get(key):
             body[key] = release[key]
     return _json_response(request, body, cache=False)

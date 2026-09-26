@@ -6,10 +6,7 @@
 
 from __future__ import annotations
 
-import io
 import logging
-import re
-import zipfile
 from dataclasses import dataclass
 
 import httpx
@@ -17,15 +14,6 @@ import httpx
 from ..config import settings
 
 log = logging.getLogger(__name__)
-
-_SHEET_TAG_RE = re.compile(
-    r'<sheet\b[^>]*?name="([^"]+)"[^>]*?sheetId="(\d+)"[^>]*?>|'
-    r'<sheet\b[^>]*?state="(\w+)"[^>]*?name="([^"]+)"[^>]*?sheetId="(\d+)"',
-)
-# Excel обрезает имена листов до 31 символа — по этой длине узнаём,
-# что обращаться к листу по имени нельзя.
-XLSX_TITLE_LIMIT = 31
-
 
 class SheetClosed(Exception):
     """Вместо CSV пришла веб-страница: таблицу закрыли или она просит входа.
@@ -38,14 +26,13 @@ class SheetClosed(Exception):
 
 @dataclass(frozen=True)
 class SheetInfo:
+    """Лист книги по Sheets API. Выгрузка книги в xlsx, которой список брался
+    без ключа, gid не давала вовсе, а лист с 14.09.2026 читается только по gid:
+    она качала 22 МБ впустую и убрана (третий аудит, М43 прогона 2)."""
+
     title: str
-    sheet_id: str | None = None   # порядковый номер из xlsx, не gid
     gid: str | None = None
     hidden: bool = False
-
-    @property
-    def title_may_be_truncated(self) -> bool:
-        return len(self.title) >= XLSX_TITLE_LIMIT
 
 
 def _base() -> str:
@@ -91,40 +78,6 @@ def fetch_sheet_csv(gid: str | None = None, title: str | None = None) -> str:
     return text
 
 
-def list_sheets_via_xlsx() -> list[SheetInfo]:
-    """Список листов из книги, выгруженной в xlsx.
-
-    Единственный способ увидеть все листы без ключа API. Дорогой: выгрузка
-    весит около двадцати мегабайт, поэтому дёргается раз в сутки.
-    """
-    with _client() as client:
-        response = client.get(f"{_base()}/export", params={"format": "xlsx"})
-    response.raise_for_status()
-    return parse_workbook(response.content)
-
-
-def parse_workbook(blob: bytes) -> list[SheetInfo]:
-    with zipfile.ZipFile(io.BytesIO(blob)) as archive:
-        xml = archive.read("xl/workbook.xml").decode("utf-8")
-
-    sheets: list[SheetInfo] = []
-    for match in re.finditer(r"<sheet\b[^>]*/>", xml):
-        tag = match.group(0)
-        name = re.search(r'name="([^"]*)"', tag)
-        sheet_id = re.search(r'sheetId="(\d+)"', tag)
-        state = re.search(r'state="(\w+)"', tag)
-        if not name:
-            continue
-        sheets.append(
-            SheetInfo(
-                title=_unescape(name.group(1)),
-                sheet_id=sheet_id.group(1) if sheet_id else None,
-                hidden=bool(state and state.group(1) != "visible"),
-            )
-        )
-    return sheets
-
-
 def list_sheets_via_api(key: str) -> list[SheetInfo]:
     """Список листов через Sheets API. Даёт настоящие gid и полные имена."""
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{settings.spreadsheet_id}"
@@ -143,13 +96,3 @@ def list_sheets_via_api(key: str) -> list[SheetInfo]:
             )
         )
     return out
-
-
-def _unescape(value: str) -> str:
-    return (
-        value.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", '"')
-        .replace("&apos;", "'")
-    )

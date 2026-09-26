@@ -80,7 +80,12 @@ class Refresher:
         self._dropped: dict[str, str] = {}
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые мы уже видели в книге. None — ещё не смотрели.
-        self._seen_titles: set[str] | None = None
+        # Имена листов, которые слежка уже видела, — на диске: после
+        # перезапуска первый взгляд только запоминал имена, и лист, заведённый
+        # колледжем, пока служба перезапускалась, искался только ночью
+        # (третий аудит, М50 прогона 2).
+        self._seen_path = state_dir / "seen_titles.json"
+        self._seen_titles: set[str] | None = self._load_seen_titles()
         # Новые листы «групп», которые поиск пока не принял (пустые, одна
         # шапка): слежка перепроверяет их, а не забывает до ночи (М14).
         self._retry_titles: dict[str, int] = {}
@@ -122,6 +127,22 @@ class Refresher:
             finally:
                 self._clear_running()
 
+    def _load_seen_titles(self) -> set[str] | None:
+        try:
+            data = json.loads(self._seen_path.read_text("utf-8"))
+        except (OSError, ValueError):
+            return None
+        return set(data) if isinstance(data, list) else None
+
+    def _save_seen_titles(self) -> None:
+        try:
+            tmp = self._seen_path.with_suffix(".tmp")
+            names = sorted(self._seen_titles or ())
+            tmp.write_text(json.dumps(names, ensure_ascii=False), "utf-8")
+            tmp.replace(self._seen_path)
+        except OSError as exc:
+            log.warning("имена листов для слежки не записались: %s", exc)
+
     def _freeze(self) -> None:
         """Заморожено владельцем: прежний снимок, stale, в сеть не ходим."""
         self.checked_at = dt.datetime.now(dt.timezone.utc)
@@ -131,7 +152,7 @@ class Refresher:
         self._fetch_only = False
         self.last_error = "заморожено владельцем: отдаётся прежнее расписание"
         self.status = self._visible_status()
-        self._save_failing("frozen")
+        self._save_failing()
 
     def restore_status(self) -> None:
         """Состояние после перезапуска: какое было — такое и есть."""
@@ -199,8 +220,13 @@ class Refresher:
             # Самый опасный случай: таблицу переделали. Держим прежнее —
             # а отвергнутый лист кладём в архив вместе с причиной: разбирать
             # инцидент по листу, который колледж уже переправил, нельзя.
-            for _, gid, text, digest in texts:
-                history.archive(self.state_dir, gid, text, digest, rejected=str(exc))
+            # Отвергнутым в архив — только упавший лист; исправный сосед по
+            # окну ложится обычной копией, а не с чужой причиной (третий аудит,
+            # М39 прогона 2).
+            failed = getattr(exc, "title", None)
+            for title, gid, text, digest in texts:
+                reason = str(exc) if failed is None or title == failed else None
+                history.archive(self.state_dir, gid, text, digest, rejected=reason)
             self._fail(f"формат таблицы изменился: {exc}", kind="format")
             return False
         except sheet_index.SheetNotFound as exc:
@@ -283,6 +309,15 @@ class Refresher:
             history.archive(self.state_dir, gid, text, digest, rejected=dropped)
         self.status = "ok"
         self._recovered()
+        if self._suspicions:
+            # Лист принят, но похож на сдвиг, которого признак соседа не увидел
+            # (третий аудит, М41 прогона 2). Раз в шесть часов, как всё.
+            alerts.notify(
+                "strangers",
+                "Лист принят, но: " + "; ".join(self._suspicions[:2])
+                + ". Присмотреться — не сдвиг ли колонок (docs/deploy.md, «Когда что-то "
+                "не так»).",
+            )
         if previous is not None and previous_teachers is not None:
             try:
                 self.renames.record(previous, snapshot, previous_teachers, self.store.teachers)
@@ -325,13 +360,15 @@ class Refresher:
             return False
 
         if self._seen_titles is None:
-            # Первый заход после запуска: запоминаем, с чем сравнивать. Гнать
-            # поиск прямо сейчас незачем — служба и так обновилась на старте.
+            # Самый первый взгляд — файла ещё нет: запоминаем, с чем сравнивать.
+            # Гнать поиск прямо сейчас незачем — служба и так обновилась на старте.
             self._seen_titles = titles
+            self._save_seen_titles()
             return False
 
         fresh = (titles - self._seen_titles) | (set(self._retry_titles) & titles)
         self._seen_titles = titles
+        self._save_seen_titles()
         if not fresh:
             return False
 
@@ -362,6 +399,7 @@ class Refresher:
         с тревогой через полчаса и без архива (В26).
         """
         self._dropped = {}
+        self._suspicions: list[str] = []
         try:
             snapshot = None
             for title, gid, text, _ in texts:
@@ -376,11 +414,13 @@ class Refresher:
                     if snapshot is not None:
                         for group, traces in shift_seed(snapshot, current).items():
                             seed.setdefault(group, set()).update(traces)
-                    _check_shift(current, seed=seed, previous=self.store.snapshot)
+                    self._suspicions += _check_shift(
+                        current, seed=seed, previous=self.store.snapshot
+                    )
                     _check_lost_names(self.store.snapshot, current, gid)
                 except SheetTooSmall as exc:
                     if snapshot is None:
-                        raise SourceFormatChanged(f"лист {name!r}: {exc}") from exc
+                        raise SheetRejected(title, f"лист {name!r}: {exc}") from exc
                     # Следующий лист колледж только начал: без него окно
                     # короче, и за краем — «ещё не опубликовано». Раньше его
                     # отказ валил весь набор, и правки сегодняшнего листа не
@@ -392,7 +432,7 @@ class Refresher:
                     continue
                 except SourceFormatChanged as exc:
                     # Имя листа — в тексте: в окне их бывает два.
-                    raise SourceFormatChanged(f"лист {name!r}: {exc}") from exc
+                    raise SheetRejected(title, f"лист {name!r}: {exc}") from exc
                 snapshot = current if snapshot is None else snapshot.merged_with(current)
             if snapshot is None:
                 return None
@@ -449,7 +489,7 @@ class Refresher:
             if sent:
                 self._alerted = True
                 self._alerted_kinds[kind] = now
-        self._save_failing(kind)
+        self._save_failing()
 
     def _recovered(self) -> None:
         """Обновление удалось после сбоя: сказать, что и сколько лежало."""
@@ -470,9 +510,9 @@ class Refresher:
         self._alerted_kinds = {}
         self._fetch_since = None
         self._fetch_only = True
-        self._save_failing(None)
+        self._save_failing()
 
-    def _save_failing(self, kind: str | None) -> None:
+    def _save_failing(self) -> None:
         try:
             if self.failing_since is None:
                 self._failing_path.unlink(missing_ok=True)
@@ -481,7 +521,6 @@ class Refresher:
             tmp.write_text(json.dumps({
                 "since": self.failing_since.isoformat(),
                 "error": self.last_error,
-                "kind": kind,
                 "fetch_only": self._fetch_only,
                 "alerted": self._alerted,
                 # Когда ушла тревога — по каждому виду: окно тишины живёт в
@@ -529,6 +568,14 @@ class Refresher:
             self._running_path.unlink(missing_ok=True)
         except OSError as exc:
             log.warning("отметка захода не снялась: %s", exc)
+
+
+class SheetRejected(SourceFormatChanged):
+    """Отказ, который знает, какой лист окна его дал."""
+
+    def __init__(self, title: str | None, message: str):
+        super().__init__(message)
+        self.title = title
 
 
 # Сколько раз слежка (раз в полчаса) перепроверяет новый лист «групп», который

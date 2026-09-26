@@ -164,14 +164,11 @@ def _hide_key(error: object) -> str:
     return re.sub(r"key=[^&\s]+", "key=***", str(error))
 
 
-# Выгрузка всей книги весит около двадцати мегабайт и занимает секунд двадцать.
-# Пока лист на сегодня не находится, resolve_for зовётся при каждом заходе
-# планировщика, то есть каждые двадцать минут: это гигабайт в сутки к Google с
-# одного адреса и полсотни длинных блокировок потока. Комментарии рядом обещали
-# «раз в сутки» — теперь это правда и для случая, когда лист не нашёлся.
-_XLSX_COOLDOWN = dt.timedelta(hours=6)
-_last_xlsx: dt.datetime | None = None
-_cached_sheets: list[SheetInfo] = []
+# Последний список листов от Sheets API и когда он получен: при сбое API служба
+# живёт им, а не выгружает книгу в xlsx — та gid не даёт (М43).
+_LIST_KEEP = dt.timedelta(hours=6)
+_last_list: list[SheetInfo] = []
+_last_list_at: dt.datetime | None = None
 # Сколько раз подряд Sheets API не ответил. Мёртвый ключ (отозван, квота)
 # раньше был виден только как WARNING раз в полчаса, а тревога приходила,
 # лишь когда кончалось покрытие запомненного листа — в воскресенье ночью
@@ -187,44 +184,48 @@ def looks_like_groups(title: str) -> bool:
 
 
 def list_sheets() -> list[SheetInfo]:
-    """Список листов: через API, если есть ключ, иначе через выгрузку xlsx."""
-    global _last_xlsx, _cached_sheets, _api_failures
+    """Список листов через Sheets API. Без ключа и без свежего списка — нет.
 
-    if settings.sheets_api_key:
-        try:
-            sheets = gsheets.list_sheets_via_api(settings.sheets_api_key)
-        except Exception as exc:  # ключ протух, квота, сеть
-            log.warning("Sheets API не ответил (%s), иду через xlsx", _hide_key(exc))
-            # Отказом ключа считаются только ответы Google о ключе и квоте; сеть
-            # — сетевой тревогой, иначе на одну беду приходили две, и одна звала
-            # проверять ключ (третий аудит, М11 прогона 1).
-            code = getattr(getattr(exc, "response", None), "status_code", None)
-            if code in _KEY_CODES:
-                _api_failures += 1
-            if _api_failures >= API_FAILURES_TO_ALERT and code in _KEY_CODES:
-                alerts.notify(
-                    "key",
-                    f"Sheets API не отвечает {_api_failures} раз подряд "
-                    f"({_api_error(exc)}). Без него gid листов не узнать: пока "
-                    "служба живёт запомненным листом, а когда его покрытие кончится, "
-                    "уйдёт в stale. Проверить ключ и его ограничение по адресу "
-                    "сервера — docs/deploy.md, «Ключ Sheets API».",
-                )
-        else:
-            if _api_failures >= API_FAILURES_TO_ALERT:
-                alerts.forget("key")
-                alerts.notify("key-ok", "Sheets API снова отвечает: ключ работает.",
-                              force=True, good=True)
-            _api_failures = 0
-            return sheets
+    При сбое API — последний удачный список, если ему меньше шести часов:
+    gid листов от этого не меняются.
+    """
+    global _api_failures, _last_list, _last_list_at
 
-    now = dt.datetime.now(dt.timezone.utc)
-    if _cached_sheets and _last_xlsx and now - _last_xlsx < _XLSX_COOLDOWN:
-        log.info("список листов беру из памяти: книгу выгружали %s", _last_xlsx)
-        return _cached_sheets
-
-    sheets = gsheets.list_sheets_via_xlsx()
-    _last_xlsx, _cached_sheets = now, sheets
+    if not settings.sheets_api_key:
+        raise SheetNotFound(
+            "ключа Sheets API нет — gid листов взять неоткуда (docs/deploy.md, «Ключ "
+            "Sheets API»)"
+        )
+    try:
+        sheets = gsheets.list_sheets_via_api(settings.sheets_api_key)
+    except Exception as exc:  # ключ протух, квота, сеть
+        log.warning("Sheets API не ответил (%s)", _hide_key(exc))
+        # Отказом ключа считаются только ответы Google о ключе и квоте; сеть
+        # — сетевой тревогой, иначе на одну беду приходили две, и одна звала
+        # проверять ключ (третий аудит, М11 прогона 1).
+        code = getattr(getattr(exc, "response", None), "status_code", None)
+        if code in _KEY_CODES:
+            _api_failures += 1
+        if _api_failures >= API_FAILURES_TO_ALERT and code in _KEY_CODES:
+            alerts.notify(
+                "key",
+                f"Sheets API не отвечает {_api_failures} раз подряд "
+                f"({_api_error(exc)}). Без него gid листов не узнать: пока "
+                "служба живёт запомненным листом, а когда его покрытие кончится, "
+                "уйдёт в stale. Проверить ключ и его ограничение по адресу "
+                "сервера — docs/deploy.md, «Ключ Sheets API».",
+            )
+        now = dt.datetime.now(dt.timezone.utc)
+        if _last_list and _last_list_at and now - _last_list_at < _LIST_KEEP:
+            log.info("список листов — прежний, от %s", _last_list_at)
+            return _last_list
+        raise SheetNotFound(f"Sheets API не ответил: {_api_error(exc)}") from exc
+    if _api_failures >= API_FAILURES_TO_ALERT:
+        alerts.forget("key")
+        alerts.notify("key-ok", "Sheets API снова отвечает: ключ работает.",
+                      force=True, good=True)
+    _api_failures = 0
+    _last_list, _last_list_at = sheets, dt.datetime.now(dt.timezone.utc)
     return sheets
 
 
@@ -391,10 +392,10 @@ def resolve_for(
 
     for sheet in candidates(list_sheets(), day):
         if sheet.gid is None:
-            # Без gid лист не прочитать: сырой экспорт знает только gid, а
-            # список без gid бывает лишь из xlsx — когда ключа Sheets API нет
-            # или он протух. Молчать нельзя: это «мы не посмотрели».
-            log.info("у листа %r нет gid — без ключа Sheets API его не прочитать", sheet.title)
+            # Без gid лист не прочитать: сырой экспорт знает только gid. Sheets
+            # API gid отдаёт всегда, так что это его сбой. Молчать нельзя: это
+            # «мы не посмотрели».
+            log.info("у листа %r нет gid — его не прочитать", sheet.title)
             if _LOOKS_LIKE_GROUPS.search(sheet.title):
                 unread.append(sheet.title)
             continue
