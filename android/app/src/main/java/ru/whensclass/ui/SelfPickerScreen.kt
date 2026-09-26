@@ -82,7 +82,7 @@ fun SelfPickerScreen(
             )
         },
     ) { padding ->
-        // От клавиатуры — как в выборе группы (М35 прогона 2).
+        // От клавиатуры — как в выборе группы.
         Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             TextButton(onClick = onStudentMode, modifier = Modifier.padding(start = 8.dp)) {
                 Text("Я студент")
@@ -106,7 +106,7 @@ fun SelfPickerScreen(
                 }
 
                 // До настроек отсюда не дойти: себя ещё не выбрали — адрес
-                // и отчёт здесь же (М76 прогона 2).
+                // и отчёт здесь же.
                 teachers.isEmpty() -> LoadFailed("Список преподавателей", loadDiagnostics, onRetry)
 
                 else -> {

@@ -75,7 +75,7 @@ def test_the_grid_we_ship_is_the_college_one():
      '{"первая": ["09:00", "10:30"]}', "{}"],
 )
 def test_bells_of_the_wrong_shape_fall_back_to_the_code(tmp_path, monkeypatch, content):
-    """Третий аудит, В18 прогона 2: правильный JSON не того вида — массив, null,
+    """Правильный JSON не того вида — массив, null,
     строка вместо пары — валил запуск или раздавался телефонам посимвольно."""
     path = tmp_path / "bells.json"
     path.write_text(content, "utf-8")

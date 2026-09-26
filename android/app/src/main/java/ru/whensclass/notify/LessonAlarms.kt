@@ -42,8 +42,7 @@ object LessonAlarms {
 
             val state = store.widgetState()
             // Группы больше нет в таблице — напоминать по её прежнему снимку
-            // значит звать на пары, которых, может, уже нет (третий аудит, М10
-            // прогона 2): экран и виджеты в это время пишут «нет в таблице».
+            // значит звать на пары, которых, может, уже нет: экран и виджеты в это время пишут «нет в таблице».
             if (state.gone) return@launch
             val schedule = ScheduleWidget.parse(state.scheduleJson) ?: return@launch
             plan(schedule, minutes)
@@ -68,7 +67,7 @@ object LessonAlarms {
                 if (lesson.isCancelled) continue
                 // Пары соседней подгруппы — не свои: о них не напоминаем, и
                 // конец такой пары не глушит напоминание о своей первой как
-                // «посреди предыдущей» (третий аудит, В24 прогона 1). У
+                // «посреди предыдущей». У
                 // преподавателя подпись группы у каждой пары — свои все.
                 if (schedule.isNeighbours(lesson)) continue
                 val bells = schedule.bells[lesson.number.toString()]
@@ -190,8 +189,7 @@ object LessonAlarms {
         alarm.lesson.teachers.firstOrNull()?.let { append(". $it") }
         // Чья пара: у подгруппы — соседки, у преподавателя — каким группам он
         // идёт читать. На экране и в виджетах подпись есть, а в напоминании её
-        // не было, и пара соседней подгруппы приходила как своя (второй аудит,
-        // М16).
+        // не было, и пара соседней подгруппы приходила как своя.
         alarm.lesson.groups?.trim()?.takeIf { it.isNotEmpty() }?.let { append(". $it") }
     }
 

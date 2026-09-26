@@ -10,7 +10,7 @@ import org.junit.Test
 import ru.whensclass.data.MAX_CHANGE_LINES
 import ru.whensclass.data.mergeChanges
 
-/** Уведомления и состояние телефона. Третий аудит: В19, М12 прогона 2. */
+/** Уведомления и состояние телефона. */
 class PhoneStateTest {
 
     private val now = Instant.parse("2026-09-26T05:00:00Z")

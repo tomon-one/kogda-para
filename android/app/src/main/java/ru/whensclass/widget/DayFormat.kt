@@ -17,8 +17,7 @@ private val SHORT_DAY = DateTimeFormatter.ofPattern("d MMMM", RU)
 /**
  * Пояс колледжа. Сетка звонков и дни листа — по Новосибирску, и сравнивать их
  * надо с тамошним «сейчас», а не с часами телефона: у студента в другом поясе
- * (онлайн-пары) подсветка и напоминания приходили не в те часы (второй аудит,
- * М31). Моменты вроде «обновлено в 17:00» показываются по телефону — это время
+ * (онлайн-пары) подсветка и напоминания приходили не в те часы. Моменты вроде «обновлено в 17:00» показываются по телефону — это время
  * на часах человека.
  */
 val COLLEGE_ZONE: ZoneId = ZoneId.of("Asia/Novosibirsk")
@@ -34,7 +33,7 @@ fun collegeToday(): LocalDate = LocalDate.now(COLLEGE_ZONE)
  *
  * Полночь — ближайшие 00:01, а не завтрашние: будильник, заведённый в первую
  * минуту суток, перешагивал сегодняшние 00:01 и вставал на первый звонок, и
- * листание «на завтра» держалось до 09:00 (третий аудит, М64 прогона 2).
+ * листание «на завтра» держалось до 09:00.
  */
 fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime, also: LocalDateTime? = null): LocalDateTime {
     val midnight = now.toLocalDate().atTime(LocalTime.of(0, 1))
@@ -112,8 +111,7 @@ fun formatFetchedAt(millis: Long): String {
 
 /**
  * «вс, 27 сентября» — день без «сегодня» и «завтра». Для уведомлений: они
- * висят и после полуночи, и утром «завтра, 28» — это уже сегодня (разбор
- * текстов 27.09; недоделка М71 прогона 2).
+ * висят и после полуночи, и утром «завтра, 28» — это уже сегодня.
  */
 fun formatDayDate(day: LocalDate): String = day.format(DateTimeFormatter.ofPattern("EEE, d MMMM", RU))
 
@@ -123,7 +121,7 @@ fun formatDayDate(day: LocalDate): String = day.format(DateTimeFormatter.ofPatte
  *
  * [nowMillis] виджеты передают из корня: вложенная шапка, читавшая часы
  * сама, пропускалась Compose и замирала — «вчера» не наступало до полуночи
- * колледжа (третий аудит, М16 прогона 1).
+ * колледжа.
  */
 fun formatFetchedShort(millis: Long, nowMillis: Long = System.currentTimeMillis()): String {
     if (millis <= 0) return "—"

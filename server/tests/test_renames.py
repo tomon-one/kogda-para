@@ -284,7 +284,7 @@ def test_teacher_replaced_by_another_person_is_not_a_rename(tmp_path, snapshot):
 
 def test_quiet_sheet_confirms_by_time(tmp_path, snapshot, monkeypatch):
     """Лист не меняется — не разбирается, и «три обновления подряд» ждали ночи,
-    а приложение через час говорило «группы больше нет» (второй аудит, В7)."""
+    а приложение через час говорило «группы больше нет»."""
     from whensclass.service import renames
 
     after = renamed_group(snapshot, "ИСП-924/2", "ИСП-924/2а")
@@ -325,7 +325,7 @@ def _week(snapshot, first, last, shift_days=0, rename=None, gid="лист"):
 def test_rename_on_the_border_of_two_sheets(tmp_path, snapshot):
     """Старый лист с «ИСП-924/2», новый — с «ИСП-924/2а». Пока оба в окне, оба
     id живут в снимке; ушёл старый — старый id исчез, а новый «не появился»:
-    книга не видела такого никогда (второй аудит, В6)."""
+    книга не видела такого никогда."""
     first, last = dt.date(2026, 9, 2), dt.date(2026, 9, 5)
     old_sheet = _week(snapshot, first, last, gid="старый")
     new_sheet = _week(snapshot, first, last, shift_days=7,
@@ -348,7 +348,7 @@ def test_border_without_rename_records_nothing(tmp_path, snapshot):
 
 def test_teacher_rename_on_the_border_of_two_sheets(tmp_path, snapshot):
     """Преподавателю поправили опечатку в имени только в новом листе: на стыке
-    книга этого не видела — как и у групп (второй аудит, В6)."""
+    книга этого не видела — как и у групп."""
     first, last = dt.date(2026, 9, 2), dt.date(2026, 9, 5)
     old_sheet = _week(snapshot, first, last, gid="старый")
     index = build_index(old_sheet)
@@ -366,7 +366,7 @@ def test_teacher_rename_on_the_border_of_two_sheets(tmp_path, snapshot):
 
 
 def test_rename_on_the_border_seen_without_a_merged_snapshot(tmp_path, snapshot):
-    """Третий аудит, М21 прогона 1: новый лист прочитан впервые, когда старый
+    """Новый лист прочитан впервые, когда старый
     уже ушёл, — склейки не было, и стык не был виден."""
     first, last = dt.date(2026, 9, 2), dt.date(2026, 9, 5)
     old_sheet = _week(snapshot, first, last, gid="старый")
@@ -384,7 +384,7 @@ def test_rename_on_the_border_seen_without_a_merged_snapshot(tmp_path, snapshot)
 
 
 def test_confirmation_does_not_miss_the_forty_minute_refresh(tmp_path, snapshot, monkeypatch):
-    """Третий аудит, М20 прогона 1: заход T+40 звал подтверждение на секунды
+    """Заход T+40 звал подтверждение на секунды
     раньше сорока минут от записи, и оно уезжало на T+60, а вечером — на ночь."""
     from whensclass.service import renames
 
@@ -397,7 +397,7 @@ def test_confirmation_does_not_miss_the_forty_minute_refresh(tmp_path, snapshot,
     assert book.group("isp-924-2") == "isp-924-2a"
 
 
-# --- Третий аудит, М56 прогона 2: правила осторожности книги ----------------
+# --- Правила осторожности книги --------------------------------------------
 
 def _trace(*items):
     items = frozenset(items)

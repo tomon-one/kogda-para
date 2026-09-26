@@ -37,7 +37,7 @@ object MidnightUpdater {
      * Начала и концы пар берутся из сетки звонков, лежащей вместе с расписанием.
      * Если её нет, остаётся полночь — ждать больше нечего. И момент, когда
      * данные станут несвежими: время в шапках краснеет в нём, а не на
-     * следующем звонке или в полночь (третий аудит, М16 прогона 1).
+     * следующем звонке или в полночь.
      */
     suspend fun nextMoment(context: Context): LocalDateTime {
         val state = runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()

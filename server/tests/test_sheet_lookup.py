@@ -177,7 +177,7 @@ def test_covering_sheet_wins_over_earlier_trouble(tmp_path, monkeypatch):
 
 def test_miss_is_remembered_and_not_rescanned_every_refresh(tmp_path, monkeypatch):
     """За краем покрытия служба каждые 20 минут заново качала и разбирала всех
-    кандидатов (второй аудит, М29): теперь «листа нет» помнится два часа, а
+    кандидатов: теперь «листа нет» помнится два часа, а
     глубокий поиск (ночью и при новом имени в книге) идёт мимо этой памяти."""
     setup_lookup(monkeypatch, visible("расписание групп 01.-05.09"),
                  {"расписание групп 01.-05.09": ("2026-09-01", "2026-09-05")})
@@ -205,7 +205,7 @@ def test_unreadable_candidate_is_not_remembered_as_a_miss(tmp_path, monkeypatch)
 
 def test_new_sheet_with_two_dates_is_found(tmp_path, monkeypatch, fixture_csv):
     """Новый лист, где заполнены только понедельник и вторник, — наш лист:
-    поиск узнаёт его по заголовку групп, а не по объёму (второй аудит, В21)."""
+    поиск узнаёт его по заголовку групп, а не по объёму."""
     from whensclass.parser.csv_schedule import FIXTURE, collapse_export, read_csv
 
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
@@ -221,7 +221,7 @@ def test_new_sheet_with_two_dates_is_found(tmp_path, monkeypatch, fixture_csv):
 
 
 def test_empty_date_skeleton_does_not_count_as_covered(tmp_path, monkeypatch):
-    """Третий аудит, В8 прогона 1: колледж вписал даты на месяц вперёд без
+    """Колледж вписал даты на месяц вперёд без
     пар. Память поиска считала лист покрывающим весь месяц и новую вкладку
     не читала бы вовсе. Покрытие листа для поиска — до последнего дописанного
     дня."""
@@ -242,7 +242,7 @@ def test_empty_date_skeleton_does_not_count_as_covered(tmp_path, monkeypatch):
 
 
 def test_closed_table_during_search_is_closed_not_unreachable(tmp_path, monkeypatch):
-    """Третий аудит, М23 прогона 1: закрытая таблица при поиске листа
+    """Закрытая таблица при поиске листа
     выглядела «добраться не вышло»."""
     sheets = visible("расписание групп 28.09-03.10")
     setup_lookup(monkeypatch, sheets, {"расписание групп 28.09-03.10": si.gsheets.SheetClosed})
@@ -251,7 +251,7 @@ def test_closed_table_during_search_is_closed_not_unreachable(tmp_path, monkeypa
 
 
 def test_next_sheet_is_searched_deep_when_the_refresh_is_deep(tmp_path, monkeypatch):
-    """Третий аудит, М19 прогона 1: поиск следующего листа шёл без deep, и
+    """Поиск следующего листа шёл без deep, и
     свежий промах прятал только что появившийся лист до ночи."""
     index = si.SheetIndex(tmp_path)
     index.remember("лист A", "1", dt.date(2026, 9, 21), dt.date(2026, 9, 26))
@@ -271,7 +271,7 @@ def test_next_sheet_is_searched_deep_when_the_refresh_is_deep(tmp_path, monkeypa
 
 @pytest.mark.parametrize("trouble", [ConnectionError, None])
 def test_calendar_that_did_not_come_is_not_alarming_either(tmp_path, monkeypatch, trouble):
-    """Третий аудит, М67 прогона 2: «тревожимся только за листы групп» держал
+    """«тревожимся только за листы групп» держал
     тест лишь в ветке отказа разбора; ветки «не прочитался» и «пустой ответ»
     можно было откатить молча."""
     sheets = visible("Календарный график 2026-2027г.", "расписание групп 01.-05.09")

@@ -104,7 +104,7 @@ class LessonPlanTest {
         assertEquals(listOf(1, 2), plan.map { it.lesson.number })
     }
 
-    // --- Третий аудит: В24 прогона 1, В15 прогона 2 --------------------------
+    // --- Соседняя подгруппа --------------------------------------------------
 
     private fun neighbour(number: Int) =
         LessonDto(number = number, subject = "Соседская $number", groups = "ИСП-924/2")
@@ -112,7 +112,7 @@ class LessonPlanTest {
     @Test
     fun `пара соседки не глушит напоминание о своей первой и сама не напоминает`() {
         // У соседки 1–2, у своей группы только 3: напоминание — о своей 3-й,
-        // а не о чужой первой (В24 прогона 1).
+        // а не о чужой первой.
         val plan = LessonAlarms.plan(
             day(neighbour(1), neighbour(2), lesson(3)), minutes = 20, now = night,
         )
@@ -140,7 +140,7 @@ class LessonPlanTest {
     @Test
     fun `посреди дня прошедшее не напоминает, а пара после окна — да`() {
         // 11:00, идёт вторая пара. Прежние тесты гонялись в 06:00, до первой
-        // пары, и не видели, где стоит отсев прошедших (В15 прогона 2).
+        // пары, и не видели, где стоит отсев прошедших.
         val noon = LocalDateTime.of(2026, 9, 8, 11, 0)
         // 1-я и 2-я — в прошлом; 4-я — после окна в третьей, напоминание в 14:00.
         val plan = LessonAlarms.plan(day(lesson(1), lesson(2), lesson(4)), minutes = 20, now = noon)

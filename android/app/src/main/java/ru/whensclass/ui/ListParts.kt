@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
  * Подходит ли имя под запрос поиска. Без регистра, «ё» как «е», без пробелов,
  * дефисов и косых: дефис на русской клавиатуре спрятан, и «исп 924» или
  * «исп924» давали «Ничего не нашлось» при «ИСП-924/1» в списке, а
- * «Чернышева» не находила «Чернышёву» (третий аудит, М33 прогона 2).
+ * «Чернышева» не находила «Чернышёву».
  */
 internal fun matchesQuery(name: String, query: String): Boolean {
     val wanted = searchKey(query)
@@ -31,7 +31,7 @@ private fun searchKey(text: String): String =
  * Список не загрузился — со ссылкой, куда написать, и сведениями для отчёта.
  * Отсюда до настроек не дойти: ни группу, ни себя ещё не выбрали, а
  * спотыкается здесь как раз тот, кто поставил приложение впервые. У
- * преподавателя адреса не было вовсе (третий аудит, М76 прогона 2).
+ * преподавателя адреса не было вовсе.
  */
 @Composable
 internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?, onRetry: (() -> Unit)? = null) {
@@ -57,8 +57,7 @@ internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?, 
                 }
                 .padding(vertical = 4.dp),
         )
-        // Связь вернулась — повторить здесь же, а не перезапуском (В3
-        // прогона 2).
+        // Связь вернулась — повторить здесь же, а не перезапуском.
         onRetry?.let { ActionButton(label = "Повторить", onClick = it) }
         loadDiagnostics?.let { ReportLink(it) }
     }

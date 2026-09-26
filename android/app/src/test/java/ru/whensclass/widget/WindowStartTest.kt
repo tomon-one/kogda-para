@@ -94,8 +94,7 @@ class WindowStartTest {
     @Test
     fun `сегодня в середине дня — окно с первой некончившейся`() {
         // Ради этого случая функция и написана; раньше тестов на него не было,
-        // и «return 0» или «return index» проходили все (третий аудит, М62
-        // прогона 2).
+        // и «return 0» или «return index» проходили все.
         assertEquals(2, windowStart(lessons(6), realDay, today, fits = 2, now = now))
         assertEquals(2, windowStart(lessons(6), realDay, today, fits = 3, now = now))
     }

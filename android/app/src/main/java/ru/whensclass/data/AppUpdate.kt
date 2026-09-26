@@ -37,7 +37,7 @@ data class ReleaseDto(
  * Объявлять ли сборку. Про одну и ту же — один раз, но «уже объявлено»
  * сверяется на равенство, а не «не меньше»: номер приходит с сервера без
  * проверки, и один ответ с versionCode 2147483647 навсегда глушил объявления
- * настоящих сборок (третий аудит, М53 прогона 1).
+ * настоящих сборок.
  */
 internal fun shouldAnnounce(release: Int, installed: Int, announced: Int): Boolean =
     release > installed && release != announced
@@ -47,7 +47,7 @@ internal fun shouldAnnounce(release: Int, installed: Int, announced: Int): Boole
  * приложения должен быть среди сертификатов файла — так судит и сам Android.
  * У сборки с ротацией ключа в файле история [старый, новый], и прежняя
  * сверка «история файла внутри истории установленного» отвергала её, хотя
- * установщик бы принял (третий аудит, М55 прогона 1). Подделать историю без
+ * установщик бы принял. Подделать историю без
  * нашего ключа нельзя.
  */
 internal fun signedAlike(installedCurrent: Set<String>, archiveAll: Set<String>): Boolean =
@@ -57,7 +57,7 @@ internal fun signedAlike(installedCurrent: Set<String>, archiveAll: Set<String>)
  * Почему загрузка не удалась — словами человека. Раньше на всё, кроме пары
  * случаев, показывался сырой английский текст Java: «write failed: ENOSPC»,
  * «unexpected end of stream», «Trust anchor for certification path not
- * found» (третий аудит, В27 и М56 прогона 1).
+ * found».
  */
 internal fun updateFailure(error: Throwable): String {
     val chain = generateSequence(error) { it.cause }.take(8).toList()
@@ -96,8 +96,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
     // Одна загрузка за раз. Повторное нажатие после поворота экрана запускало
     // вторую загрузку в тот же файл, они стирали друг другу байты, и человек
-    // видел «файл дошёл не целиком: 0 из …», хотя всё скачалось (второй
-    // аудит, М42). AppUpdate один на приложение (AppContainer).
+    // видел «файл дошёл не целиком: 0 из …», хотя всё скачалось. AppUpdate один на приложение (AppContainer).
     private val downloading = Mutex()
 
     private companion object {
@@ -151,7 +150,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         )
         // Засчитываем, только если система уведомление приняла: при
         // запрещённых уведомлениях сборка раньше считалась объявленной, и
-        // после выдачи разрешения о ней больше не говорили (второй аудит, М41).
+        // после выдачи разрешения о ней больше не говорили.
         if (shown) store.setAnnouncedVersion(release.versionCode)
     }
 
@@ -160,8 +159,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         /**
          * Файл скачан и проверен; [intent] открывает системный установщик.
          * Открывает экран, а не мы: из фона Android 10+ запуск молча
-         * отбрасывал, если человек ушёл из приложения, пока шла загрузка
-         * (третий аудит, М49 прогона 1).
+         * отбрасывал, если человек ушёл из приложения, пока шла загрузка.
          */
         data class Ready(val intent: Intent) : Result
         data class Failed(val why: String) : Result
@@ -175,7 +173,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
     // Загрузка живёт здесь, а не в экране: поворот пересоздавал экран, кнопка
     // снова звала «Обновить приложение», хотя загрузка шла, и второе нажатие
-    // открывало установщик дважды (третий аудит, М30 прогона 2).
+    // открывало установщик дважды.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _download = MutableStateFlow<Download?>(null)
     val download: StateFlow<Download?> = _download.asStateFlow()
@@ -233,7 +231,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         // Размер — не подлинность. Раньше скачанное уходило установщику как
         // есть: APK другого пакета Android поставил бы рядом как новое
         // приложение, и обещание «подсунуть поддельное обновление нельзя»
-        // держалось только для подмены нашего пакета (второй аудит, В29).
+        // держалось только для подмены нашего пакета.
         genuine(file, release)?.let { why ->
             file.delete()
             return Result.Failed(why)
@@ -258,7 +256,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             // Что делать — прямо здесь: install.md советовал на отказ
             // установщика «удалить и поставить заново», а текст обновления с
             // сервера стоял рядом — тот, кто завладел сервером, этим уводил
-            // людей на свою сборку (третий аудит, В29 прогона 1).
+            // людей на свою сборку.
             return "подпись файла не та. Не удаляйте приложение ради этого " +
                 "обновления и не ставьте файл по ссылкам из его текста — напишите автору в " +
                 "Telegram: @toomonn"
@@ -339,7 +337,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
      * Намерение для системного установщика — явное. Неявное ACTION_VIEW с
      * правом чтения получало любое приложение с фильтром на APK — однажды
      * выбранное «Всегда» для файлов из мессенджера, — и то могло изобразить
-     * установку (третий аудит, М48 прогона 1). Системного не нашлось —
+     * установку. Системного не нашлось —
      * остаётся неявное: без установщика не обновиться вовсе.
      */
     private fun installIntent(file: File): Intent {

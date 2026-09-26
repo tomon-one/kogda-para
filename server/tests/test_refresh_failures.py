@@ -1,12 +1,12 @@
 """Заход обновления падает громко: stale, тревога, архив — но не молча.
 
-Второй аудит (прогон 1) нашёл несколько путей, где обновление останавливалось
+Раньше было несколько путей, где обновление останавливалось
 без единого сигнала или сигналило не тем: прочерк вместо имени преподавателя
-замораживал снимок при status ok (К2), прочерк вместо имени группы выглядел
-сетевым сбоем (В26), тревога о диске шла на каждом заходе (В16), перезапуск
-посреди сбоя повторял тревогу (М23), чих Google сразу показывал телефонам
-«сбой» (М25), страница входа выдавалась за «формат» (М7), смерть посреди
-разбора не оставляла следов (М36).
+замораживал снимок при status ok, прочерк вместо имени группы выглядел
+сетевым сбоем, тревога о диске шла на каждом заходе, перезапуск
+посреди сбоя повторял тревогу, чих Google сразу показывал телефонам
+«сбой», страница входа выдавалась за «формат», смерть посреди
+разбора не оставляла следов.
 """
 
 import datetime as dt
@@ -88,7 +88,7 @@ def a_teacher(fixture_csv) -> str:
                 for t in x.teachers)
 
 
-# --- К2: прочерк вместо преподавателя --------------------------------------
+# --- Прочерк вместо преподавателя -------------------------------------------
 
 @pytest.mark.parametrize("junk", ["-", "—", "?", ".", "..."])
 def test_punctuation_is_not_a_teacher(junk):
@@ -107,7 +107,7 @@ def test_punctuation_teacher_does_not_freeze_snapshot(tmp_path, sheet, sent, fix
     assert r.refresh(today=TODAY) is True
     name = a_teacher(fixture_csv)
     # Через csv.writer, с кавычками: без них запятая резала ячейку, и «.» уезжала
-    # в соседнюю колонку, которую разбор не читает (третий аудит, М22 прогона 1).
+    # в соседнюю колонку, которую разбор не читает.
     rows = read_csv(fixture_csv)
     i, j = next(
         (i, j) for i, row in enumerate(rows) for j, cell in enumerate(row) if name in cell
@@ -151,15 +151,14 @@ def test_bad_snapshot_on_disk_does_not_break_teachers(tmp_path, fixture_csv):
     assert "." not in again.teachers.names.values()
 
 
-# --- В26: прочерк вместо имени группы ---------------------------------------
+# --- Прочерк вместо имени группы --------------------------------------------
 
 def test_dash_instead_of_group_name_is_format_not_network(tmp_path, sheet, sent, fixture_csv):
     """Колонка без имени — пропуск блока с предупреждением, а не ValueError."""
     rows = read_csv(fixture_csv)
     names = next(i for i, r in enumerate(rows) if sum(c.strip() == "Преподаватель" for c in r) >= 3) + 1
     # Колонка имени — та, где выше стоит «Преподаватель», а не первая непустая:
-    # прежний тест попадал в «№» и проходил и на коде до починки (третий
-    # аудит, М22 прогона 1).
+    # прежний тест попадал в «№» и проходил и на коде до починки.
     col = next(c for c, v in enumerate(rows[names - 1]) if v.strip() == "Преподаватель")
     known = {g.name for g in parse_csv(fixture_csv, "ф", FIXTURE).groups}
     assert rows[names][col].strip() in known, "портим именно имя группы"
@@ -173,7 +172,7 @@ def test_dash_instead_of_group_name_is_format_not_network(tmp_path, sheet, sent,
     assert r.status == "ok" or "формат" in (r.last_error or "")
 
 
-# --- В27: from далеко от сегодня --------------------------------------------
+# --- from далеко от сегодня -------------------------------------------------
 
 def test_far_from_is_422_not_500(fixture_csv, monkeypatch):
     from fastapi import FastAPI
@@ -183,7 +182,7 @@ def test_far_from_is_422_not_500(fixture_csv, monkeypatch):
     from whensclass.api.routes import router
 
     # «Сегодня» — своё: с 09.09.2027 настоящее сделало бы from=2026-09-07
-    # далёким, и красный тест остановил бы выкладку (третий аудит, М59 прогона 2).
+    # далёким, и красный тест остановил бы выкладку.
     monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 8))
 
     class Store:
@@ -204,7 +203,7 @@ def test_far_from_is_422_not_500(fixture_csv, monkeypatch):
     assert client.get(f"/v1/schedule/{group}?from=2026-09-07").status_code == 200
 
 
-# --- М20, М24, М21: архив ---------------------------------------------------
+# --- Архив ------------------------------------------------------------------
 
 def test_today_gate_rejection_is_archived(tmp_path, sheet, sent, fixture_csv, monkeypatch):
     store = SnapshotStore(tmp_path)
@@ -236,7 +235,7 @@ def test_old_copies_are_pruned_in_every_sheet_folder(tmp_path):
     assert not old.exists()
 
 
-# --- В16: диск ---------------------------------------------------------------
+# --- Диск -------------------------------------------------------------------
 
 def test_disk_alert_is_not_repeated_every_refresh(tmp_path, sheet, sent, monkeypatch, fixture_csv):
     store = SnapshotStore(tmp_path)
@@ -252,7 +251,7 @@ def test_disk_alert_is_not_repeated_every_refresh(tmp_path, sheet, sent, monkeyp
     assert sum(1 for b in sent if "диск" in b["message"]) == 1
 
 
-# --- М23: перезапуск посреди сбоя -------------------------------------------
+# --- Перезапуск посреди сбоя ------------------------------------------------
 
 def test_restart_during_failure_does_not_repeat_alert(tmp_path, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
@@ -265,7 +264,7 @@ def test_restart_during_failure_does_not_repeat_alert(tmp_path, sent, fixture_cs
     assert len(sent) == 1, "тревога уже уходила — окно тишины переживает перезапуск"
 
 
-# --- М25: чих Google ---------------------------------------------------------
+# --- Чих Google -------------------------------------------------------------
 
 def test_network_blip_is_not_shown_as_failure(tmp_path, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
@@ -286,7 +285,7 @@ def test_network_blip_is_not_shown_as_failure(tmp_path, sent, fixture_csv):
     assert r2.status == "stale"
 
 
-# --- М7: страница входа ------------------------------------------------------
+# --- Страница входа ---------------------------------------------------------
 
 def test_html_instead_of_csv_is_closed_sheet(monkeypatch):
     class Resp:
@@ -324,7 +323,7 @@ def test_closed_sheet_alerts_at_once(tmp_path, sheet, sent, monkeypatch, fixture
     assert r.status == "stale" and "закрыта" in r.last_error and len(sent) == 1
 
 
-# --- М26: мёртвый ключ -------------------------------------------------------
+# --- Мёртвый ключ -----------------------------------------------------------
 
 def test_dead_sheets_key_alerts_after_two_failures(monkeypatch, sent):
     monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
@@ -353,7 +352,7 @@ def _google_says(code: int, url: str = "https://sheets.googleapis.com/v4/spreads
 
 
 def test_network_trouble_is_not_blamed_on_the_key(monkeypatch, sent):
-    """Третий аудит, М11 прогона 1: полчаса без связи с Google давали тревогу
+    """Полчаса без связи с Google давали тревогу
     «Проверить ключ». Отказ ключа — только ответ Google о ключе или квоте; и
     когда ключ снова работает, об этом говорится."""
     import httpx
@@ -381,7 +380,7 @@ def test_network_trouble_is_not_blamed_on_the_key(monkeypatch, sent):
     assert len(sent) == 2 and "ключ работает" in sent[1]["message"]
 
 
-# --- М36: смерть посреди разбора --------------------------------------------
+# --- Смерть посреди разбора -------------------------------------------------
 
 def test_crash_mid_refresh_twice_is_reported(tmp_path, sheet, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
@@ -400,7 +399,7 @@ def test_single_interrupted_refresh_is_quiet(tmp_path, sheet, sent):
     assert sent == []
 
 
-# --- Третий аудит, В18 прогона 1: недописанный следующий лист ----------------
+# --- Недописанный следующий лист -------------------------------------------
 
 def _first_day_only(fixture_csv: str, new_date: str) -> str:
     """Следующий лист, который колледж только начал: шапка и один день."""
@@ -461,7 +460,7 @@ def test_too_small_current_sheet_still_fails_and_names_itself(
 
 
 def test_network_blip_during_format_failure_is_not_a_new_alarm(tmp_path, sent, fixture_csv):
-    """Третий аудит, В14 прогона 1: лист отвергнут по формату, через час один
+    """Лист отвергнут по формату, через час один
     таймаут Google. Раньше льгота сети считалась от начала всего сбоя — и
     сразу уходила тревога «таблица не прочиталась», а err подменялся сетевым.
     И окно тишины после перезапуска помнилось только для последнего вида."""
@@ -491,7 +490,7 @@ def test_network_blip_during_format_failure_is_not_a_new_alarm(tmp_path, sent, f
 def test_freeze_is_stale_at_once_without_touching_the_sheet(
     tmp_path, sheet, sent, monkeypatch
 ):
-    """Третий аудит, В25 прогона 1: рычаг заморозки из runbook
+    """Рычаг заморозки из runbook
     (SPREADSHEET_ID=stop) полчаса держал ok, стирал память о листе и вёл
     ссылку на таблицу в никуда. WHENSCLASS_FREEZE — сразу stale на прежнем
     снимке, в сеть не ходим, тревог нет."""
@@ -512,13 +511,13 @@ def test_freeze_is_stale_at_once_without_touching_the_sheet(
     assert r.look_for_new_sheet() is False
 
 
-# --- Третий аудит, прогон 2: В13 и В14 ---------------------------------------
+# --- Ключ в журнале и ворота обновления ------------------------------------
 
 SECRET = "AIzaSyD-секретный-ключ"
 
 
 def test_key_never_reaches_alert_or_log(monkeypatch, sent, caplog):
-    """В14 прогона 2: исключение httpx несёт полный адрес вместе с ?key=…;
+    """Исключение httpx несёт полный адрес вместе с ?key=…;
     прежний тест подсовывал исключение без ключа и проверял пустоту."""
     monkeypatch.setattr(sheet_index.settings, "sheets_api_key", SECRET)
     monkeypatch.setattr(sheet_index, "_api_failures", 0)
@@ -573,7 +572,7 @@ def _shift_one_day(text: str, column: int) -> str:
 def test_refresher_gates_keep_the_previous_snapshot(
     tmp_path, sheet, sent, fixture_csv, monkeypatch, gate
 ):
-    """В13 прогона 2: ворота проверялись как отдельные функции — убери их из
+    """Ворота проверялись как отдельные функции — убери их из
     Refresher, и тесты зелёные. Здесь — через заход: отказ, stale, тревога и
     прежний снимок на месте."""
     store = SnapshotStore(tmp_path)
@@ -608,7 +607,7 @@ def test_refresher_gates_keep_the_previous_snapshot(
 def test_recovery_with_a_failing_disk_still_closes_the_failure(
     tmp_path, sheet, sent, monkeypatch, fixture_csv
 ):
-    """Третий аудит, М10 прогона 1: лист починили, а снимок не лёг на диск —
+    """Лист починили, а снимок не лёг на диск —
     сбой не закрывался, «починилось» не уходило, и первый чих сети сразу давал
     stale."""
     store = SnapshotStore(tmp_path)
@@ -628,7 +627,7 @@ def test_recovery_with_a_failing_disk_still_closes_the_failure(
 
 
 def test_new_group_sheet_rejected_by_search_is_looked_at_again(tmp_path, monkeypatch):
-    """Третий аудит, М14 прогона 1: лист «групп», заведённый пустым, поиск
+    """Лист «групп», заведённый пустым, поиск
     отвергал, и заполненный позже служба узнавала только ночью."""
     from whensclass.sources.gsheets import SheetInfo
 
@@ -654,7 +653,7 @@ def test_new_group_sheet_rejected_by_search_is_looked_at_again(tmp_path, monkeyp
 
 
 def test_window_of_sheets_starts_on_monday_like_the_app(tmp_path, sheet, sent, monkeypatch):
-    """Третий аудит, М25 прогона 1: в воскресенье на стыке листов набор
+    """В воскресенье на стыке листов набор
     считался от сегодня — в снимке оставался только будущий лист, и прожитая
     неделя пропадала с экрана. Приложение просит окно с понедельника."""
     asked = []
@@ -672,7 +671,7 @@ def test_window_of_sheets_starts_on_monday_like_the_app(tmp_path, sheet, sent, m
 def test_disk_alert_window_survives_restart_and_recovery_is_told(
     tmp_path, sheet, sent, monkeypatch
 ):
-    """Третий аудит, М35 прогона 1: тревога о диске жила в памяти — после
+    """Тревога о диске жила в памяти — после
     перезапуска посреди той же беды уходила снова, а «починилось» не
     приходило вовсе."""
     store = SnapshotStore(tmp_path)
@@ -697,7 +696,7 @@ def test_disk_alert_window_survives_restart_and_recovery_is_told(
 def test_only_the_failing_sheet_is_archived_as_rejected(
     tmp_path, sent, fixture_csv, monkeypatch
 ):
-    """Третий аудит, М39 прогона 2: отказ одного листа окна клал «отвергнутыми»
+    """Отказ одного листа окна клал «отвергнутыми»
     все листы с одной причиной — исправный текущий получал чужое «нашёл всего»."""
     texts = {"лист": fixture_csv, "следующий": fixture_csv.replace("Дисциплина", "Предмет")}
     monkeypatch.setattr(
@@ -720,7 +719,7 @@ def _list():
 
 
 def test_failed_api_keeps_the_last_list_and_there_is_no_xlsx(monkeypatch, sent):
-    """Третий аудит, М43 прогона 2: при сбое API служба качала книгу в xlsx —
+    """При сбое API служба качала книгу в xlsx —
     22 МБ под замком, — а читаемых листов там нет: gid xlsx не даёт. Теперь —
     прежний список от API, если он свежий, иначе «не найден»."""
     from whensclass.sources.gsheets import SheetInfo
@@ -747,7 +746,7 @@ def test_failed_api_keeps_the_last_list_and_there_is_no_xlsx(monkeypatch, sent):
 
 
 def test_watch_baseline_survives_restart(tmp_path, monkeypatch):
-    """Третий аудит, М50 прогона 2: лист, заведённый, пока служба
+    """Лист, заведённый, пока служба
     перезапускалась, первый взгляд после запуска клал в базовую линию и не
     искал — до ночи."""
     from whensclass.sources.gsheets import SheetInfo
@@ -767,7 +766,7 @@ def test_watch_baseline_survives_restart(tmp_path, monkeypatch):
 
 
 def test_network_grace_is_half_an_hour_by_the_clock(tmp_path, sent, fixture_csv):
-    """Третий аудит, М57 прогона 2: льгота держалась только относительно себя —
+    """Льгота держалась только относительно себя —
     при FETCH_GRACE в секунду тесты были зелёными. Тут — минутами."""
     store = SnapshotStore(tmp_path)
     store.put(
@@ -786,7 +785,7 @@ def test_network_grace_is_half_an_hour_by_the_clock(tmp_path, sent, fixture_csv)
 
 
 def test_snapshot_survives_the_disk_whole(tmp_path, fixture_csv):
-    """Третий аудит, М58 прогона 2: снимок на диске проверялся только по places —
+    """Снимок на диске проверялся только по places —
     забудь дописать новое поле пары, и тесты зелёные. Тут — целиком."""
     from whensclass.parser.csv_schedule import parse_export
 
@@ -801,8 +800,8 @@ def test_snapshot_survives_the_disk_whole(tmp_path, fixture_csv):
 def test_one_changed_sheet_of_two_rebuilds_the_whole_window(
     tmp_path, sent, fixture_csv, monkeypatch
 ):
-    """Третий аудит, М65 прогона 2: окно из двух листов, изменился один —
-    снимок пересобирается из обоих (починка М22 второго аудита, без теста)."""
+    """Окно из двух листов, изменился один —
+    снимок пересобирается из обоих."""
     later = fixture_csv
     for old, new in (("02.09.2026", "14.09.2026"), ("03.09.2026", "15.09.2026"),
                      ("04.09.2026", "16.09.2026"), ("05.09.2026", "17.09.2026"),

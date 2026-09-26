@@ -172,7 +172,7 @@ def test_filled_week_is_published_and_holiday_inside_stays_free():
 
 
 def test_group_the_college_has_not_reached_sees_unpublished():
-    """Третий аудит, К2 прогона 1: колледж дописывает колонку группы сразу на
+    """Колледж дописывает колонку группы сразу на
     месяц и группу за группой. Дописана больше половины групп — доля по листу
     пропускает неделю, и остальные получали её как «пар нет». Край у каждой
     группы свой."""
@@ -187,7 +187,7 @@ def test_group_the_college_has_not_reached_sees_unpublished():
 
 
 def test_unreached_group_is_cut_even_today():
-    """Второй край К2: понедельник настал, а колонку группы колледж ещё не
+    """Второй край: понедельник настал, а колонку группы колледж ещё не
     дописал. Сегодняшний день по листу не режется, но группе он — «ещё не
     опубликовано», а не «сегодня пар нет»."""
     snap = _filling({**{d: 10 for d in WEEK}, **{d: 2 for d in NEXT}})
@@ -198,7 +198,7 @@ def test_unreached_group_is_cut_even_today():
 
 
 def test_free_days_of_a_filled_group_are_not_holes():
-    """Третий аудит, М17 прогона 1: за краем листа у дописанной группы
+    """За краем листа у дописанной группы
     приходили только дни с парами, а свободный четверг между ними пропадал.
     Теперь её покрытие — до её последнего дня, и четверг — «пар нет»."""
     filling = {**{d: 10 for d in WEEK}, **{d: 2 for d in NEXT}}
@@ -228,7 +228,7 @@ def test_group_with_no_lessons_at_all_has_nothing_published():
 
 
 def test_teacher_day_waits_for_all_his_groups():
-    """Третий аудит, В16 прогона 1: вписана одна группа преподавателя из его
+    """Вписана одна группа преподавателя из его
     двух — у него был «понедельник с одной парой» как целый день. День
     преподавателя выложен, только когда дописаны все его группы."""
     from whensclass.api.payloads import teacher_payload

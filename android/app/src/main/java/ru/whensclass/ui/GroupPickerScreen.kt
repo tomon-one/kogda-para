@@ -53,7 +53,7 @@ import ru.whensclass.widget.plural
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupPickerScreen(
-    /** Список держит App: сохранённый — сразу, свежий — следом (М31 прогона 2). */
+    /** Список держит App: сохранённый — сразу, свежий — следом. */
     groups: List<GroupDto>?,
     onPick: (GroupDto) -> Unit,
     onRetry: (() -> Unit)? = null,
@@ -64,7 +64,7 @@ fun GroupPickerScreen(
     onTeacherMode: (() -> Unit)? = null,
     loadDiagnostics: (suspend () -> String)? = null,
 ) {
-    // Набранное переживает поворот (М30 прогона 2).
+    // Набранное переживает поворот.
     var query by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
@@ -91,7 +91,7 @@ fun GroupPickerScreen(
         },
     ) { padding ->
         // Список отступает от клавиатуры: окно под неё не ужимается
-        // (enableEdgeToEdge), и найденное пряталось под ней (М35 прогона 2).
+        // (enableEdgeToEdge), и найденное пряталось под ней.
         Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             if (!canGoBack) {
                 // Первый запуск: логотип уместен, дальше он только мешает.

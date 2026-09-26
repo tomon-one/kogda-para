@@ -94,7 +94,7 @@ def test_meta_points_at_the_sheet_of_today(client, monkeypatch):
 
     # Воскресенье 13.09 в фикстуру не попадает — берётся ближайший день, с того
     # же листа. Раньше «сегодня» было 08.09, внутри фикстуры, и запасной поиск
-    # ближайшего не проверялся (третий аудит, М60 прогона 2).
+    # ближайшего не проверялся.
     monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 13))
     body = client.get("/v1/meta").json()
     assert body["src_url"].endswith("#gid=656498718")
@@ -180,7 +180,7 @@ def test_health_is_503_when_stale_or_today_is_uncovered(fixture_csv, monkeypatch
     monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 13))
     assert client.get("/healthz").status_code == 200
     # Лист кончился больше недели назад — каникулы: 200 с пометкой, а не 503
-    # все учебные дни лета (третий аудит, М88 прогона 2).
+    # все учебные дни лета.
     monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 21))
     holiday = client.get("/healthz")
     assert holiday.status_code == 200 and "каникулы" in holiday.json()["note"]
@@ -225,7 +225,7 @@ def test_release_url_is_https(client, monkeypatch):
 
 def test_teacher_without_lessons_this_sheet_is_not_gone(tmp_path, fixture_csv):
     """Преподаватель, у которого в новом листе нет пар, — «пар нет», а не 404 и
-    «вас больше нет в таблице» (второй аудит, В18)."""
+    «вас больше нет в таблице»."""
     import dataclasses
 
     from whensclass.storage.snapshot_store import SnapshotStore
@@ -256,8 +256,7 @@ def test_teacher_without_lessons_this_sheet_is_not_gone(tmp_path, fixture_csv):
 
 
 def test_schedule_is_revalidated_every_time(client):
-    """max-age=300 давал телефону пять минут отдавать кэш как свежий (второй
-    аудит, В14): хранить можно, отдавать без сверки ETag — нет."""
+    """max-age=300 давал телефону пять минут отдавать кэш как свежий: хранить можно, отдавать без сверки ETag — нет."""
     response = client.get("/v1/schedule/isp-924-2?from=2026-09-07&days=3")
     assert "no-cache" in response.headers["cache-control"]
     assert "max-age" not in response.headers["cache-control"]
@@ -279,11 +278,10 @@ def test_watchdogs_may_use_head(client):
 
 
 def test_known_teacher_without_lessons_gets_free_days_but_fixed_typo_gets_404(fixture_csv):
-    """Знакомый преподаватель без пар в листе (отпуск) — «пар нет», не 404
-    (второй аудит, В18). Но если колледж исправил опечатку в его имени и тот
+    """Знакомый преподаватель без пар в листе (отпуск) — «пар нет», не 404.
+Но если колледж исправил опечатку в его имени и тот
     же человек с парами стоит под другим id, пустые дни 60 дней говорили бы
-    «пар нет»: тогда 404, и приложение предложит выбрать заново (третий
-    аудит, В19 прогона 1)."""
+    «пар нет»: тогда 404, и приложение предложит выбрать заново."""
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
     app = FastAPI()
     app.include_router(router)
@@ -303,7 +301,7 @@ def test_known_teacher_without_lessons_gets_free_days_but_fixed_typo_gets_404(fi
 
 
 def test_health_is_503_when_today_is_only_a_skeleton(fixture_csv):
-    """Третий аудит, В8 прогона 1: дата сегодня в листе есть (каркас вписан
+    """Дата сегодня в листе есть (каркас вписан
     заранее), а пар почти ни у кого — это не «здоров», хотя статус ok."""
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
     today = dt.date(2026, 9, 8)
@@ -321,10 +319,10 @@ def test_health_is_503_when_today_is_only_a_skeleton(fixture_csv):
 
 
 def test_id_waiting_for_rename_confirmation_is_503_not_free_days_or_404(fixture_csv):
-    """Третий аудит, В26 прогона 1: переименование, которое книга распознала,
+    """Переименование, которое книга распознала,
     40 минут ждёт подтверждения — и по старому id шли пустые дни. Телефон
     писал их поверх своих и слал «убрали пару». А 404 через час давал «вас
-    больше нет» — вечером подтверждение ждёт ночи (М20). Теперь «временно»."""
+    больше нет» — вечером подтверждение ждёт ночи. Теперь «временно»."""
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
     app = FastAPI()
     app.include_router(router)
@@ -344,10 +342,9 @@ def test_id_waiting_for_rename_confirmation_is_503_not_free_days_or_404(fixture_
     assert client.get("/v1/schedule/nikogda-ne-bylo?from=2026-09-07").status_code == 404
 
 
-# --- Третий аудит, прогон 2: В11 и В12 ---------------------------------------
 
 def test_cancelled_lesson_carries_x_and_c(client, fixture_csv):
-    """В11 прогона 2: признаки отмены и причины в JSON не проверял ни один тест —
+    """Признаки отмены и причины в JSON не проверял ни один тест —
     выброси их, и отменённые пары у всех пришли бы как обычные."""
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
     gid, day, lesson = next(
@@ -363,7 +360,7 @@ def test_cancelled_lesson_carries_x_and_c(client, fixture_csv):
 
 
 def test_routes_cut_the_unpublished_tail_by_today(monkeypatch):
-    """В12 прогона 2: убери today=_today() из маршрутов — и починка 24.09
+    """Убери today=_today() из маршрутов — и починка 24.09
     (недописанная неделя — «ещё не опубликовано») пропадала молча."""
     from whensclass.api import routes
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
@@ -388,7 +385,7 @@ def test_routes_cut_the_unpublished_tail_by_today(monkeypatch):
 
 
 def test_teacher_route_follows_the_rename_book(fixture_csv, monkeypatch):
-    """В12 прогона 2: обращение /v1/teacher к книге переименований тоже не было
+    """Обращение /v1/teacher к книге переименований тоже не было
     закреплено: старый id отвечает расписанием нового, в ответе — новый g."""
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
     app = FastAPI()
@@ -408,7 +405,7 @@ def test_teacher_route_follows_the_rename_book(fixture_csv, monkeypatch):
 
 
 def test_broken_snapshot_on_disk_falls_back_to_the_previous(tmp_path, fixture_csv):
-    """Третий аудит, М46 прогона 2: snapshot.prev.json писался на каждом
+    """Snapshot.prev.json писался на каждом
     обновлении и не читался ни разу. Испорчен основной — поднимается прежний."""
     from whensclass.storage.snapshot_store import SnapshotStore
 

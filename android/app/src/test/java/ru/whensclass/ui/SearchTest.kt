@@ -4,7 +4,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Поиск по группам и преподавателям (третий аудит, М33 прогона 2). */
+/** Поиск по группам и преподавателям. */
 class SearchTest {
 
     @Test

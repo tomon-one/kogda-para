@@ -34,8 +34,7 @@ fun sheetLink(schedule: ScheduleDto?, day: LocalDate?, fallback: String?): Strin
         // что так она окажется в кадре, на телефоне ещё не проверено.
         // Выделение — ровно блок группы и день: четыре колонки (+0…+3) и все
         // строки дня. Было пять колонок и шесть строк — колонка предмета
-        // соседней группы внутри, пары 4–6 снаружи (третий аудит, М39
-        // прогона 1).
+        // соседней группы внутри, пары 4–6 снаружи.
         column != null && row != null ->
             "$base&range=$column$row:${shiftColumn(column, 3)}${row + 2 * pairs - 1}"
         column != null -> "$base&range=${column}1"

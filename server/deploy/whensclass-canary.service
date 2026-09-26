@@ -2,7 +2,7 @@
 # Канарейка раз в сутки: не переделали ли таблицу (tools/check_source.py).
 # Раньше — строка crontab root без env: без темы ntfy и ключа Sheets API
 # (дефект 9), и от root, без ужесточения службы, по каталогу, куда пишет
-# служба (второй аудит, М32). Теперь от whensclass, с тем же env и теми же
+# служба. Теперь от whensclass, с тем же env и теми же
 # ограничениями, что у службы; вывод — в journald.
 [Unit]
 Description=WhensClass canary: does the college sheet still parse
@@ -23,7 +23,7 @@ ProtectKernelTunables=yes
 ReadWritePaths=/var/lib/whensclass
 ReadOnlyPaths=-/var/lib/whensclass/apk
 
-# Узкий профиль процесса (третий аудит, М44 прогона 1): канарейка разбирает
+# Узкий профиль процесса: канарейка разбирает
 # сетевой ввод, и если её всё же захватят, пусть это будет процесс без
 # лишних семейств адресов, системных вызовов и чужих процессов в /proc.
 # Только то, что не мешает Python, uvicorn и httpx; PrivateUsers и

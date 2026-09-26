@@ -1,5 +1,5 @@
 """Канарейка (tools/check_source.py): тем же путём, что служба, и без паники
-на каникулах. Третий аудит, прогон 2: М37, М42, М84, М88."""
+на каникулах."""
 
 import datetime as dt
 import importlib.util
@@ -36,7 +36,7 @@ def canary(monkeypatch, tmp_path, fixture_csv):
 
 
 def test_holidays_are_one_quiet_note_not_a_daily_alarm(canary, monkeypatch):
-    """М88: лист кончился 12.09, а сегодня 01.10 — каникулы: код 0 и тихая
+    """Лист кончился 12.09, а сегодня 01.10 — каникулы: код 0 и тихая
     тревога, а не звонок каждое утро и failed юнита."""
     module, sent = canary
     monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 10, 1))
@@ -52,7 +52,7 @@ def test_school_day_past_the_sheet_is_still_an_alarm(canary, monkeypatch):
 
 
 def test_limits_come_from_the_service_settings(canary, monkeypatch):
-    """М37: пороги — те же, что у службы; раньше зашитые FULL_SHEET давали на
+    """Пороги — те же, что у службы; раньше зашитые FULL_SHEET давали на
     фикстуре «формат изменился», сколько бы порог ни опускали."""
     module, sent = canary
     monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
@@ -60,7 +60,7 @@ def test_limits_come_from_the_service_settings(canary, monkeypatch):
 
 
 def test_certificate_close_to_expiry_is_an_alarm(canary, monkeypatch):
-    """М53: хук перезагрузки nginx после продления ни разу не срабатывал;
+    """Хук перезагрузки nginx после продления ни разу не срабатывал;
     канарейка сверяет срок сертификата, который nginx отдаёт на деле."""
     module, sent = canary
     monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
