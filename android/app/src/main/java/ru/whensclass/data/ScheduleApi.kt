@@ -3,6 +3,7 @@ package ru.whensclass.data
 import java.io.IOException
 import kotlinx.serialization.json.Json
 import okhttp3.Cache
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import ru.whensclass.BuildConfig
@@ -22,6 +23,9 @@ import ru.whensclass.BuildConfig
  * а не молча держать прежнее, как при отвалившейся сети.
  */
 class HttpFailure(val code: Int, path: String) : IOException("сервер ответил $code на $path")
+
+/** Файл обновления оказался больше объявленного — загрузка остановлена. */
+class TooLarge(limit: Long) : IOException("файл больше объявленных $limit байт")
 
 class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildConfig.BASE_URL) {
 
@@ -62,9 +66,13 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
      * неё, не умеет сказать «файл не дошёл целиком» и представляется серверу
      * строкой с моделью телефона и версией прошивки. Нам нужно ровно обратное.
      *
+     * Больше [limit] байт не пишем: размер раньше сверялся только после
+     * загрузки, и бесконечный поток десять минут тянул трафик и забивал память
+     * (третий аудит, М54 прогона 1).
+     *
      * Возвращает число записанных байт.
      */
-    fun downloadTo(url: String, target: java.io.File): Long {
+    fun downloadTo(url: String, target: java.io.File, limit: Long): Long {
         val request = Request.Builder().url(url).build()
         // Свой клиент без кэша и без общих сроков: два с половиной мегабайта на
         // слабой связи идут дольше, чем позволено обычному запросу.
@@ -74,13 +82,36 @@ class ScheduleApi(cacheDir: java.io.File, private val baseUrl: String = BuildCon
             .readTimeout(java.time.Duration.ofMinutes(2))
             .build()
         downloader.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("сервер ответил ${response.code} на загрузку")
+            // HttpFailure, а не голый IOException: иначе «сервер занят» на 429
+            // от предела nginx не срабатывал никогда (третий аудит, В27 прогона 1).
+            if (!response.isSuccessful) throw HttpFailure(response.code, "загрузку")
+            val body = response.body
+            if (body.contentLength() > limit) throw TooLarge(limit)
+            target.outputStream().use { out ->
+                val input = body.byteStream()
+                val buffer = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    if (total > limit) throw TooLarge(limit)
+                    out.write(buffer, 0, read)
+                }
             }
-            val body = response.body ?: throw IOException("пустой ответ на загрузку")
-            target.outputStream().use { out -> body.byteStream().copyTo(out) }
         }
         return target.length()
+    }
+
+    /**
+     * Наш ли это адрес: тот же протокол, хост и порт, что у сервера
+     * расписания. Файл обновления качаем только оттуда — адрес из ответа
+     * /v1/app иначе уводил загрузку на любой хост (М54 прогона 1).
+     */
+    fun isOurs(url: String): Boolean {
+        val base = baseUrl.toHttpUrlOrNull() ?: return false
+        val target = url.toHttpUrlOrNull() ?: return false
+        return target.scheme == base.scheme && target.host == base.host && target.port == base.port
     }
 
     private fun get(path: String): String {

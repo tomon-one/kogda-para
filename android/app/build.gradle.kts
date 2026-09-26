@@ -87,8 +87,19 @@ android {
         buildConfig = true
     }
 
+    // Интерфейс только русский: строки библиотек на 80 языках — около
+    // 100 КБ в каждой загрузке (третий аудит, М44 прогона 2).
+    androidResources {
+        localeFilters += listOf("ru", "en")
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // Их читает только kotlin-reflect, а его в сборке нет.
+        resources.excludes += listOf("kotlin/**.kotlin_builtins", "DebugProbesKt.bin")
+        // Загрузчик этой библиотеки (многопроцессный DataStore) R8 вырезает:
+        // четыре .so лежали несжатыми впустую.
+        jniLibs.excludes += "**/libdatastore_shared_counter.so"
     }
 }
 
@@ -111,10 +122,8 @@ dependencies {
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
-    debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.androidx.glance.appwidget)
 

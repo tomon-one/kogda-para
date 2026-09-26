@@ -1,12 +1,7 @@
-# kotlinx.serialization: сериализаторы генерируются и находятся по имени класса
--keepattributes *Annotation*, InnerClasses
--dontnote kotlinx.serialization.**
--keepclassmembers class ru.whensclass.data.** {
-    *** Companion;
-}
--keepclasseswithmembers class ru.whensclass.data.** {
-    kotlinx.serialization.KSerializer serializer(...);
-}
+# kotlinx.serialization: правила для @Serializable приходят с самой
+# библиотекой (kotlinx-serialization-common.pro). Свои дублировали их и
+# держали Companion у классов, которые не сериализуются (третий аудит, М45
+# прогона 2).
 
 # Обработчики нажатий в виджете.
 #

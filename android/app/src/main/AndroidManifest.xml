@@ -15,6 +15,15 @@
          приложение ставит неточный будильник и продолжает работать. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- Найти системный установщик: обновление уходит ему явно, а не любому
+         приложению с фильтром на APK (третий аудит, М48 прогона 1). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
+
     <!-- Резервное копирование выключено намеренно. При allowBackup="true"
          Android забирает в облако Google весь каталог files/, а там лежит
          DataStore: выбранная группа, подгруппа, фамилия преподавателя и снимок
