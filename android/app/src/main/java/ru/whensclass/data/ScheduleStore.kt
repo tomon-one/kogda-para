@@ -95,6 +95,21 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
+    /**
+     * Строки непрочитанного «Расписание изменилось»: день и текст. Новое
+     * уведомление с тем же id заменяло прежнее, и неосмотренная отмена
+     * пропадала бесследно (третий аудит, В19 прогона 2).
+     */
+    suspend fun pendingChanges(): List<Pair<String, String>> =
+        context.dataStore.data.first()[KEY_PENDING_CHANGES].orEmpty().split("\n")
+            .mapNotNull { line -> line.split("\t", limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+
+    suspend fun putPendingChanges(lines: List<Pair<String, String>>) {
+        context.dataStore.edit {
+            it[KEY_PENDING_CHANGES] = lines.joinToString("\n") { (day, text) -> "$day\t$text" }
+        }
+    }
+
     suspend fun staleNotifiedFor(): String? = context.dataStore.data.first()[KEY_STALE_NOTIFIED]
 
     suspend fun setStaleNotifiedFor(since: String?) {
@@ -607,6 +622,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUP_ID = stringPreferencesKey("group_id")
         val KEY_SERVER_SINCE = stringPreferencesKey("server_since")
         val KEY_STALE_NOTIFIED = stringPreferencesKey("stale_notified")
+        val KEY_PENDING_CHANGES = stringPreferencesKey("pending_changes")
         val KEY_UNREACHABLE_SINCE = stringPreferencesKey("unreachable_since")
         val KEY_GONE_SINCE = stringPreferencesKey("gone_since")
         val KEY_GONE = stringPreferencesKey("gone")

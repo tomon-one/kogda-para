@@ -253,7 +253,12 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         val mine = certificates(runCatching { installedInfo(pm) }.getOrNull(), currentOnly = true)
         val theirs = certificates(archive, currentOnly = false)
         if (!signedAlike(mine, theirs)) {
-            return "подпись скачанного файла не совпадает с установленным приложением"
+            // Что делать — прямо здесь: install.md советовал на отказ
+            // установщика «удалить и поставить заново», а текст обновления с
+            // сервера стоял рядом — тот, кто завладел сервером, этим уводил
+            // людей на свою сборку (третий аудит, В29 прогона 1).
+            return "подпись файла не наша. Не удаляйте приложение ради этого " +
+                "обновления и не ставьте файл по ссылкам из его текста — напишите @toomonn"
         }
         return null
     }
