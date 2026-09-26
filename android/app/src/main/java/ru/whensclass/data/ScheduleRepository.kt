@@ -2,13 +2,14 @@ package ru.whensclass.data
 
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.NonCancellable
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -80,6 +81,10 @@ const val UNREACHABLE_BROKEN_AFTER_MILLIS = 30L * 60 * 1000
 /** Состояние, которое телефон ставит сам, когда сервер не отвечает. */
 const val STATUS_UNREACHABLE = "unreachable"
 
+/** Свои пары: без пришедших из соседней подгруппы. */
+internal fun ScheduleDto.ownOnly(): ScheduleDto =
+    copy(days = days.map { day -> day.copy(lessons = day.lessons.filter { it.groups == null }) })
+
 class ScheduleRepository(
     private val context: Context,
     private val api: ScheduleApi,
@@ -141,11 +146,18 @@ class ScheduleRepository(
         val changes = ScheduleDiff.compare(old, fresh).filter { it.day in soon }
         if (changes.isEmpty()) return
 
+        // День — словами и датой, а не «Завтра»: уведомление висит в шторке до
+        // утра, и наутро «Завтра: добавилась пара» читалось как новость о
+        // послезавтра. Снимается само к концу последнего дня, о котором
+        // говорит (третий аудит, М71 прогона 2).
         val text = changes.joinToString("\n") { change ->
-            val when_ = if (change.day == today.toString()) "Сегодня" else "Завтра"
-            "$when_: ${change.text}"
+            val date = java.time.LocalDate.parse(change.day)
+            "${ru.whensclass.widget.formatDayTitleShort(date)}: ${change.text}"
         }
-        Notifications.changes(context, "Расписание изменилось", text)
+        val lastDay = changes.maxOf { java.time.LocalDate.parse(it.day) }
+        val until = lastDay.plusDays(1).atStartOfDay(ru.whensclass.widget.COLLEGE_ZONE)
+            .toInstant().toEpochMilli()
+        Notifications.changes(context, "Расписание изменилось", text, until)
     }
 
     /**
@@ -213,10 +225,12 @@ class ScheduleRepository(
      * Не достучались до неё — показываем своё расписание как есть: без пары
      * соседей человек всё же обойдётся, а без своих пар — нет.
      */
-    private suspend fun withSecondGroup(mine: ScheduleDto, serverOk: Boolean): Merged {
+    private suspend fun withSecondGroup(
+        mine: ScheduleDto, serverOk: Boolean, from: java.time.LocalDate,
+    ): Merged {
         val second = store.currentSecondGroupId() ?: return Merged(mine, whole = true)
         val extra = try {
-            api.schedule(second, from = weekStart(), days = DAYS)
+            api.schedule(second, from = from, days = DAYS)
         } catch (error: HttpFailure) {
             // 404 при здоровом сервере — соседки больше нет в таблице. Раньше
             // это было неотличимо от сети: пары соседки молча пропадали, а
@@ -297,19 +311,46 @@ class ScheduleRepository(
         val unchanged = !store.teacherMode() && store.currentGroupId() == group.id
         store.setTeacherMode(false)
         store.selectGroup(group.id, group.name, unchanged)
-        // Перерисовать сразу, не дожидаясь сети: смена роли стирает расписание,
-        // и до конца запроса виджет иначе показывает чужое — то, что осталось от
-        // прошлой роли. Если запрос не дойдёт, честнее «ещё не загружено».
-        updateWidgets()
-        refresh(force = true)
+        afterSelection()
     }
 
     /** Преподаватель выбрал себя — дальше всё работает как у студента. */
     suspend fun selectSelfAsTeacher(teacher: GroupDto) {
+        val unchanged = store.teacherMode() && store.teacherId.first() == teacher.id
         store.setTeacherMode(true)
-        store.selectTeacher(teacher.id, teacher.name)
+        store.selectTeacher(teacher.id, teacher.name, unchanged)
+        afterSelection()
+    }
+
+    /**
+     * Соседняя подгруппа выбрана или снята (`group` = null). Свои пары на
+     * телефоне остаются — без пар прежней соседки, — и без связи экран не
+     * пустеет (третий аудит, М1 прогона 2).
+     */
+    suspend fun selectSecondGroup(group: GroupDto?) {
+        val saved = schedule.first()
+        val ownOnly = saved?.takeIf { !store.teacherMode() }?.let { dto ->
+            json.encodeToString(
+                dto.copy(days = dto.days.map { day -> day.copy(lessons = day.lessons.filter { it.groups == null }) })
+            )
+        }
+        store.setSecondGroup(group?.id, group?.name, ownOnly)
+        afterSelection()
+    }
+
+    /**
+     * После смены выбора: перерисовать сразу, переставить напоминания по тому,
+     * что теперь лежит на телефоне, и сходить за новым. Раньше будильники
+     * переставлялись только после удачного обновления, и без связи ближайшее
+     * напоминание приходило о паре прежней группы (третий аудит, М29 прогона
+     * 1). Не вышло — повторит фоновая работа, как только будет сеть.
+     */
+    private suspend fun afterSelection() {
         updateWidgets()
-        refresh(force = true)
+        LessonAlarms.reschedule(context)
+        if (refresh(force = true) is RefreshResult.Failed) {
+            ru.whensclass.work.SyncWorker.now(context)
+        }
     }
 
     /** Расписание группы — для просмотра чужого, без смены роли. */
@@ -345,6 +386,10 @@ class ScheduleRepository(
         val subject = asked.id
         val second = asked.second
         if (subject == null) return@withContext RefreshResult.NoGroup
+        // Неделя — одна на весь заход: запрос, начатый до полуночи воскресенья
+        // и кончившийся после, записывал окно прошлой недели с меткой новой
+        // (третий аудит, М18 прогона 1).
+        val from = weekStart()
         try {
             // Сохранённые дни начинаются с даты загрузки, поэтому со временем
             // сегодняшнего среди них может не оказаться — и виджет пустеет.
@@ -355,7 +400,11 @@ class ScheduleRepository(
                 // восьмым днём прошлого окна, gen на сервере тот же — и до
                 // первой правки таблицы приложение показывало один понедельник
                 // (второй аудит, М27).
-                store.windowFrom() != weekStart().toString()
+                store.windowFrom() != from.toString() ||
+                // Обрубок без пар соседки держался до следующей правки
+                // таблицы: gen тот же — «уже свежее» (третий аудит, В13
+                // прогона 1).
+                store.schedulePartial()
             // Состояние сервера спрашиваем всегда, даже когда идём за
             // расписанием напрямую. Раньше /v1/meta пропускался ровно в
             // тех случаях, ради которых состояние и нужно: при ручном
@@ -384,9 +433,9 @@ class ScheduleRepository(
             }
             val fresh = try {
                 if (teacherMode) {
-                    api.teacher(subject, from = weekStart(), days = DAYS)
+                    api.teacher(subject, from = from, days = DAYS)
                 } else {
-                    api.schedule(subject, from = weekStart(), days = DAYS)
+                    api.schedule(subject, from = from, days = DAYS)
                 }
             } catch (error: HttpFailure) {
                 // 404 при здоровом сервере — группы в таблице больше нет:
@@ -403,10 +452,13 @@ class ScheduleRepository(
                 throw error
             }
             store.clearNotFound()
+            // Ответил и сервер, и тот, кому не ответил /v1/meta: отметка «не
+            // отвечает» снимается любым удачным ответом (М12 прогона 1).
+            store.clearUnreachable()
             val merged = if (teacherMode) {
                 Merged(fresh, whole = true)
             } else {
-                withSecondGroup(fresh, serverOk = meta?.status == "ok")
+                withSecondGroup(fresh, serverOk = meta?.status == "ok", from = from)
             }
             val full = merged.schedule
 
@@ -427,41 +479,65 @@ class ScheduleRepository(
             }
             merged.secondRenamed?.let { (id, name) -> store.adoptSecondGroup(id, name) }
             merged.secondGone?.let { name ->
-                store.forgetSecondGroup()
-                Notifications.changes(
-                    context,
-                    "Подгруппы $name больше нет в таблице",
-                    "Её пары больше не показываются рядом с вашими. Если подгруппу " +
-                        "переименовали — выберите её заново в настройках.",
-                )
+                // Не стираем выбор, а отмечаем: вернётся соседка — вернутся и
+                // её пары (М41 прогона 1). Сказать — один раз, своим
+                // уведомлением и только тому, кто просил сообщать (М15).
+                if (store.markSecondGone() && store.notifyChangesEnabled()) {
+                    Notifications.subgroupGone(
+                        context,
+                        "Подгруппы $name сейчас нет в таблице",
+                        "Её пары не показываются рядом с вашими. Появится снова — " +
+                            "вернутся сами; если подгруппу переименовали — выберите её " +
+                            "заново в настройках.",
+                    )
+                }
             }
 
             val previous = schedule.first()
             val previousPartial = store.schedulePartial()
+            // Окна не было — снимок записан сборкой до 81-й, где обрубок не
+            // помечался: сравнивать с ним нельзя, «добавилась пара» было бы
+            // ложным (третий аудит, М43 прогона 1).
+            val comparable = store.windowFrom() != null
             store.putSchedule(
                 json.encodeToString(full), full.generatedAt,
-                partial = !merged.whole, windowFrom = weekStart().toString(),
+                partial = !merged.whole, windowFrom = from.toString(),
             )
-            updateWidgets()
-            // Об изменениях — только по сопоставимому. Обрубок без пар соседней
-            // подгруппы отличается от целого так же, как отмена: сравнивать
-            // целое с обрубком нельзя. Раньше обрубок записывался, а следующее
-            // целое объявляло давние пары соседки «добавившимися» (второй аудит,
-            // В10). Если прежнее — обрубок, сравниваем свои пары со своими: так
-            // и при долгой пропаже соседки об отменах говорим (В17).
-            when {
-                merged.secondGone != null -> Unit // соседку сняли: разница — её пары
-                previousPartial -> announceChanges(previous, fresh)
-                merged.whole -> announceChanges(previous, full)
+            // Записанное — уже на телефоне. Объявить и переставить будильники
+            // надо и тогда, когда корутину отменили посреди (ушли из
+            // приложения): раньше это глоталось как Failed, изменение не
+            // объявлялось никогда, а будильник об отменённой паре срабатывал
+            // (третий аудит, М9 прогона 2).
+            withContext(NonCancellable) {
+                updateWidgets()
+                // Об изменениях — только по сопоставимому. Обрубок без пар
+                // соседней подгруппы отличается от целого так же, как отмена:
+                // сравнивать целое с обрубком нельзя. Раньше обрубок
+                // записывался, а следующее целое объявляло давние пары соседки
+                // «добавившимися» (второй аудит, В10). Если прежнее — обрубок
+                // или соседка пропала, сравниваем свои пары со своими: так и
+                // при её пропаже говорим об отменах своих (В17; М15 прогона 1).
+                when {
+                    !comparable -> Unit
+                    previousPartial || merged.secondGone != null ->
+                        announceChanges(previous?.ownOnly(), fresh)
+                    merged.whole -> announceChanges(previous, full)
+                }
+                LessonAlarms.reschedule(context)
+                // И будильник к звонку: он считается по сетке из снимка, а при
+                // первом запуске её ещё нет. Взведённый в WhensClassApp по
+                // пустой сетке, он не ставился вовсе — и подсветка «идёт
+                // сейчас» до следующего запуска процесса сама не появлялась.
+                MidnightUpdater.schedule(context)
             }
-            LessonAlarms.reschedule(context)
-            // И будильник к звонку: он считается по сетке из снимка, а при
-            // первом запуске её ещё нет. Взведённый в WhensClassApp по пустой
-            // сетке, он не ставился вовсе — и подсветка «идёт сейчас» до
-            // следующего запуска процесса сама не появлялась.
-            MidnightUpdater.schedule(context)
             RefreshResult.Updated
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
+            // Неудача — тоже повод перерисовать: «сервер не отвечает» иначе
+            // доходил до виджетов только со звонком или в 00:01 (третий аудит,
+            // В4 прогона 2).
+            withContext(NonCancellable) { updateWidgets() }
             RefreshResult.Failed(error)
         }
     }

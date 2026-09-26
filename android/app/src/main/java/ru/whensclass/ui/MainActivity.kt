@@ -36,7 +36,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import ru.whensclass.AppContainer
@@ -193,6 +192,7 @@ private fun App(
 
     val groupName by container.store.groupName.collectAsState(initial = null)
     val secondGroupName by container.store.secondGroupName.collectAsState(initial = null)
+    val secondGone by container.store.secondGone.collectAsState(initial = false)
     val schedule by container.repository.schedule.collectAsState(initial = null)
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
@@ -359,13 +359,9 @@ private fun App(
                             },
                             onPick = { group: GroupDto ->
                                 scope.launch {
-                                    container.store.selectSecondGroup(group.id, group.name)
-                                    // Перерисовать сразу: смена подгруппы стирает
-                                    // расписание, и до ответа сети виджет иначе
-                                    // показывает пары прежней соседки. Если сети
-                                    // нет вовсе, он так и останется с ними.
-                                    container.repository.redrawWidgets()
-                                    container.repository.refresh(force = true)
+                                    // Свои пары остаются, пары прежней соседки
+                                    // уходят сразу — и без сети (М1 прогона 2).
+                                    container.repository.selectSecondGroup(group)
                                     pickSecond = false
                                     screen = Screen.SETTINGS
                                 }
@@ -501,17 +497,13 @@ private fun App(
                             pickSecond = false
                             screen = Screen.GROUPS
                         },
-                        secondGroupName = secondGroupName,
+                        secondGroupName = secondGroupName?.let { if (secondGone) "$it — нет в таблице" else it },
                         onPickSecondGroup = {
                             pickSecond = true
                             screen = Screen.GROUPS
                         },
                         onClearSecondGroup = {
-                            scope.launch {
-                                container.store.clearSecondGroup()
-                                container.repository.redrawWidgets()
-                                container.repository.refresh(force = true)
-                            }
+                            scope.launch { container.repository.selectSecondGroup(null) }
                         },
                         onBack = { screen = Screen.TODAY },
                     )

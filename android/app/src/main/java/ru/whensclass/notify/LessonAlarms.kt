@@ -42,7 +42,12 @@ object LessonAlarms {
             cancelAll(app)
             if (minutes <= 0) return@launch
 
-            val schedule = ScheduleWidget.parse(store.widgetState().scheduleJson) ?: return@launch
+            val state = store.widgetState()
+            // Группы больше нет в таблице — напоминать по её прежнему снимку
+            // значит звать на пары, которых, может, уже нет (третий аудит, М10
+            // прогона 2): экран и виджеты в это время пишут «нет в таблице».
+            if (state.gone) return@launch
+            val schedule = ScheduleWidget.parse(state.scheduleJson) ?: return@launch
             plan(schedule, minutes)
                 // Своя и соседняя подгруппы дают две пары в одно время —
                 // напоминание об этом должно быть одно.
@@ -63,6 +68,11 @@ object LessonAlarms {
             var busyUntil: LocalDateTime? = null
             for (lesson in day.lessons.sortedBy { it.number }) {
                 if (lesson.isCancelled) continue
+                // Пары соседней подгруппы — не свои: о них не напоминаем, и
+                // конец такой пары не глушит напоминание о своей первой как
+                // «посреди предыдущей» (третий аудит, В24 прогона 1). У
+                // преподавателя подпись группы у каждой пары — свои все.
+                if (!schedule.isTeacher && lesson.groups != null) continue
                 val bells = schedule.bells[lesson.number.toString()]
                 val start = bells?.getOrNull(0)
                     ?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: continue
