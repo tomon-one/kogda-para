@@ -11,7 +11,7 @@ body:
     attributes:
       label: Версия приложения
       description: «Настройки», строка «Версия …»
-      placeholder: pr-Зерно.0.10.2
+      placeholder: pr-Зерно.0.1.0
     validations:
       required: true
   - type: input

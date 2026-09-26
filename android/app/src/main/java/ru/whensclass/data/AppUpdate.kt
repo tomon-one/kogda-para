@@ -52,7 +52,7 @@ private val APK_NAME = Regex("""kogda-para-(\d+)\.apk""")
 
 /**
  * Самая новая сборка среди выпусков на GitHub. Номер сборки — из имени файла
- * (`kogda-para-86.apk`), версия — из тега; выпуск без такого файла не в счёт.
+ * (`kogda-para-2.apk`), версия — из тега; выпуск без такого файла не в счёт.
  */
 internal fun newestOnGithub(releases: List<GithubRelease>): ReleaseDto? = releases
     .filterNot { it.draft }
@@ -135,7 +135,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         /** Куда кладём скачанное. Внутренняя память: снаружи туда не залезть. */
         const val DIR = "updates"
         const val APK = "application/vnd.android.package-archive"
-        /** Больше этого сборка не бывает: 81-я весит 2,6 МБ. */
+        /** Больше этого сборка не бывает: она весит около 2,5 МБ. */
         const val MAX_SIZE = 64L * 1024 * 1024
     }
 
