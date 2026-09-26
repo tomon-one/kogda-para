@@ -1,0 +1,26 @@
+# /etc/systemd/system/whensclass.service — ставит владелец. Снято с сервера
+# 27.09.2026. Запуск и сокет переопределяет drop-in whensclass.service.d/
+# hardening.conf: служба слушает unix-сокет, а не 127.0.0.1:8081.
+[Unit]
+Description=WhensClass schedule API
+After=network.target
+
+[Service]
+Type=simple
+User=whensclass
+Group=whensclass
+WorkingDirectory=/opt/whensclass
+EnvironmentFile=/etc/whensclass/env
+ExecStart=/opt/whensclass/.venv/bin/uvicorn whensclass.main:app --host 127.0.0.1 --port 8081 --workers 1 --no-access-log --no-proxy-headers
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ReadWritePaths=/var/lib/whensclass
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
