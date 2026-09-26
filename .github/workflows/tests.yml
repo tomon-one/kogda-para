@@ -27,6 +27,8 @@ jobs:
           cache-dependency-path: server/constraints.txt
       - run: python -m pip install -c constraints.txt -e ".[dev]"
       - run: python -m pytest tests -q
+      # Правила F: неизвестные имена, лишние импорты — ошибки, а не стиль.
+      - run: python -m ruff check --select F,E9 src tests
 
   app:
     name: Приложение
