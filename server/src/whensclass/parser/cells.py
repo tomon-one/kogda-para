@@ -262,6 +262,12 @@ def parse_lesson(
     teacher_raw: str | None,
 ) -> Lesson | None:
     """Собирает пару из трёх ячеек. None, если пары нет."""
+    template = normalize(teacher_raw) in ("", "Преподаватель")
+    if normalize(subject_raw) == "Дисциплина" and template:
+        # Незаполненная клетка по шаблону шапки — пары нет.
+        _warn_once(("шаблон", number), "в клетке пары заготовка «Дисциплина» — пары нет",
+                   logger=log)
+        return None
     subject, cancel_a, note = _extract_cancellation(normalize(subject_raw), tail="note")
     room_text, cancel_b, room_note = _extract_cancellation(normalize(room_raw), tail="keep")
     note = note or room_note

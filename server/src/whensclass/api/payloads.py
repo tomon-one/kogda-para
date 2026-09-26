@@ -70,12 +70,7 @@ def published(snapshot: Snapshot, today: date | None) -> list[date]:
     dates = sorted(snapshot.dates)
     if today is None:
         return dates
-    busy: Counter[date] = Counter()
-    for by_date in snapshot.schedule.values():
-        for day, lessons in by_date.items():
-            if lessons:
-                busy[day] += 1
-    fullest = max((busy[day] for day in dates), default=0)
+    busy, fullest = filling(snapshot)
     end = len(dates)
     while end:
         day = dates[end - 1]
@@ -83,6 +78,30 @@ def published(snapshot: Snapshot, today: date | None) -> list[date]:
             break
         end -= 1
     return dates[:end]
+
+
+def filling(snapshot: Snapshot) -> tuple[Counter[date], int]:
+    """(у скольких групп в дне есть пары; столько же у самого полного дня)."""
+    busy: Counter[date] = Counter()
+    for by_date in snapshot.schedule.values():
+        for day, lessons in by_date.items():
+            if lessons:
+                busy[day] += 1
+    return busy, max((busy[day] for day in snapshot.dates), default=0)
+
+
+def filled_until(snapshot: Snapshot) -> date | None:
+    """Последний день листа, дописанный хотя бы наполовину против самого
+    полного, — без пустого каркаса дат на месяц вперёд.
+
+    Каркас колледж вписал 24 сентября 2026 до 02.11. Память поиска листов
+    запоминала лист по последней дате и считала его покрывающим весь октябрь:
+    новую вкладку, заведённую колледжем, служба бы даже не прочла (третий
+    аудит, В8 прогона 1).
+    """
+    busy, fullest = filling(snapshot)
+    dates = sorted(snapshot.dates)
+    return next((d for d in reversed(dates) if busy[d] >= FILLED_SHARE * fullest), None)
 
 
 def _group_edge(snapshot: Snapshot, group_id: str, sheet: list[date]) -> date | None:

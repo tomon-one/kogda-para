@@ -20,6 +20,8 @@ from ..service.refresher import state_dir
 from .releases import latest_release
 from .etag import etag_for, matches
 from .payloads import (
+    FILLED_SHARE,
+    filling,
     groups_payload,
     meta_payload,
     schedule_payload,
@@ -96,9 +98,19 @@ def healthz(request: Request) -> Response:
         reason = f"не обновляется: {refresher.last_error or refresher.status}"
     else:
         coverage = snapshot.coverage
+        busy, fullest = filling(snapshot)
         # Воскресений в листах нет — это не повод для тревоги.
         if today.weekday() != 6 and coverage and not (coverage[0] <= today <= coverage[1]):
             reason = f"лист покрывает {coverage[0]}—{coverage[1]}, а сегодня {today}"
+        elif today in snapshot.dates and busy[today] < FILLED_SHARE * fullest:
+            # Дата в листе есть, а пар почти ни у кого: каркас дат вписан
+            # заранее, а неделю колледж не дописал. Раньше это был 200 при
+            # «пар нет» у всех (третий аудит, В8 прогона 1). Так же выглядит
+            # и праздник — пусть человек глянет.
+            reason = (
+                f"сегодня пары вписаны у {busy[today]} групп из {len(snapshot.groups)} — "
+                "лист на сегодня не дописан или праздник"
+            )
     body = {"ok": reason is None, "status": refresher.status}
     if reason:
         body["reason"] = reason
@@ -201,11 +213,14 @@ def teacher(
         if renamed:
             body = build(renamed)
     name = store.known_teacher(teacher_id) if body is None else None
-    if name and spelling_twin(store.teachers, name):
+    renaming = teacher_id in getattr(refresher.renames, "pending_teachers", {})
+    if name and (renaming or spelling_twin(store.teachers, name)):
         # Колледж исправил опечатку в имени: тот же человек теперь под другим
         # id, и пустые дни здесь 60 дней говорили бы «пар нет». 404 — и
         # приложение предложит выбрать заново, человек найдёт себя под верным
-        # именем (третий аудит, В19 прогона 1).
+        # именем (третий аудит, В19 прогона 1). Пока книга ждёт подтверждения
+        # переименования, — тоже 404, а не пустые дни: телефон записывал их
+        # поверх своих, слал «убрали пару» и снимал напоминания (В26).
         name = None
     if name:
         # В этом листе у преподавателя нет пар, но он был в прошлых — отпуск,

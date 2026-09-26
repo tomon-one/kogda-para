@@ -248,6 +248,7 @@ def test_network_blip_is_not_shown_as_failure(tmp_path, sent, fixture_csv):
     assert r.status == "ok" and sent == []
     # Полчаса спустя — уже сбой, и наружу, и владельцу.
     r.failing_since -= FETCH_GRACE
+    r._fetch_since -= FETCH_GRACE
     r._fail("таблица не прочиталась: ReadTimeout", kind="fetch")
     assert r.status == "stale" and len(sent) == 1
     # Не сеть — показывать сразу, даже если началось с чиха.
@@ -391,3 +392,56 @@ def test_too_small_current_sheet_still_fails_and_names_itself(
     sheet["text"] = _first_day_only(fixture_csv, "08.09.2026 вторник")
     assert r.refresh(today=TODAY) is False
     assert r.status in ("stale", "empty") and "лист 'лист'" in r.last_error
+
+
+
+def test_network_blip_during_format_failure_is_not_a_new_alarm(tmp_path, sent, fixture_csv):
+    """Третий аудит, В14 прогона 1: лист отвергнут по формату, через час один
+    таймаут Google. Раньше льгота сети считалась от начала всего сбоя — и
+    сразу уходила тревога «таблица не прочиталась», а err подменялся сетевым.
+    И окно тишины после перезапуска помнилось только для последнего вида."""
+    store = SnapshotStore(tmp_path)
+    store.put(
+        parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
+    )
+    r = Refresher(store, tmp_path)
+    r._fail("формат таблицы изменился: x", kind="format")
+    assert len(sent) == 1
+    r.failing_since -= dt.timedelta(hours=1)
+    r._fail("таблица не прочиталась: ReadTimeout", kind="fetch")
+    assert len(sent) == 1, "один таймаут посреди отказа по формату — не тревога"
+    assert r.last_error.startswith("формат таблицы изменился")
+
+    # Сеть лежит полчаса подряд — тревога о сети, и после перезапуска окно
+    # тишины помнится и для неё, и для формата.
+    r._fetch_since -= FETCH_GRACE
+    r._fail("таблица не прочиталась: ReadTimeout", kind="fetch")
+    assert len(sent) == 2
+    alerts._last_sent.clear()
+    again = Refresher(store, tmp_path)
+    again._fail("формат таблицы изменился: x", kind="format")
+    assert len(sent) == 2, "формат уже сказан — окно тишины пережило перезапуск"
+
+
+def test_freeze_is_stale_at_once_without_touching_the_sheet(
+    tmp_path, sheet, sent, monkeypatch
+):
+    """Третий аудит, В25 прогона 1: рычаг заморозки из runbook
+    (SPREADSHEET_ID=stop) полчаса держал ok, стирал память о листе и вёл
+    ссылку на таблицу в никуда. WHENSCLASS_FREEZE — сразу stale на прежнем
+    снимке, в сеть не ходим, тревог нет."""
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    assert r.refresh(today=TODAY) is True
+    before = store.snapshot
+
+    def no_network(*args, **kwargs):
+        raise AssertionError("замороженная служба в таблицу не ходит")
+
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", no_network)
+    monkeypatch.setattr(sheet_index, "resolve_window", no_network)
+    monkeypatch.setattr(settings, "freeze", True)
+    assert r.refresh(today=TODAY, force=True) is False
+    assert r.status == "stale" and "заморожено" in r.last_error
+    assert store.snapshot is before and sent == []
+    assert r.look_for_new_sheet() is False

@@ -121,14 +121,26 @@ def build_column_map(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> lis
                 f"в колонке {col + 3} ожидалась «{_ROOM_MARK}», а там {mark!r}"
             )
 
+    # Имя в двух колонках — опечатка в одной из них («ИСП-924/1» над
+    # ИСП-924/2), а в какой, главный заголовок не скажет. Раньше это был отказ
+    # листа у всех (третий аудит, В9 прогона 1). Теперь обе колонки остаются
+    # без имени: имена им даёт повторный заголовок (`parse_sheet`), а нет
+    # его — пропажу группы с парами ловит служба (`_check_lost_names`).
+    where: dict[str, list[int]] = {}
+    for col in starts:
+        for name in columns[col]:
+            where.setdefault(group_id(name), []).append(col)
     groups: list[GroupRef] = []
-    seen: set[str] = set()
     for col in starts:
         for name in columns[col]:
             gid = group_id(name)
-            if gid in seen:
-                raise SourceFormatChanged(f"группа {name!r} объявлена дважды")
-            seen.add(gid)
+            if len(where[gid]) > 1:
+                _warn_once(
+                    ("дважды", gid, tuple(where[gid])),
+                    "группа %r объявлена в главном заголовке дважды — в колонках %s; "
+                    "обе считаю безымянными", name, where[gid],
+                )
+                continue
             groups.append(GroupRef(name=name, id=gid, column=col))
     return groups
 
@@ -150,21 +162,31 @@ def find_header_rows(
     В `adopt` складываются имена, которые повторный заголовок даёт колонке,
     безымянной в главном: их подбирает `parse_sheet`.
     """
-    expected = {g.column for g in groups}
+    # Раскладка — по главному заголовку, а не по группам: колонка с именем,
+    # повторённым в двух местах, группой не стала (`build_column_map`), но
+    # в заголовке стоит.
+    expected: set[int] | None = None
     skip: set[int] = set()
 
     for i, row in enumerate(rows):
         columns = _row_columns(row)
         if columns:
             skip.add(i)
-            if len(columns) >= min_groups and set(columns) != expected:
-                raise SourceFormatChanged(
-                    f"повторный заголовок в {where(i)} задаёт другие колонки"
-                )
+            if len(columns) >= min_groups:
+                if expected is None:
+                    expected = set(columns)
+                elif set(columns) != expected:
+                    raise SourceFormatChanged(
+                        f"повторный заголовок в {where(i)} задаёт другие колонки"
+                    )
             continue
 
         cells = {c for c, v in enumerate(row) if (v or "").strip() == "Дисциплина"}
-        if not cells:
+        if len(cells) < min_groups:
+            # «Дисциплина» / «Преподаватель» в клетке одной группы — заготовка
+            # шаблона, а не заголовок: раньше она выкидывала три строки у всех
+            # групп, и лист отвергался с номерами пар соседнего дня (третий
+            # аудит, В10 прогона 1). Такую клетку разбор ячеек считает пустой.
             continue
         below = rows[i + 1] if i + 1 < len(rows) else []
         if any(

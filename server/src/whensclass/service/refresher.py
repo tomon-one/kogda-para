@@ -91,6 +91,9 @@ class Refresher:
     def refresh(self, today: dt.date | None = None, force: bool = False) -> bool:
         """Перечитывает таблицу. True, если снимок обновился."""
         with self._lock:
+            if settings.freeze:
+                self._freeze()
+                return False
             if self._crashes >= CRASHES_TO_ALERT:
                 self._fail(
                     f"служба {self._crashes} раза подряд умерла посреди захода — "
@@ -115,6 +118,17 @@ class Refresher:
                 return False
             finally:
                 self._clear_running()
+
+    def _freeze(self) -> None:
+        """Заморожено владельцем: прежний снимок, stale, в сеть не ходим."""
+        self.checked_at = dt.datetime.now(dt.timezone.utc)
+        if self.failing_since is None:
+            self.failing_since = self.checked_at
+            log.warning("служба заморожена (WHENSCLASS_FREEZE) — в таблицу не хожу")
+        self._fetch_only = False
+        self.last_error = "заморожено владельцем: отдаётся прежнее расписание"
+        self.status = self._visible_status()
+        self._save_failing("frozen")
 
     def restore_status(self) -> None:
         """Состояние после перезапуска: какое было — такое и есть."""
@@ -278,7 +292,7 @@ class Refresher:
         Без ключа не работает и не должна: там список листов — это выгрузка
         книги на два десятка мегабайт.
         """
-        if not settings.sheets_api_key:
+        if not settings.sheets_api_key or settings.freeze:
             return False
         with self._lock:
             return self._look()
@@ -378,16 +392,21 @@ class Refresher:
             self._alerted = False
             self._fetch_only = True
         self._fetch_only = self._fetch_only and kind == "fetch"
-        self.last_error = public or message
+        # Сеть отсчитывается от первого сетевого отказа подряд, а не от начала
+        # всего сбоя: один таймаут посреди отказа по формату сразу уходил
+        # тревогой «таблица не прочиталась» и подменял err — а по runbook это
+        # «чинится само» (третий аудит, В14 прогона 1).
+        self._fetch_since = (self._fetch_since or now) if kind == "fetch" else None
+        if kind != "fetch" or self._fetch_only:
+            self.last_error = public or message
         self.status = self._visible_status(now)
         self._sheets = None
         log.error("%s (состояние: %s)", message, self.status)
 
         # Формат и поиск листа сами не чинятся — говорить сразу. Сеть и
-        # Google чинятся к следующему заходу: о них — только если лежим
+        # Google чинятся к следующему заходу: о них — только если сеть лежит
         # дольше получаса, иначе каждый чих Google будит человека дважды.
-        lying = now - self.failing_since
-        if kind != "fetch" or lying >= FETCH_GRACE:
+        if kind != "fetch" or now - self._fetch_since >= FETCH_GRACE:
             sent = alerts.notify(
                 kind,
                 f"{message}. Состояние: {self.status}, "
@@ -398,7 +417,8 @@ class Refresher:
                 force=not self._alerted,
             )
             if sent:
-                self._alerted, self._alerted_at, self._alerted_kind = True, now, kind
+                self._alerted = True
+                self._alerted_kinds[kind] = now
         self._save_failing(kind)
 
     def _recovered(self) -> None:
@@ -417,7 +437,8 @@ class Refresher:
         for kind in FAIL_KINDS:
             alerts.forget(kind)
         self.failing_since, self.last_error, self._alerted = None, None, False
-        self._alerted_at = self._alerted_kind = None
+        self._alerted_kinds = {}
+        self._fetch_since = None
         self._fetch_only = True
         self._save_failing(None)
 
@@ -433,18 +454,20 @@ class Refresher:
                 "kind": kind,
                 "fetch_only": self._fetch_only,
                 "alerted": self._alerted,
-                # Когда и о чём ушла последняя тревога: окно тишины живёт в
-                # памяти, и перезапуск посреди сбоя повторял её сразу (М23).
-                "alerted_at": self._alerted_at.isoformat() if self._alerted_at else None,
-                "alerted_kind": self._alerted_kind,
+                # Когда ушла тревога — по каждому виду: окно тишины живёт в
+                # памяти, и перезапуск посреди сбоя повторял её сразу (М23), а
+                # с одним «последним видом» — тревогу о формате после сетевой
+                # (третий аудит, В14 прогона 1).
+                "alerted_kinds": {k: at.isoformat() for k, at in self._alerted_kinds.items()},
+                "fetch_since": self._fetch_since.isoformat() if self._fetch_since else None,
             }, ensure_ascii=False), "utf-8")
             tmp.replace(self._failing_path)
         except OSError as exc:
             log.warning("состояние сбоя не записалось: %s", exc)
 
     def _load_failing(self) -> None:
-        self._alerted_at: dt.datetime | None = None
-        self._alerted_kind: str | None = None
+        self._alerted_kinds: dict[str, dt.datetime] = {}
+        self._fetch_since: dt.datetime | None = None
         try:
             data = json.loads(self._failing_path.read_text("utf-8"))
             self.failing_since = dt.datetime.fromisoformat(data["since"])
@@ -452,10 +475,15 @@ class Refresher:
             self._alerted = bool(data.get("alerted"))
             # Старые файлы без признака — сбой не сетевой: показывать как был.
             self._fetch_only = bool(data.get("fetch_only", False))
+            kinds = dict(data.get("alerted_kinds") or {})
             if data.get("alerted_at") and data.get("alerted_kind"):
-                self._alerted_at = dt.datetime.fromisoformat(data["alerted_at"])
-                self._alerted_kind = data["alerted_kind"]
-                alerts.remember(self._alerted_kind, self._alerted_at)
+                # Файл до 26.09.2026: одна тревога.
+                kinds.setdefault(data["alerted_kind"], data["alerted_at"])
+            for kind, at in kinds.items():
+                self._alerted_kinds[kind] = dt.datetime.fromisoformat(at)
+                alerts.remember(kind, self._alerted_kinds[kind])
+            if data.get("fetch_since"):
+                self._fetch_since = dt.datetime.fromisoformat(data["fetch_since"])
         except (OSError, ValueError, KeyError, TypeError):
             self.failing_since, self.last_error, self._alerted = None, None, False
 
@@ -556,6 +584,7 @@ def _limits() -> Limits:
         min_dates=settings.min_dates,
         min_lessons=settings.min_lessons,
         max_gap_days=settings.max_gap_days,
+        max_days_ahead=settings.max_days_ahead,
     )
 
 
