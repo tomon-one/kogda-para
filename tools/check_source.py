@@ -34,7 +34,7 @@ import datetime as dt  # noqa: E402
 
 from whensclass.config import settings  # noqa: E402
 from whensclass.domain.models import SourceFormatChanged  # noqa: E402
-from whensclass.parser.csv_schedule import _check_shift, parse_export, shift_seed  # noqa: E402
+from whensclass.parser.csv_schedule import check_shift, parse_export, shift_seed  # noqa: E402
 from whensclass.service import alerts  # noqa: E402
 from whensclass.service.refresher import _limits, _today  # noqa: E402
 from whensclass.sources import gsheets, sheet_index  # noqa: E402
@@ -112,7 +112,7 @@ def main() -> int:
         )
         store = SnapshotStore(state)
         previous = store.snapshot if store.load() else None
-        _check_shift(snapshot, seed=shift_seed(previous, snapshot), previous=previous)
+        check_shift(snapshot, seed=shift_seed(previous, snapshot), previous=previous)
     except SourceFormatChanged as exc:
         print(f"БЕДА: формат таблицы изменился — {exc}")
         print("Сверьтесь с docs/source-format.md: там записано, как было.")

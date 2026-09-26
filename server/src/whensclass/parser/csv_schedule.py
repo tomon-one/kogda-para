@@ -539,7 +539,7 @@ def shift_seed(previous: Snapshot | None, current: Snapshot) -> Seed:
     }
 
 
-def _check_shift(
+def check_shift(
     snapshot: Snapshot, seed: Seed | None = None, previous: Snapshot | None = None
 ) -> list[str]:
     """Сдвиг колонок или ячеек по содержимому (см. SHIFT_*, PREV_*, выше).

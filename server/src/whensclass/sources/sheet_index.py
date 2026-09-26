@@ -154,7 +154,7 @@ def _api_error(exc: Exception) -> str:
     return f"ответ {code}" if code else type(exc).__name__
 
 
-def _hide_key(error: object) -> str:
+def hide_key(error: object) -> str:
     """Прячет ключ API в тексте ошибки.
 
     httpx кладёт в исключение полный адрес запроса вместе с ?key=..., а ключ
@@ -199,7 +199,7 @@ def list_sheets() -> list[SheetInfo]:
     try:
         sheets = gsheets.list_sheets_via_api(settings.sheets_api_key)
     except Exception as exc:  # ключ протух, квота, сеть
-        log.warning("Sheets API не ответил (%s)", _hide_key(exc))
+        log.warning("Sheets API не ответил (%s)", hide_key(exc))
         # Отказом ключа считаются только ответы Google о ключе и квоте; сеть
         # — сетевой тревогой, иначе на одну беду приходили две, и одна звала
         # проверять ключ.
@@ -256,7 +256,8 @@ def resolve_window(
     а все, что попадают в окно, — если следующий уже опубликован.
 
     С `deep=False` соседний лист берём только из памяти: искать его в сети —
-    это выгрузка всей книги, и делать её каждые двадцать минут незачем.
+    это читать листы-кандидаты целиком, и делать это каждые двадцать минут
+    незачем.
     """
     first = resolve_for(start, state_dir, deep=deep)
     sheets = [first]
@@ -274,9 +275,9 @@ def resolve_window(
     following = index.following(covered_to)
     if following is None:
         if not deep:
-            # Искать соседний лист в сети — это выгрузка всей книги на два
-            # десятка мегабайт. Раз в сутки (deep) не жалко, каждые двадцать
-            # минут — уже расточительство.
+            # Искать соседний лист в сети — это читать листы-кандидаты
+            # целиком, по мегабайту и больше. Раз в сутки (deep) не жалко,
+            # каждые двадцать минут — уже расточительство.
             return sheets
         try:
             # Глубоко, как и весь заход: без deep промах, записанный меньше
