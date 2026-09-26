@@ -56,6 +56,7 @@ fun GroupPickerScreen(
     /** Список держит App: сохранённый — сразу, свежий — следом (М31 прогона 2). */
     groups: List<GroupDto>?,
     onPick: (GroupDto) -> Unit,
+    onRetry: (() -> Unit)? = null,
     canGoBack: Boolean = false,
     onBack: () -> Unit = {},
     onTeacherMode: (() -> Unit)? = null,
@@ -132,7 +133,7 @@ fun GroupPickerScreen(
                     CircularProgressIndicator()
                 }
 
-                list.isEmpty() -> LoadFailed("Список групп", loadDiagnostics)
+                list.isEmpty() -> LoadFailed("Список групп", loadDiagnostics, onRetry)
 
                 else -> {
                     // Отбор считаем только когда меняется запрос или сам список:

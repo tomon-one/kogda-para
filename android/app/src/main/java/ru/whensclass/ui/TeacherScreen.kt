@@ -64,6 +64,7 @@ fun TeacherScreen(
     showGroups: Boolean = true,
     selfId: String? = null,
     startDay: String? = null,
+    startKey: Int = 0,
     ownScheduleTitle: String = "Посмотреть других преподавателей",
     othersTitle: String = "Другие преподаватели",
     // Дно списка. Говорим, откуда взялся список, а не откуда не взялся:
@@ -87,6 +88,7 @@ fun TeacherScreen(
                 today = rememberToday(),
                 modifier = Modifier.weight(1f),
                 startDay = startDay,
+                startKey = startKey,
             )
             TextButton(
                 onClick = { browsing = true },

@@ -526,8 +526,13 @@ internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
         .putExtra(MainActivity.EXTRA_DAY, day.toString())
         // CLEAR_TOP, а не один NEW_TASK: без него каждое нажатие на виджет
         // клало в стек ещё одну копию экрана, и «назад» пришлось бы жать
-        // столько раз, сколько раз человек за день заглянул в виджет.
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        // столько раз, сколько раз человек за день заглянул в виджет. И
+        // SINGLE_TOP: без него CLEAR_TOP уничтожал живой экран и создавал
+        // заново (третий аудит, М32 прогона 2).
+        .addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP,
+        )
 
 @Composable
 private fun LessonRow(

@@ -23,13 +23,21 @@ fun sheetLink(schedule: ScheduleDto?, day: LocalDate?, fallback: String?): Strin
         ?: today?.let { d -> schedule.days.firstOrNull { it.date > d } }
     val column = schedule.column ?: dayDto?.lessons?.firstNotNullOfOrNull { it.column }
     val row = dayDto?.row
+    // День — по две строки на пару (пара и преподаватели), сколько пар в
+    // сетке звонков; без сетки — шесть, как в листе.
+    val pairs = schedule.bells.keys.mapNotNull { it.toIntOrNull() }.maxOrNull() ?: 6
     return when {
         // Диапазон вправо-вниз, а не одна ячейка: приложение Google Таблиц на
         // Android подводит к ячейке, но оставляет её у правого верхнего края,
         // почти за кадром (дефект 6 в handoff, проверено 14 сентября 2026).
         // Ячейка дня становится левым верхним углом выделения. ПРЕДПОЛОЖЕНИЕ:
         // что так она окажется в кадре, на телефоне ещё не проверено.
-        column != null && row != null -> "$base&range=$column$row:${shiftColumn(column, 4)}${row + 5}"
+        // Выделение — ровно блок группы и день: четыре колонки (+0…+3) и все
+        // строки дня. Было пять колонок и шесть строк — колонка предмета
+        // соседней группы внутри, пары 4–6 снаружи (третий аудит, М39
+        // прогона 1).
+        column != null && row != null ->
+            "$base&range=$column$row:${shiftColumn(column, 3)}${row + 2 * pairs - 1}"
         column != null -> "$base&range=${column}1"
         row != null -> "$base&range=A$row"
         else -> base

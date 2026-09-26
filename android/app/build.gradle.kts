@@ -93,6 +93,14 @@ android {
         localeFilters += listOf("ru", "en")
     }
 
+    // Тесты — в поясе, который не колледжа: машина Tomon живёт в
+    // Asia/Novosibirsk, и возврат любого места к часам телефона все тесты
+    // пропускали, а в другом поясе DayFormatTest вечером падал сам (третий
+    // аудит, М61 прогона 2).
+    testOptions {
+        unitTests.all { it.systemProperty("user.timezone", "UTC") }
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         // Их читает только kotlin-reflect, а его в сборке нет.

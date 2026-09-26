@@ -51,8 +51,7 @@ object MidnightUpdater {
 
     suspend fun schedule(context: Context) {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
-        val at = nextMoment(context)
-            .atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant().toEpochMilli()
+        val at = ru.whensclass.widget.millisOf(nextMoment(context))
         // Точное время, если разрешено: смысл будильника в том, чтобы подсветка
         // появлялась вместе со звонком, а не когда система сочтёт удобным.
         if (LessonAlarms.exactAllowed(context)) {

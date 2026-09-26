@@ -124,7 +124,8 @@ object LessonAlarms {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val millis = alarm.at.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant().toEpochMilli()
+        // Время колледжа, не телефона: millisOf закреплён тестом в чужом поясе.
+        val millis = ru.whensclass.widget.millisOf(alarm.at)
         if (exactAllowed(context)) {
             manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
         } else {

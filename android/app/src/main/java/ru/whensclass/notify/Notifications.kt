@@ -148,7 +148,12 @@ object Notifications {
         ensureChannels(context)
 
         val intent = Intent(context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            // SINGLE_TOP — живой экран получает onNewIntent, а не
+            // пересоздаётся (третий аудит, М32 прогона 2).
+            .addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            )
             .putExtra(MainActivity.EXTRA_DAY, day)
             .putExtra(MainActivity.EXTRA_UPDATE, update)
         val pending = PendingIntent.getActivity(

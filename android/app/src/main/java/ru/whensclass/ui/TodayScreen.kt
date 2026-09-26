@@ -119,6 +119,8 @@ private val TIME_COLUMN = 92.dp
 @Composable
 fun TodayScreen(
     startDay: String? = null,
+    /** Растёт на каждое открытие с днём по живому экрану (onNewIntent). */
+    startKey: Int = 0,
     groupName: String,
     teachers: List<GroupDto>?,
     loadTeacherSchedule: suspend (String) -> ScheduleDto?,
@@ -162,6 +164,11 @@ fun TodayScreen(
     // Вкладка переживает поворот экрана (третий аудит, М30 прогона 2).
     var tab by rememberSaveable(teacherMode) {
         mutableStateOf(if (teacherMode) Tab.TEACHERS else Tab.STUDENTS)
+    }
+    // Нажали на день в виджете по живому экрану — к своему расписанию, а не к
+    // открытой чужой вкладке.
+    LaunchedEffect(startKey) {
+        if (startKey > 0) tab = if (teacherMode) Tab.TEACHERS else Tab.STUDENTS
     }
     val snackbar = remember { SnackbarHostState() }
     // Неудачу показываем плашкой: галочка «Расписание обновлено» загоралась и
@@ -339,6 +346,7 @@ fun TodayScreen(
                         // День, на который нажали в виджете, терялся: вкладка
                         // преподавателя открывалась всегда на сегодня.
                         startDay = if (teacherMode) startDay else null,
+                        startKey = startKey,
                         // Себя отмечаем, только когда человек и правда
                         // преподаватель: у студента это просто чужая фамилия.
                         selfId = if (teacherMode) selfTeacherId else null,
@@ -356,6 +364,7 @@ fun TodayScreen(
             schedule = schedule,
             today = today,
             startDay = startDay,
+            startKey = startKey,
             header = if (platesInList) plates else null,
         )
         }
@@ -556,6 +565,7 @@ fun ScheduleDays(
     today: LocalDate,
     modifier: Modifier = Modifier,
     startDay: String? = null,
+    startKey: Int = 0,
     /** Первой строкой списка — например, плашки, когда шапке тесно. */
     header: (@Composable () -> Unit)? = null,
 ) {
@@ -585,6 +595,10 @@ fun ScheduleDays(
     val firstToday = rememberSaveable { today.toString() }
     LaunchedEffect(today) {
         if (today.toString() != firstToday) wanted = today.toString()
+    }
+    // Нажали на день в виджете, а экран жив: к этому дню.
+    LaunchedEffect(startKey) {
+        if (startKey > 0 && startDay != null) wanted = startDay
     }
     LaunchedEffect(wanted, days) {
         val want = wanted ?: return@LaunchedEffect
