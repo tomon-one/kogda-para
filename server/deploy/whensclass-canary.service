@@ -1,11 +1,12 @@
 # /etc/systemd/system/whensclass-canary.service — ставит владелец.
 # Канарейка раз в сутки: не переделали ли таблицу (tools/check_source.py).
 # Раньше — строка crontab root без env: без темы ntfy и ключа Sheets API
-# (дефект 9), и от root, без ужесточения службы, по каталогу, куда пишет
+# и от root, без ужесточения службы, по каталогу, куда пишет
 # служба. Теперь от whensclass, с тем же env и теми же
 # ограничениями, что у службы; вывод — в journald.
 [Unit]
 Description=WhensClass canary: does the college sheet still parse
+Wants=network-online.target
 After=network-online.target
 
 [Service]
@@ -26,8 +27,7 @@ ReadOnlyPaths=-/var/lib/whensclass/apk
 # Узкий профиль процесса: канарейка разбирает
 # сетевой ввод, и если её всё же захватят, пусть это будет процесс без
 # лишних семейств адресов, системных вызовов и чужих процессов в /proc.
-# Только то, что не мешает Python, uvicorn и httpx; PrivateUsers и
-# ProcSubset не ставим — первое путает группу сокета для nginx, второе
+# Только то, что не мешает Python и httpx; ProcSubset не ставим — он
 # прячет /proc/meminfo, который читают библиотеки.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallFilter=@system-service
