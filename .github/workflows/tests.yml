@@ -7,6 +7,8 @@ on:
     paths-ignore: ["**.md", "docs/**", "LICENSE", ".github/ISSUE_TEMPLATE/**"]
   pull_request:
     paths-ignore: ["**.md", "docs/**", "LICENSE", ".github/ISSUE_TEMPLATE/**"]
+  # Запустить вручную — после пуша, где были одни документы.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -28,7 +30,7 @@ jobs:
       - run: python -m pip install -c constraints.txt -e ".[dev]"
       - run: python -m pytest tests -q
       # Правила F: неизвестные имена, лишние импорты — ошибки, а не стиль.
-      - run: python -m ruff check --select F,E9 src tests
+      - run: python -m ruff check --select F,E9 src tests ../tools
 
   app:
     name: Приложение
@@ -47,4 +49,6 @@ jobs:
           packages: "platforms;android-37.0 build-tools;36.0.0 build-tools;37.0.0"
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v6
-      - run: ./gradlew :app:testDebugUnitTest
+      # Юнит-тесты и сжатие R8, как у выпуска: ошибки правил R8 тесты не видят.
+      # Подпись для этого шага не нужна.
+      - run: ./gradlew :app:testDebugUnitTest :app:minifyReleaseWithR8
