@@ -37,8 +37,8 @@ CASES = [
         dict(room="279", cancelled=True, note=None),
     ),
     (
-        ("Иностранный язык (Пр)", "https://my.mts-link.ru/j/100000004/20000000626", ""),
-        dict(url="https://my.mts-link.ru/j/100000004/20000000626", room=None),
+        ("Иностранный язык (Пр)", "https://my.mts-link.ru/j/100000004/20000000627", ""),
+        dict(url="https://my.mts-link.ru/j/100000004/20000000627", room=None),
     ),
     (
         ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 0 (Б.Хмельницкого 0)", ""),

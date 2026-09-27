@@ -99,8 +99,9 @@ Play Защита предупреждает, потому что приложе
 ## Что уходит на сервер
 
 Только то, чьё расписание открыто, и за какие дни. Учётной записи, аналитики и
-рекламы нет, всё остальное остаётся на телефоне. Если сервер не отвечает, за
-новой версией приложение обращается к GitHub — группа и настройки туда не уходят.
+рекламы нет, всё остальное остаётся на телефоне. Если сервер не отвечает или не
+отдаёт файл, за новой версией приложение обращается к GitHub — группа и
+настройки туда не уходят.
 
 ## Как устроено
 
@@ -114,18 +115,26 @@ Play Защита предупреждает, потому что приложе
   [установка](docs/install.md).
 - `tools/` — вспомогательные скрипты.
 
+Сервер — Python 3.12 или новее; для чтения таблицы нужен ключ Google Sheets API
+(`WHENSCLASS_SHEETS_API_KEY` в `server/.env`):
+
 ```bash
-# Сервер: Python 3.12+, для чтения таблицы нужен ключ Google Sheets API
-# (WHENSCLASS_SHEETS_API_KEY в server/.env)
-cd server && python3 -m venv .venv
+cd server
+python3 -m venv .venv
 .venv/bin/python -m pip install -c constraints.txt -e ".[dev]"
 .venv/bin/python -m uvicorn whensclass.main:app --port 8081 --app-dir src
+```
 
-# Приложение: JDK 21
-cd android && ./gradlew assembleDebug
+Приложение — JDK 21 и Android SDK с platform 37, из корня репозитория:
+
+```bash
+cd android
+./gradlew assembleDebug
 ```
 
 ## Лицензия
 
-Код — под [AGPL-3.0](LICENSE). Логотип колледжа в `assets/` принадлежит
-колледжу и под лицензию не входит.
+Код — под [AGPL-3.0](LICENSE). Логотип колледжа — `assets/logo-ngok.svg` и
+сделанные из него иконки и значки приложения в `android/app/src/main/res` —
+принадлежит колледжу и под лицензию не входит, как и данные таблицы колледжа в
+тестовых фикстурах.
