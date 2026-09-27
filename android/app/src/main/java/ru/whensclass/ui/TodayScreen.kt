@@ -692,7 +692,7 @@ private fun DayCard(
     val past = date != null && date.isBefore(today)
     // Момент — параметром от часов со звонками (rememberNow в ScheduleDays):
     // раньше он брался при компоновке карточки, и подсветка со звонком не
-    // двигалась, пока экран открыт (дефект 7 в handoff).
+    // двигалась, пока экран открыт.
     val current = if (isToday) currentLessonNumber(bells, today, now) else null
 
     Surface(

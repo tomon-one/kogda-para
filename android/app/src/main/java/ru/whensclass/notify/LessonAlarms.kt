@@ -34,24 +34,31 @@ object LessonAlarms {
 
     fun reschedule(context: Context) {
         val app = context.applicationContext
-        CoroutineScope(Dispatchers.Default).launch {
-            val store = AppContainer.store(app)
-            val minutes = store.notifyBeforeMinutes()
-            cancelAll(app)
-            if (minutes <= 0) return@launch
+        CoroutineScope(Dispatchers.Default).launch { rescheduleNow(app) }
+    }
 
-            val state = store.widgetState()
-            // Группы больше нет в таблице — напоминать по её прежнему снимку
-            // значит звать на пары, которых, может, уже нет: экран и виджеты в это время пишут «нет в таблице».
-            if (state.gone) return@launch
-            val schedule = ScheduleWidget.parse(state.scheduleJson) ?: return@launch
-            plan(schedule, minutes)
-                // Своя и соседняя подгруппы дают две пары в одно время —
-                // напоминание об этом должно быть одно.
-                .distinctBy { it.at }
-                .take(MAX_ALARMS)
-                .forEachIndexed { index, alarm -> schedule(app, index, alarm) }
-        }
+    /**
+     * То же, но с ожиданием конца — для приёмника будильника: без `goAsync`
+     * процесс могли убить раньше, чем будильники переставлены.
+     */
+    suspend fun rescheduleNow(context: Context) {
+        val app = context.applicationContext
+        val store = AppContainer.store(app)
+        val minutes = store.notifyBeforeMinutes()
+        cancelAll(app)
+        if (minutes <= 0) return
+
+        val state = store.widgetState()
+        // Группы больше нет в таблице — напоминать по её прежнему снимку
+        // значит звать на пары, которых, может, уже нет: экран и виджеты в это время пишут «нет в таблице».
+        if (state.gone) return
+        val schedule = ScheduleWidget.parse(state.scheduleJson) ?: return
+        plan(schedule, minutes)
+            // Своя и соседняя подгруппы дают две пары в одно время —
+            // напоминание об этом должно быть одно.
+            .distinctBy { it.at }
+            .take(MAX_ALARMS)
+            .forEachIndexed { index, alarm -> schedule(app, index, alarm) }
     }
 
     /** Что и когда напомнить. Вынесено отдельно, чтобы можно было проверить. */
@@ -90,7 +97,12 @@ object LessonAlarms {
 
                 if (duringPrevious) continue
                 if (fireAt.isBefore(now)) continue
-                out.add(Alarm(fireAt, lesson, minutes, date.toString(), busyUntil))
+                out.add(
+                    Alarm(
+                        fireAt, lesson, minutes, date.toString(), busyUntil,
+                        ownGroup = schedule.groupName.takeUnless { schedule.isTeacher },
+                    ),
+                )
             }
         }
         return out.sortedBy { it.at }
@@ -103,6 +115,8 @@ object LessonAlarms {
         val day: String,
         /** Конец пары — к нему напоминание снимается само. */
         val end: LocalDateTime? = null,
+        /** Своя группа студента: её имя в напоминании не пишется. */
+        val ownGroup: String? = null,
     ) {
         /** Когда пара начнётся: будильник стоит настолько же раньше. */
         val start: LocalDateTime get() = at.plusMinutes(minutes.toLong())
@@ -188,15 +202,17 @@ object LessonAlarms {
         } else {
             roomLabel(lesson.room)?.replaceFirstChar { it.uppercase() }
         }
-        return listOfNotNull(
+        val parts = listOfNotNull(
             place,
             "${lesson.number} пара" + (kindName(lesson.kind)?.let { ", ${it.lowercase()}" } ?: ""),
             lesson.teachers.firstOrNull(),
-            // Чья пара: у подгруппы — соседки, у преподавателя — каким группам
-            // он идёт читать. На экране и в виджетах подпись есть, а в
-            // напоминании её не было, и пара соседней подгруппы приходила как своя.
-            lesson.groups?.trim()?.takeIf { it.isNotEmpty() },
-        ).joinToString(". ")
+            // Чья пара: у преподавателя — каким группам он идёт читать. Свою
+            // группу студенту не подписываем: склейка с соседней подгруппой
+            // ставит своё имя на общий номер, и оно было лишним.
+            lesson.groups?.trim()?.takeIf { it.isNotEmpty() && it != alarm.ownGroup },
+        )
+        // «Трухачев Д. Д.» уже кончается точкой — вторую не ставить.
+        return parts.reduce { acc, part -> acc + (if (acc.endsWith(".")) " " else ". ") + part }
     }
 
     const val EXTRA_SUBJECT = "subject"
@@ -222,6 +238,13 @@ class LessonAlarmReceiver : BroadcastReceiver() {
             intent.getStringExtra(LessonAlarms.EXTRA_DAY),
             until = end?.let { ru.whensclass.widget.millisOf(it) },
         )
-        LessonAlarms.reschedule(context)
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                LessonAlarms.rescheduleNow(context)
+            } finally {
+                pending.finish()
+            }
+        }
     }
 }

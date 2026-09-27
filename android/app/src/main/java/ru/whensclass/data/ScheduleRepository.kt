@@ -501,6 +501,9 @@ class ScheduleRepository(
                     val confirmed = store.noteNotFound(System.currentTimeMillis())
                     if (confirmed) {
                         updateWidgets()
+                        // Будильники по прежнему снимку снять сразу: иначе
+                        // первое напоминание звало на пару пропавшей группы.
+                        LessonAlarms.reschedule(context)
                         return@withContext RefreshResult.Gone
                     }
                 }
