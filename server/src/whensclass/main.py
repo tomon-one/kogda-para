@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 import zoneinfo
 from contextlib import asynccontextmanager
 
@@ -63,6 +64,12 @@ async def lifespan(app: FastAPI):
         log.error(
             "WHENSCLASS_SHEET_TITLE задан без WHENSCLASS_SHEET_GID: с 14 сентября 2026 "
             "лист читается только по gid, по имени служба его не найдёт"
+        )
+
+    if settings.exit_ssh and not re.fullmatch(r"[^@\s]+@[^:\s]+:\d+", settings.exit_ssh):
+        log.error(
+            "WHENSCLASS_EXIT_SSH=%r — не вида пользователь@хост:порт: запасной путь к Google "
+            "через exit работать не будет", settings.exit_ssh,
         )
 
     store = SnapshotStore(directory)

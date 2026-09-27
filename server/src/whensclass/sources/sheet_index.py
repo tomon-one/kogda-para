@@ -15,6 +15,8 @@ import logging
 import pathlib
 import re
 
+import httpx
+
 from ..api.payloads import filled_until
 from ..config import settings
 from ..domain.models import SourceFormatChanged
@@ -193,8 +195,7 @@ def list_sheets() -> list[SheetInfo]:
 
     if not settings.sheets_api_key:
         raise SheetNotFound(
-            "ключа Sheets API нет — gid листов взять неоткуда (docs/deploy.md, «Ключ "
-            "Sheets API»)"
+            "ключа Sheets API нет — gid листов взять неоткуда"
         )
     try:
         sheets = gsheets.list_sheets_via_api(settings.sheets_api_key)
@@ -213,12 +214,17 @@ def list_sheets() -> list[SheetInfo]:
                 f"({_api_error(exc)}). Без него gid листов не узнать: пока "
                 "служба живёт запомненным листом, а когда его покрытие кончится, "
                 "уйдёт в stale. Проверить ключ и его ограничение по адресу "
-                "сервера — docs/deploy.md, «Ключ Sheets API».",
+                "сервера — руководство по серверу, «Ключ Sheets API».",
             )
         now = dt.datetime.now(dt.timezone.utc)
         if _last_list and _last_list_at and now - _last_list_at < _LIST_KEEP:
             log.info("список листов — прежний, от %s", _last_list_at)
             return _last_list
+        if isinstance(exc, httpx.TransportError):
+            # Сеть — это сеть: полчаса льготы и сетевая тревога. Раньше обрыв
+            # здесь становился «не нашёл лист» — stale и тревога сразу, хотя
+            # лист никуда не девался.
+            raise
         raise SheetNotFound(f"Sheets API не ответил: {_api_error(exc)}") from exc
     if _api_failures >= API_FAILURES_TO_ALERT:
         alerts.forget("key")
@@ -286,8 +292,17 @@ def resolve_window(
         except SheetNotFound:
             log.info("следующий лист ещё не опубликован, отдаём что есть")
             return sheets
-    if following and following[0] != first[0]:
-        sheets.append(following)
+        except httpx.TransportError as exc:
+            log.info("следующий лист не посмотрелся (%s), отдаём что есть", type(exc).__name__)
+            return sheets
+    if following:
+        same = following[1] == first[1] if first[1] else following[0] == first[0]
+        if not same:
+            sheets.append(following)
+        elif following[0] != first[0]:
+            # Тот же лист, переименованный на месте: тот же gid под новым
+            # именем. Второй раз его не качать — взять свежее имя.
+            sheets[0] = following
     return sheets
 
 

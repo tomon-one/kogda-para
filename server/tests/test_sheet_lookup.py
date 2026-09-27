@@ -284,3 +284,46 @@ def test_calendar_that_did_not_come_is_not_alarming_either(tmp_path, monkeypatch
     # не повод; берётся ближайший лист групп, а не «добраться не вышло».
     title, _ = si.resolve_for(DAY, tmp_path)
     assert title == "расписание групп 01.-05.09"
+
+
+def test_sheet_renamed_in_place_is_read_once(tmp_path, monkeypatch):
+    """Колледж переименовал лист, gid тот же: в окне он был дважды — под
+    старым и новым именем, и качался на каждом заходе два раза."""
+    def resolve_for(day, state_dir, deep=False):
+        return ("старое имя", "1") if day == dt.date(2026, 9, 25) else ("новое имя", "1")
+
+    index = si.SheetIndex(tmp_path)
+    index.remember("старое имя", "1", dt.date(2026, 9, 21), dt.date(2026, 9, 26))
+    monkeypatch.setattr(si, "resolve_for", resolve_for)
+    assert si.resolve_window(dt.date(2026, 9, 25), 8, tmp_path, deep=True) == [("новое имя", "1")]
+
+
+def test_network_blip_on_the_next_sheet_keeps_the_current(tmp_path, monkeypatch):
+    import httpx
+
+    def resolve_for(day, state_dir, deep=False):
+        if day == dt.date(2026, 9, 25):
+            return "лист A", "1"
+        raise httpx.ConnectError("нет маршрута")
+
+    index = si.SheetIndex(tmp_path)
+    index.remember("лист A", "1", dt.date(2026, 9, 21), dt.date(2026, 9, 26))
+    monkeypatch.setattr(si, "resolve_for", resolve_for)
+    assert si.resolve_window(dt.date(2026, 9, 25), 8, tmp_path, deep=True) == [("лист A", "1")]
+
+
+def test_sheets_api_unreachable_is_a_network_failure(monkeypatch):
+    """Обрыв сети у Sheets API — сеть (полчаса льготы), а не «лист не найден»
+    с тревогой сразу; и не отказ ключа."""
+    import httpx
+
+    def unreachable(key):
+        raise httpx.ConnectError("нет маршрута")
+
+    monkeypatch.setattr(si.settings, "sheets_api_key", "ключ")
+    monkeypatch.setattr(si, "_last_list", None)
+    monkeypatch.setattr(si, "_api_failures", 0)
+    monkeypatch.setattr(si.gsheets, "list_sheets_via_api", unreachable)
+    with pytest.raises(httpx.ConnectError):
+        si.list_sheets()
+    assert si._api_failures == 0

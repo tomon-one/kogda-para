@@ -393,7 +393,7 @@ def test_subgroups_sharing_lessons_are_not_a_shift():
 
 def test_new_day_without_a_date_is_named_as_such(fixture_csv):
     """Запятая вместо даты: день молча прилипал к предыдущему, а отказ говорил
-    про номера пар соседнего дня (20 сентября 2026, задача 10 в handoff)."""
+    про номера пар соседнего дня (20 сентября 2026)."""
     rows = rows_of(fixture_csv)
     rows[date_rows(rows)[1]][0] = ","
     with pytest.raises(SourceFormatChanged, match="начинается новый день"):

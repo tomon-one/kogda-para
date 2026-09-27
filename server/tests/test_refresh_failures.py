@@ -709,10 +709,13 @@ def test_only_the_failing_sheet_is_archived_as_rejected(
 
 
 def _list():
-    """list_sheets при сбое API без прежнего списка честно бросает «не найден»."""
+    """list_sheets при сбое API без прежнего списка бросает «не найден», а при
+    обрыве сети — саму сетевую ошибку."""
+    import httpx
+
     try:
         return sheet_index.list_sheets()
-    except sheet_index.SheetNotFound:
+    except (sheet_index.SheetNotFound, httpx.TransportError):
         return None
 
 

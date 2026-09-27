@@ -311,7 +311,7 @@ class Refresher:
             alerts.notify(
                 "strangers",
                 "Лист принят, но: " + "; ".join(self._suspicions[:2])
-                + ". Присмотреться — не сдвиг ли колонок (docs/deploy.md, «Когда что-то "
+                + ". Присмотреться — не сдвиг ли колонок (руководство по серверу, «Когда что-то "
                 "не так»).",
             )
         if previous is not None and previous_teachers is not None:
