@@ -10,7 +10,7 @@
 ![лицензия AGPL-3.0](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-AGPL--3.0-blue)
 [![тесты](https://github.com/tomon-one/kogda-para/actions/workflows/tests.yml/badge.svg)](https://github.com/tomon-one/kogda-para/actions/workflows/tests.yml)
 
-**[Скачать](https://github.com/tomon-one/kogda-para/releases/latest)**
+**[Скачать](https://kogda-para-nsk.ru/download/latest.apk)**
 · [все версии](https://github.com/tomon-one/kogda-para/releases)
 · [как поставить](docs/install.md) · вопросы — [@toomonn](https://t.me/toomonn)
 

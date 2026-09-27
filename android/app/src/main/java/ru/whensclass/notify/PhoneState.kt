@@ -34,6 +34,8 @@ data class PhoneState(
     val zoneWarning: String? = null,
     /** Разрешено ли «Когда пара?» ставить обновление самой себе. */
     val canInstall: Boolean = true,
+    /** Система не экономит на приложении батарею. */
+    val unrestricted: Boolean = true,
 ) {
     companion object {
         fun read(context: Context): PhoneState = PhoneState(
@@ -45,6 +47,7 @@ data class PhoneState(
             backgroundLimits = backgroundLimits(context),
             zoneWarning = zoneWarning(context),
             canInstall = runCatching { context.packageManager.canRequestPackageInstalls() }.getOrDefault(true),
+            unrestricted = Background.unrestricted(context),
         )
 
         private fun backgroundLimits(context: Context): List<String> = buildList {

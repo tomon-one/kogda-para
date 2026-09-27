@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     state_dir: str = "var"
     # Свой домен — канарейке, чтобы сверять срок отдаваемого сертификата.
-    domain: str = "schedule.edelweiss-alpine-confederation.ru"
+    domain: str = "kogda-para-nsk.ru"
     timezone: str = "Asia/Novosibirsk"
 
     # Границы правдоподобия листа для обновления. Единственный случай, где

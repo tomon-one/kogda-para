@@ -21,8 +21,8 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт:
         // по нему приложение узнаёт о новой сборке на сервере.
-        versionCode = 2
-        versionName = "pr-Зерно.0.1.1"
+        versionCode = 3
+        versionName = "pr-Зерно.0.1.2"
     }
 
     signingConfigs {
@@ -62,7 +62,7 @@ android {
             // разрешает src/debug/res/xml/network_security_config.xml.
             val local = gradleLocalProperties(rootDir)
             val url = local.getProperty("WHENSCLASS_BASE_URL")
-                ?: "https://schedule.edelweiss-alpine-confederation.ru"
+                ?: "https://kogda-para-nsk.ru"
             buildConfigField("String", "BASE_URL", "\"$url\"")
         }
         release {
@@ -76,7 +76,7 @@ android {
             buildConfigField(
                 "String",
                 "BASE_URL",
-                "\"https://schedule.edelweiss-alpine-confederation.ru\"",
+                "\"https://kogda-para-nsk.ru\"",
             )
         }
     }

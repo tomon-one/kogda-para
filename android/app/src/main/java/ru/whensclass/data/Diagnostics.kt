@@ -89,7 +89,9 @@ internal suspend fun collectDiagnostics(
         "«Соседняя подгруппа»".takeIf { phone.subgroupChannelOff },
     )
     if (off.isNotEmpty()) lines += "Каналы выключены в телефоне: ${off.joinToString(", ")}"
-    lines += "Фон: " + phone.backgroundLimits.joinToString("; ").ifEmpty { "ограничений не видно" }
+    lines += "Фон: " + phone.backgroundLimits.joinToString("; ").ifEmpty { "ограничений не видно" } +
+        // Те же слова, что в разделе «Работа в фоне».
+        ", без экономии батареи ${if (phone.unrestricted) "да" else "нет"}"
     if (phone.zoneWarning != null) lines += "Пояс: выставлен вручную и не колледжа"
     lines += "Телефон: ${LocalDateTime.now().format(STAMP)}, $zone"
 

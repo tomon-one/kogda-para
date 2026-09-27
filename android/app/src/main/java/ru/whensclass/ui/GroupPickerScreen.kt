@@ -1,18 +1,13 @@
 package ru.whensclass.ui
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -23,9 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -37,10 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import ru.whensclass.R
 import ru.whensclass.data.GroupDto
 import ru.whensclass.widget.plural
 
@@ -93,28 +84,6 @@ fun GroupPickerScreen(
         // Список отступает от клавиатуры: окно под неё не ужимается
         // (enableEdgeToEdge), и найденное пряталось под ней.
         Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
-            if (!canGoBack) {
-                // Первый запуск: логотип уместен, дальше он только мешает.
-                Image(
-                    painter = painterResource(R.drawable.logo_ngok),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .height(40.dp)
-                        .padding(start = 16.dp, bottom = 4.dp),
-                )
-            }
-
-            onTeacherMode?.let { switchRole ->
-                // Приложением пользуются и преподаватели: им нужна не группа,
-                // а собственное расписание.
-                TextButton(
-                    onClick = switchRole,
-                    modifier = Modifier.padding(start = 8.dp),
-                ) {
-                    Text("Я преподаватель")
-                }
-            }
-
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -154,28 +123,14 @@ fun GroupPickerScreen(
                         )
                     }
                     LazyColumn(
-                        contentPadding = PaddingValues(
-                            start = 12.dp, end = 12.dp, bottom = 24.dp,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
                     ) {
-                        items(filtered, key = { it.id }) { group ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    group.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 48.dp)
-                                        .clickable { onPick(group) }
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                )
-                            }
+                        // Приложением пользуются и преподаватели: им нужна не
+                        // группа, а собственное расписание.
+                        onTeacherMode?.let { switchRole ->
+                            item(key = "роль") { RoleSwitchRow("Я преподаватель", switchRole) }
                         }
+                        lettered(filtered, name = { it.name }, key = { it.id }, onPick = onPick)
                         // Дно списка. Видит только тот, кто долистал до
                         // конца вместо того, чтобы искать поиском.
                         if (query.isBlank()) {
