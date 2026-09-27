@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 from dataclasses import dataclass
 
@@ -60,6 +61,8 @@ def _via_exit(*args: str, stdin: str | None = None) -> str:
     ни там.
     """
     target, _, port = (settings.exit_ssh or "").rpartition(":")
+    if not target or not port.isdigit():
+        raise OSError(f"exit: WHENSCLASS_EXIT_SSH не вида пользователь@хост:порт — {settings.exit_ssh!r}")
     command = [
         "ssh", "-F", "/dev/null", "-p", port, "-i", settings.exit_key,
         "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
@@ -71,8 +74,18 @@ def _via_exit(*args: str, stdin: str | None = None) -> str:
     result = subprocess.run(
         command, input=(stdin or "").encode(), capture_output=True, timeout=settings.http_timeout + 60,
     )
+    why = result.stderr.decode("utf-8", "replace").strip()[:300]
+    # curl -f на exit: Google ответил кодом ошибки. Это ответ Google, а не
+    # обрыв сети, — отдаём его наверх как HTTPStatusError, как при прямом
+    # запросе: мёртвый gid (400) забывается и ищется заново, отказ ключа
+    # (403) считается тревогой ключа. Иначе через exit любой отказ Google
+    # выглядел сетевым сбоем.
+    status = re.search(r"returned error: (\d{3})", why) if result.returncode == 22 else None
+    if status:
+        request = httpx.Request("GET", f"https://exit/{args[0]}")
+        response = httpx.Response(int(status.group(1)), request=request)
+        raise httpx.HTTPStatusError(f"exit: Google ответил {status.group(1)}", request=request, response=response)
     if result.returncode != 0:
-        why = result.stderr.decode("utf-8", "replace").strip()[:300]
         raise OSError(f"exit: ssh вернул {result.returncode}: {why}")
     return result.stdout.decode("utf-8")
 
@@ -157,7 +170,9 @@ def list_sheets_via_api(key: str) -> list[SheetInfo]:
         out.append(
             SheetInfo(
                 title=props.get("title", ""),
-                gid=str(props["sheetId"]) if "sheetId" in props else None,
+                # gid — только число: он становится именем каталога архива,
+                # а ответ мог прийти и через exit.
+                gid=str(props["sheetId"]) if isinstance(props.get("sheetId"), int) else None,
                 hidden=bool(props.get("hidden")),
             )
         )

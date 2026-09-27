@@ -79,7 +79,7 @@ def check_cert(quiet: bool) -> None:
         alerts.notify(
             "canary-cert",
             f"Когда пара?: сертификат {host} кончается через {left} дн. — продление "
-            "не дошло до nginx? docs/deploy.md, «Сертификат».",
+            "не дошло до nginx? руководство по серверу, «Сертификат».",
         )
 
 
@@ -101,6 +101,16 @@ def main() -> int:
         title, gid = sheet_index.resolve_for(today, state, deep=True)
     except LookupError as exc:
         print(f"БЕДА: не нашёл лист на {today}: {exc}")
+        return 2
+    except gsheets.SheetClosed as exc:
+        # Закрытая таблица при поиске листа падала трассировкой: ловился только
+        # «не нашёл».
+        print(f"БЕДА: таблица колледжа закрыта — {exc}")
+        alerts.notify("canary-closed", f"Когда пара?: таблица колледжа закрыта — {exc}")
+        return 2
+    except Exception as exc:
+        # Сеть и прочее — сказать, но не падать: служба о сети скажет сама.
+        print(f"БЕДА: список листов не получен: {type(exc).__name__}: {exc}")
         return 2
 
     try:

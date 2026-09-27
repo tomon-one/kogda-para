@@ -35,7 +35,7 @@ class _Ssh:
 
 @pytest.fixture
 def exit_on(monkeypatch):
-    monkeypatch.setattr(settings, "exit_ssh", "wc-fetch@exit.example:47832")
+    monkeypatch.setattr(settings, "exit_ssh", "wc-fetch@exit.example:2222")
     ssh = _Ssh(stdout="﻿Дата,ИСП-924/1\n".encode())
     monkeypatch.setattr(gsheets.subprocess, "run", ssh)
     return ssh
@@ -54,7 +54,7 @@ def test_google_unreachable_sheet_comes_through_exit(monkeypatch, exit_on):
     assert gsheets.fetch_sheet_csv("656498718") == "Дата,ИСП-924/1\n"
     command, stdin = exit_on.calls[0]
     assert command[-3:] == ["wc-fetch@exit.example", "csv", "656498718"]
-    assert ["-p", "47832"] == command[command.index("-p"):command.index("-p") + 2]
+    assert ["-p", "2222"] == command[command.index("-p"):command.index("-p") + 2]
     for option in ("BatchMode=yes", "StrictHostKeyChecking=yes", "IdentitiesOnly=yes"):
         assert option in command
     assert stdin == b""
@@ -98,3 +98,27 @@ def test_api_key_goes_to_exit_on_stdin_not_in_arguments(monkeypatch, exit_on):
     assert command[-1] == "sheets"
     assert not any("секретный-ключ" in part for part in command)
     assert stdin == "секретный-ключ\n".encode()
+
+
+def test_google_error_through_exit_keeps_its_code(monkeypatch, exit_on):
+    """curl -f на exit: Google ответил 400 — это мёртвый gid, а не сеть.
+    Раньше через exit любой отказ Google выглядел обрывом связи."""
+    exit_on.returncode, exit_on.stderr = 22, b"curl: (22) The requested URL returned error: 400"
+    monkeypatch.setattr(gsheets, "_client", _google(_unreachable))
+    with pytest.raises(httpx.HTTPStatusError) as caught:
+        gsheets.fetch_sheet_csv("1")
+    assert caught.value.response.status_code == 400
+
+
+def test_gid_that_is_not_a_number_is_dropped(monkeypatch, exit_on):
+    exit_on.stdout = b'{"sheets":[{"properties":{"sheetId":"../../x","title":"groups"}}]}'
+    monkeypatch.setattr(gsheets, "_client", _google(_unreachable))
+    assert gsheets.list_sheets_via_api("ключ") == [gsheets.SheetInfo(title="groups", gid=None)]
+
+
+def test_exit_setting_without_port_does_not_call_ssh(monkeypatch, exit_on):
+    monkeypatch.setattr(settings, "exit_ssh", "wc-fetch@exit.example")
+    monkeypatch.setattr(gsheets, "_client", _google(_unreachable))
+    with pytest.raises(httpx.ConnectError):
+        gsheets.fetch_sheet_csv("1")
+    assert exit_on.calls == []

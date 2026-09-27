@@ -67,3 +67,16 @@ def test_certificate_close_to_expiry_is_an_alarm(canary, monkeypatch):
     monkeypatch.setattr(module, "cert_days_left", lambda host: 10)
     module.main()
     assert ("canary-cert", False) in sent
+
+
+def test_closed_table_during_the_search_is_an_alarm_not_a_crash(canary, monkeypatch):
+    """Закрытая таблица при поиске листа роняла канарейку трассировкой."""
+    module, sent = canary
+
+    def closed(*args, **kwargs):
+        raise module.gsheets.SheetClosed("страница входа")
+
+    monkeypatch.setattr(module.sheet_index, "resolve_for", closed)
+    monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
+    assert module.main() == 2
+    assert sent == [("canary-closed", False)]

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     sheet_gid: str | None = None
 
     # Ключ Sheets API. Без него gid листов взять неоткуда — лист не прочитать,
-    # служба уходит в stale с тревогой (docs/deploy.md, «Ключ Sheets API»).
+    # служба уходит в stale с тревогой (руководство по серверу, «Ключ Sheets API»).
     sheets_api_key: str | None = None
 
     # Запасной путь к Google — машина exit по ssh, когда напрямую Google не
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     max_gap_days: int = 25
     max_days_ahead: int = 120
     # Заморозка: служба не ходит в таблицу и сразу stale на прежнем снимке —
-    # когда на экранах чужие пары при ok (docs/deploy.md, «Когда что-то не
+    # когда на экранах чужие пары при ok (руководство по серверу, «Когда что-то не
     # так»). Прежний рычаг SPREADSHEET_ID=stop полчаса держал ok, стирал
     # память о листе и вёл ссылку «открыть таблицу» в несуществующую книгу.
     freeze: bool = False
