@@ -111,6 +111,16 @@ def test_numbered_online_room_is_online_with_a_number():
     assert parse_lesson(1, "Информатика", "онлайн12", "").room == "12"
 
 
+def test_room_zero_or_one_means_not_assigned_yet():
+    """«0» и «1» у очной пары — кабинет ещё не назначен: не «каб. 0», а место
+    не указано. Онлайн-комната с таким номером — другое, она остаётся."""
+    for cell in ("0", "1", " 0 "):
+        lesson = parse_lesson(1, "Дизайн-проектирование (Лек)", cell, "Иванова А. С.")
+        assert lesson.room is None and lesson.online is False, cell
+    assert parse_lesson(1, "Информатика", "онлайн 0", "").room == "0"
+    assert parse_lesson(1, "Информатика", "10", "").room == "10"
+
+
 def test_room_that_only_starts_with_online_stays_a_room():
     """Сверяем ячейку целиком: «онлайн-центр» был бы зданием, а не вебинаром."""
     lesson = parse_lesson(1, "Информатика", "онлайн-центр", "")
