@@ -6,12 +6,20 @@
 # колледжа и ничего не пишет на диск:
 #   csv <gid>  — лист сырым CSV;
 #   sheets     — список листов через Sheets API; ключ API — первой строкой stdin.
+#
+# На машине живёт VPN, поэтому запросы — строго по одному (flock на сам
+# скрипт: на диск ничего не пишется), а всё, что ждёт ввода, — со сроком:
+# иначе сотня подключений без перевода строки висела бы вечно.
 set -eu
 set -f
 ID=1FiMov0r4UUDKT6A56NWMImpoUakDC2YDevgaOpJQ7Qc
 
+exec 9<"$0"
+flock -w 30 9 || { echo "wc-fetch: занято" >&2; exit 75; }
+
+# -q первым: не читать ~/.curlrc.
 fetch() {
-    curl -fsSg -L --max-redirs 5 --proto =https --proto-redir =https \
+    curl -q -fsSg --proto =https --proto-redir =https \
         --connect-timeout 15 --max-time 90 --max-filesize 50000000 \
         -A 'WhensClass/0.1 (NGOK schedule widget; student project)' "$@"
 }
@@ -21,13 +29,15 @@ set -- ${SSH_ORIGINAL_COMMAND:-}
 case "${1:-}:$#" in
     csv:2)
         case "$2" in '' | *[!0-9]*) echo "wc-fetch: gid — только цифры" >&2; exit 2 ;; esac
-        fetch "https://docs.google.com/spreadsheets/d/$ID/export?format=csv&gid=$2"
+        # Экспорт перенаправляет на googleusercontent.com — идём за ним.
+        fetch -L --max-redirs 5 "https://docs.google.com/spreadsheets/d/$ID/export?format=csv&gid=$2"
         ;;
     sheets:1)
-        IFS= read -r key || true
+        key=$(timeout 10 head -n 1) || true
         case "$key" in '' | *[!A-Za-z0-9_-]*) echo "wc-fetch: ключ не того вида" >&2; exit 2 ;; esac
         # Ключ — заголовком из stdin (-K -), а не в адресе и не в аргументах:
-        # так его нет ни в списке процессов, ни в журналах.
+        # так его нет ни в списке процессов, ни в журналах. Без -L: заголовок
+        # с ключом не должен уйти на чужой хост.
         printf 'header = "X-Goog-Api-Key: %s"\n' "$key" |
             fetch -K - "https://sheets.googleapis.com/v4/spreadsheets/$ID?fields=sheets.properties(sheetId,title,hidden)"
         ;;
