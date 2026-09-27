@@ -170,7 +170,8 @@ class NextLessonWidget : GlanceAppWidget() {
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
                 val head = status + nextLessonHead(
                     time, when_, ongoing, lesson.groups,
-                    place = if (tight) place(lesson, withKind = false) else null,
+                    // Без «⧉»: нажатие на шапку открывает приложение, а не копирует.
+                    place = if (tight) place(lesson, withKind = false).removeSuffix("  ⧉") else null,
                 )
                 Text(
                     head,
@@ -302,16 +303,20 @@ internal fun nextLessonHead(
     groups: String?,
     place: String? = null,
 ): String {
-    // [place] — только в тесной клетке, где третьей строки нет. Там место
-    // идёт раньше группы, а «сегодня» опускается: строка режется справа, и
-    // место уходило в многоточие первым.
-    val day = whenWord.takeUnless { place != null && !ongoing && it == "сегодня" }
-    val core = when {
-        ongoing -> "$whenWord · $time"
-        day == null -> time
-        else -> "$time · $day"
+    // [place] — только в тесной клетке, где третьей строки нет. Строка
+    // режется справа, поэтому место — сразу за временем, а «сегодня» не
+    // пишется вовсе; у идущей пары — «идёт» и место: время начала опоздавшему
+    // уже ни к чему, а кабинет — то, ради чего он смотрит.
+    if (place != null) {
+        val parts = if (ongoing) {
+            listOf("идёт", place)
+        } else {
+            listOfNotNull(time, place, whenWord.takeUnless { it == "сегодня" })
+        }
+        return (parts + listOfNotNull(groups)).joinToString(" · ")
     }
-    return listOfNotNull(core, place, groups).joinToString(" · ")
+    val core = if (ongoing) "$whenWord · $time" else "$time · $whenWord"
+    return listOfNotNull(core, groups).joinToString(" · ")
 }
 
 /** Три строки маленького виджета — в sp, без отступов. */

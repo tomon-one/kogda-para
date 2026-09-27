@@ -65,6 +65,22 @@ internal fun newestOnGithub(releases: List<GithubRelease>): ReleaseDto? = releas
     }
     .maxByOrNull { it.versionCode }
 
+private val VERSION_NAME = Regex("""(b|pr|r)-\p{L}+\.(\d+)\.(\d+)\.(\d+)""")
+
+/**
+ * Сборка прежнего счёта. До 27.09.2026 номера дошли до 86-го, а имена были
+ * «0.x», «b-…» и «pr-Зерно.0.10.x»; потом счёт начат заново. Прежние сборки
+ * подписаны тем же ключом, и с номером больше нынешнего Android поставил бы
+ * такую поверх — после этого новые сборки для телефона «старее», и
+ * обновления встали бы навсегда. Имя версии зашито в подписанный файл, его не
+ * подделать: по нему прежние и отсекаются.
+ */
+internal fun olderNumbering(versionName: String?): Boolean {
+    val match = VERSION_NAME.matchEntire(versionName ?: return true) ?: return true
+    val (prefix, major, minor) = match.destructured
+    return major.toInt() == 0 && (prefix == "b" || minor.toInt() >= 10)
+}
+
 /**
  * Объявлять ли сборку. Про одну и ту же — один раз, но «уже объявлено»
  * сверяется на равенство, а не «не меньше»: номер приходит с сервера без
@@ -298,6 +314,9 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         }
         if (versionCode(archive) != release.versionCode.toLong()) {
             return "в файле сборка ${versionCode(archive)}, а объявлена ${release.versionCode}"
+        }
+        if (olderNumbering(archive.versionName)) {
+            return "это сборка прежнего счёта (${archive.versionName}) — ставить её нельзя"
         }
         val mine = certificates(runCatching { installedInfo(pm) }.getOrNull(), currentOnly = true)
         val theirs = certificates(archive, currentOnly = false)

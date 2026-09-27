@@ -127,11 +127,14 @@ class ScheduleApi(
     fun isOurs(url: String): Boolean {
         val target = url.toHttpUrlOrNull() ?: return false
         val base = baseUrl.toHttpUrlOrNull()
+        // Только файл сборки, а не любой путь: иначе захваченная служба
+        // отдала бы APK по адресу вроде /v1/что-угодно, а файлы в /download/
+        // раздаёт nginx из каталога root.
         if (base != null && target.scheme == base.scheme && target.host == base.host && target.port == base.port) {
-            return true
+            return OUR_APK.matches(target.encodedPath)
         }
         return target.scheme == "https" && target.host == "github.com" && target.port == 443 &&
-            target.encodedPath.startsWith("/$REPO/releases/download/")
+            GITHUB_APK.matches(target.encodedPath)
     }
 
     private fun get(path: String): String {
@@ -149,5 +152,7 @@ class ScheduleApi(
         const val CACHE_BYTES = 2L * 1024 * 1024
         const val GITHUB_API = "https://api.github.com"
         const val REPO = "tomon-one/kogda-para"
+        val OUR_APK = Regex("""/download/kogda-para-\d+\.apk""")
+        val GITHUB_APK = Regex("""/$REPO/releases/download/[^/]+/kogda-para-\d+\.apk""")
     }
 }

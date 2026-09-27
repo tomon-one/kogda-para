@@ -90,6 +90,20 @@ class LessonTextTest {
     }
 
     @Test
+    fun `своя группа не подписывается, точка после инициалов не удваивается`() {
+        val own = LessonAlarms.Alarm(
+            at = LocalDateTime.of(2026, 9, 9, 8, 40),
+            lesson = LessonDto(number = 4, subject = "Физика", teachers = listOf("Трухачев Д. Д."), groups = "ИСП-924/1"),
+            minutes = 20,
+            day = "2026-09-09",
+            ownGroup = "ИСП-924/1",
+        )
+        assertEquals("4 пара. Трухачев Д. Д.", LessonAlarms.text(own))
+        val theirs = own.copy(lesson = own.lesson.copy(groups = "ИСП-924/2"))
+        assertEquals("4 пара. Трухачев Д. Д. ИСП-924/2", LessonAlarms.text(theirs))
+    }
+
+    @Test
     fun `пара другой группы подписана группой`() {
         val text = LessonAlarms.text(
             alarm(LessonDto(number = 3, subject = "Физика", room = "272", groups = "ИСП-924/2")),

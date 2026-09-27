@@ -99,6 +99,20 @@ class AppUpdateTest {
         assertTrue(api.isOurs("https://github.com/tomon-one/kogda-para/releases/download/t/kogda-para-2.apk"))
         assertFalse(api.isOurs("https://github.com/someone/else/releases/download/t/kogda-para-2.apk"))
         assertFalse(api.isOurs("http://github.com/tomon-one/kogda-para/releases/download/t/kogda-para-2.apk"))
+        // Только файл сборки: не любой путь на своём сервере и в выпусках.
+        assertFalse(api.isOurs("$base/v1/schedule/kogda-para-2.apk"))
+        assertFalse(api.isOurs("$base/download/other.apk"))
+        assertFalse(api.isOurs("https://github.com/tomon-one/kogda-para/releases/download/t/x/kogda-para-2.apk"))
+    }
+
+    @Test
+    fun `сборки прежнего счёта не ставятся, даже подписанные тем же ключом`() {
+        for (old in listOf("0.2", "0.26", "b-Тень.0.3.1", "b-Сон.0.9.12", "pr-Зерно.0.10.0", "pr-Зерно.0.10.3", null)) {
+            assertTrue(old.toString(), olderNumbering(old))
+        }
+        for (new in listOf("pr-Зерно.0.1.0", "pr-Росток.0.2.3", "pr-Плод.0.9.12", "r-Алтай.1.0.0", "r-Байкал.1.1.0")) {
+            assertFalse(new, olderNumbering(new))
+        }
     }
 
     @Test

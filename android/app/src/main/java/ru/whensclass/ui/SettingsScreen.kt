@@ -256,6 +256,9 @@ fun SettingsScreen(
             }
 
             SwitchRow("Сообщать о новых версиях", notifyUpdates, onNotifyUpdates)
+            if (notifyUpdates && notifications && phone.updateChannelOff) {
+                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_UPDATE, "Сообщения о новых версиях")
+            }
             // Магазина нет, обновление никто не принесёт.
             Hint("Приложение проверяет это раз в час вместе с расписанием.")
 
@@ -683,13 +686,18 @@ private fun ThemeOption(
 private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
     val context = LocalContext.current
+    // runCatching, как у остальных переходов: на части прошивок такого экрана
+    // нет, и голый вызов ронял приложение.
     val open = {
-        context.startActivity(
-            Intent(
-                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                Uri.parse("package:${context.packageName}"),
-            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
+        runCatching {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:${context.packageName}"),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+        Unit
     }
     Row(
         modifier = Modifier
@@ -822,11 +830,13 @@ private fun NotificationsDenied(allowed: Boolean) {
         ActionButton(
             label = "Разрешить",
             onClick = {
-                context.startActivity(
-                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
+                runCatching {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
             },
         )
     }

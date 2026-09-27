@@ -149,7 +149,10 @@ object Notifications {
      * true — уведомление ушло в систему; false — уведомления запрещены.
      */
     fun newVersion(context: Context, title: String, text: String): Boolean =
-        show(context, CHANNEL_UPDATE, ID_UPDATE, title, text, day = null, update = true)
+        // Канал выключен в настройках телефона — система уведомление молча
+        // выбросит: сборка не должна считаться объявленной, как и у сбоя.
+        show(context, CHANNEL_UPDATE, ID_UPDATE, title, text, day = null, update = true) &&
+            !channelOff(context, CHANNEL_UPDATE)
 
     // Разрешение проверяет allowed() в первой строке, а SecurityException, если
     // его отберут между проверкой и показом, ловит runCatching: lint видит
