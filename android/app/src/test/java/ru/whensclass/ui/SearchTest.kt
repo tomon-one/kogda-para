@@ -22,3 +22,13 @@ class SearchTest {
         assertTrue(matchesQuery("Чернышёва Валерия Дмитриевна", "чернышёва в"))
     }
 }
+
+class LetterTest {
+    @org.junit.Test
+    fun `разделы по первой букве`() {
+        org.junit.Assert.assertEquals("И", letterOf("ИСП-924/1"))
+        org.junit.Assert.assertEquals("0–9", letterOf("01.26.Р.ИИ.ГД.ОФ.9-НСК"))
+        org.junit.Assert.assertEquals("Е", letterOf("Ёлкина А. А."))
+        org.junit.Assert.assertEquals("#", letterOf(""))
+    }
+}

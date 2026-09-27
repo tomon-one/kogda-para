@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +40,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -158,6 +161,50 @@ fun MinimalCheck(selected: Boolean, modifier: Modifier = Modifier) {
 }
 
 /**
+ * Выбор одного из нескольких одной строкой. Три варианта темы столбиком с
+ * галочками занимали полкарточки ради одной настройки.
+ */
+@Composable
+fun <T> Segmented(
+    options: List<Pair<String, T>>,
+    selected: T,
+    onPick: (T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(3.dp)
+            .selectableGroup(),
+    ) {
+        options.forEach { (label, value) ->
+            val on = value == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 42.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent,
+                    )
+                    .selectable(selected = on, role = Role.RadioButton, onClick = { onPick(value) }),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                    color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/**
  * Дно длинного списка.
  *
  * Видит только тот, кто долистал до конца вместо того, чтобы искать
@@ -232,10 +279,12 @@ fun ActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** Отступ сверху — от строки над кнопкой; в одной строке с текстом не нужен. */
+    top: Dp = 6.dp,
 ) {
     Box(
         modifier = modifier
-            .padding(top = 6.dp)
+            .padding(top = top)
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(enabled = enabled, onClick = onClick)

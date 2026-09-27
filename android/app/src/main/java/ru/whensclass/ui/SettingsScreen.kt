@@ -6,6 +6,7 @@ import android.widget.Toast
 import android.os.Build
 import android.provider.Settings
 import android.net.Uri
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
 import ru.whensclass.data.ReleaseDto
+import ru.whensclass.notify.Background
+import ru.whensclass.notify.Vendor
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import kotlinx.coroutines.launch
@@ -165,27 +168,49 @@ fun SettingsScreen(
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
         Section(if (teacherMode) "Преподаватель" else "Группа") {
-            Text(groupName ?: "не выбрано", style = MaterialTheme.typography.bodyLarge)
-            ActionButton(
-                label = if (teacherMode) "Выбрать заново" else "Сменить группу",
-                onClick = onChangeGroup,
-            )
+            // Название и кнопка одной строкой: столбиком раздел выходил
+            // вдвое выше, а читается так же.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    groupName ?: "не выбрано",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                )
+                ActionButton(
+                    label = if (teacherMode) "Выбрать заново" else "Сменить",
+                    onClick = onChangeGroup,
+                    top = 0.dp,
+                )
+            }
 
             if (!teacherMode) {
-                Text(
-                    // «Соседняя»: просто «Подгруппа» читали как свою первую или
-                    // вторую и выбирали себя же (разбор текстов 27.09).
-                    "Соседняя подгруппа: " + (secondGroupName ?: "нет"),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ActionButton(
-                        label = if (secondGroupName == null) "Добавить" else "Заменить",
-                        onClick = onPickSecondGroup,
-                    )
-                    if (secondGroupName != null) {
-                        ActionButton(label = "Убрать", onClick = onClearSecondGroup)
+                Row(
+                    modifier = Modifier.padding(top = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        // Пометка beta: выбор подгруппы неудобен и будет
+                        // переделан. «Соседняя» из подписи убрана — оба по
+                        // просьбе Tomon 28.09.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Подгруппа", style = MaterialTheme.typography.bodyLarge)
+                            BetaMark(modifier = Modifier.padding(start = 8.dp))
+                        }
+                        Text(
+                            secondGroupName ?: "не выбрана",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionButton(
+                            label = if (secondGroupName == null) "Добавить" else "Заменить",
+                            onClick = onPickSecondGroup,
+                            top = 0.dp,
+                        )
+                        if (secondGroupName != null) {
+                            ActionButton(label = "Убрать", onClick = onClearSecondGroup, top = 0.dp)
+                        }
                     }
                 }
             }
@@ -193,10 +218,19 @@ fun SettingsScreen(
 
         PinWidgets()
 
+        BackgroundWork(phone.unrestricted)
+
         Section("Оформление") {
-            ThemeOption("Как в системе", ThemeChoice.SYSTEM, theme, onTheme)
-            ThemeOption("Тёмная", ThemeChoice.DARK, theme, onTheme)
-            ThemeOption("Светлая", ThemeChoice.LIGHT, theme, onTheme)
+            // «Как в системе» в треть строки не влезало.
+            Segmented(
+                options = listOf(
+                    "Системная" to ThemeChoice.SYSTEM,
+                    "Тёмная" to ThemeChoice.DARK,
+                    "Светлая" to ThemeChoice.LIGHT,
+                ),
+                selected = theme,
+                onPick = onTheme,
+            )
         }
 
         Section("Уведомления") {
@@ -556,6 +590,83 @@ private fun PinWidgets() {
     }
 }
 
+/**
+ * Работа в фоне — только на марках, которые её режут сверх обычного Android.
+ * Включить её может только человек, в настройках телефона; приложение лишь
+ * открывает нужный экран. Галочка — только у стандартной экономии батареи:
+ * фирменные переключатели прошивки приложению не видны.
+ */
+@Composable
+private fun BackgroundWork(unrestricted: Boolean) {
+    val vendor = remember { Vendor.current() } ?: return
+    val steps = remember(vendor) { Background.steps(vendor) }
+    val context = LocalContext.current
+    Section("Работа в фоне") {
+        Hint(
+            "${vendor.title()} не будит приложения в фоне: виджет не обновится, а " +
+                "напоминание не придёт, пока приложение не открыть. Нажмите пункты по очереди.",
+        )
+        steps.forEach { step ->
+            ExternalRow(step.label, checked = if (step.battery) unrestricted else null) {
+                if (!Background.open(context, step)) {
+                    Toast.makeText(
+                        context,
+                        "Экран «${step.label}» не открылся — ищите его в свойствах приложения",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+            Hint(step.hint)
+        }
+        if (vendor.pinInRecents) {
+            Hint(
+                "Ещё закрепите приложение в недавних (замок на карточке): иначе очистка " +
+                    "памяти выгружает его вместе с остальными.",
+            )
+        }
+        Hint(
+            "Не помогло — напишите автору, ссылка в «О приложении», и приложите " +
+                "«Сведения для отчёта».",
+        )
+    }
+}
+
+/**
+ * Строка, которая уводит в настройки телефона: значок справа говорит, что
+ * нажатие откроет чужой экран. [checked] — что там сейчас, если это видно.
+ */
+@Composable
+private fun ExternalRow(label: String, checked: Boolean? = null, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (checked != null) MinimalCheck(selected = checked, modifier = Modifier.padding(end = 10.dp))
+            ExternalMark(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Пометка у того, что работает, но ещё будет переделано. */
+@Composable
+private fun BetaMark(modifier: Modifier = Modifier) {
+    Text(
+        "beta",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
+}
+
 /** Пояснение под выключателем. */
 @Composable
 private fun Hint(text: String) {
@@ -647,26 +758,6 @@ private fun Section(
     }
 }
 
-@Composable
-private fun ThemeOption(
-    label: String,
-    value: ThemeChoice,
-    current: ThemeChoice,
-    onPick: (ThemeChoice) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            // Не ниже 48dp: попасть пальцем в строку списка иначе трудно.
-            .heightIn(min = 48.dp)
-            .selectable(selected = value == current, onClick = { onPick(value) }),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MinimalCheck(selected = value == current, modifier = Modifier.padding(end = 12.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
 /**
  * Точное время напоминаний.
  *
@@ -699,21 +790,7 @@ private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
         }
         Unit
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp)
-            .heightIn(min = 48.dp)
-            .clickable(onClick = open),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text("Точное время", style = MaterialTheme.typography.bodyLarge)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            MinimalCheck(selected = allowed, modifier = Modifier.padding(end = 10.dp))
-            ExternalMark(color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
+    ExternalRow("Точное время", checked = allowed, onClick = open)
     val what = if (reminders) "напоминание и подсветку на виджетах" else "подсветку на виджетах"
     Text(
         if (allowed) {

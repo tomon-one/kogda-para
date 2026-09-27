@@ -14,6 +14,14 @@
          Разрешение выдаётся человеком в настройках телефона; не выдали —
          приложение ставит неточный будильник и продолжает работать. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Системное окно «Разрешить работу в фоне?». Спрашивается только по
+         кнопке в разделе «Работа в фоне» — на Xiaomi, Huawei, Honor и Samsung,
+         где без этого не приходят обновление и будильники звонка. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Без него Huawei на EMUI 10–11 не открывает чужому приложению свой
+         экран «Запуск приложений» (тот же раздел). На остальных телефонах
+         такого разрешения нет, и оно ничего не значит. -->
+    <uses-permission android:name="com.huawei.permission.external_app_settings.USE_COMPONENT" />
 
     <!-- Найти системный установщик: обновление уходит ему явно, а не любому
          приложению с фильтром на APK. -->

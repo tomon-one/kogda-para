@@ -84,10 +84,6 @@ fun SelfPickerScreen(
     ) { padding ->
         // От клавиатуры — как в выборе группы.
         Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
-            TextButton(onClick = onStudentMode, modifier = Modifier.padding(start = 8.dp)) {
-                Text("Я студент")
-            }
-
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -126,25 +122,9 @@ fun SelfPickerScreen(
                     }
                     LazyColumn(
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        items(filtered, key = { it.id }) { teacher ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    teacher.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 48.dp)
-                                        .clickable { onPick(teacher) }
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                )
-                            }
-                        }
+                        item(key = "роль") { RoleSwitchRow("Я студент", onStudentMode) }
+                        lettered(filtered, name = { it.name }, key = { it.id }, onPick = onPick)
                         // Дно списка — для тех, кто листает, а не ищет.
                         if (query.isBlank()) {
                             item(key = "конец") {
