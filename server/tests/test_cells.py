@@ -37,13 +37,13 @@ CASES = [
         dict(room="279", cancelled=True, note=None),
     ),
     (
-        ("Иностранный язык (Пр)", "https://my.mts-link.ru/j/100000001/20000000065", ""),
-        dict(url="https://my.mts-link.ru/j/100000001/20000000065", room=None),
+        ("Иностранный язык (Пр)", "https://my.mts-link.ru/j/100000004/20000000626", ""),
+        dict(url="https://my.mts-link.ru/j/100000004/20000000626", room=None),
     ),
     (
-        ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 8 (Б.Хмельницкого 8)", ""),
+        ("Физкультура (Пр)", "Спортзал Б.Хмельницкого 0 (Б.Хмельницкого 0)", ""),
         # скобка в конце аудитории — это адрес, а не тип занятия
-        dict(room="Спортзал Б.Хмельницкого 8 (Б.Хмельницкого 8)", kind="Пр"),
+        dict(room="Спортзал Б.Хмельницкого 0 (Б.Хмельницкого 0)", kind="Пр"),
     ),
     (
         ('Технология выполнения работ по профессии "Графический дизайнер" (Пр)',
@@ -119,9 +119,9 @@ def test_room_that_only_starts_with_online_stays_a_room():
 
 
 def test_link_means_online_too():
-    lesson = parse_lesson(1, "Информатика", "https://my.mts-link.ru/j/5/8", "")
+    lesson = parse_lesson(1, "Информатика", "https://my.mts-link.ru/j/6/0", "")
     assert lesson.online is True
-    assert lesson.url == "https://my.mts-link.ru/j/5/8"
+    assert lesson.url == "https://my.mts-link.ru/j/6/0"
 
 
 def test_ordinary_room_is_not_online():
@@ -162,18 +162,18 @@ AUDIT_CASES = [
     ),
     (
         # Ссылка слитно с подписью: ГД-925/3, 04.09, пара 1.
-        ("Иностранный язык", "онлайнhttps://my.mts-link.ru/j/100000001/20000000112", ""),
-        dict(url="https://my.mts-link.ru/j/100000001/20000000112", room=None),
+        ("Иностранный язык", "онлайнhttps://my.mts-link.ru/j/100000004/20000000629", ""),
+        dict(url="https://my.mts-link.ru/j/100000004/20000000629", room=None),
     ),
     (
         # Голая ссылка разбиралась и раньше.
-        ("Информатика", "https://my.mts-link.ru/j/5/8", ""),
-        dict(url="https://my.mts-link.ru/j/5/8", room=None),
+        ("Информатика", "https://my.mts-link.ru/j/6/0", ""),
+        dict(url="https://my.mts-link.ru/j/6/0", room=None),
     ),
     (
         # Ссылка в колонке предмета: УП-926/1, 07.09, пара 4.
-        ("https://my.mts-link.ru/j/5/8", "", "Новиков Вячеслав Сергеевич"),
-        dict(url="https://my.mts-link.ru/j/5/8", subject="Занятие онлайн"),
+        ("https://my.mts-link.ru/j/6/0", "", "Новиков Вячеслав Сергеевич"),
+        dict(url="https://my.mts-link.ru/j/6/0", subject="Занятие онлайн"),
     ),
     (
         # Причина отмены в колонке аудитории: Т-1125, 07.09, пара 4.
@@ -245,7 +245,7 @@ def test_two_line_cancellation_keeps_the_reason_as_a_reason():
     assert lesson.note == "Преподаватель заболел"
 
 
-@pytest.mark.parametrize("room", ["55/1", "171/3", "Восход 222", "Спортзал 8", "279а"])
+@pytest.mark.parametrize("room", ["55/1", "171/3", "Восход 222", "Спортзал 0", "279а"])
 def test_room_after_cancellation_stays_a_room(room):
     """«ОТМЕНА 55/1» — отменена пара в 55/1, а не причина «55/1»."""
     lesson = parse_lesson(1, "Информатика", f"ОТМЕНА {room}", "")
@@ -300,7 +300,7 @@ def test_same_sheet_trouble_is_logged_once(caplog):
 @pytest.mark.parametrize(
     "subject, room, teachers, expected",
     [
-        # МФ-926/8, 25.09, пара 4: тип и преподаватель — новой пары.
+        # МФ-926/0, 25.09, пара 4: тип и преподаватель — новой пары.
         (
             "Математика (Пр) ЗАМЕНА Коммуникативный тренинг (Лек)", "351",
             "Романова Анастасия Юрьевна Звонцов Александр Сергеевич",
@@ -343,16 +343,16 @@ def test_word_replacement_alone_is_not_a_replacement():
     [
         ("Русский язык (Лек) преподаватель на онлайн, студенты в кабинете 269", "269"),
         ("Русский язык (Лек) преподаватель на онлайн, студенты в кабинет 369", "369"),
-        ("Русский язык (Пр) преподаватель на онлайн, студенты в кабинете 171/8", "171/8"),
+        ("Русский язык (Пр) преподаватель на онлайн, студенты в кабинете 171/0", "171/0"),
         ("Экономика организации (Лек) студенты в кабинете 351", "351"),
     ],
 )
 def test_students_in_a_room_is_an_offline_lesson_with_a_link(subject, room):
     """Л-926/3, 23.09, пара 1: студенты в кабинете, преподаватель по ссылке.
     Пара очная: кабинет — место, ссылка остаётся, «онлайн» нет."""
-    lesson = parse_lesson(1, subject, "https://my.mts-link.ru/j/5/8", "Московец К. Р.")
+    lesson = parse_lesson(1, subject, "https://my.mts-link.ru/j/6/0", "Московец К. Р.")
     assert lesson.room == room
-    assert lesson.url == "https://my.mts-link.ru/j/5/8"
+    assert lesson.url == "https://my.mts-link.ru/j/6/0"
     assert lesson.online is False
     assert "студент" not in lesson.subject and "онлайн" not in lesson.subject
     assert lesson.kind in ("Лек", "Пр")
@@ -382,7 +382,7 @@ def test_typo_in_online_is_still_online(room):
     assert lesson.online and lesson.room in (None, "12")
 
 
-@pytest.mark.parametrize("room", ["Спортзал 8", "Восход 222", "онлайн-центр"])
+@pytest.mark.parametrize("room", ["Спортзал 0", "Восход 222", "онлайн-центр"])
 def test_rooms_that_only_look_like_online_stay_rooms(room):
     assert not parse_lesson(3, "Физика (Пр)", room, "").online
 
