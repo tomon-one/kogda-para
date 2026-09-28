@@ -708,15 +708,20 @@ window.addEventListener('beforeinstallprompt', function (e) {
   installEvent = e;
 });
 
+/**
+ * Окно «Тестовый режим» — только на /tested/: основной сайт после аудита
+ * вышел из теста (Tomon 28.09), а tested тестовым и остаётся.
+ */
 function testNotice() {
+  if (store.CHANNEL !== 'tested') return;
   var key = store.CHANNEL + ':test-notice';
   try {
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
   } catch (e) { /* без хранилища — показывать каждый раз */ }
   dialog('Тестовый режим', [
-    h('p', null, 'Сайт работает в тестовом режиме: что-то может показываться не так. ' +
-      'Сверяйтесь с таблицей колледжа, когда это важно.'),
+    h('p', null, 'Это проверочная копия сайта: новое попадает сюда раньше, чем на ' +
+      'kogda-para-nsk.ru, и может показываться не так. Сверяйтесь с таблицей колледжа, когда это важно.'),
     h('p', null, 'Нашли ошибку — напишите автору в Telegram: ',
       externalLink('@toomonn', 'https://t.me/toomonn'), '.'),
   ], [{ label: 'Понятно', onClick: closeDialog }]);
