@@ -77,6 +77,8 @@ body {
   -webkit-tap-highlight-color: transparent;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  /* Экран въезжает сбоку — без полосы прокрутки на время въезда. */
+  overflow-x: hidden;
 }
 
 body.dialog-open { overflow: hidden; }
@@ -185,7 +187,11 @@ a:hover { text-decoration: underline; }
 .icon { display: inline-flex; line-height: 0; }
 .icon svg { display: block; }
 
-.icon.spin svg { animation: spin 0.45s linear infinite; }
+.icon.spin svg {
+  animation: spin 0.45s linear infinite;
+  /* Экран перестраивается посреди оборота — новый значок продолжает с той же фазы. */
+  animation-delay: var(--spin-shift, 0ms);
+}
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -203,11 +209,26 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-bottom: 3px solid transparent;
   color: var(--fg);
+  position: relative;
 }
 
-.tab.on { border-bottom-color: var(--primary); }
+.tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--primary);
+  -webkit-transform: scaleX(0);
+  transform: scaleX(0);
+}
+
+.tab.on::after {
+  -webkit-transform: none;
+  transform: none;
+}
 .tab.muted { color: var(--muted); }
 .tabs.soon { margin-bottom: 8px; }
 
@@ -335,6 +356,17 @@ a:hover { text-decoration: underline; }
 .past .time, .past .subject { color: var(--muted); }
 .lesson.now .time { font-weight: 700; color: var(--primary); }
 .now-label { font-size: 11px; color: var(--primary); }
+
+.now-label::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  vertical-align: 1px;
+}
 
 .lesson-body {
   flex: 1;
@@ -708,4 +740,139 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--shadow);
   -webkit-transform: translateX(-50%);
   transform: translateX(-50%);
+}
+
+/*
+  Движение. Всё — внутри no-preference: у кого в системе «уменьшить движение»,
+  экраны просто сменяются. Экран перестраивается целиком, поэтому въезд,
+  начатый до перестройки, продолжается с того же места: сдвиг --shift ставит
+  страница (main.js).
+*/
+@media (prefers-reduced-motion: no-preference) {
+  .screen.enter-forward > :not(.bottom-bar) {
+    -webkit-animation: enter-forward 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: enter-forward 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  .screen.enter-back > :not(.bottom-bar) {
+    animation: enter-back 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  .screen.enter-fade > *,
+  .screen.enter-forward > .bottom-bar,
+  .screen.enter-back > .bottom-bar {
+    animation: fade-in 0.22s ease-out both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  .screen.enter-fade .tab.on::after,
+  .screen.enter-forward .tab.on::after {
+    animation: underline 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  /* Дни всплывают по очереди — когда расписание только появилось. */
+  .days.appear > * {
+    animation: rise 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: calc(var(--i, 0) * 45ms + var(--shift, 0ms));
+  }
+
+  .days.appear > :nth-child(2) { --i: 1; }
+  .days.appear > :nth-child(3) { --i: 2; }
+  .days.appear > :nth-child(4) { --i: 3; }
+  .days.appear > :nth-child(5) { --i: 4; }
+  .days.appear > :nth-child(6) { --i: 5; }
+  .days.appear > :nth-child(n+7) { --i: 6; }
+
+  .icon.pop,
+  .pin-star.pop {
+    animation: pop 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  .now-label::before { animation: pulse 1.6s ease-in-out infinite; }
+
+  .snackbar { animation: snack-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .snackbar.hide { animation: snack-out 0.18s ease-in both; }
+
+  .overlay { animation: fade-in 0.16s ease-out both; }
+  .overlay.closing { animation: fade-out 0.14s ease-in both; }
+  .dialog { animation: dialog-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+  /* Нажатие: кнопка чуть проседает, строка — только подсветкой. */
+  .action, .text-button, .icon-button, .primary-button, .link-button, .segment, .pin-star,
+  .list-row, .role-row, .pin-open, .tab, .text-link {
+    transition: background-color 0.15s, opacity 0.15s, -webkit-transform 0.12s;
+    transition: background-color 0.15s, opacity 0.15s, transform 0.12s;
+  }
+
+  .action:active, .text-button:active, .icon-button:active, .primary-button:active,
+  .link-button:active, .segment:active, .pin-star:active {
+    -webkit-transform: scale(0.96);
+    transform: scale(0.96);
+  }
+
+  /* Смена темы — цвета перетекают, а не щёлкают. */
+  html.theme-anim,
+  html.theme-anim * {
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s !important;
+  }
+}
+
+@keyframes enter-forward {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes enter-back {
+  from { opacity: 0; transform: translateX(-28px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes underline {
+  from { transform: scaleX(0); }
+  to { transform: none; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pop {
+  0% { opacity: 0; transform: scale(0.5); }
+  60% { opacity: 1; transform: scale(1.18); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: none; }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+@keyframes snack-in {
+  from { opacity: 0; transform: translate(-50%, 16px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes snack-out {
+  from { opacity: 1; transform: translate(-50%, 0); }
+  to { opacity: 0; transform: translate(-50%, 16px); }
+}
+
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.95); }
+  to { opacity: 1; transform: none; }
 }

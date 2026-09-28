@@ -109,6 +109,7 @@ export function othersList(app, kind, selfId) {
   var teachers = kind === 'teachers';
   var key = 'others-' + kind;
   var results = h('div', { class: 'results' });
+  var popped = null;
 
   function fill() {
     clear(results);
@@ -137,9 +138,14 @@ export function othersList(app, kind, selfId) {
           h('span', null, item.name),
           isSelf ? h('span', { class: 'self-mark' }, 'это вы') : null),
         h('button', {
-          type: 'button', class: 'pin-star' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false',
-          'aria-label': 'Закрепить наверху списка',
-          onclick: function () { app.togglePin(kind, item.id); fill(); },
+          type: 'button', class: 'pin-star' + (on ? ' on' : '') + (item.id === popped ? ' pop' : ''),
+          'aria-pressed': on ? 'true' : 'false', 'aria-label': 'Закрепить наверху списка',
+          onclick: function () {
+            app.togglePin(kind, item.id);
+            popped = item.id;
+            fill();
+            popped = null;
+          },
         }, on ? '★' : '☆'));
     }
 
