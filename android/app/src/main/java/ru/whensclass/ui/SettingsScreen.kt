@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -169,7 +173,8 @@ fun SettingsScreen(
     ) {
         Section(if (teacherMode) "Преподаватель" else "Группа") {
             // Название и кнопка одной строкой: столбиком раздел выходил
-            // вдвое выше, а читается так же.
+            // вдвое выше, а читается так же. Кнопки раздела — одной ширины
+            // (Tomon 28.09).
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     groupName ?: "не выбрано",
@@ -179,19 +184,16 @@ fun SettingsScreen(
                 ActionButton(
                     label = if (teacherMode) "Выбрать заново" else "Сменить",
                     onClick = onChangeGroup,
+                    modifier = Modifier.widthIn(min = GROUP_BUTTON),
                     top = 0.dp,
                 )
             }
 
             if (!teacherMode) {
-                Row(
-                    modifier = Modifier.padding(top = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        // Пометка beta: выбор подгруппы неудобен и будет
-                        // переделан. «Соседняя» из подписи убрана — оба по
-                        // просьбе Tomon 28.09.
+                // Пометка beta: выбор подгруппы неудобен и будет переделан.
+                // «Соседняя» из подписи убрана — оба по просьбе Tomon 28.09.
+                val subgroup = @Composable {
+                    Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Подгруппа", style = MaterialTheme.typography.bodyLarge)
                             BetaMark(modifier = Modifier.padding(start = 8.dp))
@@ -202,15 +204,35 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                }
+                if (secondGroupName == null) {
+                    Row(
+                        modifier = Modifier.padding(top = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(modifier = Modifier.weight(1f).padding(end = 8.dp)) { subgroup() }
                         ActionButton(
-                            label = if (secondGroupName == null) "Добавить" else "Заменить",
+                            label = "Добавить",
                             onClick = onPickSecondGroup,
+                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
                             top = 0.dp,
                         )
-                        if (secondGroupName != null) {
-                            ActionButton(label = "Убрать", onClick = onClearSecondGroup, top = 0.dp)
-                        }
+                    }
+                } else {
+                    // Две кнопки рядом с названием не оставляли места самому
+                    // названию — они строкой ниже.
+                    Box(modifier = Modifier.padding(top = 14.dp)) { subgroup() }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionButton(
+                            label = "Заменить",
+                            onClick = onPickSecondGroup,
+                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
+                        )
+                        ActionButton(
+                            label = "Убрать",
+                            onClick = onClearSecondGroup,
+                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
+                        )
                     }
                 }
             }
@@ -506,6 +528,9 @@ private fun Link(text: String, url: String) {
     )
 }
 
+/** Ширина кнопок раздела «Группа»: «Сменить» и «Добавить» — одного размера. */
+private val GROUP_BUTTON = 112.dp
+
 /** Насколько заранее можно попросить напоминание. */
 private val NOTIFY_OPTIONS = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180, 240)
 private const val MIN_NOTIFY = 10
@@ -553,8 +578,8 @@ private fun OwnTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> 
 }
 
 /**
- * Виджет на домашний экран одной кнопкой, без поиска в списке лончера: ради
- * виджетов приложение и ставят. Лончер спрашивает, куда поставить. Не умеет
+ * Виджет на домашний экран одной кнопкой, без поиска в списке лаунчера: ради
+ * виджетов приложение и ставят. Лаунчер спрашивает, куда поставить. Не умеет
  * он закреплять по просьбе приложения — раздела нет, виджет добавляют из
  * списка, как написано в инструкции.
  */
@@ -574,19 +599,30 @@ private fun PinWidgets() {
             if (!asked) {
                 Toast.makeText(
                     context,
-                    "Лончер не дал добавить виджет — добавьте его из списка виджетов",
+                    "Лаунчер не дал добавить виджет — добавьте его из списка виджетов",
                     Toast.LENGTH_LONG,
                 ).show()
             }
         }
     }
     Section("Виджеты") {
-        Hint("Добавить на домашний экран — лончер спросит, куда поставить.")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ActionButton(label = "День", onClick = { pin(ScheduleWidgetReceiver::class.java) })
-            ActionButton(label = "Неделя", onClick = { pin(WeekWidgetReceiver::class.java) })
+        Hint("Добавить на домашний экран — лаунчер спросит, куда поставить.")
+        // Три кнопки одним рядом и одной ширины (Tomon 28.09); «Ближайшая
+        // пара» переносится на две строки, соседи тянутся за ней по высоте.
+        Row(
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val tile = Modifier.weight(1f).fillMaxHeight()
+            ActionButton(label = "День", onClick = { pin(ScheduleWidgetReceiver::class.java) }, modifier = tile, side = 6.dp)
+            ActionButton(label = "Неделя", onClick = { pin(WeekWidgetReceiver::class.java) }, modifier = tile, side = 6.dp)
+            ActionButton(
+                label = "Ближайшая пара",
+                onClick = { pin(NextLessonWidgetReceiver::class.java) },
+                modifier = tile,
+                side = 6.dp,
+            )
         }
-        ActionButton(label = "Ближайшая пара", onClick = { pin(NextLessonWidgetReceiver::class.java) })
     }
 }
 

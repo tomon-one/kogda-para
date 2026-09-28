@@ -281,19 +281,25 @@ fun ActionButton(
     enabled: Boolean = true,
     /** Отступ сверху — от строки над кнопкой; в одной строке с текстом не нужен. */
     top: Dp = 6.dp,
+    /** Поля слева и справа: у кнопок в ряд на всю ширину — уже, чтобы влезло слово. */
+    side: Dp = 14.dp,
 ) {
+    // По центру: кнопкам одной ширины (раздел «Группа», ряд виджетов)
+    // текст у левого края выглядел съехавшим.
     Box(
         modifier = modifier
             .padding(top = top)
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .padding(horizontal = side, vertical = 9.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
             color = if (enabled) {
                 MaterialTheme.colorScheme.primary
             } else {
