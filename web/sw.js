@@ -14,7 +14,8 @@ var CACHE = PREFIX + BUILD;
 // Все файлы сайта. Тест web/tests/files.test.mjs сверяет список с каталогом.
 var FILES = [
   './',
-  'manifest.webmanifest',
+  '404.html',
+  'manifest.json',
   'assets/app.css',
   'assets/boot.js',
   'assets/icon.svg',

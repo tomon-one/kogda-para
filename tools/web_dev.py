@@ -24,7 +24,7 @@ TYPES = {
     ".css": "text/css; charset=utf-8",
     ".svg": "image/svg+xml",
     ".png": "image/png",
-    ".webmanifest": "application/manifest+json",
+    ".json": "application/json",
 }
 PASS_HEADERS = ("ETag", "Cache-Control", "Content-Type")
 # Та же политика, что ставит nginx (server/deploy/whensclass.conf): нарушение
@@ -56,11 +56,12 @@ def make_handler(api: str, web: pathlib.Path):
             if path.endswith("/"):
                 path += "index.html"
             file = (web / path.lstrip("/")).resolve()
+            status = 200
             if web not in file.parents or not file.is_file() or "tests" in file.relative_to(web).parts:
-                self.send_error(404)
-                return
+                # Как nginx: неверный адрес — страница 404 сайта.
+                file, status = web / "404.html", 404
             body = file.read_bytes()
-            self.send_response(200)
+            self.send_response(status)
             self.send_header("Content-Type", TYPES.get(file.suffix, "application/octet-stream"))
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
