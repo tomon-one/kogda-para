@@ -82,8 +82,21 @@ function lessonRow(lesson, bells, isNow, key) {
     h('div', { class: 'lesson-time' },
       h('div', { class: 'pair' }, lesson.n + ' пара'),
       time ? h('div', { class: 'time' }, time) : null,
-      isNow ? h('div', { class: 'now-label' }, 'идёт сейчас') : null),
+      isNow ? nowLabel() : null),
     body);
+}
+
+// Точка у «идёт сейчас» дышит по часам страницы, а не с момента, когда строка
+// нарисована: экран перестраивается (пришло расписание, звонок, звезда), и
+// новая точка продолжает с той же фазы, а не вспыхивает заново. Период — как
+// у анимации pulse в app.css.
+var PULSE_MS = 2400;
+
+function nowLabel() {
+  var el = h('div', { class: 'now-label' }, 'идёт сейчас');
+  var now = window.performance && performance.now ? performance.now() : Date.now();
+  el.style.setProperty('--pulse-shift', -(now % PULSE_MS) + 'ms');
+  return el;
 }
 
 function keyed(el, key) {
