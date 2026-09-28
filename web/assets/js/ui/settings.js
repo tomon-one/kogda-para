@@ -131,6 +131,12 @@ function notifications(app, teacherMode) {
     body.push(h('p', { class: 'warning small' }, 'Альфа-тест: уведомления идут через серверы ' +
       (isFirefox() ? 'Mozilla' : 'Google') + ' и могут не дойти.'));
   }
+  if (isAndroid() && !isFirefox()) {
+    // Chrome на Android сам читает текст уведомлений и может спрятать
+    // обычное за пометкой «возможный спам»; сайту это не обойти (Tomon 28.09).
+    body.push(h('p', { class: 'warning small' }, 'Chrome может спрятать уведомление за пометкой ' +
+      '«возможный спам»: откройте его и разрешите этот сайт всегда.'));
+  }
   return section(title, body);
 }
 
