@@ -34,7 +34,8 @@ const NEWER = [
   [/\?\?/, 'оператор ??'],
   [/\.\.\./, 'разворот ...'],
   [/catch\s*\{/, 'catch без параметра'],
-  [/\.(flat|flatMap|matchAll|replaceAll|at|findLast)\(/, 'метод новее ES2017'],
+  // clients.matchAll сервис-воркера — не String.prototype.matchAll.
+  [/(?<!clients)\.(flat|flatMap|matchAll|replaceAll|at|findLast)\(/, 'метод новее ES2017'],
   [/Object\.(fromEntries|hasOwn)\b/, 'метод новее ES2017'],
   [/\\p\{/, 'классы Юникода в регулярке'],
   [/\bimport\(/, 'динамический импорт'],

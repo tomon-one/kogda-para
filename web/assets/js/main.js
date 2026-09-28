@@ -5,6 +5,7 @@
 
 import * as repo from './repo.js';
 import * as store from './store.js';
+import * as push from './push.js';
 import { h, clear, closeDialog, dialog, snackbar, externalLink } from './ui/dom.js';
 import { HttpError, NetError } from './api.js';
 import { collegeNow, parseIso } from './time.js';
@@ -168,7 +169,36 @@ var app = {
     render();
   },
   tally: function () { return store.get('tally') || { opens: 0, since: 0 }; },
+  render: function () { render(); },
+  pushBlocker: push.blocker,
+  pushChoice: push.choice,
+  pushEnabled: push.enabled,
+  /** Включить, поменять или выключить уведомления; ответ — снаружи, строкой внизу. */
+  setPush: function (next) {
+    var who = pushSubject();
+    if (!who) return;
+    push.update(next, who).then(function () {
+      render();
+    }, function (error) {
+      snackbar(PUSH_FAILS[error && error.reason] || 'Браузер не дал подписаться на уведомления');
+      render();
+    });
+  },
 };
+
+var PUSH_FAILS = {
+  denied: 'Браузер не разрешил уведомления',
+  network: 'Нет связи с сервером — уведомления не включились',
+  timeout: 'Сервер не ответил — уведомления не включились',
+  server: 'Сервер не принял подписку',
+  off: 'На сервере уведомления ещё не настроены',
+};
+
+/** Чьё расписание присылать: своя группа или сам преподаватель. */
+function pushSubject() {
+  var own = repo.chosen();
+  return own ? { kind: repo.isTeacher() ? 'teacher' : 'group', id: own.id } : null;
+}
 
 function pick(mode, row) {
   if (mode === 'extra') {
@@ -182,6 +212,8 @@ function pick(mode, row) {
     if (mode === 'self') repo.selectSelf(row);
     else repo.selectGroup(row);
     state.wanted = collegeNow().date;
+    // Уведомления — о новой своей группе, а не о прежней.
+    push.sync(pushSubject());
     home();
   }
   refresh(true, false);
@@ -820,3 +852,5 @@ loadLists(false);
 testNotice();
 if (repo.chosen()) refresh(false, false);
 registerWorker();
+// Служба должна знать нынешнюю подписку: браузер мог сменить её сам.
+push.sync(pushSubject());

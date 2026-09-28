@@ -171,3 +171,10 @@ var ORDINALS = ['Первая', 'Вторая', 'Третья', 'Четвёрт�
 export function ordinalGroup(number) {
   return (ORDINALS[number - 1] || number + '-я') + ' группа';
 }
+
+/** «20 мин», «1 ч», «1 ч 30 мин» — formatDurationShort в приложении. */
+export function durationShort(minutes) {
+  if (minutes < 60) return minutes + ' мин';
+  if (minutes % 60 === 0) return (minutes / 60) + ' ч';
+  return Math.floor(minutes / 60) + ' ч ' + (minutes % 60) + ' мин';
+}
