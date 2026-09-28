@@ -24,7 +24,7 @@ data class PhoneState(
     val changesChannelOff: Boolean = false,
     /** Канал «Сбои сервера» выключен. */
     val serverChannelOff: Boolean = false,
-    /** Канал «Соседняя подгруппа» выключен. */
+    /** Канал «Другие группы» выключен. */
     val subgroupChannelOff: Boolean = false,
     /** Канал «Новые версии» выключен. */
     val updateChannelOff: Boolean = false,

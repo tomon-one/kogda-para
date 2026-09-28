@@ -34,6 +34,20 @@ object Notifications {
     const val CHANNEL_SERVER = "server_down"
     const val CHANNEL_SUBGROUP = "subgroup_gone"
 
+    /**
+     * Названия каналов, как их показывает телефон: ими же говорят настройки
+     * («Уведомления «…» выключены») и отчёт.
+     */
+    private val NAMES = mapOf(
+        CHANNEL_LESSON to "Скоро пара",
+        CHANNEL_CHANGES to "Изменения в расписании",
+        CHANNEL_SERVER to "Сбои сервера",
+        CHANNEL_SUBGROUP to "Другие группы",
+        CHANNEL_UPDATE to "Новые версии",
+    )
+
+    fun channelName(channel: String): String = NAMES[channel] ?: channel
+
     private const val ID_LESSON = 1
     private const val ID_CHANGES = 2
     private const val ID_UPDATE = 3
@@ -49,35 +63,35 @@ object Notifications {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_LESSON,
-                "Скоро пара",
+                channelName(CHANNEL_LESSON),
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply { description = "Напоминание перед началом занятия" },
         )
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_CHANGES,
-                "Изменения в расписании",
+                channelName(CHANNEL_CHANGES),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = "Отмены и замены на сегодня и завтра" },
         )
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_SERVER,
-                "Сбои сервера",
+                channelName(CHANNEL_SERVER),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = "Сервер не обновляет расписание дольше двух часов" },
         )
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_SUBGROUP,
-                "Другие группы",
+                channelName(CHANNEL_SUBGROUP),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = "Одной из выбранных групп не стало в таблице" },
         )
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_UPDATE,
-                "Новые версии",
+                channelName(CHANNEL_UPDATE),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply { description = "Вышла новая сборка приложения" },
         )
