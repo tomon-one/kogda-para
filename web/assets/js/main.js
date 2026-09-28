@@ -82,7 +82,10 @@ function decodeURIComponentSafe(text) {
 function go(path, replace) {
   var hash = path ? '#' + path : '';
   var url = location.pathname + location.search + hash;
-  if (replace) history.replaceState({ steps: stepsNow() }, '', url);
+  // Присланный адрес едет вместе с экраном выбора (приветствие → выбор, свой
+  // → чужой режим), и только с ним: после выбора он уже открыт.
+  var pending = /^pick/.test(path || '') && history.state ? history.state.pending : undefined;
+  if (replace) history.replaceState({ steps: stepsNow(), pending: pending }, '', url);
   else history.pushState({ steps: stepsNow() + 1 }, '', url);
   onRoute();
 }
@@ -169,6 +172,8 @@ function pick(mode, row) {
  * приложении. Был присланный адрес — к нему.
  */
 function home() {
+  // Присланный адрес лежит в записи истории экрана выбора — и после перезагрузки.
+  pendingRoute = (history.state && history.state.pending) || pendingRoute;
   var steps = stepsNow();
   if (steps > 0) {
     returningHome = true;
@@ -186,9 +191,9 @@ function onRoute() {
   // Приветствие — один раз; без выбора — сразу к выбору.
   if (!chosen && route.screen !== 'pick') {
     // Ссылку на чужое расписание из чата не терять: откроется после выбора.
-    if (route.kind && route.id) pendingRoute = route.kind + '/' + route.id;
+    var pending = route.kind && route.id ? route.kind + '/' + route.id : (history.state && history.state.pending) || null;
     route = { screen: 'pick', mode: 'group' };
-    history.replaceState({ steps: stepsNow() }, '', location.pathname + location.search + '#pick');
+    history.replaceState({ steps: stepsNow(), pending: pending }, '', location.pathname + location.search + '#pick');
   }
   if (route.screen === 'pick' && route.mode === 'second' && repo.isTeacher()) {
     route = { screen: 'settings' };
@@ -326,7 +331,9 @@ function restoreFocus(signature) {
 
 function renderScreen(navigated) {
   var active = document.activeElement;
-  var signature = navigated ? null : focusSignature(active);
+  var hadFocus = active && active !== document.body && root.contains(active);
+  var signature = focusSignature(active);
+  if (navigated && !(signature && signature.key)) signature = null;
   var focusKey = active && active.getAttribute && active.getAttribute('data-query');
   var anchor = navigated ? null : scrollAnchor();
   var scrollY = window.pageYOffset;
@@ -354,6 +361,15 @@ function renderScreen(navigated) {
   root.appendChild(screen);
   if (focusKey && !navigated && document.activeElement !== active && root.contains(active)) active.focus();
   if (!focusKey) restoreFocus(signature);
+  // Переход, а той же кнопки на новом экране нет — фокус на заголовок, а не
+  // на body: иначе клавиатура и чтец начинают сначала (аудит, прогон 3).
+  if (navigated && hadFocus && (!document.activeElement || document.activeElement === document.body)) {
+    var heading = root.querySelector('h1, h2');
+    if (heading) {
+      heading.setAttribute('tabindex', '-1');
+      try { heading.focus({ preventScroll: true }); } catch (e) { heading.focus(); }
+    }
+  }
 
   if (!scrollToWanted()) {
     if (anchor) restoreAnchor(anchor);
@@ -458,6 +474,8 @@ function loadLists(force) {
   });
 }
 
+var otherTicket = 0;
+
 /** Чужое расписание открыто снова — не старше этого, иначе перезапросить. */
 var OTHER_FRESH_MS = 5 * 60 * 1000;
 
@@ -470,16 +488,18 @@ function loadOther(kind, id) {
   // Перезапрос того же — прежнее остаётся на экране, пока не придёт новое, и
   // остаётся, если не пришло: без связи оно лучше пустоты (аудит, прогон 2).
   var prev = other && other.kind === kind && other.id === id && other.schedule ? other : null;
-  state.other = { kind: kind, id: id, loading: !prev, schedule: prev && prev.schedule, at: prev && prev.at };
+  // Номер запроса: поздний ответ прежнего не затирает свежий (аудит, прогон 3).
+  var ticket = ++otherTicket;
+  state.other = { kind: kind, id: id, loading: !prev, schedule: prev && prev.schedule, at: prev && prev.at, ticket: ticket };
   repo.otherSchedule(kind, id).then(function (r) {
-    if (!state.other || state.other.kind !== kind || state.other.id !== id) return;
+    if (!state.other || state.other.ticket !== ticket) return;
     if (r.schedule || r.notFound || !prev) {
       state.other = {
         kind: kind, id: id, loading: false, schedule: r.schedule || null, at: r.schedule ? Date.now() : null,
-        notFound: !!r.notFound, failed: !r.schedule && !r.notFound,
+        notFound: !!r.notFound, failed: !r.schedule && !r.notFound, ticket: ticket,
       };
     } else {
-      state.other = { kind: kind, id: id, loading: false, schedule: prev.schedule, at: prev.at, failed: true };
+      state.other = { kind: kind, id: id, loading: false, schedule: prev.schedule, at: prev.at, failed: true, ticket: ticket };
     }
     render();
   });
@@ -507,6 +527,16 @@ function failText(result) {
 }
 
 var flashTimer = null;
+var retryTimer = null;
+
+/** Не удалось — ещё раз через минуту: одна неудача ещё не «сервер не отвечает». */
+function retrySoon() {
+  if (retryTimer) return;
+  retryTimer = setTimeout(function () {
+    retryTimer = null;
+    if (document.visibilityState !== 'hidden') refresh(false, false);
+  }, 60000);
+}
 
 /** Сказать чтецу экрана — через живую область вне перестраиваемого экрана. */
 function announce(text) {
@@ -538,8 +568,12 @@ function refresh(force, manual) {
   repo.refresh(force).then(function (result) {
     // Крестик — у любой неудачи, не только ручной, и снимается любой удачей:
     // иначе автообновление без сети зажигало галочку (аудит сайта, W4, W6).
-    if (result.kind === 'failed') state.refreshFailed = true;
-    else if (result.kind !== 'nogroup') state.refreshFailed = false;
+    if (result.kind === 'failed') {
+      state.refreshFailed = true;
+      retrySoon();
+    } else if (result.kind !== 'nogroup') {
+      state.refreshFailed = false;
+    }
     if (manual && (result.kind === 'failed' || result.kind === 'gone')) snackbar(failText(result));
     state.refreshing = repo.isRefreshing();
     if (state.refreshing) {

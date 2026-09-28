@@ -39,7 +39,7 @@ function loadFailed(app, what) {
       : ' не загрузился. Проверьте интернет или напишите автору в Telegram:')),
     externalLink('@toomonn', TELEGRAM, 'link strong'),
     h('div', null, actionButton('Повторить', function () { app.loadLists(true); })),
-    h('button', { type: 'button', class: 'text-link', onclick: app.showReport }, 'Сведения для отчёта'));
+    h('button', { type: 'button', class: 'text-link', 'data-key': 'report', onclick: app.showReport }, 'Сведения для отчёта'));
 }
 
 /** Строка смены роли — первой строкой списка, такой же заметной, как остальные. */
@@ -149,8 +149,12 @@ export function othersList(app, kind, selfId) {
             fill();
             popped = null;
             // Список перестроен — фокус на ту же звезду, а не на body.
+            // Без прокрутки: снятая звезда переезжает вниз списка, и страница
+            // уезжала за ней (аудит сайта, прогон 3).
             var star = results.querySelector('[data-key="star:' + item.id + '"]');
-            if (star) star.focus();
+            if (star) {
+              try { star.focus({ preventScroll: true }); } catch (e) { star.focus(); }
+            }
           },
         }, on ? '★' : '☆'));
     }

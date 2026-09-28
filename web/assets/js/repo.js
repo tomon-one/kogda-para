@@ -153,13 +153,13 @@ function putServerState(status, srcUrl, since) {
   store.set('server', next);
 }
 
-/** Отметить неудачу связи; вернуть начало цепочки неудач подряд. */
+/** Отметить неудачу связи: начало цепочки неудач подряд и их число. */
 function noteUnreachable(now) {
   var u = store.get('unreachable');
   var streak = u && now - u.last < UNREACHABLE_STREAK_GAP_MS;
-  var first = streak ? u.since : now;
-  store.set('unreachable', { since: first, last: now });
-  return first;
+  var chain = { since: streak ? u.since : now, last: now, count: streak ? (u.count || 1) + 1 : 1 };
+  store.set('unreachable', chain);
+  return chain;
 }
 
 /** Отметить 404; true — подтверждено повтором через час. */
@@ -233,9 +233,13 @@ function refreshOnce(force) {
         // редких заходах не виден вовсе. Мерило — последний ответ сервера:
         // молчит дольше получаса — не отвечает, и давность — от него
         // (аудит сайта, прогон 2). Ответа не было никогда — цепочка неудач.
+        // Одна неудача — ещё не сбой: у человека могла пропасть своя сеть
+        // (Wi-Fi без интернета navigator.onLine не видит). Нужны две подряд —
+        // страница повторяет неудачное через минуту (аудит, прогон 3).
         var lastOk = store.get('lastOk');
-        var since = lastOk || noteUnreachable(now);
-        if (now - since >= UNREACHABLE_BROKEN_AFTER_MS) {
+        var chain = noteUnreachable(now);
+        var since = lastOk || chain.since;
+        if (chain.count >= 2 && now - since >= UNREACHABLE_BROKEN_AFTER_MS) {
           putServerState(STATUS_UNREACHABLE, null, new Date(since).toISOString());
         }
       }
@@ -262,6 +266,8 @@ function refreshOnce(force) {
         clearGone();
         store.remove('unreachable');
         store.set('lastOk', Date.now());
+        // Расписание пришло — сервер отвечает, даже если meta сорвался.
+        if (serverState().status === STATUS_UNREACHABLE) putServerState('ok', null, null);
         var merging = teacherMode
           ? Promise.resolve({ schedule: fresh, whole: true })
           : withSecondGroup(fresh, !!meta && meta.status === 'ok', sub, subRequest);
