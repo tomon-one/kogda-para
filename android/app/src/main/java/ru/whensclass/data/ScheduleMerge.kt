@@ -1,58 +1,106 @@
 package ru.whensclass.data
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
 /**
- * Склейка расписания с расписанием второй подгруппы.
+ * Сколько групп можно выбрать вместе со своей. Хватает на любую группу
+ * колледжа целиком: больше всего подгрупп, шесть, у одной (28.09).
+ */
+const val MAX_GROUPS = 6
+
+/**
+ * Ещё одна выбранная группа: её пары видны на экране рядом со своими.
  *
  * Зачем: в таблице колледжа подгруппы стоят разными колонками, и общая пара
- * нередко записана только в одной из них — в своей колонке её просто нет.
- * Человек, который смотрит только свою, такую пару пропускает.
- *
- * Что делаем: пары из второй колонки, которых нет в своей, добавляем в день и
- * подписываем группой — чтобы было видно, откуда они взялись. Если в один
- * номер пары у подгрупп разное, подписываем обе: иначе непонятно, какая ваша.
- * Совпавшие пары остаются одной строкой и без подписи — это и есть общая пара.
+ * бывает записана не во всех. А кто-то хочет видеть и совсем чужую группу —
+ * выбрать можно любую (Tomon 28.09). Виджеты, напоминания и уведомления об
+ * изменениях — только о своей группе.
  */
-fun mergeSecondGroup(primary: ScheduleDto, secondary: ScheduleDto): ScheduleDto {
-    val extraByDate = secondary.days.associateBy({ it.date }, { it.lessons })
-    val days = primary.days.map { day ->
-        val extra = extraByDate[day.date].orEmpty()
-        day.copy(
-            lessons = mergeLessons(
-                mine = day.lessons,
-                other = extra,
-                myName = primary.groupName,
-                otherName = secondary.groupName,
-            ),
-        )
-    }
-    return primary.copy(days = days)
-}
+@Serializable
+data class ExtraGroup(
+    @SerialName("id") val id: String,
+    @SerialName("name") val name: String,
+    /**
+     * Группы нет в таблице — подтверждено часом 404. Выбор не стирается:
+     * вернётся группа — вернутся и её пары.
+     */
+    @SerialName("gone") val gone: Boolean = false,
+    /** Когда сервер впервые ответил на неё 404, мс; null — отвечает. */
+    @SerialName("gone_since") val goneSince: Long? = null,
+)
 
-private fun mergeLessons(
-    mine: List<LessonDto>,
-    other: List<LessonDto>,
-    myName: String,
-    otherName: String,
-): List<LessonDto> {
-    val extra = other.filterNot { theirs -> mine.any { same(it, theirs) } }
-    if (extra.isEmpty()) return mine
-
-    val contested = extra.map { it.number }.toSet()
-    val labelledMine = mine.map {
-        if (it.number in contested && it.groups == null) it.copy(groups = myName) else it
+/**
+ * Своё расписание вместе с парами остальных выбранных групп — для экрана.
+ *
+ * Одинаковая пара у нескольких групп остаётся одной строкой, и у неё
+ * отмечены все эти группы: так видно совмещённые. Пара, которой у своей
+ * группы нет, добавляется отдельной строкой без своей отметки. В один номер
+ * своя пара стоит выше чужих, чужие — в порядке выбора.
+ *
+ * [extras] — по порядку выбора; null — расписания этой группы на телефоне
+ * ещё нет, её место в значках остаётся. Дни — только внутри своего окна:
+ * за его краем своих данных нет, и показывать там чужие пары было бы
+ * странно.
+ */
+fun combineGroups(main: ScheduleDto, extras: List<Pair<String, ScheduleDto?>>): ScheduleDto {
+    if (extras.isEmpty() || main.isTeacher) return main
+    val names = listOf(main.groupName) + extras.map { it.first }
+    val own = main.days.mapNotNull { day -> day.date.takeIf { it.isNotEmpty() } }
+    val first = own.minOrNull()
+    val last = own.maxOrNull()
+    val theirs = extras.map { (_, schedule) ->
+        schedule?.days.orEmpty().associateBy({ it.date }, { it.lessons })
     }
-    val labelledExtra = extra.map { it.copy(groups = otherName) }
-    // sortedBy устойчива: при равном номере своя пара остаётся выше чужой.
-    return (labelledMine + labelledExtra).sortedBy { it.number }
+    // Дни, которых у своей группы нет, а у выбранной есть, — внутри окна.
+    val extraDates = theirs.flatMap { it.keys }
+        .filter { first != null && last != null && it >= first && it <= last }
+        .filterNot { date -> main.days.any { it.date == date } }
+        .toSortedSet()
+    val days = (main.days + extraDates.map { DayDto(date = it) }).sortedBy { it.date }
+    return main.copy(
+        groupNames = names,
+        days = days.map { day ->
+            val rows = day.lessons.map { it.copy(slots = listOf(0)) }.toMutableList()
+            theirs.forEachIndexed { index, byDate ->
+                val slot = index + 1
+                byDate[day.date].orEmpty().forEach { lesson ->
+                    val at = rows.indexOfFirst { same(it, lesson) && slot !in it.slots }
+                    if (at >= 0) rows[at] = rows[at].copy(slots = rows[at].slots + slot)
+                    else rows += lesson.copy(groups = null, slots = listOf(slot))
+                }
+            }
+            // sortedBy устойчива: в один номер своя пара выше чужих.
+            day.copy(lessons = rows.sortedBy { it.number })
+        },
+    )
 }
 
 /**
- * Одна ли это пара в двух колонках.
+ * Остальные подгруппы своей группы: для «ИСП-924/1» — «ИСП-924/2» и дальше
+ * по номеру. Пусто, если у группы нет подгрупп.
+ */
+fun subgroupsOf(name: String, groups: List<GroupDto>): List<GroupDto> {
+    val base = SUBGROUP.matchEntire(name.trim())?.groupValues?.get(1) ?: return emptyList()
+    return groups
+        .mapNotNull { group ->
+            val match = SUBGROUP.matchEntire(group.name.trim()) ?: return@mapNotNull null
+            if (match.groupValues[1] != base || group.name.trim() == name.trim()) return@mapNotNull null
+            match.groupValues[2].toIntOrNull()?.let { it to group }
+        }
+        .sortedBy { it.first }
+        .map { it.second }
+}
+
+private val SUBGROUP = Regex("""(.+)/(\d+)""")
+
+/**
+ * Одна ли это пара у двух групп.
  *
  * Аудиторию сравниваем нарочно: у общей лекции она одна, а если подгруппы
  * сидят в разных кабинетах — это разные пары, и показать надо обе.
  */
-private fun same(a: LessonDto, b: LessonDto): Boolean =
+internal fun same(a: LessonDto, b: LessonDto): Boolean =
     a.number == b.number &&
         a.subject.trim() == b.subject.trim() &&
         a.room?.trim() == b.room?.trim() &&

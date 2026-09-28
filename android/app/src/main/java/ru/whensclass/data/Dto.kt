@@ -23,19 +23,29 @@ data class ScheduleDto(
     @SerialName("col") val column: String? = null,
     /** «teacher» у расписания преподавателя: там подпись группы у каждой пары. */
     @SerialName("kind") val kind: String? = null,
+    /**
+     * Только для экрана: имена выбранных групп по порядку, первая — своя
+     * ([combineGroups]). Номер значка у пары — место в этом списке плюс один.
+     * Пусто — группа одна, значков нет.
+     */
+    @kotlinx.serialization.Transient val groupNames: List<String> = emptyList(),
 ) {
     val isTeacher: Boolean get() = kind == "teacher"
 
     /**
-     * Пара пришла из соседней подгруппы. Склейка подписывает на общем номере
-     * и свою пару — своим именем, поэтому «есть подпись» ещё не значит
+     * Пара пришла из соседней подгруппы — в снимке сборок до 0.1.4, где
+     * склейка хранилась вместе со своими парами. Склейка подписывала на общем
+     * номере и свою пару своим именем, поэтому «есть подпись» ещё не значит
      * «чужая»; у преподавателя подпись группы стоит у каждой пары, и чужих
      * там нет.
      */
     fun isNeighbours(lesson: LessonDto): Boolean =
         !isTeacher && lesson.groups != null && lesson.groups != groupName
 
-    /** Свои пары: без пришедших из соседней подгруппы и без своей подписи. */
+    /**
+     * Свои пары: без пришедших из соседней подгруппы и без своей подписи.
+     * Нужно, чтобы перевести снимок сборок до 0.1.4 ([ScheduleStore.migrateGroups]).
+     */
     fun ownOnly(): ScheduleDto = copy(
         days = days.map { day ->
             day.copy(
@@ -77,6 +87,11 @@ data class LessonDto(
     @SerialName("gr") val groups: String? = null,
     /** В расписании преподавателя — колонка группы, у которой эта пара. */
     @SerialName("col") val column: String? = null,
+    /**
+     * Только для экрана: у каких из выбранных групп есть эта пара — места в
+     * [ScheduleDto.groupNames], 0 — своя. Пусто — группа одна.
+     */
+    @kotlinx.serialization.Transient val slots: List<Int> = emptyList(),
 ) {
     val isCancelled: Boolean get() = cancelled != 0
 

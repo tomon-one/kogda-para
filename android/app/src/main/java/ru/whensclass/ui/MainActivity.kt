@@ -50,6 +50,8 @@ import ru.whensclass.data.sheetLink
 import ru.whensclass.data.AppUpdate
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
+import ru.whensclass.data.MAX_GROUPS
+import ru.whensclass.data.subgroupsOf
 import ru.whensclass.data.RefreshResult
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.notify.LessonAlarms
@@ -240,9 +242,13 @@ private fun App(
     }
 
     val groupName by container.store.groupName.collectAsState(initial = null)
-    val secondGroupName by container.store.secondGroupName.collectAsState(initial = null)
-    val secondGone by container.store.secondGone.collectAsState(initial = false)
+    val groupId by container.store.groupId.collectAsState(initial = null)
+    val extraGroups by container.repository.extraGroups.collectAsState(initial = emptyList())
+    val groupsByName by container.store.groupsByName.collectAsState(initial = true)
     val schedule by container.repository.schedule.collectAsState(initial = null)
+    // Для экрана — вместе с парами остальных выбранных групп; виджеты и
+    // напоминания — по своему расписанию.
+    val shownSchedule by container.repository.shownSchedule.collectAsState(initial = null)
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
@@ -253,7 +259,7 @@ private fun App(
     val notifyChanges by container.store.notifyChanges.collectAsState(initial = true)
     val notifyUpdates by container.store.notifyUpdates.collectAsState(initial = true)
     val notifyServer by container.store.notifyServer.collectAsState(initial = true)
-    val notifySubgroup by container.store.notifySubgroup.collectAsState(initial = true)
+    val notifyGroupsGone by container.store.notifyGroupsGone.collectAsState(initial = true)
     val pinnedTeachers by container.store.pinnedTeachers.collectAsState(initial = emptyList())
     val teacherMode by container.store.isTeacher.collectAsState(initial = false)
     val serverStatus by container.store.serverStatus.collectAsState(initial = "ok")
@@ -309,8 +315,8 @@ private fun App(
     var reloadKey by remember { mutableStateOf(0) }
     // Какой список показывать на экране выбора: null — по текущей роли.
     var pickTeacher by rememberSaveable { mutableStateOf<Boolean?>(null) }
-    // Тот же экран, но выбирают не свою группу, а соседнюю подгруппу.
-    var pickSecond by rememberSaveable { mutableStateOf(false) }
+    // Тот же экран, но выбирают не свою группу, а ещё одну к ней.
+    var pickExtra by rememberSaveable { mutableStateOf(false) }
 
     // Итог загрузки обновления. Установщик открывается, когда человек в
     // приложении: из фона Android 10+ его молча не пускал.
@@ -335,7 +341,7 @@ private fun App(
             focusUpdate = true
             screen = Screen.SETTINGS
         } else {
-            pickSecond = false
+            pickExtra = false
             pickTeacher = null
             screen = Screen.TODAY
         }
@@ -372,7 +378,7 @@ private fun App(
     // выбора группы вернуться можно было только стрелкой в шапке.
     BackHandler(enabled = screen != Screen.TODAY) {
         val back = if (screen == Screen.GROUPS) groupsFrom else Screen.TODAY
-        pickSecond = false
+        pickExtra = false
         pickTeacher = null
         screen = back
     }
@@ -493,24 +499,25 @@ private fun App(
                         },
                     )
 
-                    Screen.GROUPS -> if (pickSecond) {
+                    Screen.GROUPS -> if (pickExtra) {
                         GroupPickerScreen(
-                            groups = groups,
+                            // Своя и уже выбранные — не в списке: дважды одну не показываем.
+                            groups = groups?.filter { group ->
+                                group.id != groupId && extraGroups.none { it.id == group.id }
+                            },
                             onRetry = retryLists,
-                            title = "Выберите соседнюю подгруппу",
+                            // «Вторая группа», «Третья группа»: какой по счёту она
+                            // встанет в значках у пар.
+                            title = ordinalGroup(extraGroups.size + 2),
                             canGoBack = true,
                             onBack = {
-                                pickSecond = false
+                                pickExtra = false
                                 screen = groupsFrom
                             },
                             onPick = { group: GroupDto ->
-                                scope.launch {
-                                    // Свои пары остаются, пары прежней соседки
-                                    // уходят сразу — и без сети.
-                                    container.repository.selectSecondGroup(group)
-                                    pickSecond = false
-                                    screen = Screen.SETTINGS
-                                }
+                                pickExtra = false
+                                screen = Screen.SETTINGS
+                                scope.launch { container.repository.addExtraGroups(listOf(group)) }
                             },
                         )
                     } else if (pickTeacher ?: teacherMode) {
@@ -564,7 +571,7 @@ private fun App(
                         notifyChanges = notifyChanges,
                         notifyUpdates = notifyUpdates,
                         notifyServer = notifyServer,
-                        notifySubgroup = notifySubgroup,
+                        notifyGroupsGone = notifyGroupsGone,
                         exactAlarms = exactAlarms,
                         notifications = notifications,
                         phone = phone,
@@ -589,8 +596,8 @@ private fun App(
                         onNotifyServer = { on ->
                             scope.launch { container.store.setNotifyServer(on) }
                         },
-                        onNotifySubgroup = { on ->
-                            scope.launch { container.store.setNotifySubgroup(on) }
+                        onNotifyGroupsGone = { on ->
+                            scope.launch { container.store.setNotifyGroupsGone(on) }
                         },
                         focusUpdate = focusUpdate,
                         checkingUpdate = checkingUpdate,
@@ -636,18 +643,28 @@ private fun App(
                             }
                         },
                         onChangeGroup = {
-                            pickSecond = false
+                            pickExtra = false
                             groupsFrom = Screen.SETTINGS
                             screen = Screen.GROUPS
                         },
-                        secondGroupName = secondGroupName?.let { if (secondGone) "$it — нет в таблице" else it },
-                        onPickSecondGroup = {
-                            pickSecond = true
+                        extraGroups = extraGroups,
+                        groupsByName = groupsByName,
+                        onGroupsByName = { byName -> scope.launch { container.store.setGroupsByName(byName) } },
+                        // Остальные подгруппы своей группы, которых ещё нет среди
+                        // выбранных, — одной кнопкой, сколько влезет.
+                        subgroups = groupName?.let { name -> subgroupsOf(name, groups.orEmpty()) }.orEmpty()
+                            .filter { group -> extraGroups.none { it.id == group.id } }
+                            .take(MAX_GROUPS - 1 - extraGroups.size),
+                        onAddGroup = {
+                            pickExtra = true
                             groupsFrom = Screen.SETTINGS
                             screen = Screen.GROUPS
                         },
-                        onClearSecondGroup = {
-                            scope.launch { container.repository.selectSecondGroup(null) }
+                        onAddSubgroups = { list ->
+                            scope.launch { container.repository.addExtraGroups(list) }
+                        },
+                        onRemoveGroup = { id ->
+                            scope.launch { container.repository.removeExtraGroup(id) }
                         },
                         onBack = { screen = Screen.TODAY },
                     )
@@ -670,7 +687,8 @@ private fun App(
                         onTogglePinnedTeacher = { id ->
                             scope.launch { container.store.togglePinnedTeacher(id) }
                         },
-                        schedule = schedule,
+                        schedule = shownSchedule,
+                        groupsByName = groupsByName,
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,
                         refreshing = refreshing,
@@ -685,7 +703,7 @@ private fun App(
                         gone = gone,
                         onRepick = {
                             pickTeacher = teacherMode
-                            pickSecond = false
+                            pickExtra = false
                             groupsFrom = Screen.TODAY
                             screen = Screen.GROUPS
                         },

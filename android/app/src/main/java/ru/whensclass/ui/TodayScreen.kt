@@ -160,6 +160,8 @@ fun TodayScreen(
     /** Группы (преподавателя) в таблице больше нет — сервер отвечает 404. */
     gone: Boolean = false,
     onRepick: () -> Unit = {},
+    /** Подписи выбранных групп у пар: названиями или номерами (настройки). */
+    groupsByName: Boolean = true,
 ) {
     // Часы со звонками: и «сегодня», и давность сбоя на плашке пересчитываются
     // сами.
@@ -374,6 +376,7 @@ fun TodayScreen(
             startDay = startDay,
             startKey = startKey,
             header = if (platesInList) plates else null,
+            groupsByName = groupsByName,
         )
         }
         }
@@ -578,6 +581,8 @@ fun ScheduleDays(
     startKey: Int = 0,
     /** Первой строкой списка — например, плашки, когда шапке тесно. */
     header: (@Composable () -> Unit)? = null,
+    /** Подписи выбранных групп у пар: названиями или номерами. */
+    groupsByName: Boolean = true,
 ) {
     val now = rememberNow(schedule.bells)
     val days = remember(schedule) { daysWithGaps(schedule) }
@@ -632,7 +637,10 @@ fun ScheduleDays(
     ) {
         header?.let { item(key = "header") { it() } }
         items(days, key = { it.date }) { day ->
-            DayCard(day, schedule.bells, now, teacher = schedule.isTeacher)
+            DayCard(
+                day, schedule.bells, now, teacher = schedule.isTeacher,
+                groups = schedule.groupNames, groupsByName = groupsByName,
+            )
         }
     }
 }
@@ -691,6 +699,9 @@ private fun DayCard(
     bells: Map<String, List<String>>,
     now: LocalDateTime,
     teacher: Boolean = false,
+    /** Выбранные группы по порядку, первая — своя; пусто — группа одна. */
+    groups: List<String> = emptyList(),
+    groupsByName: Boolean = true,
 ) {
     val today = now.toLocalDate()
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
@@ -724,13 +735,22 @@ private fun DayCard(
                 day.lessons.forEachIndexed { index, lesson ->
                     // Линия во всю ширину карточки — расписание, а не плитки.
                     if (index > 0) HorizontalDivider()
-                    // Отменённая пара в своё время — не «идёт сейчас».
-                    LessonRow(lesson, bells, isNow = lesson.number == current && !lesson.isCancelled, past)
+                    // Отменённая пара в своё время — не «идёт сейчас». Пара
+                    // только у других групп — тоже: человек на ней не сидит.
+                    val foreign = groups.isNotEmpty() && 0 !in lesson.slots
+                    LessonRow(
+                        lesson, bells,
+                        isNow = lesson.number == current && !lesson.isCancelled && !foreign,
+                        past = past,
+                        groups = groups,
+                        groupsByName = groupsByName,
+                    )
                 }
                 // День, в котором отменили всё до единой пары. Случай редкий
                 // и по-своему счастливый: пары показать надо, а сказать о нём
-                // больше нечего.
-                if (day.lessons.all { it.isCancelled }) {
+                // больше нечего. Считаются только свои.
+                val own = if (groups.isEmpty()) day.lessons else day.lessons.filter { 0 in it.slots }
+                if (own.isNotEmpty() && own.all { it.isCancelled }) {
                     Text(
                         // Преподавателю отмена всех пар — сорванные часы, не
                         // удача (разбор текстов 27.09).
@@ -827,8 +847,14 @@ private fun LessonRow(
     bells: Map<String, List<String>>,
     isNow: Boolean,
     past: Boolean = false,
+    /** Выбранные группы: значки под временем ([GroupMarks]); пусто — их нет. */
+    groups: List<String> = emptyList(),
+    groupsByName: Boolean = true,
 ) {
-    val main = if (past) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+    // Пара только у других выбранных групп: её видно сразу, а не только по
+    // значкам — приглушённая строка на сером фоне и подпись (Tomon 28.09).
+    val foreign = groups.isNotEmpty() && 0 !in lesson.slots
+    val main = if (past || foreign) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
     // Колонка растёт со шрифтом: «09:00–10:30» в sp, колонка в dp, и с
     // крупным шрифтом конец пары уходил в многоточие.
     val timeColumn = TIME_COLUMN * LocalDensity.current.fontScale.coerceAtLeast(1f)
@@ -836,8 +862,11 @@ private fun LessonRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
-                else MaterialTheme.colorScheme.surface
+                when {
+                    isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
+                    foreign -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    else -> MaterialTheme.colorScheme.surface
+                }
             )
             .height(IntrinsicSize.Min)
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -875,6 +904,7 @@ private fun LessonRow(
                     )
                 }
             }
+            if (groups.isNotEmpty()) GroupMarks(lesson.slots, groups, groupsByName, Modifier.padding(top = 6.dp))
         }
 
         VerticalDivider(
@@ -889,6 +919,13 @@ private fun LessonRow(
                 color = main,
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
             )
+            if (foreign) {
+                Text(
+                    "Не у вашей группы",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             Spacer(Modifier.height(4.dp))
             // Тип занятия и аудитория — то, ради чего сюда и заглядывают,
@@ -900,12 +937,12 @@ private fun LessonRow(
                 // строку целиком.
                 val shrink = Modifier.weight(1f, fill = false)
                 if (lesson.isOnline) {
-                    Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, muted = past, modifier = shrink)
+                    Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, muted = past || foreign, modifier = shrink)
                 } else {
                     // Ни кабинета, ни ссылки — так и говорим: пустая строка
                     // читается как «не загрузилось», хотя в таблице там пусто.
                     val room = roomLabel(lesson.room)
-                    Place(room ?: "Не указано", muted = room == null || past, modifier = shrink)
+                    Place(room ?: "Не указано", muted = room == null || past || foreign, modifier = shrink)
                 }
                 kindName(lesson.kind)?.let {
                     Text(
@@ -919,8 +956,8 @@ private fun LessonRow(
             lesson.url?.let { OnlineLink(it) }
 
             // Подпись группы стоит вместо преподавателя: у преподавателя в
-            // своём расписании важно, кому читается пара, а у пары из второй
-            // подгруппы — чья она. В остальных случаях там преподаватель.
+            // своём расписании важно, кому читается пара. Чья пара у
+            // выбранных групп — видно по значкам, там преподаватель.
             val group = lesson.groups
             if (group != null) {
                 Text(

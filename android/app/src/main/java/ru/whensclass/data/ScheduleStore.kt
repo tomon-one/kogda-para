@@ -10,6 +10,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("whensclass")
 
@@ -33,6 +36,8 @@ internal fun notifyFlag(own: String?, changes: String?): Boolean =
     own?.let { it != "0" } ?: (changes != "0")
 
 class ScheduleStore(private val context: Context) {
+    private val json = Json { ignoreUnknownKeys = true }
+
 
     /**
      * Прочитаны ли настройки с диска.
@@ -246,14 +251,14 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_NOTIFY_SERVER] = if (enabled) "1" else "0" }
     }
 
-    /** Сообщать ли о пропаже соседней подгруппы из таблицы. */
-    val notifySubgroup: Flow<Boolean> = context.dataStore.data.map {
+    /** Сообщать ли о пропаже из таблицы одной из остальных выбранных групп. */
+    val notifyGroupsGone: Flow<Boolean> = context.dataStore.data.map {
         notifyFlag(it[KEY_NOTIFY_SUBGROUP], it[KEY_NOTIFY_CHANGES])
     }
 
-    suspend fun notifySubgroupEnabled(): Boolean = notifySubgroup.first()
+    suspend fun notifyGroupsGoneEnabled(): Boolean = notifyGroupsGone.first()
 
-    suspend fun setNotifySubgroup(enabled: Boolean) {
+    suspend fun setNotifyGroupsGone(enabled: Boolean) {
         context.dataStore.edit { it[KEY_NOTIFY_SUBGROUP] = if (enabled) "1" else "0" }
     }
 
@@ -398,8 +403,6 @@ class ScheduleStore(private val context: Context) {
      */
     suspend fun selectGroup(id: String, name: String, unchanged: Boolean = false) {
         context.dataStore.edit {
-            val sameGroup = it[KEY_GROUP_ID] == id
-            val wasGone = it[KEY_GONE] == "1"
             it[KEY_GROUP_ID] = id
             it[KEY_GROUP_NAME] = name
             it.remove(KEY_GONE_SINCE)
@@ -413,17 +416,11 @@ class ScheduleStore(private val context: Context) {
             it.remove(KEY_FETCHED_AT)
             // Непрочитанные изменения — про прежнюю группу: к новым не копить.
             it.remove(KEY_PENDING_CHANGES)
-            // Соседняя подгруппа была парой к прежней группе, к новой она
-            // отношения не имеет. Но та же группа после роли преподавателя —
-            // та же пара подгрупп, а перевыбор после «группы
-            // больше нет» — обычно та же группа под новым именем, и соседку
-            // молча стирать нельзя: не найдётся она — скажет сама.
-            if (!sameGroup && !wasGone) {
-                it.remove(KEY_GROUP2_ID)
-                it.remove(KEY_GROUP2_NAME)
-                it.remove(KEY_GROUP2_GONE_SINCE)
-                it.remove(KEY_GROUP2_GONE)
-            }
+            // Остальные выбранные группы остаются: выбрать можно любые, и к
+            // своей они не привязаны. Кроме новой своей — дважды одну группу
+            // не показываем.
+            val extras = readExtras(it)
+            if (extras.any { extra -> extra.id == id }) writeExtras(it, extras.filter { extra -> extra.id != id })
         }
     }
 
@@ -441,13 +438,6 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
-    suspend fun adoptSecondGroup(id: String, name: String) {
-        context.dataStore.edit {
-            it[KEY_GROUP2_ID] = id
-            it[KEY_GROUP2_NAME] = name
-        }
-    }
-
     suspend fun adoptTeacher(id: String, name: String) {
         context.dataStore.edit {
             it[KEY_TEACHER_ID] = id
@@ -455,102 +445,137 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
-    /**
-     * Вторая подгруппа.
-     *
-     * В таблице колледжа подгруппы стоят разными колонками, и общая пара
-     * нередко записана только в одной из них. Кто смотрит только свою
-     * колонку, такую пару пропускает — поэтому соседнюю можно добавить.
-     */
-    val secondGroupId: Flow<String?> = context.dataStore.data.map { it[KEY_GROUP2_ID] }
-    val secondGroupName: Flow<String?> = context.dataStore.data.map { it[KEY_GROUP2_NAME] }
+    /** Подписи выбранных групп у пар: названиями (так по умолчанию) или номерами. */
+    val groupsByName: Flow<Boolean> = context.dataStore.data.map { it[KEY_GROUP_LABELS] != "numbers" }
 
-    suspend fun currentSecondGroupId(): String? = secondGroupId.first()
-
-    /**
-     * Соседняя подгруппа выбрана или снята (`id` = null). Свои пары остаются —
-     * `ownOnly` это они, без пар прежней соседки, и снимок помечен обрубком: без
-     * связи раньше стиралось всё, и экран с виджетами писали «ещё не
-     * загружено». Отметки о пропаже прежней
-     * соседки — прочь: иначе один 404 новой снимал её без часа проверки.
-     */
-    suspend fun setSecondGroup(id: String?, name: String?, ownOnly: String?) {
-        context.dataStore.edit {
-            if (id != null && name != null) {
-                it[KEY_GROUP2_ID] = id
-                it[KEY_GROUP2_NAME] = name
-            } else {
-                it.remove(KEY_GROUP2_ID)
-                it.remove(KEY_GROUP2_NAME)
-            }
-            it.remove(KEY_GROUP2_GONE_SINCE)
-            it.remove(KEY_GROUP2_GONE)
-            if (ownOnly != null) {
-                it[KEY_SCHEDULE] = ownOnly
-                it[KEY_PARTIAL] = "1"
-            } else {
-                dropSchedule(it)
-            }
-        }
+    suspend fun setGroupsByName(byName: Boolean) {
+        context.dataStore.edit { it[KEY_GROUP_LABELS] = if (byName) "names" else "numbers" }
     }
 
     /**
-     * Забыть сохранённое расписание.
-     *
-     * Состав пар поменялся не в колледже, а у нас: показывать прежнее нельзя,
-     * и сообщать «убрали пару» — тем более. Сравнивать будет не с чем, и
-     * уведомление об изменениях промолчит.
+     * Остальные выбранные группы по порядку выбора — их пары видны на экране
+     * рядом со своими ([combineGroups]). Своя группа сюда не входит.
      */
-    private fun dropSchedule(prefs: MutablePreferences) {
-        prefs.remove(KEY_SCHEDULE)
-        prefs.remove(KEY_GENERATED_AT)
-        prefs.remove(KEY_PARTIAL)
-        prefs.remove(KEY_FETCHED_AT)
-        prefs.remove(KEY_PENDING_CHANGES)
+    val extraGroups: Flow<List<ExtraGroup>> = context.dataStore.data.map(::readExtras)
+
+    suspend fun currentExtraGroups(): List<ExtraGroup> = extraGroups.first()
+
+    /**
+     * Их расписания: объект «id → расписание», как его записал репозиторий.
+     * Разбирает репозиторий; хранилищу нужно только выбросить лишние.
+     */
+    val extraSchedulesJson: Flow<String?> = context.dataStore.data.map { it[KEY_EXTRA_SCHEDULES] }
+
+    /**
+     * Новый список остальных групп. Расписания убранных — прочь сразу: иначе
+     * их пары вернулись бы на экран, стоит выбрать группу снова, — из
+     * прошлого снимка.
+     */
+    suspend fun setExtraGroups(groups: List<ExtraGroup>) {
+        context.dataStore.edit { writeExtras(it, groups.take(MAX_GROUPS - 1)) }
+    }
+
+    suspend fun putExtraSchedules(body: String) {
+        context.dataStore.edit { it[KEY_EXTRA_SCHEDULES] = body }
+    }
+
+    /** Группу переименовали: сервер ответил за неё под новым id. */
+    suspend fun adoptExtra(oldId: String, id: String, name: String) {
+        editExtras { list -> list.map { if (it.id == oldId) it.copy(id = id, name = name) else it } }
     }
 
     /**
-     * Соседней подгруппы больше нет в таблице: сервер отвечает на неё 404 при
-     * здоровом состоянии. Подтверждается тем же часом, что и пропажа своей
-     * группы: опечатку в заголовке колледж чинит быстрее. true — подтверждено.
+     * Группа ответила 404 при здоровом сервере. Подтверждается тем же часом,
+     * что и пропажа своей группы: опечатку в заголовке колледж чинит
+     * быстрее. true — подтверждено.
      */
-    suspend fun noteSecondNotFound(nowMillis: Long): Boolean {
+    suspend fun noteExtraNotFound(id: String, nowMillis: Long): Boolean {
         var confirmed = false
-        context.dataStore.edit {
-            val first = it[KEY_GROUP2_GONE_SINCE]?.toLongOrNull()
-            if (first == null) it[KEY_GROUP2_GONE_SINCE] = nowMillis.toString()
-            else if (nowMillis - first >= GONE_CONFIRM_MILLIS) confirmed = true
+        editExtras { list ->
+            list.map {
+                if (it.id != id) return@map it
+                val since = it.goneSince
+                if (since != null && nowMillis - since >= GONE_CONFIRM_MILLIS) confirmed = true
+                if (since == null) it.copy(goneSince = nowMillis) else it
+            }
         }
         return confirmed
     }
 
-    /** Соседка снова отвечает: отметки о пропаже — прочь, её пары вернутся. */
-    suspend fun clearSecondNotFound() {
-        context.dataStore.edit {
-            it.remove(KEY_GROUP2_GONE_SINCE)
-            it.remove(KEY_GROUP2_GONE)
+    /** Группы снова отвечают: отметки о пропаже — прочь, их пары вернутся. */
+    suspend fun clearExtrasNotFound(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        editExtras { list ->
+            list.map { if (it.id in ids && (it.gone || it.goneSince != null)) it.copy(gone = false, goneSince = null) else it }
         }
     }
 
     /**
-     * Соседки нет в таблице — подтверждено. Выбор не стирается: раньше через
-     * час 404 его стирало навсегда, и после починки таблицы её пары сами не
-     * возвращались. true — отметка новая, о ней
-     * пора сказать.
+     * Группы нет в таблице — подтверждено. Выбор не стирается: после починки
+     * таблицы её пары вернутся сами. true — отметка новая, о ней пора сказать.
      */
-    suspend fun markSecondGone(): Boolean {
+    suspend fun markExtraGone(id: String): Boolean {
         var fresh = false
-        context.dataStore.edit {
-            fresh = it[KEY_GROUP2_GONE] != "1"
-            it[KEY_GROUP2_GONE] = "1"
+        editExtras { list ->
+            list.map {
+                if (it.id != id || it.gone) it
+                else it.copy(gone = true).also { fresh = true }
+            }
         }
         return fresh
     }
 
-    val secondGone: Flow<Boolean> = context.dataStore.data.map { it[KEY_GROUP2_GONE] == "1" }
+    /**
+     * Перевод со «соседней подгруппы» сборок до 0.1.4 на список групп.
+     *
+     * Снимок там лежал склеенным с парами соседки. Теперь по нему работают
+     * виджеты, напоминания и уведомления об изменениях, а они только о своей
+     * группе, — поэтому оставляем свои пары. Пары соседки придут со следующим
+     * обновлением, своим снимком. Второй раз ничего не делает.
+     */
+    suspend fun migrateGroups() {
+        context.dataStore.edit { prefs ->
+            val id = prefs[KEY_GROUP2_ID]
+            val name = prefs[KEY_GROUP2_NAME]
+            if (id == null && prefs[KEY_PARTIAL] == null) return@edit
+            if (id != null && name != null && prefs[KEY_EXTRA_GROUPS] == null) {
+                val gone = prefs[KEY_GROUP2_GONE] == "1"
+                val since = prefs[KEY_GROUP2_GONE_SINCE]?.toLongOrNull()
+                prefs[KEY_EXTRA_GROUPS] = json.encodeToString(listOf(ExtraGroup(id, name, gone, since)))
+            }
+            prefs[KEY_SCHEDULE]?.let { body ->
+                runCatching { json.decodeFromString<ScheduleDto>(body) }.getOrNull()?.let { saved ->
+                    prefs[KEY_SCHEDULE] = json.encodeToString(saved.ownOnly())
+                }
+            }
+            prefs.remove(KEY_GROUP2_ID)
+            prefs.remove(KEY_GROUP2_NAME)
+            prefs.remove(KEY_GROUP2_GONE)
+            prefs.remove(KEY_GROUP2_GONE_SINCE)
+            prefs.remove(KEY_PARTIAL)
+        }
+    }
 
-    /** Лежит ли на телефоне расписание без пар соседней подгруппы (не дошли до неё). */
-    suspend fun schedulePartial(): Boolean = context.dataStore.data.first()[KEY_PARTIAL] == "1"
+    private fun readExtras(prefs: Preferences): List<ExtraGroup> =
+        prefs[KEY_EXTRA_GROUPS]
+            ?.let { body -> runCatching { json.decodeFromString<List<ExtraGroup>>(body) }.getOrNull() }
+            .orEmpty()
+
+    private fun writeExtras(prefs: MutablePreferences, groups: List<ExtraGroup>) {
+        if (groups.isEmpty()) prefs.remove(KEY_EXTRA_GROUPS)
+        else prefs[KEY_EXTRA_GROUPS] = json.encodeToString(groups)
+        val keep = groups.map { it.id }.toSet()
+        val schedules = prefs[KEY_EXTRA_SCHEDULES]
+            ?.let { runCatching { json.decodeFromString<JsonObject>(it) }.getOrNull() }
+            ?: return
+        val left = JsonObject(schedules.filterKeys { it in keep })
+        if (left.isEmpty()) prefs.remove(KEY_EXTRA_SCHEDULES)
+        else prefs[KEY_EXTRA_SCHEDULES] = json.encodeToString(left)
+    }
+
+    private suspend fun editExtras(change: (List<ExtraGroup>) -> List<ExtraGroup>) {
+        context.dataStore.edit { writeExtras(it, change(readExtras(it))) }
+    }
 
     /** Дата последней перерисовки виджетов: по ней узнаём смену суток. */
     suspend fun lastWidgetDay(): String? = context.dataStore.data.first()[KEY_WIDGET_DAY]
@@ -562,14 +587,12 @@ class ScheduleStore(private val context: Context) {
     suspend fun putSchedule(
         body: String,
         generatedAt: String,
-        partial: Boolean = false,
         windowFrom: String? = null,
     ) {
         context.dataStore.edit {
             it[KEY_SCHEDULE] = body
             it[KEY_GENERATED_AT] = generatedAt
             it[KEY_FETCHED_AT] = System.currentTimeMillis().toString()
-            if (partial) it[KEY_PARTIAL] = "1" else it.remove(KEY_PARTIAL)
             if (windowFrom != null) it[KEY_WINDOW_FROM] = windowFrom else it.remove(KEY_WINDOW_FROM)
         }
     }
@@ -662,7 +685,11 @@ class ScheduleStore(private val context: Context) {
         val KEY_GONE_SINCE = stringPreferencesKey("gone_since")
         val KEY_GONE = stringPreferencesKey("gone")
         const val GONE_CONFIRM_MILLIS = 60L * 60 * 1000
+        /** Сборки до 0.1.4: снимок без пар соседки. Читается только при переводе. */
         val KEY_PARTIAL = stringPreferencesKey("schedule_partial")
+        val KEY_EXTRA_GROUPS = stringPreferencesKey("extra_groups")
+        val KEY_EXTRA_SCHEDULES = stringPreferencesKey("extra_schedules")
+        val KEY_GROUP_LABELS = stringPreferencesKey("group_labels")
         val KEY_WINDOW_FROM = stringPreferencesKey("window_from")
         val KEY_GROUP2_GONE_SINCE = stringPreferencesKey("group2_gone_since")
         val KEY_GROUP2_GONE = stringPreferencesKey("group2_gone")

@@ -54,8 +54,10 @@ internal suspend fun collectDiagnostics(
         "Группа: ${store.groupName.first() ?: "не выбрана"} " +
             "[${store.groupId.first() ?: "—"}]"
     }
-    store.secondGroupName.first()?.let { name ->
-        lines += "Подгруппа: $name [${store.secondGroupId.first() ?: "—"}]"
+    store.currentExtraGroups().takeIf { it.isNotEmpty() }?.let { extras ->
+        lines += "Ещё группы: " + extras.joinToString(", ") {
+            "${it.name} [${it.id}]" + if (it.gone) " — нет в таблице" else ""
+        }
     }
 
     if (schedule == null) {
@@ -86,7 +88,7 @@ internal suspend fun collectDiagnostics(
         "«Скоро пара»".takeIf { phone.lessonChannelOff },
         "«Изменения»".takeIf { phone.changesChannelOff },
         "«Сбои сервера»".takeIf { phone.serverChannelOff },
-        "«Соседняя подгруппа»".takeIf { phone.subgroupChannelOff },
+        "«Другие группы»".takeIf { phone.subgroupChannelOff },
     )
     if (off.isNotEmpty()) lines += "Каналы выключены в телефоне: ${off.joinToString(", ")}"
     lines += "Фон: " + phone.backgroundLimits.joinToString("; ").ifEmpty { "ограничений не видно" } +

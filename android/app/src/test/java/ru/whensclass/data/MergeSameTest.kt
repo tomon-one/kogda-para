@@ -4,11 +4,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Когда две колонки подгрупп описывают одну и ту же пару.
+ * Когда колонки двух групп описывают одну и ту же пару.
  *
- * Общая пара нередко записана только в одной колонке, поэтому соседнюю
- * подгруппу можно подмешать. Но пары, записанные в обеих, задваивать нельзя:
- * день распухает вдвое, а в недельном виджете упирается в предел контейнера.
+ * Общая пара бывает записана не во всех колонках, поэтому другие группы
+ * можно подмешать. Но пары, записанные в обеих, задваивать нельзя: день
+ * распухает вдвое, а совмещённая пара выглядит двумя.
  *
  * Что считать «той же парой» — решение, а не очевидность, и до 9 сентября оно
  * нигде не было записано: сверяются номер, предмет, аудитория, ссылка, онлайн
@@ -39,8 +39,8 @@ class MergeSameTest {
             generatedAt = "2026-09-09T00:00:00Z",
             days = listOf(day),
         )
-        val second = schedule.copy(groupId = "isp-924-2", days = listOf(other))
-        return mergeSecondGroup(schedule, second).days.first().lessons
+        val second = schedule.copy(groupId = "isp-924-2", groupName = "ИСП-924/2", days = listOf(other))
+        return combineGroups(schedule, listOf(second.groupName to second)).days.first().lessons
     }
 
     @Test

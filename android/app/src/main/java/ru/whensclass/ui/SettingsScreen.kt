@@ -6,7 +6,6 @@ import android.widget.Toast
 import android.os.Build
 import android.provider.Settings
 import android.net.Uri
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -84,7 +83,13 @@ import ru.whensclass.widget.formatDurationShort
 @Composable
 fun SettingsScreen(
     groupName: String?,
-    secondGroupName: String?,
+    /** Остальные выбранные группы по порядку — их пары на экране рядом со своими. */
+    extraGroups: List<ru.whensclass.data.ExtraGroup> = emptyList(),
+    /** Подгруппы своей группы, которых ещё нет среди выбранных и которые влезают. */
+    subgroups: List<ru.whensclass.data.GroupDto> = emptyList(),
+    /** Подписи групп у пар: названиями или номерами. */
+    groupsByName: Boolean = true,
+    onGroupsByName: (Boolean) -> Unit = {},
     teacherMode: Boolean,
     onSwitchRole: () -> Unit,
     theme: ThemeChoice,
@@ -95,7 +100,7 @@ fun SettingsScreen(
     notifyChanges: Boolean,
     notifyUpdates: Boolean,
     notifyServer: Boolean = true,
-    notifySubgroup: Boolean = true,
+    notifyGroupsGone: Boolean = true,
     exactAlarms: Boolean,
     notifications: Boolean,
     /** Что телефон делает с приложением помимо его настроек. */
@@ -105,7 +110,7 @@ fun SettingsScreen(
     onNotifyChanges: (Boolean) -> Unit,
     onNotifyUpdates: (Boolean) -> Unit,
     onNotifyServer: (Boolean) -> Unit = {},
-    onNotifySubgroup: (Boolean) -> Unit = {},
+    onNotifyGroupsGone: (Boolean) -> Unit = {},
     focusUpdate: Boolean,
     checkingUpdate: Boolean,
     updateChecked: Boolean,
@@ -114,8 +119,9 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onTheme: (ThemeChoice) -> Unit,
     onChangeGroup: () -> Unit,
-    onPickSecondGroup: () -> Unit,
-    onClearSecondGroup: () -> Unit,
+    onAddGroup: () -> Unit = {},
+    onAddSubgroups: (List<ru.whensclass.data.GroupDto>) -> Unit = {},
+    onRemoveGroup: (String) -> Unit = {},
     onUpdate: () -> Unit,
     loadDiagnostics: suspend () -> String,
     /** Таблица колледжа — к своей колонке на сегодня. Null, пока сервер не назвал адрес. */
@@ -175,11 +181,16 @@ fun SettingsScreen(
             // Название и кнопка одной строкой: столбиком раздел выходил
             // вдвое выше, а читается так же. Кнопки раздела — одной ширины
             // (Tomon 28.09).
+            // Номера у групп — только когда пары ими и подписаны: названия
+            // и так стоят в строке.
+            val numbered = !teacherMode && extraGroups.isNotEmpty() && !groupsByName
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // С другими группами — номер 1, как у значков под временем пар.
+                if (numbered) GroupMark("1", lit = true, own = true)
                 Text(
                     groupName ?: "не выбрано",
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    modifier = Modifier.weight(1f).padding(start = if (numbered) 10.dp else 0.dp, end = 8.dp),
                 )
                 ActionButton(
                     label = if (teacherMode) "Выбрать заново" else "Сменить",
@@ -190,51 +201,63 @@ fun SettingsScreen(
             }
 
             if (!teacherMode) {
-                // Пометка beta: выбор подгруппы неудобен и будет переделан.
-                // «Соседняя» из подписи убрана — оба по просьбе Tomon 28.09.
-                val subgroup = @Composable {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Подгруппа", style = MaterialTheme.typography.bodyLarge)
-                            BetaMark(modifier = Modifier.padding(start = 8.dp))
-                        }
-                        Text(
-                            secondGroupName ?: "не выбрана",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                if (secondGroupName == null) {
+                // Остальные группы — любые, до шести вместе со своей (Tomon
+                // 28.09). Номер — тот же, что у значков под временем пар.
+                extraGroups.forEachIndexed { index, group ->
                     Row(
-                        modifier = Modifier.padding(top = 14.dp),
+                        modifier = Modifier.padding(top = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(modifier = Modifier.weight(1f).padding(end = 8.dp)) { subgroup() }
+                        if (numbered) GroupMark("${index + 2}", lit = true, own = false)
+                        Text(
+                            group.name + if (group.gone) " — нет в таблице" else "",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f).padding(start = if (numbered) 10.dp else 0.dp, end = 8.dp),
+                        )
                         ActionButton(
-                            label = "Добавить",
-                            onClick = onPickSecondGroup,
+                            label = "Убрать",
+                            onClick = { onRemoveGroup(group.id) },
                             modifier = Modifier.widthIn(min = GROUP_BUTTON),
                             top = 0.dp,
                         )
                     }
-                } else {
-                    // Две кнопки рядом с названием не оставляли места самому
-                    // названию — они строкой ниже.
-                    Box(modifier = Modifier.padding(top = 14.dp)) { subgroup() }
+                }
+                val room = ru.whensclass.data.MAX_GROUPS - 1 - extraGroups.size
+                if (room > 0) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ActionButton(
-                            label = "Заменить",
-                            onClick = onPickSecondGroup,
+                            label = "Добавить группу",
+                            onClick = onAddGroup,
                             modifier = Modifier.widthIn(min = GROUP_BUTTON),
                         )
-                        ActionButton(
-                            label = "Убрать",
-                            onClick = onClearSecondGroup,
-                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
-                        )
+                        if (subgroups.isNotEmpty()) {
+                            ActionButton(
+                                label = if (subgroups.size == 1) "Добавить ${subgroups.single().name}"
+                                else "Добавить подгруппы",
+                                onClick = { onAddSubgroups(subgroups) },
+                                modifier = Modifier.widthIn(min = GROUP_BUTTON),
+                            )
+                        }
                     }
                 }
+                if (extraGroups.isNotEmpty()) {
+                    // Названия или номера под временем пар (Tomon 28.09).
+                    Text(
+                        "Подписи у пар",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
+                    )
+                    Segmented(
+                        options = listOf("Названия" to true, "Номера" to false),
+                        selected = groupsByName,
+                        onPick = onGroupsByName,
+                    )
+                }
+                Hint(
+                    "Пары других групп — на экране расписания рядом со своими, подписи под " +
+                        "временем — чья пара. Виджеты, напоминания и уведомления об изменениях — " +
+                        "только о своей группе.",
+                )
             }
         }
 
@@ -301,14 +324,14 @@ fun SettingsScreen(
             Hint("Если расписание не обновляется дольше двух часов — один раз за сбой; " +
                 "уведомление уберётся само, когда сервер починится.")
 
-            // Только студенту с выбранной соседней подгруппой: остальным
+            // Только студенту с другими выбранными группами: остальным
             // этого уведомления не бывает.
-            if (!teacherMode && secondGroupName != null) {
-                SwitchRow("Сообщать о пропаже подгруппы", notifySubgroup, onNotifySubgroup)
-                if (notifySubgroup && notifications && phone.subgroupChannelOff) {
-                    ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SUBGROUP, "Сообщения о подгруппе")
+            if (!teacherMode && extraGroups.isNotEmpty()) {
+                SwitchRow("Сообщать о пропаже других групп", notifyGroupsGone, onNotifyGroupsGone)
+                if (notifyGroupsGone && notifications && phone.subgroupChannelOff) {
+                    ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SUBGROUP, "Другие группы")
                 }
-                Hint("Если соседней подгруппы не стало в таблице — один раз.")
+                Hint("Если одной из выбранных групп не стало в таблице — один раз.")
             }
 
             SwitchRow("Сообщать о новых версиях", notifyUpdates, onNotifyUpdates)
@@ -371,8 +394,8 @@ fun SettingsScreen(
                         "серверу уходит, чьё именно: иначе его неоткуда взять. " +
                         "Всё для вашего удобства."
                 } else {
-                    "На сервер уходит только название вашей группы — и подгруппы, " +
-                        "если вы её выбрали. Больше ничего: ни имени, " +
+                    "На сервер уходят только названия вашей группы и других, " +
+                        "если вы их выбрали. Больше ничего: ни имени, " +
                         "ни номера телефона, ни местоположения. Учётной записи нет, " +
                         "аналитики и рекламы нет. Когда смотрите чужое расписание, " +
                         "серверу уходит, чьё именно: иначе его неоткуда взять. " +
@@ -691,18 +714,6 @@ private fun ExternalRow(label: String, checked: Boolean? = null, onClick: () -> 
     }
 }
 
-/** Пометка у того, что работает, но ещё будет переделано. */
-@Composable
-private fun BetaMark(modifier: Modifier = Modifier) {
-    Text(
-        "beta",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 6.dp, vertical = 1.dp),
-    )
-}
 
 /** Пояснение под выключателем. */
 @Composable
