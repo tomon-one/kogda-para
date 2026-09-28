@@ -109,13 +109,27 @@ def test_vapid_header_is_a_valid_es256_jwt():
     head, body, signature = token.split(".")
     assert json.loads(b64decode(head)) == {"typ": "JWT", "alg": "ES256"}
     claims = json.loads(b64decode(body))
-    assert claims == {"aud": "https://web.push.apple.com", "exp": 1_800_003_600,
+    # 12 часов: Apple — не дальше суток и не обновлять чаще раза в час.
+    assert claims == {"aud": "https://web.push.apple.com", "exp": 1_800_043_200,
                       "sub": "https://kogda-para-nsk.ru"}
     raw = b64decode(signature)
     der = encode_dss_signature(int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big"))
     ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), b64decode(k)).verify(
         der, f"{head}.{body}".encode(), ec.ECDSA(hashes.SHA256())
     )
+
+
+def test_vapid_token_is_reused_until_an_hour_is_left():
+    key = ec.generate_private_key(ec.SECP256R1())
+    vapid = webpush.Vapid(b64encode(key.private_numbers().private_value.to_bytes(32, "big")),
+                          "https://kogda-para-nsk.ru")
+    apple = "https://web.push.apple.com/a"
+    first = vapid.header(apple, now=1_800_000_000)
+    assert vapid.header(apple + "b", now=1_800_000_000 + 10 * 3600) == first
+    # Другая служба — свой aud и свой токен.
+    assert vapid.header("https://fcm.googleapis.com/fcm/send/x", now=1_800_000_000) != first
+    # До конца меньше часа — новый.
+    assert vapid.header(apple, now=1_800_000_000 + 11 * 3600 + 1) != first
 
 
 # --- подписки ------------------------------------------------------------------
@@ -321,10 +335,23 @@ def test_new_subscription_gets_a_hello_once(tmp_path):
     day = dt.date(2026, 9, 29)
     push.subscribe(service.parse_subscription(_body()), day)
     push.subscribe(service.parse_subscription(_body(remind=30)), day)
-    assert [m["t"] for _, m, _ in push.sent] == ["hello"]
-    assert push.sent[0][1]["body"] == (
+    assert [j.message["notification"]["data"]["t"] for j in push.sent] == ["hello"]
+    note = push.sent[0].message["notification"]
+    assert note["title"] == "Уведомления включены"
+    assert note["body"] == (
         "Сюда будут приходить отмены и замены на сегодня и завтра и напоминания о паре."
     )
+    # Декларативный формат Apple: нажатие ведёт на тот сайт, что подписан.
+    assert push.sent[0].message["web_push"] == 8030 and push.sent[0].message["mutable"] is True
+    assert note["navigate"] == "https://kogda-para-nsk.ru/"
+
+
+def test_tested_site_is_opened_by_its_notifications(tmp_path):
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(service.parse_subscription(_body(site="tested")), dt.date(2026, 9, 29))
+    assert push.sent[0].message["notification"]["navigate"] == "https://kogda-para-nsk.ru/tested/"
+    with pytest.raises(service.BadSubscription):
+        service.parse_subscription(_body(site="evil"))
 
 
 def test_after_refresh_tells_only_subscribers_of_that_group(tmp_path, snapshots):
@@ -338,12 +365,12 @@ def test_after_refresh_tells_only_subscribers_of_that_group(tmp_path, snapshots)
     push.sent.clear()
     push.after_refresh(before, bt, after, at, day)
     assert len(push.sent) == 1
-    sub, message, ttl = push.sent[0]
-    assert sub["endpoint"] == "https://web.push.apple.com/abc"
-    assert message["t"] == "changes" and message["title"] == "Расписание изменилось"
-    assert message["lines"] == [
-        ["2026-09-08", f"вт, 8 сентября: отменили {first.number} пару: {first.subject}"]
-    ]
+    job = push.sent[0]
+    note = job.message["notification"]
+    assert job.sub["endpoint"] == "https://web.push.apple.com/abc"
+    assert note["data"]["t"] == "changes" and note["title"] == "Расписание изменилось"
+    assert note["body"] == f"вт, 8 сентября: отменили {first.number} пару: {first.subject}"
+    assert note["data"]["days"] == ["2026-09-08"]
 
 
 def test_reminder_goes_once_at_its_minute(tmp_path, snapshots):
@@ -358,9 +385,12 @@ def test_reminder_goes_once_at_its_minute(tmp_path, snapshots):
     push.remind(after, at, now=first["at"])
     push.remind(after, at, now=first["at"])
     assert len(push.sent) == 1
-    _, message, ttl = push.sent[0]
-    assert message["t"] == "lesson" and message["title"] == first["title"]
-    assert ttl == 20 * 60
+    job = push.sent[0]
+    note = job.message["notification"]
+    assert note["data"]["t"] == "lesson" and note["title"] == first["title"]
+    assert job.ttl == 20 * 60
+    # Позже начала пары повторять незачем.
+    assert job.deadline == note["data"]["start"] / 1000
 
 
 def test_without_key_nothing_is_sent(tmp_path, snapshots):
@@ -410,3 +440,83 @@ def test_api_without_key_says_so(tmp_path, api):
     push.vapid = None
     assert client.get("/v1/push/key").status_code == 404
     assert client.post("/v1/push/subscribe", json=_body()).status_code == 404
+
+
+def test_changes_fit_the_push_size_newest_kept():
+    sub = service.parse_subscription(_body())
+    lines = [["2026-09-29", f"вт, 29 сентября: {i} " + "очень длинная строка " * 40] for i in range(8)]
+    out = service.changes_message(sub, lines)
+    raw = json.dumps(out, ensure_ascii=False).encode("utf-8")
+    assert len(raw) <= service.MAX_PAYLOAD
+    body = out["notification"]["body"].split("\n")
+    assert body[-1].startswith("вт, 29 сентября: 7 ")
+    assert len(body) == len(out["notification"]["data"]["days"])
+
+
+@pytest.fixture
+def sending(tmp_path, monkeypatch):
+    """Push с подменённой отправкой: ответы по очереди, повторы — сразу и в список."""
+    answers, later = [], []
+    monkeypatch.setattr(webpush, "send", lambda *a, **k: answers.pop(0))
+    push = service.Push(tmp_path, _vapid())
+    push._later = lambda delay, action: later.append(delay)
+    return push, answers, later
+
+
+def test_retry_once_after_retry_after(sending):
+    push, answers, later = sending
+    sub = service.parse_subscription(_body())
+    push._subs[sub["endpoint"]] = sub
+    job = service.Job(sub, service.message(sub, "changes", "т", "б"), 3600)
+    answers.append(webpush.Result(429, "TooManyRequests", 7))
+    push._send(job)
+    assert later == [7]
+    answers.append(webpush.Result(503))
+    push._send(job, attempt=1)
+    assert later == [7]
+    assert push.count() == 1
+
+
+def test_no_retry_after_the_lesson_started(sending):
+    push, answers, later = sending
+    sub = service.parse_subscription(_body())
+    job = service.Job(sub, service.message(sub, "lesson", "т", "б"), 600, deadline=0)
+    answers.append(webpush.Result(503))
+    push._send(job)
+    assert later == []
+
+
+@pytest.mark.parametrize("status, reason", [(410, None), (404, None), (403, "VapidPkHashMismatch")])
+def test_dead_or_foreign_key_subscription_is_dropped(sending, status, reason):
+    push, answers, later = sending
+    sub = service.parse_subscription(_body())
+    push._subs[sub["endpoint"]] = sub
+    answers.append(webpush.Result(status, reason))
+    push._send(service.Job(sub, service.message(sub, "hello", "т", "б"), 60))
+    assert push.count() == 0 and later == []
+
+
+def test_bad_token_keeps_the_subscription(sending):
+    push, answers, later = sending
+    sub = service.parse_subscription(_body())
+    push._subs[sub["endpoint"]] = sub
+    answers.append(webpush.Result(403, "BadJwtToken"))
+    push._send(service.Job(sub, service.message(sub, "hello", "т", "б"), 60))
+    assert push.count() == 1 and later == []
+
+
+def test_browser_moved_subscription_keeps_the_choice(api):
+    client, push = api
+    assert client.post("/v1/push/subscribe", json=_body(id="isp-924-2", remind=45)).status_code == 204
+    fresh = _body(endpoint="https://web.push.apple.com/new")
+    body = {"old": "https://web.push.apple.com/abc", "endpoint": fresh["endpoint"], "keys": fresh["keys"]}
+    assert client.post("/v1/push/move", json=body).status_code == 204
+    assert list(push._subs) == ["https://web.push.apple.com/new"]
+    moved = push._subs["https://web.push.apple.com/new"]
+    assert moved["id"] == "isp-924-2" and moved["remind"] == 45 and moved["p256dh"] == fresh["keys"]["p256dh"]
+    # Чужой адрес вместо нового — отказ; неизвестный прежний — ничего не меняет.
+    bad = {**body, "old": "https://web.push.apple.com/new", "endpoint": "https://10.0.0.1/x"}
+    assert client.post("/v1/push/move", json=bad).status_code == 422
+    assert client.post("/v1/push/move", json={**body, "old": "https://web.push.apple.com/none"}
+                       ).status_code == 204
+    assert list(push._subs) == ["https://web.push.apple.com/new"]

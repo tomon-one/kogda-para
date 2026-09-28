@@ -96,6 +96,11 @@ self.addEventListener('fetch', function (event) {
 // своей группы и напоминания о паре. Здесь — только показать. Айфон требует
 // показывать каждое: пришедшее и не показанное он считает нарушением и
 // может отписать сайт.
+//
+// Сообщение — в декларативном формате Apple ({web_push: 8030, notification:
+// {title, body, navigate, tag, data}}): айфон с iOS 18.4 покажет его и сам,
+// если воркер не проснулся. Здесь оно разбирается так же, как в Chrome и
+// Firefox, где декларативного показа нет.
 
 var ZONE = 'Asia/Novosibirsk';
 // Больше строк шторка не покажет развёрнутой (как в приложении).
@@ -112,35 +117,47 @@ function collegeToday() {
 
 var ICON = new URL('assets/icon-192.png', self.registration.scope).href;
 
+/** {t, title, body, …данные} из декларативного сообщения. */
+function unpack(raw) {
+  var note = raw && raw.notification;
+  if (!note) return raw || {};
+  var data = note.data || {};
+  var out = { title: note.title, body: note.body };
+  Object.keys(data).forEach(function (k) { out[k] = data[k]; });
+  return out;
+}
+
+function show(title, body, tag, extra) {
+  var data = { url: self.registration.scope };
+  Object.keys(extra || {}).forEach(function (k) { data[k] = extra[k]; });
+  return self.registration.showNotification(title, { body: body || '', tag: tag, icon: ICON, data: data });
+}
+
 function showChanges(data) {
+  var days = data.days || [];
+  var fresh = String(data.body || '').split('\n').map(function (text, i) { return [days[i] || '', text]; });
   // Непрочитанное прежнее не затирать: новые строки — к старым, прошедшие
-  // дни — прочь (announceChanges в приложении).
+  // дни — прочь (announceChanges в приложении). Прежнее закрыть: на айфоне
+  // тот же tag не заменяет уведомление, а ставит второе рядом (WebKit 258922).
   return self.registration.getNotifications({ tag: 'changes' }).then(function (open) {
     var lines = [];
-    open.forEach(function (n) { ((n.data && n.data.lines) || []).forEach(function (l) { lines.push(l); }); });
-    (data.lines || []).forEach(function (l) { lines.push(l); });
+    open.forEach(function (n) {
+      ((n.data && n.data.lines) || []).forEach(function (l) { lines.push(l); });
+      n.close();
+    });
+    fresh.forEach(function (l) { lines.push(l); });
     var today = collegeToday();
     var seen = {};
     var kept = lines.filter(function (l) {
-      if (!l || l[0] < today || seen[l[1]]) return false;
+      if (!l || (l[0] && l[0] < today) || seen[l[1]]) return false;
       seen[l[1]] = true;
       return true;
     }).slice(-MAX_LINES);
-    if (!kept.length) kept = (data.lines || []).slice(-MAX_LINES);
-    return self.registration.showNotification(data.title || 'Расписание изменилось', {
-      body: kept.map(function (l) { return l[1]; }).join('\n'),
-      tag: 'changes',
-      renotify: true,
-      icon: ICON,
-      data: { url: self.registration.scope, lines: kept },
-    });
+    if (!kept.length) kept = fresh.slice(-MAX_LINES);
+    return show(data.title || 'Расписание изменилось', kept.map(function (l) { return l[1]; }).join('\n'),
+      'changes', { lines: kept });
   }, function () {
-    return self.registration.showNotification(data.title || 'Расписание изменилось', {
-      body: (data.lines || []).map(function (l) { return l[1]; }).join('\n'),
-      tag: 'changes',
-      icon: ICON,
-      data: { url: self.registration.scope, lines: data.lines || [] },
-    });
+    return show(data.title || 'Расписание изменилось', data.body, 'changes', { lines: fresh });
   });
 }
 
@@ -148,26 +165,19 @@ function showLesson(data) {
   // Что пара уже идёт — по часам в момент показа: доставку могли задержать
   // (LessonAlarms.title в приложении).
   var title = data.start && Date.now() > data.start ? 'Пара уже идёт — ' + data.subject : data.title;
-  return self.registration.showNotification(title || 'Скоро пара', {
-    body: data.body || '',
-    tag: 'lesson',
-    renotify: true,
-    icon: ICON,
-    data: { url: self.registration.scope },
-  });
+  return show(title || 'Скоро пара', data.body, 'lesson');
 }
 
 self.addEventListener('push', function (event) {
   var data = {};
   try {
-    data = event.data ? event.data.json() : {};
+    data = unpack(event.data ? event.data.json() : {});
   } catch (e) {
     data = {};
   }
   var shown = data.t === 'changes' ? showChanges(data)
     : data.t === 'lesson' ? showLesson(data)
-      : self.registration.showNotification(data.title || 'Когда пара?', { body: data.body || '', icon: ICON,
-        data: { url: self.registration.scope } });
+      : show(data.title || 'Когда пара?', data.body, data.t || 'other');
   event.waitUntil(shown);
 });
 
@@ -180,4 +190,23 @@ self.addEventListener('notificationclick', function (event) {
     }
     return self.clients.openWindow ? self.clients.openWindow(url) : null;
   }));
+});
+
+// Браузер сменил подписку сам (Chrome на Android): новый адрес — службе, с
+// прежним выбором. На айфоне этого события нет — там подписку пересылает
+// страница при открытии (push.js, sync).
+self.addEventListener('pushsubscriptionchange', function (event) {
+  var old = event.oldSubscription;
+  if (!old) return;
+  var fresh = event.newSubscription ? Promise.resolve(event.newSubscription)
+    : self.registration.pushManager.subscribe(old.options);
+  event.waitUntil(fresh.then(function (sub) {
+    var json = sub.toJSON();
+    return fetch('/v1/push/move', {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old: old.endpoint, endpoint: json.endpoint, keys: json.keys }),
+    });
+  }).then(null, function () { return null; }));
 });

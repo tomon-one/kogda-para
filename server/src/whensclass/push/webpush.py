@@ -13,8 +13,10 @@ import hmac
 import json
 import os
 import struct
+import threading
 import time
 import urllib.parse
+from typing import NamedTuple
 
 import httpx
 from cryptography.hazmat.primitives import hashes
@@ -81,31 +83,56 @@ class Vapid:
     открытый выводится из него и уходит браузеру при подписке.
     """
 
+    # Токен живёт 12 часов и переиспользуется, новый — когда до конца меньше
+    # часа. Apple: exp не дальше суток и «не обновлять JWT чаще раза в час»;
+    # RFC 8292 советует переиспользовать (поиск 28.09). Было — новый токен на
+    # каждое сообщение со сроком в час.
+    LIFETIME = 12 * 3600
+    RENEW_BEFORE = 3600
+
     def __init__(self, private_b64: str, subject: str):
         value = int.from_bytes(b64decode(private_b64.strip()), "big")
         self._key = ec.derive_private_key(value, ec.SECP256R1())
         self.public = b64encode(_public_bytes(self._key.public_key()))
         self.subject = subject
+        self._tokens: dict[str, tuple[str, int]] = {}
+        self._lock = threading.Lock()
 
     def header(self, endpoint: str, now: float | None = None) -> str:
         parts = urllib.parse.urlsplit(endpoint)
-        claims = {
-            "aud": f"{parts.scheme}://{parts.netloc}",
-            # Час, а не сутки: Apple принимает не дольше часа.
-            "exp": int((now or time.time()) + 3600),
-            "sub": self.subject,
-        }
+        # Origin службы рассылки: схема и хост, порт — только нестандартный.
+        aud = f"{parts.scheme}://{parts.netloc}"
+        moment = int(now if now is not None else time.time())
+        with self._lock:
+            cached = self._tokens.get(aud)
+            if cached is None or cached[1] - moment < self.RENEW_BEFORE:
+                cached = (self._sign(aud, moment + self.LIFETIME), moment + self.LIFETIME)
+                self._tokens[aud] = cached
+        return f"vapid t={cached[0]}, k={self.public}"
+
+    def _sign(self, aud: str, exp: int) -> str:
+        claims = {"aud": aud, "exp": exp, "sub": self.subject}
         head = b64encode(json.dumps({"typ": "JWT", "alg": "ES256"}, separators=(",", ":")).encode())
         body = b64encode(json.dumps(claims, separators=(",", ":")).encode())
         signing = f"{head}.{body}".encode("ascii")
         r, s = decode_dss_signature(self._key.sign(signing, ec.ECDSA(hashes.SHA256())))
         signature = b64encode(r.to_bytes(32, "big") + s.to_bytes(32, "big"))
-        return f"vapid t={head}.{body}.{signature}, k={self.public}"
+        return f"{head}.{body}.{signature}"
 
 
 # Ответы службы рассылки, после которых подписка мертва: браузер отписался
 # или его стёрли. Такую убираем, иначе слали бы в пустоту каждый раз.
 GONE = (404, 410)
+# Стоит повторить: служба перегружена или на миг недоступна.
+RETRY = (429, 500, 502, 503, 504)
+
+
+class Result(NamedTuple):
+    status: int
+    # Причина из тела ответа — у Apple JSON с «reason»: BadJwtToken,
+    # VapidPkHashMismatch, TooManyRequests…
+    reason: str | None = None
+    retry_after: int | None = None
 
 
 def send(
@@ -117,8 +144,8 @@ def send(
     message: dict,
     ttl: int,
     urgency: str = "normal",
-) -> int:
-    """Отправить одно сообщение; вернуть код ответа службы рассылки.
+) -> Result:
+    """Отправить одно сообщение; вернуть ответ службы рассылки.
 
     `urgency` high — для напоминаний: с ним служба рассылки и телефон не
     откладывают доставку до пробуждения, normal — для остального.
@@ -139,4 +166,12 @@ def send(
             "Urgency": urgency,
         },
     )
-    return response.status_code
+    reason = None
+    if response.status_code >= 300:
+        try:
+            body = response.json()
+            reason = str(body.get("reason") or body.get("message") or "")[:80] or None
+        except ValueError:
+            reason = response.text[:80] or None
+    retry = response.headers.get("Retry-After", "")
+    return Result(response.status_code, reason, int(retry) if retry.isdigit() else None)
