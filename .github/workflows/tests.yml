@@ -52,3 +52,15 @@ jobs:
       # Юнит-тесты и сжатие R8, как у выпуска: ошибки правил R8 тесты не видят.
       # Подпись для этого шага не нужна.
       - run: ./gradlew :app:testDebugUnitTest :app:minifyReleaseWithR8
+
+  web:
+    name: Сайт
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      # Расчёты, обновление против поддельного сервера, список файлов
+      # сервис-воркера и синтаксис для старых браузеров.
+      - run: node --test 'web/tests/*.test.mjs'
