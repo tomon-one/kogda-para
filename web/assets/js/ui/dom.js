@@ -77,7 +77,10 @@ export function snackbar(text) {
   document.body.appendChild(el);
   clearTimeout(snackTimer);
   snackTimer = setTimeout(function () {
-    if (el.parentNode) el.parentNode.removeChild(el);
+    el.classList.add('hide');
+    setTimeout(function () {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 200);
   }, 4000);
 }
 
@@ -90,7 +93,10 @@ export function closeDialog() {
   var d = openDialog;
   openDialog = null;
   document.removeEventListener('keydown', d.onKey);
-  if (d.el.parentNode) d.el.parentNode.removeChild(d.el);
+  d.el.classList.add('closing');
+  setTimeout(function () {
+    if (d.el.parentNode) d.el.parentNode.removeChild(d.el);
+  }, 150);
   document.body.classList.remove('dialog-open');
   if (d.restore && d.restore.focus) d.restore.focus();
 }

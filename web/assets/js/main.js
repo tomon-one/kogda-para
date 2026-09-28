@@ -29,7 +29,16 @@ var state = {
   /** День, к которому надо прокрутить, когда он появится; null — человек листает сам. */
   wanted: null,
   lastRefresh: 0,
+  /** Когда начал крутиться ⟳: новый значок после перестройки продолжает с той же фазы. */
+  spinStart: 0,
+  /** Запрос кончился, значок доводит оборот. */
+  spinningDown: false,
+  flashAt: 0,
 };
+
+/** Въезд экрана: каким классом и когда начался — перестройка его продолжает. */
+var nav = { cls: null, at: 0, depth: null };
+var appearAt = 0;
 
 var installEvent = null;
 var depth = 0;
@@ -99,8 +108,11 @@ var app = {
   theme: function () { return store.get('theme') || 'system'; },
   setTheme: function (theme) {
     store.set('theme', theme);
+    // Без перестройки экрана: тогда цвета перетекают, а не щёлкают.
+    var html = document.documentElement;
+    html.classList.add('theme-anim');
     applyTheme();
-    render();
+    setTimeout(function () { html.classList.remove('theme-anim'); }, 400);
   },
   installPrompt: function () { return installEvent; },
   install: function () {
@@ -148,6 +160,11 @@ function onRoute() {
   var isOwn = route.screen === 'main' && !route.kind;
   var enteredList = route.screen === 'main' && (route.kind !== app.route.kind || route.id !== app.route.id);
   app.route = route;
+  // Глубже — справа, назад — слева, вбок (вкладки) — проявлением, как в приложении.
+  var depth = depthOf(route);
+  nav.cls = nav.depth == null || depth === nav.depth ? 'enter-fade'
+    : depth > nav.depth ? 'enter-forward' : 'enter-back';
+  nav.depth = depth;
   if ((isOwn && !wasOwn) || (route.id && enteredList)) state.wanted = collegeNow().date;
   if (route.id) loadOther(route.kind, route.id);
   closeDialog();
@@ -155,6 +172,24 @@ function onRoute() {
 }
 
 // ——— отрисовка ———
+
+function depthOf(route) {
+  if (!store.get('welcome') && !repo.chosen()) return 0;
+  if (route.screen === 'pick') return 1;
+  if (route.screen === 'settings' || route.id) return 3;
+  return 2;
+}
+
+/**
+ * Продолжить анимацию, начатую до перестройки экрана: тот же класс и сдвиг
+ * назад на прошедшее время. Иначе каждый ответ сервера обрывал бы въезд.
+ */
+function continueAnimation(el, cls, startedAt, longest) {
+  var since = Date.now() - startedAt;
+  if (!cls || since >= longest) return;
+  el.classList.add(cls);
+  if (since > 0) el.style.setProperty('--shift', -since + 'ms');
+}
 
 function screenFor(route) {
   if (!store.get('welcome') && !repo.chosen()) return welcomeScreen(app);
@@ -172,8 +207,16 @@ function render(navigated) {
   var focusKey = active && active.getAttribute && active.getAttribute('data-query');
   var anchor = navigated ? null : scrollAnchor();
   var scrollY = window.pageYOffset;
+  var hadCards = !!root.querySelector('[data-day]');
 
   var screen = screenFor(app.route);
+  if (navigated) nav.at = Date.now();
+  continueAnimation(screen, nav.cls, nav.at, 400);
+  // Дни всплывают, когда их только что не было: после выбора группы, при
+  // переходе, при первом ответе сервера.
+  var days = screen.querySelector('.days');
+  if (days && (navigated || !hadCards)) appearAt = Date.now();
+  if (days) continueAnimation(days, 'appear', appearAt, 700);
   // Человек набирает в поиске: поле остаётся прежним узлом, иначе телефон
   // прячет клавиатуру на каждом ответе сервера.
   if (focusKey && !navigated) {
@@ -295,6 +338,8 @@ function failText(result) {
 }
 
 var flashTimer = null;
+/** Оборот ⟳ — как в app.css и в приложении. */
+var SPIN_MS = 450;
 
 /**
  * Обновить своё расписание. `manual` — нажали ⟳: тогда неудача — плашкой, и
@@ -302,6 +347,7 @@ var flashTimer = null;
  */
 function refresh(force, manual) {
   if (!repo.chosen()) return;
+  if (!state.refreshing && !state.spinningDown) state.spinStart = Date.now();
   state.refreshing = true;
   state.flash = false;
   if (manual) state.refreshFailed = false;
@@ -312,18 +358,32 @@ function refresh(force, manual) {
   }
   render();
   repo.refresh(force).then(function (result) {
-    state.refreshing = repo.isRefreshing();
     if (manual && (result.kind === 'failed' || result.kind === 'gone')) {
       state.refreshFailed = result.kind === 'failed';
       snackbar(failText(result));
     }
-    state.flash = true;
-    render();
-    clearTimeout(flashTimer);
-    flashTimer = setTimeout(function () {
-      state.flash = false;
+    state.refreshing = repo.isRefreshing();
+    if (state.refreshing) {
       render();
-    }, 900);
+      return;
+    }
+    // Значок доводит оборот до конца — хотя бы один целый: замерший на
+    // полповороте выглядит зависшим. Потом галочка или крестик.
+    state.spinningDown = true;
+    render();
+    var turns = Math.max(1, Math.ceil((Date.now() - state.spinStart) / SPIN_MS));
+    setTimeout(function () {
+      state.spinningDown = false;
+      if (state.refreshing) return;
+      state.flash = true;
+      state.flashAt = Date.now();
+      render();
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(function () {
+        state.flash = false;
+        render();
+      }, 900);
+    }, Math.max(0, state.spinStart + turns * SPIN_MS - Date.now()));
   });
 }
 

@@ -17,13 +17,24 @@ function row(main, sub, buttons) {
 }
 
 function segmented(options, selected, onPick) {
-  return h('div', { class: 'segmented', role: 'radiogroup' }, options.map(function (o) {
+  var group = h('div', { class: 'segmented', role: 'radiogroup' });
+  options.forEach(function (o) {
     var on = o[1] === selected;
-    return h('button', {
+    group.appendChild(h('button', {
       type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false',
-      class: 'segment' + (on ? ' on' : ''), onclick: function () { onPick(o[1]); },
-    }, o[0]);
-  }));
+      class: 'segment' + (on ? ' on' : ''),
+      onclick: function (e) {
+        var buttons = group.querySelectorAll('.segment');
+        for (var i = 0; i < buttons.length; i++) {
+          var mine = buttons[i] === e.currentTarget;
+          buttons[i].classList.toggle('on', mine);
+          buttons[i].setAttribute('aria-checked', mine ? 'true' : 'false');
+        }
+        onPick(o[1]);
+      },
+    }, o[0]));
+  });
+  return group;
 }
 
 export function settingsScreen(app) {

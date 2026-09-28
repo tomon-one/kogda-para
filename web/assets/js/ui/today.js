@@ -65,23 +65,27 @@ function topbar(app, own) {
   else if (app.server().status === STATUS_UNREACHABLE) broken = 'Сервер расписания не отвечает';
   else if (app.serverBroken()) broken = 'Сервер не смог обновить расписание';
 
+  var spinning = s.refreshing || s.spinningDown;
   var refreshIcon;
   var label;
-  if (s.flash && broken) {
+  if (s.flash) {
     // Запрос прошёл, но сервер отдал прежнее: галочка обещала бы свежесть,
     // которой нет. Подробности — на плашке.
-    refreshIcon = icon('close');
-    label = broken;
-  } else if (s.flash) {
-    refreshIcon = icon('check');
-    label = 'Расписание обновлено';
+    refreshIcon = icon(broken ? 'close' : 'check');
+    label = broken || 'Расписание обновлено';
+    var since = Date.now() - s.flashAt;
+    if (since < 320) {
+      refreshIcon.classList.add('pop');
+      refreshIcon.style.setProperty('--shift', -since + 'ms');
+    }
   } else {
-    refreshIcon = icon('refresh', s.refreshing ? 'spin' : '');
+    refreshIcon = icon('refresh', spinning ? 'spin' : '');
+    if (spinning) refreshIcon.style.setProperty('--spin-shift', -((Date.now() - s.spinStart) % 450) + 'ms');
     label = 'Обновить расписание';
   }
   var refresh = h('button', {
     type: 'button', class: 'icon-button', 'aria-label': label, title: label,
-    disabled: s.refreshing, onclick: function () { app.refresh(true, true); },
+    disabled: spinning, onclick: function () { app.refresh(true, true); },
   }, refreshIcon);
 
   return h('header', { class: 'topbar' },
