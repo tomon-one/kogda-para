@@ -28,6 +28,7 @@ var FILES = [
   'assets/js/api.js',
   'assets/js/format.js',
   'assets/js/main.js',
+  'assets/js/push.js',
   'assets/js/repo.js',
   'assets/js/schedule.js',
   'assets/js/search.js',
@@ -87,5 +88,96 @@ self.addEventListener('fetch', function (event) {
     return cache.match(key).then(function (hit) {
       return hit || fetch(request);
     });
+  }));
+});
+
+// ——— уведомления (Web Push) ———
+// Что прислать, решает служба (server/src/whensclass/push): отмены и замены
+// своей группы и напоминания о паре. Здесь — только показать. Айфон требует
+// показывать каждое: пришедшее и не показанное он считает нарушением и
+// может отписать сайт.
+
+var ZONE = 'Asia/Novosibirsk';
+// Больше строк шторка не покажет развёрнутой (как в приложении).
+var MAX_LINES = 8;
+
+function collegeToday() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: ZONE }).format(new Date());
+  } catch (e) {
+    var d = new Date();
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+}
+
+var ICON = new URL('assets/icon-192.png', self.registration.scope).href;
+
+function showChanges(data) {
+  // Непрочитанное прежнее не затирать: новые строки — к старым, прошедшие
+  // дни — прочь (announceChanges в приложении).
+  return self.registration.getNotifications({ tag: 'changes' }).then(function (open) {
+    var lines = [];
+    open.forEach(function (n) { ((n.data && n.data.lines) || []).forEach(function (l) { lines.push(l); }); });
+    (data.lines || []).forEach(function (l) { lines.push(l); });
+    var today = collegeToday();
+    var seen = {};
+    var kept = lines.filter(function (l) {
+      if (!l || l[0] < today || seen[l[1]]) return false;
+      seen[l[1]] = true;
+      return true;
+    }).slice(-MAX_LINES);
+    if (!kept.length) kept = (data.lines || []).slice(-MAX_LINES);
+    return self.registration.showNotification(data.title || 'Расписание изменилось', {
+      body: kept.map(function (l) { return l[1]; }).join('\n'),
+      tag: 'changes',
+      renotify: true,
+      icon: ICON,
+      data: { url: self.registration.scope, lines: kept },
+    });
+  }, function () {
+    return self.registration.showNotification(data.title || 'Расписание изменилось', {
+      body: (data.lines || []).map(function (l) { return l[1]; }).join('\n'),
+      tag: 'changes',
+      icon: ICON,
+      data: { url: self.registration.scope, lines: data.lines || [] },
+    });
+  });
+}
+
+function showLesson(data) {
+  // Что пара уже идёт — по часам в момент показа: доставку могли задержать
+  // (LessonAlarms.title в приложении).
+  var title = data.start && Date.now() > data.start ? 'Пара уже идёт — ' + data.subject : data.title;
+  return self.registration.showNotification(title || 'Скоро пара', {
+    body: data.body || '',
+    tag: 'lesson',
+    renotify: true,
+    icon: ICON,
+    data: { url: self.registration.scope },
+  });
+}
+
+self.addEventListener('push', function (event) {
+  var data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {};
+  }
+  var shown = data.t === 'changes' ? showChanges(data)
+    : data.t === 'lesson' ? showLesson(data)
+      : self.registration.showNotification('Когда пара?', { body: data.body || '', icon: ICON,
+        data: { url: self.registration.scope } });
+  event.waitUntil(shown);
+});
+
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  var url = (event.notification.data && event.notification.data.url) || self.registration.scope;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].url.indexOf(self.registration.scope) === 0 && 'focus' in list[i]) return list[i].focus();
+    }
+    return self.clients.openWindow ? self.clients.openWindow(url) : null;
   }));
 });

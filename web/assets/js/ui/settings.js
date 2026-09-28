@@ -3,8 +3,9 @@
 // для этого телефона (значок, приложение), таблица, оформление, данные и «О
 // сайте» (Tomon 28.09).
 
-import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid } from './dom.js';
-import { sheetLink } from '../format.js';
+import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, dialog, closeDialog } from './dom.js';
+import { sheetLink, durationShort } from '../format.js';
+import { REMIND_CHOICES } from '../push.js';
 import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
 import { groupMark } from './days.js';
 import { VERSION, build } from '../version.js';
@@ -39,6 +40,93 @@ function segmented(options, selected, onPick) {
     }, o[0]));
   });
   return group;
+}
+
+/** Выключатель строкой: подпись слева, бегунок справа — SwitchRow приложения. */
+function switchRow(label, on, onChange, key) {
+  var input = h('input', { type: 'checkbox', role: 'switch', class: 'switch', 'data-key': key });
+  input.checked = on;
+  input.addEventListener('change', function () { onChange(input.checked); });
+  return h('label', { class: 'switch-row' }, h('span', null, label), input);
+}
+
+/**
+ * Уведомления: считает и шлёт их служба (push.js). На айфоне — beta, на
+ * остальных — альфа-тест: там они идут через серверы Google, а до них с
+ * сервера достаётся не всегда (Tomon 28.09). Каждое ограничение, которое не
+ * обойти, — строкой-предупреждением рядом.
+ */
+function notifications(app, teacherMode) {
+  var ios = isIos();
+  var title = [h('span', null, 'Уведомления'), ' ', h('span', { class: 'badge' }, ios ? 'beta' : 'альфа-тест')];
+  var why = app.pushBlocker();
+  if (why === 'home') {
+    return section(title, h('p', null, 'На айфоне уведомления приходят только сайту со значком на экране ' +
+      '«Домой», на iOS 16.4 и новее. Добавьте значок — раздел выше — откройте сайт им и включите здесь.'));
+  }
+  if (why === 'unsupported') {
+    return section(title, h('p', null, 'Этот браузер не умеет уведомления сайтов' +
+      (ios ? ': нужна iOS 16.4 или новее.' : '.')));
+  }
+  if (why === 'denied') {
+    return section(title, h('p', null, 'Уведомления для этого сайта запрещены в настройках браузера — ' +
+      'разрешите их там.'));
+  }
+
+  var now = app.pushChoice();
+  function change(next) {
+    if (app.pushEnabled() || (!next.changes && !next.remind)) {
+      app.setPush(next);
+      return;
+    }
+    // Первое включение — сначала сказать, что появится на сервере (Tomon 28.09).
+    // Выключатель под окном — обратно, пока не согласились: окно закрывают
+    // и мимо кнопок.
+    app.render();
+    dialog('Включить уведомления?', [
+      h('p', null, 'Чтобы их присылать, сервер будет хранить адрес, по которому этот браузер ' +
+        'принимает уведомления, ' + (teacherMode ? 'выбранное имя из таблицы' : 'название вашей группы') +
+        ', что присылать и дату подписки — пока уведомления включены. Больше ничего. ' +
+        'Выключите — запись сотрётся.'),
+    ], [
+      { label: 'Отмена' },
+      // Разрешение браузера спрашивается прямо в этом нажатии: айфон
+      // спрашивает только по нажатию.
+      { label: 'Включить', onClick: function () { closeDialog(); app.setPush(next); } },
+    ]);
+  }
+
+  var body = [
+    switchRow('Сообщать об изменениях', now.changes, function (on) {
+      change({ changes: on, remind: now.remind });
+    }, 'push-changes'),
+    h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра.'),
+    switchRow('Напоминать о паре', now.remind > 0, function (on) {
+      change({ changes: now.changes, remind: on ? (now.remind || 20) : 0 });
+    }, 'push-remind'),
+  ];
+  if (now.remind > 0) {
+    var select = h('select', { class: 'minutes', 'aria-label': 'За сколько предупредить' });
+    REMIND_CHOICES.forEach(function (m) {
+      var option = h('option', { value: String(m) }, durationShort(m));
+      option.selected = m === now.remind;
+      select.appendChild(option);
+    });
+    select.addEventListener('change', function () {
+      app.setPush({ changes: now.changes, remind: parseInt(select.value, 10) });
+    });
+    body.push(h('label', { class: 'switch-row' }, h('span', null, 'За сколько предупредить'), select));
+    body.push(h('p', { class: 'muted small' }, 'О первой паре дня — всегда. О следующих — только если ' +
+      'напоминание приходится на перемену, а не на пару.'));
+    body.push(h('p', { class: 'warning small' }, ios
+      ? 'Нестабильно: айфон может задержать напоминание.'
+      : 'Нестабильно: браузер может задержать напоминание или не показать его. Надёжнее — приложение.'));
+  }
+  if (!ios) {
+    body.push(h('p', { class: 'warning small' }, 'Альфа-тест: на Android и компьютере уведомления идут через ' +
+      'серверы Google и могут не дойти.'));
+  }
+  return section(title, body);
 }
 
 export function settingsScreen(app) {
@@ -116,6 +204,8 @@ export function settingsScreen(app) {
         !install && !ios ? h('p', null, 'Android: меню браузера → «Добавить на главный экран».') : null,
       ]),
 
+      own ? notifications(app, teacherMode) : null,
+
       // На айфоне его не поставить.
       ios ? null : section('Приложение для Android', [
         h('p', null, 'Виджеты на домашнем экране, напоминания о парах и уведомления об отменах и заменах.'),
@@ -151,6 +241,10 @@ export function settingsScreen(app) {
           'ни номера телефона, ни местоположения. Учётной записи нет, аналитики и рекламы нет, ' +
           'выбор хранится только в этом браузере. Когда смотрите чужое расписание, серверу уходит, ' +
           'чьё именно: иначе его неоткуда взять. Всё для вашего удобства.'),
+        // Уведомления — единственное, что сервер хранит о браузере (Tomon 28.09).
+        h('p', null, 'Пока включены уведомления, сервер хранит адрес, по которому этот браузер их ' +
+          'принимает, ' + (teacherMode ? 'и выбранное имя' : 'и вашу группу') + ', что присылать и дату ' +
+          'подписки. Выключите — запись сотрётся.'),
         h('p', null, 'Что написано в таблице колледжа, то и покажет сайт: за ошибки, замены и ' +
           'опоздавшие обновления автор не отвечает.'),
         h('p', null, 'Если однажды что-то сломается, автор постарается починить, но сроков не обещает. ' +
