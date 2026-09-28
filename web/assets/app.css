@@ -443,8 +443,11 @@ p a, .point a { text-decoration: underline; }
 .lesson.foreign { background: var(--foreign-bg); }
 .lesson.foreign .time, .lesson.foreign .subject { color: var(--muted); }
 
-.group-name { display: inline-flex; align-items: center; }
-.group-name .mark { margin: 0 10px 0 0; flex: none; }
+.group-name { display: flex; align-items: center; min-width: 0; }
+/* Длинное название без пробелов переносится внутри строки, а не уходит под кнопку. */
+.group-name-text { min-width: 0; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
+/* Длинное название в значке — многоточием: целиком оно и так рядом. */
+.group-name .mark { margin: 0 10px 0 0; flex: none; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
 .setting-sub { margin: 12px 0 6px; }
 .setting-actions { display: flex; flex-wrap: wrap; margin-top: 10px; }
 .setting-actions .action { margin: 0 8px 8px 0; }
