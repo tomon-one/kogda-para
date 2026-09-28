@@ -206,11 +206,17 @@ a:hover { text-decoration: underline; }
   text-align: center;
   font-size: 14px;
   font-weight: 500;
+  color: var(--fg);
+  position: relative;
+}
+
+/* Многоточие — у подписи, а не у кнопки: полоска под вкладкой переезжает к
+   соседней и не должна обрезаться её краем. */
+.tab-label {
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--fg);
-  position: relative;
 }
 
 .tab::after {
@@ -614,7 +620,9 @@ a:hover { text-decoration: underline; }
 .setting-text { flex: 1; min-width: 0; }
 .setting-buttons { display: flex; flex: none; }
 .setting-buttons .action { margin: 0 0 0 8px; }
-.action.fixed { width: 112px; padding-left: 8px; padding-right: 8px; }
+/* Наименьшая ширина, как у приложения (GROUP_BUTTON): «Сменить» и «Добавить»
+   одной ширины, «Выбрать заново» — в одну строку, шире. */
+.action.fixed { min-width: 112px; white-space: nowrap; }
 
 .beta {
   display: inline-block;
@@ -773,6 +781,38 @@ a:hover { text-decoration: underline; }
     animation-delay: var(--shift, 0ms);
   }
 
+  /* Внутри главного экрана: шапка стоит, содержимое едет, полоска вкладки
+     переезжает от прежней к новой. */
+  .screen.tab-right > .content,
+  .screen.content-forward > .content {
+    animation: enter-forward 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  .screen.tab-left > .content,
+  .screen.content-back > .content {
+    animation: enter-back 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  .screen.tab-right > .bottom-bar,
+  .screen.tab-left > .bottom-bar,
+  .screen.content-forward > .bottom-bar,
+  .screen.content-back > .bottom-bar {
+    animation: fade-in 0.22s ease-out both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  .screen.tab-right .tab.on::after {
+    animation: underline-from-left 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
+  .screen.tab-left .tab.on::after {
+    animation: underline-from-right 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
   /* Дни всплывают по очереди — когда расписание только появилось. */
   .days.appear > * {
     animation: rise 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -843,6 +883,16 @@ a:hover { text-decoration: underline; }
 
 @keyframes underline {
   from { transform: scaleX(0); }
+  to { transform: none; }
+}
+
+@keyframes underline-from-left {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+
+@keyframes underline-from-right {
+  from { transform: translateX(100%); }
   to { transform: none; }
 }
 

@@ -112,7 +112,7 @@ function tabs(app, current, teacherMode) {
         var mine = teacherMode ? tab === 'teachers' : tab === 'students';
         app.go(mine ? '' : teacherMode ? 'groups' : 'teachers');
       },
-    }, names[tab]);
+    }, h('span', { class: 'tab-label' }, names[tab]));
   }));
 }
 
@@ -121,7 +121,7 @@ function secondTabs() {
     return h('button', {
       type: 'button', class: 'tab muted',
       onclick: function () { snackbar(SOON[key][1]); },
-    }, SOON[key][0]);
+    }, h('span', { class: 'tab-label' }, SOON[key][0]));
   }));
 }
 
