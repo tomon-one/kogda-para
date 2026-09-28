@@ -21,6 +21,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .api.routes import router
 from .config import settings
+from .push.service import Push, load_vapid
 from .service.bells import BELLS
 from .service.refresher import Refresher, state_dir
 from .storage.snapshot_store import SnapshotStore
@@ -61,8 +62,11 @@ async def lifespan(app: FastAPI):
 
     store = SnapshotStore(directory)
     refresher = Refresher(store, directory)
+    push = Push(directory, load_vapid())
+    refresher.on_update = push.after_refresh
     app.state.store = store
     app.state.refresher = refresher
+    app.state.push = push
 
     if store.load():
         log.info("поднял снимок с диска: лист %r", store.snapshot.sheet_title)
@@ -107,6 +111,14 @@ async def lifespan(app: FastAPI):
             max_instances=1,
             coalesce=True,
         )
+    # Напоминания о паре для сайта: раз в минуту, в начале минуты.
+    scheduler.add_job(
+        lambda: push.remind(store.snapshot, store.teachers if push.count() else None),
+        CronTrigger(minute="*", second=2),
+        id="push-remind",
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
 
     # Первый заход сразу, чтобы сервис не стоял пустым до ближайшего часа.

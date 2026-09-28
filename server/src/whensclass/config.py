@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     ntfy_topic: str | None = None
     ntfy_url: str = "https://ntfy.sh/"
 
+    # Ключ VAPID для уведомлений сайта: 32 байта закрытого ключа P-256 в
+    # base64url. Пусто — уведомлений сайта нет, остальное работает.
+    vapid_key: str | None = None
+
     state_dir: str = "var"
     # Свой домен — канарейке, чтобы сверять срок отдаваемого сертификата.
     domain: str = "kogda-para-nsk.ru"

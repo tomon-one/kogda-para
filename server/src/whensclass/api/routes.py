@@ -8,16 +8,16 @@
 from __future__ import annotations
 
 import datetime as dt
-import zoneinfo
 import json
+import zoneinfo
 
 from fastapi import APIRouter, Query, Request, Response
 
 from ..config import settings
 from ..domain.teachers import spelling_twin
+from ..push.service import BadSubscription, parse_subscription
 from ..service.bells import BELLS
 from ..service.refresher import state_dir
-from .releases import CHANNELS, latest_release
 from .etag import etag_for, matches
 from .payloads import (
     FILLED_SHARE,
@@ -28,6 +28,7 @@ from .payloads import (
     teacher_payload,
     teachers_payload,
 )
+from .releases import CHANNELS, latest_release
 
 # GET и HEAD: nginx пропускает оба, а сторожа по коду ответа ходят HEAD-ом —
 # на @router.get служба отвечала им 405.
@@ -277,3 +278,74 @@ def schedule(
         return Response(status_code=404, content='{"error":"группа не найдена"}',
                         media_type=JSON)
     return _json_response(request, body)
+
+
+# --- уведомления сайта --------------------------------------------------------
+# Только для сайта: приложение считает уведомления само. POST — единственное,
+# что служба принимает; nginx пускает его только в /v1/push/ и с телом до 2 КБ.
+
+MAX_PUSH_BODY = 4096
+
+
+def _error(status: int, text: str) -> Response:
+    return Response(status_code=status, media_type=JSON,
+                    content=json.dumps({"error": text}, ensure_ascii=False))
+
+
+async def _json_body(request: Request) -> object:
+    raw = await request.body()
+    if len(raw) > MAX_PUSH_BODY:
+        raise BadSubscription("тело больше 4 КБ")
+    try:
+        return json.loads(raw)
+    except ValueError as exc:
+        raise BadSubscription("тело — не JSON") from exc
+
+
+@router.get("/v1/push/key")
+def push_key(request: Request) -> Response:
+    """Открытый ключ VAPID: браузер подписывается с ним."""
+    push = request.app.state.push
+    if not push.enabled:
+        return _error(404, "уведомления сайта не настроены")
+    return _json_response(request, {"v": 1, "key": push.vapid.public}, cache=False)
+
+
+@router.post("/v1/push/subscribe")
+async def push_subscribe(request: Request) -> Response:
+    """Подписка браузера: записать или заменить (тот же адрес — та же запись)."""
+    push = request.app.state.push
+    if not push.enabled:
+        return _error(404, "уведомления сайта не настроены")
+    try:
+        sub = parse_subscription(await _json_body(request))
+    except BadSubscription as exc:
+        return _error(422, str(exc))
+    store = request.app.state.store
+    if store.snapshot is None:
+        return _not_loaded()
+    if sub["kind"] == "group":
+        known = any(g.id == sub["id"] for g in store.snapshot.groups)
+    else:
+        index = store.teachers
+        known = bool(index and sub["id"] in index.names) or store.known_teacher(sub["id"]) is not None
+    if not known:
+        return _error(404, "группа не найдена" if sub["kind"] == "group" else "преподаватель не найден")
+    if not push.subscribe(sub, _today()):
+        return _error(503, "подписок слишком много")
+    return Response(status_code=204)
+
+
+@router.post("/v1/push/remove")
+async def push_remove(request: Request) -> Response:
+    """Отписка: запись стирается. Неизвестный адрес — тоже 204."""
+    push = request.app.state.push
+    try:
+        body = await _json_body(request)
+    except BadSubscription as exc:
+        return _error(422, str(exc))
+    endpoint = body.get("endpoint") if isinstance(body, dict) else None
+    if not isinstance(endpoint, str):
+        return _error(422, "нужен endpoint")
+    push.unsubscribe(endpoint)
+    return Response(status_code=204)
