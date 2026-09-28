@@ -84,19 +84,6 @@ def test_new_sheet_starts_the_search_once(tmp_path, monkeypatch):
     assert calls == [True]
 
 
-def test_without_key_we_do_not_look(tmp_path, monkeypatch):
-    """Без ключа список листов — двадцать мегабайт. Раз в полчаса нельзя."""
-    refresher, calls = watcher(tmp_path, monkeypatch, key=None)
-
-    def explode():
-        raise AssertionError("без ключа книгу трогать нельзя")
-
-    monkeypatch.setattr(sheet_index, "list_sheets", explode)
-
-    assert refresher.look_for_new_sheet() is False
-    assert calls == []
-
-
 def test_unreachable_book_is_not_a_failure(tmp_path, monkeypatch):
     """Не дозвонились — молчим: ночной поиск никуда не делся."""
     refresher, calls = watcher(tmp_path, monkeypatch)

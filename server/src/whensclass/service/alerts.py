@@ -25,6 +25,7 @@ import time
 import httpx
 
 from ..config import settings
+from ..storage.atomic import write_json
 
 log = logging.getLogger(__name__)
 
@@ -127,9 +128,7 @@ def _save() -> None:
         return
     data = {kind: _sent_at[kind].isoformat() for kind in _last_sent if kind in _sent_at}
     try:
-        tmp = _state_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data), "utf-8")
-        tmp.replace(_state_path)
+        write_json(_state_path, data)
     except OSError as exc:
         log.warning("окна тишины не записались: %s", exc)
 
@@ -138,7 +137,8 @@ def remember(kind: str, at: dt.datetime) -> None:
     """Тревога этого вида уже уходила в `at` — окно тишины считать от неё.
 
     Окно живёт в памяти процесса, а служба перезапускается при каждой
-    выкладке: перезапуск посреди сбоя сразу повторял тревогу. Время последней тревоги лежит в failing.json и поднимается отсюда.
+    выкладке: перезапуск посреди сбоя сразу повторял тревогу. Время последней
+    тревоги лежит в alerts.json, keep_in поднимает его отсюда.
     """
     ago = (dt.datetime.now(dt.timezone.utc) - at).total_seconds()
     if 0 <= ago < _LONGEST_WINDOW:

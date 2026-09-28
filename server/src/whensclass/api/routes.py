@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query, Request, Response
 
 from ..config import settings
 from ..domain.teachers import spelling_twin
-from ..service.bells import load_bells
+from ..service.bells import BELLS
 from ..service.refresher import state_dir
 from .releases import CHANNELS, latest_release
 from .etag import etag_for, matches
@@ -130,6 +130,12 @@ def healthz(request: Request) -> Response:
     )
 
 
+def _not_loaded() -> Response:
+    """Служба ещё ничего не разобрала: 503 — «временно», телефон держит своё."""
+    return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
+                    media_type=JSON)
+
+
 @router.api_route("/v1/app", methods=["GET", "HEAD"])
 def app_release(request: Request) -> Response:
     """Последняя выложенная сборка приложения — чтобы оно знало об обновлении."""
@@ -165,8 +171,7 @@ def app_release(request: Request) -> Response:
 def meta(request: Request) -> Response:
     store, refresher = _state(request)
     if store.snapshot is None:
-        return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
-                        media_type=JSON)
+        return _not_loaded()
     body = meta_payload(store.snapshot, store.generated, refresher.status,
                         refresher.checked_at, today=_today(),
                         failing_since=refresher.failing_since, error=refresher.last_error)
@@ -177,8 +182,7 @@ def meta(request: Request) -> Response:
 def groups(request: Request) -> Response:
     store, _ = _state(request)
     if store.snapshot is None:
-        return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
-                        media_type=JSON)
+        return _not_loaded()
     return _json_response(request, groups_payload(store.snapshot, store.generated))
 
 
@@ -187,8 +191,7 @@ def teachers(request: Request) -> Response:
     """Список преподавателей — собирается из расписания групп."""
     store, _ = _state(request)
     if store.snapshot is None or store.teachers is None:
-        return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
-                        media_type=JSON)
+        return _not_loaded()
     return _json_response(request, teachers_payload(store.teachers, store.generated))
 
 
@@ -203,8 +206,7 @@ def teacher(
     if (bad := _bad_from(start)) is not None:
         return bad
     if store.snapshot is None or store.teachers is None:
-        return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
-                        media_type=JSON)
+        return _not_loaded()
 
     def build(tid: str) -> dict | None:
         return teacher_payload(
@@ -214,26 +216,15 @@ def teacher(
             start or _today(),
             days,
             store.generated,
-            bells=load_bells() or None,
+            bells=BELLS,
             today=_today(),
         )
 
     body = build(teacher_id)
-    if body is None:
-        # Преподавателя переименовали в таблице — отвечаем за нового. В
-        # ответе стоит его новый id, приложение перепишет выбор у себя.
-        renamed = (
-            refresher.renames.teacher(teacher_id) or store.teachers.aliases.get(teacher_id)
-        )
-        if renamed:
-            body = build(renamed)
-    if body is None and teacher_id in getattr(refresher.renames, "pending_teachers", {}):
-        # Книга ждёт подтверждения переименования: пустые дни «знакомого»
-        # телефон записывал поверх своих, слал «убрали пару» и снимал
-        # напоминания, а 404 через час давал
-        # «вас больше нет» — вечером подтверждение ждёт ночи. 503 —
-        # «временно»: телефон держит прежнее.
-        return _renaming_response()
+    if body is None and (full := store.teachers.aliases.get(teacher_id)):
+        # Краткая запись «Фамилия И. О.», сведённая к полному имени: отвечаем
+        # расписанием полного, в ответе его id.
+        body = build(full)
     name = store.known_teacher(teacher_id) if body is None else None
     if name and spelling_twin(store.teachers, name):
         # Колледж исправил опечатку в имени: тот же человек теперь под другим
@@ -246,23 +237,13 @@ def teacher(
         # неделя без часов. Это «пар нет», а не «вас больше нет в таблице».
         body = teacher_payload(
             store.snapshot, store.teachers, teacher_id, start or _today(), days,
-            store.generated, bells=load_bells() or None, known_name=name,
+            store.generated, bells=BELLS, known_name=name,
             today=_today(),
         )
     if body is None:
         return Response(status_code=404, content='{"error":"преподаватель не найден"}',
                         media_type=JSON)
     return _json_response(request, body)
-
-
-def _renaming_response() -> Response:
-    """Старый id, чьё переименование книга ещё подтверждает: «временно», а
-    не «нет такого» — приложение держит прежнее расписание и не объявляет
-    «вас больше нет в таблице»."""
-    return Response(
-        status_code=503, content='{"error":"id, похоже, переименован — подтверждаю"}',
-        media_type=JSON, headers={"Retry-After": "1200"},
-    )
 
 
 @router.api_route("/v1/schedule/{group_id}", methods=["GET", "HEAD"])
@@ -276,8 +257,7 @@ def schedule(
     if (bad := _bad_from(start)) is not None:
         return bad
     if store.snapshot is None:
-        return Response(status_code=503, content='{"error":"расписание ещё не загружено"}',
-                        media_type=JSON)
+        return _not_loaded()
 
     def build(gid: str) -> dict | None:
         return schedule_payload(
@@ -286,21 +266,14 @@ def schedule(
             start or _today(),
             days,
             store.generated,
-            bells=load_bells() or None,
+            bells=BELLS,
             today=_today(),
         )
 
     body = build(group_id)
     if body is None:
-        # Группу переименовали в таблице — отвечаем за новую. В ответе стоит
-        # её новый id, приложение перепишет выбор у себя.
-        renamed = refresher.renames.group(group_id)
-        if renamed:
-            body = build(renamed)
-    if body is None and group_id in getattr(refresher.renames, "pending_groups", {}):
-        # Переименование ждёт подтверждения: не 404, а «временно».
-        return _renaming_response()
-    if body is None:
+        # Группы с таким id нет — в том числе переименованной: приложение на
+        # 404 предлагает выбрать группу заново.
         return Response(status_code=404, content='{"error":"группа не найдена"}',
                         media_type=JSON)
     return _json_response(request, body)

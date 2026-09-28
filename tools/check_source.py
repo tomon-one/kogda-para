@@ -36,7 +36,9 @@ from whensclass.config import settings  # noqa: E402
 from whensclass.domain.models import SourceFormatChanged  # noqa: E402
 from whensclass.parser.csv_schedule import check_shift, parse_export, shift_seed  # noqa: E402
 from whensclass.service import alerts  # noqa: E402
-from whensclass.service.refresher import _limits, _today  # noqa: E402
+from whensclass.service.refresher import (  # noqa: E402
+    _check_group_drop, _check_lost_names, _limits, _today,
+)
 from whensclass.sources import gsheets, sheet_index  # noqa: E402
 from whensclass.storage.snapshot_store import SnapshotStore  # noqa: E402
 
@@ -123,6 +125,10 @@ def main() -> int:
         store = SnapshotStore(state)
         previous = store.snapshot if store.load() else None
         check_shift(snapshot, seed=shift_seed(previous, snapshot), previous=previous)
+        # Те же сверки с прежним снимком, что у службы: стёртое имя группы
+        # при парах на месте и пропажа групп толпой.
+        _check_lost_names(previous, snapshot, gid)
+        _check_group_drop(previous, snapshot)
     except SourceFormatChanged as exc:
         print(f"БЕДА: формат таблицы изменился — {exc}")
         print("Сверьтесь с docs/source-format.md: там записано, как было.")

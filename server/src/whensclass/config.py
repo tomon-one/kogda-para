@@ -13,9 +13,7 @@ class Settings(BaseSettings):
     spreadsheet_id: str = "1FiMov0r4UUDKT6A56NWMImpoUakDC2YDevgaOpJQ7Qc"
 
     # Аварийный путь: если поиск листа сломался, а расписание нужно сегодня —
-    # прописать сюда gid листа руками и перезапустить сервис. Имя — только
-    # подпись: с 14 сентября 2026 лист читается только по gid.
-    sheet_title: str | None = None
+    # прописать сюда gid листа руками и перезапустить сервис.
     sheet_gid: str | None = None
 
     # Ключ Sheets API. Без него gid листов взять неоткуда — лист не прочитать,

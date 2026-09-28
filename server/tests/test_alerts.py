@@ -81,7 +81,8 @@ def test_failure_state_survives_restart_and_recovery_reports_duration(tmp_path, 
     assert refresher.failing_since is not None
     assert len(sent.bodies) == 1, "формат не самолечится — сказать сразу"
     saved = json.loads((tmp_path / "failing.json").read_text("utf-8"))
-    assert saved["alerted"] is True and "format" in saved["alerted_kinds"]
+    assert saved["alerted"] is True
+    assert "format" in json.loads((tmp_path / "alerts.json").read_text("utf-8"))
 
     # Второй сбой того же рода — молчим, состояние держится.
     refresher._fail("формат таблицы изменился: снова", kind="format")
