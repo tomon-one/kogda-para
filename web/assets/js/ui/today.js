@@ -222,7 +222,8 @@ function ownView(app, content) {
     content.appendChild(missing);
     return;
   }
-  content.appendChild(dayCards(schedule, app.now(), platesEl, app.scrollTarget()));
+  // Вместе с парами остальных выбранных групп — только на экране.
+  content.appendChild(dayCards(app.shown() || schedule, app.now(), platesEl, app.scrollTarget(), app.groupsByName()));
 }
 
 function chosenView(app, kind, id) {

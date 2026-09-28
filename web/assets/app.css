@@ -15,6 +15,9 @@
   --on-primary: #fff;
   --today-bg: rgba(194, 3, 2, 0.12);
   --now-bg: rgba(194, 3, 2, 0.07);
+  /* Значок группы с этой парой и строка пары только у других групп. */
+  --mark-bg: rgba(194, 3, 2, 0.12);
+  --foreign-bg: rgba(0, 0, 0, 0.05);
   --selected-bg: rgba(194, 3, 2, 0.16);
   --button-border: rgba(194, 3, 2, 0.4);
   --divider: #e2e3e5;
@@ -35,6 +38,8 @@
     --on-primary: #000;
     --today-bg: rgba(255, 107, 112, 0.14);
     --now-bg: rgba(255, 107, 112, 0.07);
+    --mark-bg: rgba(255, 107, 112, 0.12);
+    --foreign-bg: rgba(255, 255, 255, 0.07);
     --selected-bg: rgba(255, 107, 112, 0.18);
     --button-border: rgba(255, 107, 112, 0.35);
     --divider: #262626;
@@ -55,6 +60,8 @@
   --on-primary: #000;
   --today-bg: rgba(255, 107, 112, 0.14);
   --now-bg: rgba(255, 107, 112, 0.07);
+  --mark-bg: rgba(255, 107, 112, 0.12);
+  --foreign-bg: rgba(255, 255, 255, 0.07);
   --selected-bg: rgba(255, 107, 112, 0.18);
   --button-border: rgba(255, 107, 112, 0.35);
   --divider: #262626;
@@ -400,6 +407,46 @@ p a, .point a { text-decoration: underline; }
   vertical-align: 1px;
 }
 
+/* Значки выбранных групп под временем (GroupMarks.kt): своя — сплошной,
+   другая с этой парой — бледный, без неё — рамка. По три в ряд. */
+.marks {
+  display: flex;
+  flex-wrap: wrap;
+  width: 66px;
+  margin-top: 6px;
+}
+
+.mark {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin: 0 4px 4px 0;
+  border: 1px solid var(--outline);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* Названиями — сколько влезет в колонку; длинное — многоточием. */
+.marks.names { width: auto; }
+.marks.names .mark { width: auto; min-width: 18px; max-width: 100%; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mark.lit { border-color: transparent; background: var(--mark-bg); color: var(--primary); font-weight: 600; }
+.mark.own { background: var(--primary); color: var(--on-primary); }
+
+/* Пара только у других групп: видно сразу, а не только по значкам. */
+.lesson.foreign { background: var(--foreign-bg); }
+.lesson.foreign .time, .lesson.foreign .subject { color: var(--muted); }
+
+.group-name { display: inline-flex; align-items: center; }
+.group-name .mark { margin: 0 10px 0 0; flex: none; }
+.setting-sub { margin: 12px 0 6px; }
+.setting-actions { display: flex; flex-wrap: wrap; margin-top: 10px; }
+.setting-actions .action { margin: 0 8px 8px 0; }
+
 .lesson-body {
   flex: 1;
   min-width: 0;
@@ -415,6 +462,8 @@ p a, .point a { text-decoration: underline; }
   .lesson { flex-direction: column; }
   .lesson-time { width: auto; }
   .lesson-time .pair, .lesson-time .time, .lesson-time .now-label { display: inline; margin-right: 6px; }
+  .lesson-time .marks { display: inline-flex; width: auto; margin-top: 0; vertical-align: middle; }
+  .lesson-time .mark { margin-bottom: 0; }
   .lesson-body { margin: 4px 0 0; padding: 0; border-left: 0; }
 }
 

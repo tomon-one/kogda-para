@@ -1,4 +1,4 @@
-// Расписание: окно дней, пропущенные дни, склейка подгрупп, идущая пара.
+// Расписание: окно дней, пропущенные дни, другие выбранные группы, идущая пара.
 // Правила — как в приложении (ScheduleRepository.kt, ScheduleMerge.kt,
 // TodayScreen.kt, DayFormat.kt).
 
@@ -17,7 +17,8 @@ export function windowMark(from) {
 }
 
 /**
- * Пара из соседней подгруппы. Склейка подписывает на общем номере и свою пару
+ * Пара из соседней подгруппы — в снимке до веб-0.2.0, где склейка хранилась
+ * вместе со своими парами. Склейка подписывала на общем номере и свою пару
  * своим именем, поэтому «есть подпись» ещё не значит «чужая»; у преподавателя
  * подпись группы стоит у каждой пары.
  */
@@ -29,7 +30,7 @@ function copy(obj, changes) {
   return Object.assign({}, obj, changes);
 }
 
-/** Только свои пары: без пар соседней подгруппы и без своей подписи. */
+/** Только свои пары: без пар соседней подгруппы и без своей подписи — перевод снимка до веб-0.2.0. */
 export function ownOnly(schedule) {
   return copy(schedule, {
     days: (schedule.days || []).map(function (day) {
@@ -60,38 +61,88 @@ function same(a, b) {
     isCancelled(a) === isCancelled(b);
 }
 
-function mergeLessons(mine, other, myName, otherName) {
-  var extra = other.filter(function (theirs) {
-    return !mine.some(function (m) { return same(m, theirs); });
+/** Сколько групп можно выбрать вместе со своей: любая группа колледжа целиком, больше всего подгрупп — шесть. */
+export var MAX_GROUPS = 6;
+
+/**
+ * Своё расписание вместе с парами остальных выбранных групп — для экрана
+ * (combineGroups в ScheduleMerge.kt). Одинаковая пара у нескольких групп —
+ * одна строка, у неё в `slots` все эти группы, своя — 0: так видно
+ * совмещённые. Пара, которой у своей нет, — отдельной строкой без 0. В один
+ * номер своя выше чужих. `extras` — [[имя, расписание или null], …] по порядку
+ * выбора; дни — только внутри своего окна. В `groupNames` — имена по порядку.
+ */
+export function combineGroups(main, extras) {
+  if (!main || !extras.length || main.kind === 'teacher') return main;
+  var own = (main.days || []).map(function (d) { return d.d; }).filter(Boolean).sort();
+  var first = own[0];
+  var last = own[own.length - 1];
+  var theirs = extras.map(function (pair) {
+    var byDate = {};
+    ((pair[1] && pair[1].days) || []).forEach(function (d) { byDate[d.d] = d.l || []; });
+    return byDate;
   });
-  if (!extra.length) return mine;
-  var contested = {};
-  extra.forEach(function (l) { contested[l.n] = true; });
-  var labelledMine = mine.map(function (l) {
-    return contested[l.n] && l.gr == null ? copy(l, { gr: myName }) : l;
+  var have = {};
+  (main.days || []).forEach(function (d) { have[d.d] = true; });
+  var added = {};
+  theirs.forEach(function (byDate) {
+    Object.keys(byDate).forEach(function (date) {
+      if (first && date >= first && date <= last && !have[date]) added[date] = true;
+    });
   });
-  var labelledExtra = extra.map(function (l) { return copy(l, { gr: otherName }); });
-  // Устойчивая сортировка: при равном номере своя пара выше чужой.
-  var all = labelledMine.concat(labelledExtra);
-  return all.map(function (l, i) { return { l: l, i: i }; })
-    .sort(function (a, b) { return a.l.n - b.l.n || a.i - b.i; })
-    .map(function (x) { return x.l; });
+  var days = (main.days || []).concat(Object.keys(added).map(function (date) { return { d: date, l: [] }; }))
+    .sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
+  return copy(main, {
+    groupNames: [main.gn].concat(extras.map(function (pair) { return pair[0]; })),
+    days: days.map(function (day) {
+      var rows = (day.l || []).map(function (l) { return copy(l, { slots: [0] }); });
+      theirs.forEach(function (byDate, index) {
+        var slot = index + 1;
+        (byDate[day.d] || []).forEach(function (lesson) {
+          var at = -1;
+          for (var i = 0; i < rows.length; i++) {
+            if (same(rows[i], lesson) && rows[i].slots.indexOf(slot) < 0) { at = i; break; }
+          }
+          if (at >= 0) {
+            rows[at] = copy(rows[at], { slots: rows[at].slots.concat([slot]) });
+          } else {
+            var extra = copy(lesson, { slots: [slot] });
+            delete extra.gr;
+            rows.push(extra);
+          }
+        });
+      });
+      // Устойчивая сортировка: в один номер своя выше чужих, чужие — по порядку.
+      var sorted = rows.map(function (l, i) { return { l: l, i: i }; })
+        .sort(function (a, b) { return a.l.n - b.l.n || a.i - b.i; })
+        .map(function (x) { return x.l; });
+      return copy(day, { l: sorted });
+    }),
+  });
 }
 
 /**
- * Пары второй подгруппы, которых нет в своей колонке, — в свой день и с
- * подписью группы. Совпавшие остаются одной строкой без подписи.
+ * Подписи групп для значков (shortLabels в GroupMarks.kt): подгруппы той же
+ * группы, что своя, — коротко, «/1», «/2»; остальные — полным названием.
  */
-export function mergeSecondGroup(primary, secondary) {
-  var extraByDate = {};
-  (secondary.days || []).forEach(function (d) { extraByDate[d.d] = d.l || []; });
-  return copy(primary, {
-    days: (primary.days || []).map(function (day) {
-      return copy(day, {
-        l: mergeLessons(day.l || [], extraByDate[day.d] || [], primary.gn, secondary.gn),
-      });
-    }),
+export function shortLabels(names) {
+  var m = /^(.+)\/(\d+)$/.exec(String(names[0] || '').trim());
+  return names.map(function (name) {
+    var n = /^(.+)\/(\d+)$/.exec(String(name).trim());
+    return m && n && n[1] === m[1] ? '/' + n[2] : name;
   });
+}
+
+/** Остальные подгруппы своей группы по номеру: для «ИСП-924/1» — «ИСП-924/2», … */
+export function subgroupsOf(name, groups) {
+  var m = /^(.+)\/(\d+)$/.exec(String(name || '').trim());
+  if (!m) return [];
+  return (groups || []).map(function (g) {
+    var n = /^(.+)\/(\d+)$/.exec(String(g.name || '').trim());
+    return n && n[1] === m[1] && g.name.trim() !== name.trim() ? { n: Number(n[2]), g: g } : null;
+  }).filter(Boolean)
+    .sort(function (a, b) { return a.n - b.n; })
+    .map(function (x) { return x.g; });
 }
 
 /**

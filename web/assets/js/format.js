@@ -164,3 +164,10 @@ export function sheetLink(schedule, day, fallback) {
   if (row != null) return base + '&range=A' + row;
   return base;
 }
+
+var ORDINALS = ['Первая', 'Вторая', 'Третья', 'Четвёртая', 'Пятая', 'Шестая'];
+
+/** «Вторая группа», «Третья группа» — заголовок выбора следующей (ordinalGroup в GroupMarks.kt). */
+export function ordinalGroup(number) {
+  return (ORDINALS[number - 1] || number + '-я') + ' группа';
+}

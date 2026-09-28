@@ -4,6 +4,7 @@
 import { h, clear, icon, actionButton, externalLink } from './dom.js';
 import { lettered, matchesQuery } from '../search.js';
 import { plural } from '../time.js';
+import { ordinalGroup } from '../format.js';
 
 var TELEGRAM = 'https://t.me/toomonn';
 
@@ -59,12 +60,15 @@ function letteredList(rows, onPick) {
 }
 
 /**
- * Экран выбора: группы (`mode` = 'group' или 'second') или себя ('self').
+ * Экран выбора: группы (`mode` = 'group' или 'extra' — ещё одна к своей) или
+ * себя ('self').
  */
 export function pickerScreen(app, mode) {
   var self = mode === 'self';
+  var extra = mode === 'extra';
+  // «Вторая группа», «Третья группа»: какой по счёту она встанет в значках у пар.
   var title = self ? 'Найдите себя в списке'
-    : mode === 'second' ? 'Выберите соседнюю подгруппу' : 'Выберите группу';
+    : extra ? ordinalGroup(app.extras().length + 2) : 'Выберите группу';
   var key = 'pick-' + mode;
   var results = h('div', { class: 'results' });
 
@@ -78,6 +82,14 @@ export function pickerScreen(app, mode) {
     if (!list.length) {
       results.appendChild(loadFailed(app, self ? 'Список преподавателей' : 'Список групп'));
       return;
+    }
+    // Своя и уже выбранные — не в списке: дважды одну не показываем.
+    if (extra) {
+      var own = app.chosen();
+      var taken = app.extras();
+      list = list.filter(function (r) {
+        return (!own || r.id !== own.id) && !taken.some(function (g) { return g.id === r.id; });
+      });
     }
     var query = app.state.queries[key] || '';
     var found = query.trim() ? list.filter(function (r) { return matchesQuery(r.name, query); }) : list;

@@ -50,8 +50,9 @@ export function icon(name, cls) {
 }
 
 /** Кнопка на подложке — как ActionButton приложения. */
-export function actionButton(label, onClick, cls) {
-  return h('button', { type: 'button', class: 'action' + (cls ? ' ' + cls : ''), onclick: onClick }, label);
+/** `key` — для фокуса после перестройки экрана (data-key). */
+export function actionButton(label, onClick, cls, key) {
+  return h('button', { type: 'button', class: 'action' + (cls ? ' ' + cls : ''), 'data-key': key || null, onclick: onClick }, label);
 }
 
 /** Ссылка, которая выглядит как кнопка: переход — настоящей ссылкой, без window.open. */

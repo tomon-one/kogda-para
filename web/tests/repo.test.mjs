@@ -37,7 +37,7 @@ function schedule(id, name, gen, extra) {
 
 function reset() {
   ['role', 'group', 'teacher', 'second', 'schedule', 'gen', 'fetchedAt', 'window', 'partial', 'server',
-    'unreachable', 'gone', 'secondGone', 'lastOk'].forEach(store.remove);
+    'unreachable', 'gone', 'secondGone', 'lastOk', 'extras', 'extraSchedules'].forEach(store.remove);
   clock = MONDAY_NOON;
   requests = [];
 }
@@ -131,7 +131,7 @@ test('переименование группы — выбор переписы�
   assert.deepEqual(store.get('group'), { id: 'new', name: 'Новое имя' });
 });
 
-test('подгруппа: склейка, неполное без ответа, пропажа через час', async () => {
+test('другие группы: отдельно от своей, без ответа — прежний снимок, пропажа через час', async () => {
   reset();
   const theirs = schedule('isp-2', 'ИСП-2', 'G1', { days: [{ d: '2026-09-28', l: [{ n: 2, s: 'Химия', r: '5' }] }] });
   server = healthy('G1', [
@@ -139,32 +139,74 @@ test('подгруппа: склейка, неполное без ответа, 
     ['/v1/schedule/isp-2?', [200, theirs]],
   ]);
   repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
-  repo.selectSecond({ id: 'isp-2', name: 'ИСП-2' });
   await repo.refresh(true);
-  assert.equal(repo.saved().days[0].l.length, 2);
-  assert.equal(store.get('partial'), false);
-
-  // Первое 404 соседки — своё без её пар, помечено неполным: следующий заход
-  // перезапросит и при том же gen.
-  server = healthy('G1', [['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]]]);
-  await repo.refresh(true);
-  assert.equal(repo.saved().days[0].l.length, 1);
-  assert.equal(store.get('partial'), true);
-  assert.equal(repo.secondGone(), false);
-
-  // Через час то же — соседки нет в таблице; выбор остаётся, расписание целое.
-  clock += HOUR;
+  repo.addExtras([{ id: 'isp-2', name: 'ИСП-2' }, { id: 'isp-1', name: 'ИСП-1' }, { id: 'isp-2', name: 'ИСП-2' }]);
+  assert.deepEqual(repo.extras(), [{ id: 'isp-2', name: 'ИСП-2' }], 'своя и повтор — не добавляются');
+  // Снимка новой группы нет — перезапрос и при том же gen.
   requests = [];
   await repo.refresh(false);
-  assert.ok(requests.some((u) => u.indexOf('/v1/schedule/isp-1?') === 0), 'неполное перезапрашивается');
-  assert.equal(repo.secondGone(), true);
-  assert.equal(store.get('partial'), false);
-  assert.deepEqual(repo.second(), { id: 'isp-2', name: 'ИСП-2' });
-
-  // Снятие подгруппы оставляет свои пары.
-  repo.selectSecond(null);
+  assert.ok(requests.some((u) => u.indexOf('/v1/schedule/isp-2?') === 0));
+  // Своё — только своё; на экране — вместе, с отметками.
   assert.equal(repo.saved().days[0].l.length, 1);
-  assert.equal(repo.second(), null);
+  assert.deepEqual(repo.shown().days[0].l.map((l) => l.slots), [[0], [1]]);
+
+  // Первое 404 группы — своё обновилось, её прежний снимок на месте.
+  server = healthy('G1', [['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]]]);
+  await repo.refresh(true);
+  assert.equal(repo.shown().days[0].l.length, 2);
+  assert.equal(repo.extras()[0].gone, undefined);
+
+  // Через час то же — группы нет в таблице: выбор остаётся, её пар не видно.
+  clock += HOUR;
+  await repo.refresh(true);
+  assert.equal(repo.extras()[0].gone, true);
+  assert.equal(repo.shown().days[0].l.length, 1);
+  assert.deepEqual(repo.shown().groupNames, ['ИСП-1', 'ИСП-2']);
+
+  // Вернулась — отметка снята.
+  server = healthy('G1', [
+    ['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]],
+    ['/v1/schedule/isp-2?', [200, theirs]],
+  ]);
+  await repo.refresh(true);
+  assert.deepEqual(repo.extras(), [{ id: 'isp-2', name: 'ИСП-2' }]);
+
+  // Убрать — сразу, вместе со снимком.
+  repo.removeExtra('isp-2');
+  assert.deepEqual(repo.extras(), []);
+  assert.equal(store.get('extraSchedules'), null);
+  assert.equal(repo.shown().days[0].l.length, 1);
+});
+
+test('не больше шести групп вместе со своей; новая своя уходит из остальных', () => {
+  reset();
+  repo.selectGroup({ id: 'g0', name: 'Г/0' });
+  repo.addExtras([1, 2, 3, 4, 5, 6, 7].map((i) => ({ id: 'g' + i, name: 'Г/' + i })));
+  assert.deepEqual(repo.extras().map((g) => g.id), ['g1', 'g2', 'g3', 'g4', 'g5']);
+  repo.selectGroup({ id: 'g3', name: 'Г/3' });
+  assert.deepEqual(repo.extras().map((g) => g.id), ['g1', 'g2', 'g4', 'g5']);
+});
+
+test('снимок с соседней подгруппой до веб-0.2.0 переводится один раз', () => {
+  reset();
+  store.set('role', 'student');
+  store.set('group', { id: 'isp-1', name: 'ИСП-1' });
+  store.set('second', { id: 'isp-2', name: 'ИСП-2' });
+  store.set('secondGone', { since: 5, confirmed: false });
+  store.set('schedule', schedule('isp-1', 'ИСП-1', 'G1', { days: [{ d: '2026-09-28', l: [
+    { n: 1, s: 'Физика', r: '101' },
+    { n: 2, s: 'Химия', r: '5', gr: 'ИСП-2' },
+  ] }] }));
+  store.set('partial', false);
+  repo.migrateGroups();
+  assert.deepEqual(repo.extras(), [{ id: 'isp-2', name: 'ИСП-2', gone: false, goneSince: 5 }]);
+  assert.equal(repo.saved().days[0].l.length, 1);
+  assert.equal(store.get('second'), null);
+  assert.equal(store.get('partial'), null);
+  // Второй раз — ничего: своё добавленное не трогается.
+  repo.addExtras([{ id: 'isp-3', name: 'ИСП-3' }]);
+  repo.migrateGroups();
+  assert.equal(repo.extras().length, 2);
 });
 
 test('смена группы стирает прежнее расписание, повторный выбор — нет', async () => {
