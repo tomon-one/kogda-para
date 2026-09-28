@@ -538,7 +538,9 @@ class ScheduleStore(private val context: Context) {
             val id = prefs[KEY_GROUP2_ID]
             val name = prefs[KEY_GROUP2_NAME]
             if (id == null && prefs[KEY_PARTIAL] == null) return@edit
-            if (id != null && name != null && prefs[KEY_EXTRA_GROUPS] == null) {
+            // Старая версия давала выбрать соседкой свою же группу — такую не
+            // переносим: она встала бы в список второй раз (Tomon 28.09).
+            if (id != null && name != null && prefs[KEY_EXTRA_GROUPS] == null && id != prefs[KEY_GROUP_ID]) {
                 val gone = prefs[KEY_GROUP2_GONE] == "1"
                 val since = prefs[KEY_GROUP2_GONE_SINCE]?.toLongOrNull()
                 prefs[KEY_EXTRA_GROUPS] = json.encodeToString(listOf(ExtraGroup(id, name, gone, since)))

@@ -209,6 +209,16 @@ test('снимок с соседней подгруппой до веб-0.2.0 п
   assert.equal(repo.extras().length, 2);
 });
 
+test('своя группа, выбранная соседкой в прежней версии, в остальные не переносится', () => {
+  reset();
+  store.set('role', 'student');
+  store.set('group', { id: 'isp-1', name: 'ИСП-1' });
+  store.set('second', { id: 'isp-1', name: 'ИСП-1' });
+  repo.migrateGroups();
+  assert.deepEqual(repo.extras(), []);
+  assert.equal(store.get('second'), null);
+});
+
 test('смена группы стирает прежнее расписание, повторный выбор — нет', async () => {
   reset();
   server = healthy('G1', [['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]]]);
