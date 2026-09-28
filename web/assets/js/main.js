@@ -9,7 +9,7 @@ import { h, clear, closeDialog, dialog, snackbar, externalLink } from './ui/dom.
 import { HttpError, NetError } from './api.js';
 import { collegeNow, parseIso } from './time.js';
 import { currentLessonNumber, dayIndex, parseTime } from './schedule.js';
-import { mainScreen } from './ui/today.js';
+import { mainScreen, refreshLabel } from './ui/today.js';
 import { pickerScreen } from './ui/lists.js';
 import { settingsScreen } from './ui/settings.js';
 import { welcomeScreen } from './ui/welcome.js';
@@ -41,7 +41,18 @@ var nav = { cls: null, at: 0, depth: null, appear: false };
 var appearAt = 0;
 
 var installEvent = null;
-var depth = 0;
+/** Адрес, присланный человеку без своего выбора: открыть его после выбора. */
+var pendingRoute = null;
+var returningHome = false;
+
+/**
+ * Сколько шагов сайта над первым в истории вкладки — в history.state, а не в
+ * памяти: переживает перезагрузку, и «назад» из одного места не считается
+ * дважды (аудит сайта, прогон 2).
+ */
+function stepsNow() {
+  return (history.state && history.state.steps) || 0;
+}
 
 // ——— переходы ———
 
@@ -71,22 +82,15 @@ function decodeURIComponentSafe(text) {
 function go(path, replace) {
   var hash = path ? '#' + path : '';
   var url = location.pathname + location.search + hash;
-  if (replace) {
-    history.replaceState(null, '', url);
-  } else {
-    history.pushState(null, '', url);
-    depth++;
-  }
+  if (replace) history.replaceState({ steps: stepsNow() }, '', url);
+  else history.pushState({ steps: stepsNow() + 1 }, '', url);
   onRoute();
 }
 
+/** Шаг назад по истории сайта; дальше первого — на своё расписание. */
 function back() {
-  if (depth > 0) {
-    depth--;
-    history.back();
-  } else {
-    go('', true);
-  }
+  if (stepsNow() > 0) history.back();
+  else go('', true);
 }
 
 var app = {
@@ -103,6 +107,7 @@ var app = {
   server: repo.serverState,
   serverBroken: repo.serverBroken,
   gone: repo.gone,
+  goneSuspected: repo.goneSuspected,
   secondGone: repo.secondGone,
   pinned: repo.pinned,
   now: function () { return collegeNow(); },
@@ -130,13 +135,10 @@ var app = {
     go('pick', true);
   },
   /** «Вернуться к своему расписанию» — шагом назад, как и «К списку». */
-  toOwn: function () {
-    if (depth > 0) back();
-    else go('', true);
-  },
+  toOwn: back,
   /** «К списку» — шагом назад, если пришли из списка, иначе заменой адреса. */
   toList: function (kind) {
-    if (depth > 0) back();
+    if (stepsNow() > 0) back();
     else go(kind, true);
   },
   loadLists: loadLists,
@@ -150,7 +152,7 @@ function pick(mode, row) {
     repo.selectSecond(row);
     // В настройки — шагом назад, а не новой записью: иначе «назад» оттуда
     // снова открывал настройки (аудит сайта, W5, W0). «Убрать» — уже там.
-    if (app.route.screen === 'pick' && depth > 0) back();
+    if (app.route.screen === 'pick' && stepsNow() > 0) back();
     else if (app.route.screen !== 'settings') go('settings', true);
     else render();
   } else {
@@ -162,27 +164,31 @@ function pick(mode, row) {
   refresh(true, false);
 }
 
-/** На главный экран, свернув пройденное: «назад» оттуда — вон с сайта, как в приложении. */
+/**
+ * На главный экран, свернув пройденное: «назад» оттуда — вон с сайта, как в
+ * приложении. Был присланный адрес — к нему.
+ */
 function home() {
-  if (depth > 0) {
-    var steps = depth;
-    depth = 0;
+  var steps = stepsNow();
+  if (steps > 0) {
     returningHome = true;
     history.go(-steps);
   } else {
-    go('', true);
+    var target = pendingRoute;
+    pendingRoute = null;
+    go(target || '', true);
   }
 }
-
-var returningHome = false;
 
 function onRoute() {
   var route = parseRoute();
   var chosen = repo.chosen();
   // Приветствие — один раз; без выбора — сразу к выбору.
   if (!chosen && route.screen !== 'pick') {
+    // Ссылку на чужое расписание из чата не терять: откроется после выбора.
+    if (route.kind && route.id) pendingRoute = route.kind + '/' + route.id;
     route = { screen: 'pick', mode: 'group' };
-    history.replaceState(null, '', location.pathname + location.search + '#pick');
+    history.replaceState({ steps: stepsNow() }, '', location.pathname + location.search + '#pick');
   }
   if (route.screen === 'pick' && route.mode === 'second' && repo.isTeacher()) {
     route = { screen: 'settings' };
@@ -211,7 +217,10 @@ function onRoute() {
   nav.depth = depth;
   if ((isOwn && !wasOwn) || (route.id && enteredList)) state.wanted = collegeNow().date;
   if (route.id) loadOther(route.kind, route.id);
-  if (route.screen === 'pick' || route.kind) loadLists(emptyList(state.groups) || emptyList(state.teachers));
+  // Экран выбора — всегда за свежими (ответ по ETag, без изменений — пустой):
+  // после «Выбрать заново» в старом списке нет новой группы (аудит, прогон 2).
+  if (route.screen === 'pick') loadLists(true);
+  else if (route.kind) loadLists(emptyList(state.groups) || emptyList(state.teachers));
   closeDialog();
   render(true);
 }
@@ -280,26 +289,39 @@ function render(navigated) {
 }
 
 /**
- * Чем узнать ту же кнопку в перестроенном экране: подпись для чтеца или текст.
- * Без этого каждая перестройка роняла фокус клавиатуры и чтеца на body
- * (аудит сайта, W7).
+ * Чем узнать ту же кнопку в перестроенном экране: ключ data-key, а где его
+ * нет — подпись для чтеца или текст, и только если такая одна. Иначе фокус
+ * уезжал на первую звезду, и Enter закреплял не того (аудит, прогон 2).
  */
 function focusSignature(el) {
   if (!el || el === document.body || !root.contains(el)) return null;
+  var key = el.getAttribute('data-key');
+  if (key) return { key: key };
   var label = el.getAttribute('aria-label') || (el.textContent || '').trim().slice(0, 80);
-  return label ? el.tagName + '|' + el.className + '|' + label : null;
+  return label ? { tag: el.tagName, cls: el.className, label: label } : null;
+}
+
+function findBySignature(signature) {
+  if (!signature) return null;
+  if (signature.key) {
+    var keyed = root.querySelectorAll('[data-key]');
+    for (var k = 0; k < keyed.length; k++) if (keyed[k].getAttribute('data-key') === signature.key) return keyed[k];
+    return null;
+  }
+  var found = [];
+  var all = root.querySelectorAll(signature.tag);
+  for (var i = 0; i < all.length; i++) {
+    var sig = focusSignature(all[i]);
+    if (sig && !sig.key && sig.cls === signature.cls && sig.label === signature.label) found.push(all[i]);
+  }
+  return found.length === 1 ? found[0] : null;
 }
 
 function restoreFocus(signature) {
   if (!signature || (document.activeElement && document.activeElement !== document.body)) return;
-  var tag = signature.split('|')[0];
-  var all = root.querySelectorAll(tag);
-  for (var i = 0; i < all.length; i++) {
-    if (focusSignature(all[i]) === signature) {
-      try { all[i].focus({ preventScroll: true }); } catch (e) { all[i].focus(); }
-      return;
-    }
-  }
+  var el = findBySignature(signature);
+  if (!el) return;
+  try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
 }
 
 function renderScreen(navigated) {
@@ -444,14 +466,21 @@ function loadOther(kind, id) {
   // Тот же и свежий — не качать; иначе показывался снимок первого открытия,
   // пока жива страница (аудит сайта, W0).
   if (other && other.kind === kind && other.id === id && !other.failed &&
-    (other.loading || Date.now() - other.at < OTHER_FRESH_MS)) return;
-  state.other = { kind: kind, id: id, loading: true, schedule: null };
+    (other.loading || Date.now() - (other.at || 0) < OTHER_FRESH_MS)) return;
+  // Перезапрос того же — прежнее остаётся на экране, пока не придёт новое, и
+  // остаётся, если не пришло: без связи оно лучше пустоты (аудит, прогон 2).
+  var prev = other && other.kind === kind && other.id === id && other.schedule ? other : null;
+  state.other = { kind: kind, id: id, loading: !prev, schedule: prev && prev.schedule, at: prev && prev.at };
   repo.otherSchedule(kind, id).then(function (r) {
     if (!state.other || state.other.kind !== kind || state.other.id !== id) return;
-    state.other = {
-      kind: kind, id: id, loading: false, schedule: r.schedule || null, at: Date.now(),
-      notFound: !!r.notFound, failed: !r.schedule && !r.notFound,
-    };
+    if (r.schedule || r.notFound || !prev) {
+      state.other = {
+        kind: kind, id: id, loading: false, schedule: r.schedule || null, at: r.schedule ? Date.now() : null,
+        notFound: !!r.notFound, failed: !r.schedule && !r.notFound,
+      };
+    } else {
+      state.other = { kind: kind, id: id, loading: false, schedule: prev.schedule, at: prev.at, failed: true };
+    }
     render();
   });
 }
@@ -499,8 +528,8 @@ function refresh(force, manual) {
   state.refreshing = true;
   state.flash = false;
   state.lastRefresh = Date.now();
-  if (manual && app.route.id) {
-    state.other = null;
+  if (manual && app.route.id && state.other) {
+    state.other.failed = true;
     loadOther(app.route.kind, app.route.id);
   }
   // Списки не загрузились — ⟳ пробует и их: так и обещает текст под ними.
@@ -527,7 +556,7 @@ function refresh(force, manual) {
       if (state.refreshing) return;
       state.flash = true;
       state.flashAt = Date.now();
-      announce(state.refreshFailed ? 'Не удалось обновить расписание' : 'Расписание обновлено');
+      if (manual) announce(refreshLabel(app) || 'Расписание обновлено');
       render();
       clearTimeout(flashTimer);
       flashTimer = setTimeout(function () {
@@ -616,9 +645,9 @@ document.addEventListener('visibilitychange', function () {
 window.addEventListener('popstate', function () {
   if (returningHome) {
     returningHome = false;
-    history.replaceState(null, '', location.pathname + location.search);
-  } else if (depth > 0) {
-    depth--;
+    var target = pendingRoute;
+    pendingRoute = null;
+    history.replaceState({ steps: 0 }, '', location.pathname + location.search + (target ? '#' + target : ''));
   }
   onRoute();
 });
@@ -660,14 +689,18 @@ function testNotice() {
 }
 
 /**
- * Счёт — только настоящее открытие, раз за сеанс вкладки: перезагрузка и
- * возврат «назад» — не новое открытие, как поворот экрана у приложения.
+ * Счёт — только настоящее открытие: переход на страницу, а не перезагрузка и
+ * не возврат «назад» (как поворот экрана у приложения). По виду перехода, а
+ * не раз за сеанс: вкладку держат открытой месяцами (аудит, прогон 2).
  */
 function countOpen() {
+  var type = 'navigate';
   try {
-    if (sessionStorage.getItem(store.CHANNEL + ':counted')) return;
-    sessionStorage.setItem(store.CHANNEL + ':counted', '1');
-  } catch (e) { /* без хранилища сеанса — считать каждый заход */ }
+    var entry = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+    if (entry) type = entry.type;
+    else if (performance.navigation) type = ['navigate', 'reload', 'back_forward'][performance.navigation.type] || 'navigate';
+  } catch (e) { /* старый браузер — считать */ }
+  if (type !== 'navigate') return;
   var tally = app.tally();
   store.set('tally', { opens: tally.opens + 1, since: tally.since || Date.now() });
 }
@@ -696,7 +729,9 @@ function registerWorker() {
   // Сменился воркер при уже работавшем — вышла новая сборка; первый — нет.
   var hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
+    // Первый захват воркером — не новая сборка; следующие — новая.
     if (hadController) workerUpdated = true;
+    hadController = true;
   });
   // После первого показа и обновления: файлы для воркера не спорят за сеть с
   // расписанием (аудит сайта, W2).

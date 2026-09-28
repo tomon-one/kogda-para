@@ -48,7 +48,7 @@ function dayCard(day, bells, now, teacher) {
     return card;
   }
   lessons.forEach(function (lesson) {
-    card.appendChild(lessonRow(lesson, bells, lesson.n === current && !isCancelled(lesson)));
+    card.appendChild(lessonRow(lesson, bells, lesson.n === current && !isCancelled(lesson), day.d + ':' + lesson.n + ':' + (lesson.gr || '')));
   });
   if (lessons.every(isCancelled)) {
     // Преподавателю отмена всех пар — сорванные часы, не удача.
@@ -57,7 +57,7 @@ function dayCard(day, bells, now, teacher) {
   return card;
 }
 
-function lessonRow(lesson, bells, isNow) {
+function lessonRow(lesson, bells, isNow, key) {
   var time = lessonTime(bells, lesson.n);
   var place;
   if (isOnline(lesson)) {
@@ -71,7 +71,7 @@ function lessonRow(lesson, bells, isNow) {
   var body = h('div', { class: 'lesson-body' },
     h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, lesson.s),
     h('div', { class: 'lesson-meta' }, place, kind ? h('span', { class: 'kind' }, kind) : null),
-    lesson.u ? onlineLink(lesson.u) : null,
+    lesson.u ? onlineLink(lesson.u, key) : null,
     // Подпись группы — вместо преподавателя: у преподавателя важно, кому
     // читается пара, у пары второй подгруппы — чья она.
     lesson.gr != null
@@ -86,6 +86,11 @@ function lessonRow(lesson, bells, isNow) {
     body);
 }
 
+function keyed(el, key) {
+  el.setAttribute('data-key', key);
+  return el;
+}
+
 function note(lesson) {
   if (isCancelled(lesson)) {
     return h('div', { class: 'cancel-note' }, lesson.c ? 'Отменена — ' + lesson.c : 'Отменена');
@@ -98,10 +103,10 @@ function note(lesson) {
  * Ссылка на занятие: куда ведёт и две кнопки. Хост не с площадки вебинаров
  * колледжа — красным: ссылку мог вписать кто угодно, кто правит таблицу.
  */
-function onlineLink(url) {
+function onlineLink(url, key) {
   var known = isKnownWebinar(url);
   var end = linkEnd(url);
-  var copy = h('button', { type: 'button', class: 'link-button' }, 'Копировать');
+  var copy = h('button', { type: 'button', class: 'link-button', 'data-key': 'copy:' + key }, 'Копировать');
   copy.addEventListener('click', function () {
     copyText(url).then(function (ok) {
       snackbar(ok ? 'Ссылка скопирована' : 'Скопировать не вышло');
@@ -110,8 +115,10 @@ function onlineLink(url) {
   return h('div', { class: 'online-link' },
     h('div', { class: 'link-where' + (known ? '' : ' foreign') },
       h('span', { class: 'link-host' }, (known ? '' : 'чужой адрес: ') + linkHost(url)),
-      end ? h('span', { class: 'link-end' }, '\u00a0· …/' + end) : null),
+      // Обычный пробел: перенос — между хостом и хвостом, а не посреди хоста.
+      end ? ' ' : null,
+      end ? h('span', { class: 'link-end' }, '· …/' + end) : null),
     h('div', { class: 'link-buttons' },
-      isWebLink(url) ? actionLink('Открыть', url, 'link-button') : null,
+      isWebLink(url) ? keyed(actionLink('Открыть', url, 'link-button'), 'open-link:' + key) : null,
       copy));
 }

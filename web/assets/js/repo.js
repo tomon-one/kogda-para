@@ -129,6 +129,11 @@ export function serverBroken() {
   return !!s.status && s.status !== 'ok';
 }
 
+/** Своё уже отвечало 404 при здоровом сервере — подтверждения ещё нет. */
+export function goneSuspected() {
+  return !!store.get('gone');
+}
+
 export function gone() {
   var g = store.get('gone');
   return !!(g && g.confirmed);
@@ -221,9 +226,15 @@ function refreshOnce(force) {
       var now = Date.now();
       if (meta) {
         store.remove('unreachable');
+        store.set('lastOk', now);
         putServerState(meta.status, meta.src_url, meta.since);
       } else if (online()) {
-        var since = noteUnreachable(now);
+        // Сайт открывают не каждый час: от цепочки неудач подряд сбой при
+        // редких заходах не виден вовсе. Мерило — последний ответ сервера:
+        // молчит дольше получаса — не отвечает, и давность — от него
+        // (аудит сайта, прогон 2). Ответа не было никогда — цепочка неудач.
+        var lastOk = store.get('lastOk');
+        var since = lastOk || noteUnreachable(now);
         if (now - since >= UNREACHABLE_BROKEN_AFTER_MS) {
           putServerState(STATUS_UNREACHABLE, null, new Date(since).toISOString());
         }
@@ -234,8 +245,9 @@ function refreshOnce(force) {
         store.set('fetchedAt', now);
         return { kind: 'fresh' };
       }
-      // Своё и подгруппа — разом: по очереди своё свежее ждало бы соседку до
-      // тайм-аута (аудит сайта, W2).
+      // Своё и подгруппа — разом, а не по очереди (аудит сайта, W2). На экран
+      // своё попадает вместе с соседкой: её молчание ограничено тайм-аутом
+      // запроса, 30 секунд.
       var request = (teacherMode ? api.teacher(own.id, from, DAYS) : api.schedule(own.id, from, DAYS))
         .then(cleanSchedule);
       var subRequest = !teacherMode && sub ? api.schedule(sub.id, from, DAYS).then(cleanSchedule) : null;
@@ -249,6 +261,7 @@ function refreshOnce(force) {
         if (fresh === 'gone') return { kind: 'gone' };
         clearGone();
         store.remove('unreachable');
+        store.set('lastOk', Date.now());
         var merging = teacherMode
           ? Promise.resolve({ schedule: fresh, whole: true })
           : withSecondGroup(fresh, !!meta && meta.status === 'ok', sub, subRequest);
