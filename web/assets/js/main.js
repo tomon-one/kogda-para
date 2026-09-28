@@ -37,7 +37,7 @@ var state = {
 };
 
 /** Въезд экрана: каким классом и когда начался — перестройка его продолжает. */
-var nav = { cls: null, at: 0, depth: null };
+var nav = { cls: null, at: 0, depth: null, appear: false };
 var appearAt = 0;
 
 var installEvent = null;
@@ -159,11 +159,24 @@ function onRoute() {
   var wasOwn = app.route.screen === 'main' && !app.route.kind;
   var isOwn = route.screen === 'main' && !route.kind;
   var enteredList = route.screen === 'main' && (route.kind !== app.route.kind || route.id !== app.route.id);
+  var oldRoute = app.route;
   app.route = route;
-  // Глубже — справа, назад — слева, вбок (вкладки) — проявлением, как в приложении.
+  // Глубже — справа, назад — слева. Внутри главного экрана шапка и вкладки
+  // стоят на месте, едет только содержимое: иначе смена вкладки выглядела как
+  // перезагрузка страницы (Tomon, 28.09).
   var depth = depthOf(route);
-  nav.cls = nav.depth == null || depth === nav.depth ? 'enter-fade'
-    : depth > nav.depth ? 'enter-forward' : 'enter-back';
+  var oldTab = nav.depth == null ? null : tabOf(oldRoute);
+  var newTab = tabOf(route);
+  if (oldTab && newTab && oldTab !== newTab) {
+    nav.cls = tabIndex(newTab) > tabIndex(oldTab) ? 'tab-right' : 'tab-left';
+  } else if (oldTab && newTab) {
+    nav.cls = depth >= nav.depth ? 'content-forward' : 'content-back';
+  } else {
+    nav.cls = nav.depth == null || depth === nav.depth ? 'enter-fade'
+      : depth > nav.depth ? 'enter-forward' : 'enter-back';
+  }
+  // Дни всплывают после выбора группы; при переходах внутри экрана хватает сдвига.
+  nav.appear = nav.depth != null && nav.depth < 2 && depth >= 2;
   nav.depth = depth;
   if ((isOwn && !wasOwn) || (route.id && enteredList)) state.wanted = collegeNow().date;
   if (route.id) loadOther(route.kind, route.id);
@@ -172,6 +185,18 @@ function onRoute() {
 }
 
 // ——— отрисовка ———
+
+/** Вкладка главного экрана, где этот адрес; null — не главный экран. */
+function tabOf(route) {
+  if (route.screen !== 'main') return null;
+  if (repo.isTeacher()) return route.kind === 'groups' ? 'students' : 'teachers';
+  return route.kind === 'teachers' ? 'teachers' : 'students';
+}
+
+/** Порядок вкладок: у преподавателя его раздел первым. */
+function tabIndex(tab) {
+  return (repo.isTeacher() ? ['teachers', 'students'] : ['students', 'teachers']).indexOf(tab);
+}
 
 function depthOf(route) {
   if (!store.get('welcome') && !repo.chosen()) return 0;
@@ -215,7 +240,7 @@ function render(navigated) {
   // Дни всплывают, когда их только что не было: после выбора группы, при
   // переходе, при первом ответе сервера.
   var days = screen.querySelector('.days');
-  if (days && (navigated || !hadCards)) appearAt = Date.now();
+  if (days && ((navigated && nav.appear) || (!navigated && !hadCards))) appearAt = Date.now();
   if (days) continueAnimation(days, 'appear', appearAt, 700);
   // Человек набирает в поиске: поле остаётся прежним узлом, иначе телефон
   // прячет клавиатуру на каждом ответе сервера.
