@@ -3,7 +3,7 @@
 
 import { h, icon, actionButton, actionLink, externalLink, snackbar } from './dom.js';
 import { sheetLink } from '../format.js';
-import { VERSION } from '../version.js';
+import { VERSION, build } from '../version.js';
 import { CHANNEL } from '../store.js';
 
 function section(title, body) {
@@ -117,7 +117,7 @@ export function settingsScreen(app) {
           type: 'button', class: 'text-link',
           onclick: function () { app.go(teacherMode ? 'pick' : 'pick/self'); },
         }, teacherMode ? 'Я студент' : 'Я преподаватель')),
-        h('p', { class: 'muted small' }, 'Версия ' + VERSION + (CHANNEL === 'tested' ? ' tested' : '')),
+        h('p', { class: 'muted small' }, 'Версия ' + VERSION + (CHANNEL === 'tested' ? ' tested' : '') + ', сборка ' + build()),
         h('p', { class: 'signature' }, 'Создано Tomon'),
       ])));
 }

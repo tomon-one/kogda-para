@@ -6,9 +6,9 @@ export function h(tag, attrs) {
     Object.keys(attrs).forEach(function (key) {
       var value = attrs[key];
       if (value == null || value === false) return;
+      // Текст — только детьми, через createTextNode: ключа для innerHTML нет
+      // нарочно (аудит сайта, W1, W3).
       if (key === 'class') el.className = value;
-      else if (key === 'text') el.textContent = value;
-      else if (key === 'html') el.innerHTML = value;
       else if (key.indexOf('on') === 0) el.addEventListener(key.slice(2), value);
       else el.setAttribute(key, value === true ? '' : value);
     });
@@ -88,6 +88,14 @@ export function snackbar(text) {
 
 var openDialog = null;
 
+/** Страница под окном — не для чтеца экрана, пока окно открыто. */
+function setBackground(hidden) {
+  var app = document.getElementById('app');
+  if (!app) return;
+  if (hidden) app.setAttribute('aria-hidden', 'true');
+  else app.removeAttribute('aria-hidden');
+}
+
 export function closeDialog() {
   if (!openDialog) return;
   var d = openDialog;
@@ -98,6 +106,7 @@ export function closeDialog() {
     if (d.el.parentNode) d.el.parentNode.removeChild(d.el);
   }, 150);
   document.body.classList.remove('dialog-open');
+  setBackground(false);
   if (d.restore && d.restore.focus) d.restore.focus();
 }
 
@@ -114,13 +123,31 @@ export function dialog(title, body, buttons) {
   overlay.addEventListener('click', function (e) {
     if (e.target === overlay) closeDialog();
   });
+  // Окно держит фокус: Tab ходит по его кнопкам и ссылкам, не уходя на
+  // страницу под ним (аудит сайта, W7).
   var onKey = function (e) {
-    if (e.key === 'Escape' || e.key === 'Esc') closeDialog();
+    if (e.key === 'Escape' || e.key === 'Esc') {
+      closeDialog();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    var items = card.querySelectorAll('button, a[href]');
+    if (!items.length) return;
+    var first = items[0];
+    var last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   };
   document.addEventListener('keydown', onKey);
   openDialog = { el: overlay, onKey: onKey, restore: document.activeElement };
   document.body.appendChild(overlay);
   document.body.classList.add('dialog-open');
+  setBackground(true);
   var first = card.querySelector('button');
   if (first) first.focus();
   return card;

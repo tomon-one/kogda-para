@@ -35,7 +35,8 @@ function spinner() {
 /** Список не загрузился — куда написать, повтор и сведения для отчёта. */
 function loadFailed(app, what) {
   return h('div', { class: 'load-failed' },
-    h('p', null, what + ' не загрузился. Проверьте интернет или напишите автору в Telegram:'),
+    h('p', null, what + (app.state.listsBusy ? ' не загрузился: сервер занят. Попробуйте через минуту или напишите автору в Telegram:'
+      : ' не загрузился. Проверьте интернет или напишите автору в Telegram:')),
     externalLink('@toomonn', TELEGRAM, 'link strong'),
     h('div', null, actionButton('Повторить', function () { app.loadLists(true); })),
     h('button', { type: 'button', class: 'text-link', onclick: app.showReport }, 'Сведения для отчёта'));
@@ -120,8 +121,9 @@ export function othersList(app, kind, selfId) {
     }
     if (!list.length) {
       results.appendChild(h('p', { class: 'nothing' },
-        (teachers ? 'Список преподавателей' : 'Список групп') +
-        ' не загрузился. Проверьте интернет и нажмите ⟳ вверху.'));
+        (teachers ? 'Список преподавателей' : 'Список групп') + (app.state.listsBusy
+          ? ' не загрузился: сервер занят. Через минуту нажмите ⟳ вверху.'
+          : ' не загрузился. Проверьте интернет и нажмите ⟳ вверху.')));
       return;
     }
     var query = app.state.queries[key] || '';
