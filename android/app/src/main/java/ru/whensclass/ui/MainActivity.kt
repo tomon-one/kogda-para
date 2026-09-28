@@ -558,11 +558,6 @@ private fun App(
                     Screen.SETTINGS -> SettingsScreen(
                         groupName = chosenName,
                         teacherMode = teacherMode,
-                        onSwitchRole = {
-                            pickTeacher = !teacherMode
-                            groupsFrom = Screen.SETTINGS
-                            screen = Screen.GROUPS
-                        },
                         theme = theme,
                         update = update,
                         installing = installing,
@@ -650,8 +645,8 @@ private fun App(
                         extraGroups = extraGroups,
                         groupsByName = groupsByName,
                         onGroupsByName = { byName -> scope.launch { container.store.setGroupsByName(byName) } },
-                        // Остальные подгруппы своей группы, которых ещё нет среди
-                        // выбранных, — одной кнопкой, сколько влезет.
+                        // Подгруппы своей группы, которых ещё нет среди выбранных, —
+                        // строками с «Добавить», сколько влезет.
                         subgroups = groupName?.let { name -> subgroupsOf(name, groups.orEmpty()) }.orEmpty()
                             .filter { group -> extraGroups.none { it.id == group.id } }
                             .take(MAX_GROUPS - 1 - extraGroups.size),
@@ -660,8 +655,8 @@ private fun App(
                             groupsFrom = Screen.SETTINGS
                             screen = Screen.GROUPS
                         },
-                        onAddSubgroups = { list ->
-                            scope.launch { container.repository.addExtraGroups(list) }
+                        onAddSubgroup = { group ->
+                            scope.launch { container.repository.addExtraGroups(listOf(group)) }
                         },
                         onRemoveGroup = { id ->
                             scope.launch { container.repository.removeExtraGroup(id) }

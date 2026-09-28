@@ -77,7 +77,9 @@ import ru.whensclass.widget.formatDurationShort
 /**
  * Настройки и короткий честный рассказ о данных.
  *
- * Тексты намеренно немногословны: это приложение для одногруппников, а не
+ * Разделы — от частого к разовому: группа, виджеты, уведомления и всё, что
+ * им мешает в телефоне; дальше таблица, оформление, версия, данные и «О
+ * приложении» (Tomon 28.09). Тексты намеренно немногословны: это не
  * пользовательское соглашение, которое всё равно никто не читает.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,7 +94,6 @@ fun SettingsScreen(
     groupsByName: Boolean = true,
     onGroupsByName: (Boolean) -> Unit = {},
     teacherMode: Boolean,
-    onSwitchRole: () -> Unit,
     theme: ThemeChoice,
     update: ReleaseDto?,
     installing: Boolean,
@@ -121,7 +122,7 @@ fun SettingsScreen(
     onTheme: (ThemeChoice) -> Unit,
     onChangeGroup: () -> Unit,
     onAddGroup: () -> Unit = {},
-    onAddSubgroups: (List<ru.whensclass.data.GroupDto>) -> Unit = {},
+    onAddSubgroup: (ru.whensclass.data.GroupDto) -> Unit = {},
     onRemoveGroup: (String) -> Unit = {},
     onUpdate: () -> Unit,
     loadDiagnostics: suspend () -> String,
@@ -227,7 +228,7 @@ fun SettingsScreen(
                             name = group.name,
                             note = "подгруппа вашей группы",
                             action = "Добавить",
-                            onAction = { onAddSubgroups(listOf(group)) },
+                            onAction = { onAddSubgroup(group) },
                         )
                     }
                 }
@@ -264,27 +265,11 @@ fun SettingsScreen(
 
         PinWidgets()
 
-        BackgroundWork(phone.unrestricted)
-
-        Section("Оформление") {
-            // «Как в системе» в треть строки не влезало.
-            Segmented(
-                options = listOf(
-                    "Системная" to ThemeChoice.SYSTEM,
-                    "Тёмная" to ThemeChoice.DARK,
-                    "Светлая" to ThemeChoice.LIGHT,
-                ),
-                selected = theme,
-                onPick = onTheme,
-            )
-        }
-
         Section("Уведомления") {
             NotificationsDenied(notifications)
-            PhoneLimits(phone)
             SwitchRow("Напоминать о паре", notifyEnabled, onNotifyEnabled)
             if (notifyEnabled && notifications && phone.lessonChannelOff) {
-                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_LESSON, "Напоминания о паре")
+                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_LESSON)
             }
             if (notifyEnabled) {
                 // Обещание должно совпадать с поведением: напоминаем не о
@@ -310,17 +295,17 @@ fun SettingsScreen(
             }
 
             // У каждого вида уведомлений — свой выключатель и свой канал:
-            // сбой сервера и пропажа подгруппы раньше шли под «изменениями»
-            // (просьба Tomon 27.09).
+            // сбой сервера и пропажа другой группы раньше шли под
+            // «изменениями» (просьба Tomon 27.09).
             SwitchRow("Сообщать об изменениях", notifyChanges, onNotifyChanges)
             if (notifyChanges && notifications && phone.changesChannelOff) {
-                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES, "Сообщения об изменениях")
+                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES)
             }
             Hint("Отмены и замены на сегодня и завтра.")
 
             SwitchRow("Сообщать о сбоях сервера", notifyServer, onNotifyServer)
             if (notifyServer && notifications && phone.serverChannelOff) {
-                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SERVER, "Сообщения о сбоях")
+                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SERVER)
             }
             Hint("Если расписание не обновляется дольше двух часов — один раз за сбой; " +
                 "уведомление уберётся само, когда сервер починится.")
@@ -330,25 +315,24 @@ fun SettingsScreen(
             if (!teacherMode && extraGroups.isNotEmpty()) {
                 SwitchRow("Сообщать о пропаже других групп", notifyGroupsGone, onNotifyGroupsGone)
                 if (notifyGroupsGone && notifications && phone.subgroupChannelOff) {
-                    ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SUBGROUP, "Другие группы")
+                    ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SUBGROUP)
                 }
                 Hint("Если одной из выбранных групп не стало в таблице — один раз.")
             }
 
             SwitchRow("Сообщать о новых версиях", notifyUpdates, onNotifyUpdates)
             if (notifyUpdates && notifications && phone.updateChannelOff) {
-                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_UPDATE, "Сообщения о новых версиях")
+                ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_UPDATE)
             }
             // Магазина нет, обновление никто не принесёт.
             Hint("Приложение проверяет это раз в час вместе с расписанием.")
-
-            // В конце блока: это разрешение телефона, а не выключатель, и нужно
-            // оно не только напоминаниям — звонок для виджетов, подсветка
-            // идущей пары, ждёт того же, а на Android 14+ его по умолчанию нет.
-            // Посреди выключателей оно рвало их
-            // ряд (просьба Tomon 27.09).
-            ExactAlarms(exactAlarms, notifyEnabled)
         }
+
+        // Всё, что упирается в настройки телефона, — одним разделом сразу под
+        // тем, чему оно мешает: ограничения фона и пояс стояли в
+        // «Уведомлениях», хотя режут и виджеты, а шаги для марки — выше
+        // выключателей, которые трогают чаще (разбор 28.09).
+        BackgroundWork(phone, exactAlarms, notifyEnabled)
 
         Section("Расписание") {
             Text(
@@ -356,13 +340,16 @@ fun SettingsScreen(
                 // в разделе настроек это рассказ мимо дела.
                 // «Перед парой чаще» — это про сервер: телефон ходит за
                 // расписанием раз в час и при открытии.
-                // У преподавателя своей колонки нет: берётся колонка группы
-                // первой пары (SheetLink).
+                // Дня нет в ответе (воскресенье, каникулы) — ссылка ведёт на
+                // ближайший следующий; у преподавателя своей колонки нет, берётся
+                // колонка группы первой пары, а без пар — только строка дня
+                // (SheetLink).
                 "Телефон забирает его раз в час и при каждом открытии, сервер " +
                     "читает таблицу колледжа чаще и перед каждой парой. Кнопка ниже " +
-                    (if (teacherMode) "откроет таблицу на сегодняшнем дне, у колонки " +
-                        "группы первой пары."
-                    else "откроет таблицу на вашей колонке и сегодняшнем дне."),
+                    (if (teacherMode) "откроет таблицу на сегодняшнем дне, а если его в таблице " +
+                        "нет — на ближайшем следующем; в день с парами — у колонки группы первой из них."
+                    else "откроет таблицу на вашей колонке и сегодняшнем дне, а если его в таблице " +
+                        "нет — на ближайшем следующем."),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -383,42 +370,16 @@ fun SettingsScreen(
             )
         }
 
-        Section("Данные") {
-            Text(
-                // У преподавателя на сервер уходит не группа, а он сам —
-                // писать про группу было бы неправдой.
-                if (teacherMode) {
-                    "На сервер уходит выбранное имя, как оно записано в таблице " +
-                    "колледжа. Больше ничего: " +
-                        "ни номера телефона, ни местоположения. Учётной записи нет, " +
-                        "аналитики и рекламы нет. Когда смотрите чужое расписание, " +
-                        "серверу уходит, чьё именно: иначе его неоткуда взять. " +
-                        "Всё для вашего удобства."
-                } else {
-                    "На сервер уходят только названия вашей группы и других, " +
-                        "если вы их выбрали. Больше ничего: ни имени, " +
-                        "ни номера телефона, ни местоположения. Учётной записи нет, " +
-                        "аналитики и рекламы нет. Когда смотрите чужое расписание, " +
-                        "серверу уходит, чьё именно: иначе его неоткуда взять. " +
-                        "Всё для вашего удобства."
-                },
-                // Тем же приглушённым, что и остальные пояснения: белый текст
-                // в одном блоке из шести читался как что-то важнее прочего.
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Section("Ответственность") {
-            Text(
-                "Что написано в таблице колледжа, то и покажет приложение: за " +
-                    "ошибки, замены и опоздавшие обновления автор не отвечает.\n\n" +
-                    "Если однажды что-то сломается, автор постарается починить, но " +
-                    "сроков не обещает. Пропущенная пара остаётся на вашей совести, " +
-                    "даже если приложение в этот момент показывало неправильно. " +
-                    "Сверяйтесь с таблицей, когда это важно.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Section("Оформление") {
+            // «Как в системе» в треть строки не влезало.
+            Segmented(
+                options = listOf(
+                    "Системная" to ThemeChoice.SYSTEM,
+                    "Тёмная" to ThemeChoice.DARK,
+                    "Светлая" to ThemeChoice.LIGHT,
+                ),
+                selected = theme,
+                onPick = onTheme,
             )
         }
 
@@ -498,6 +459,39 @@ fun SettingsScreen(
             }
         }
 
+        // Два текста, которые читают один раз, — одной карточкой (Tomon 28.09).
+        Section("Данные и ответственность") {
+            Text(
+                // У преподавателя на сервер уходит не группа, а он сам —
+                // писать про группу было бы неправдой.
+                if (teacherMode) {
+                    "На сервер уходит выбранное имя, как оно записано в таблице " +
+                    "колледжа. Больше ничего: " +
+                        "ни номера телефона, ни местоположения. Учётной записи нет, " +
+                        "аналитики и рекламы нет. Когда смотрите чужое расписание, " +
+                        "серверу уходит, чьё именно: иначе его неоткуда взять. " +
+                        "Всё для вашего удобства."
+                } else {
+                    "На сервер уходят только названия вашей группы и других, " +
+                        "если вы их выбрали. Больше ничего: ни имени, " +
+                        "ни номера телефона, ни местоположения. Учётной записи нет, " +
+                        "аналитики и рекламы нет. Когда смотрите чужое расписание, " +
+                        "серверу уходит, чьё именно: иначе его неоткуда взять. " +
+                        "Всё для вашего удобства."
+                } + "\n\n" +
+                    "Что написано в таблице колледжа, то и покажет приложение: за " +
+                    "ошибки, замены и опоздавшие обновления автор не отвечает.\n\n" +
+                    "Если однажды что-то сломается, автор постарается починить, но " +
+                    "сроков не обещает. Пропущенная пара остаётся на вашей совести, " +
+                    "даже если приложение в этот момент показывало неправильно. " +
+                    "Сверяйтесь с таблицей, когда это важно.",
+                // Тем же приглушённым, что и остальные пояснения: белый текст
+                // читался как что-то важнее прочего.
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         Section("О приложении") {
             Text(
                 "Неофициальное приложение для студентов и преподавателей НГОК.",
@@ -505,20 +499,14 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            // Ссылки — в том же порядке, что в «О сайте». «Я преподаватель»
+            // отсюда убрано: тот же переход — первой строкой списка, куда
+            // ведёт «Сменить» (Tomon 28.09).
             Link("Сайт для айфона и браузера", "https://kogda-para-nsk.ru")
             Link("Нашли ошибку? Напишите автору в Telegram", "https://t.me/toomonn")
             ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth())
+            Link("Исходный код", "https://github.com/tomon-one/kogda-para")
             Link("GitHub автора", "https://github.com/tomon-one")
-            Text(
-                if (teacherMode) "Я студент" else "Я преподаватель",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSwitchRole)
-                    .padding(top = 14.dp, bottom = 4.dp),
-            )
             Text(
                 "Создано Tomon",
                 style = MaterialTheme.typography.bodySmall,
@@ -690,43 +678,60 @@ private fun PinWidgets() {
 }
 
 /**
- * Работа в фоне — только на марках, которые её режут сверх обычного Android.
- * Включить её может только человек, в настройках телефона; приложение лишь
- * открывает нужный экран. Галочка — только у стандартной экономии батареи:
- * фирменные переключатели прошивки приложению не видны.
+ * Работа в фоне — всё, что упирается в настройки телефона: ограничения фона
+ * и пояс, шаги для марок, которые режут фон сверх обычного Android, и точное
+ * время. Раздела нет, когда показать нечего: до Android 12, на марке не из
+ * списка и без ограничений.
+ *
+ * Включить это может только человек, в настройках телефона; приложение лишь
+ * открывает нужный экран. Галочка у шага — только у стандартной экономии
+ * батареи: фирменные переключатели прошивки приложению не видны.
  */
 @Composable
-private fun BackgroundWork(unrestricted: Boolean) {
-    val vendor = remember { Vendor.current() } ?: return
-    val steps = remember(vendor) { Background.steps(vendor) }
+private fun BackgroundWork(phone: ru.whensclass.notify.PhoneState, exactAlarms: Boolean, reminders: Boolean) {
+    val vendor = remember { Vendor.current() }
+    val steps = remember(vendor) { vendor?.let { Background.steps(it) }.orEmpty() }
+    val exact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    if (vendor == null && !exact && phone.backgroundLimits.isEmpty() && phone.zoneWarning == null) return
     val context = LocalContext.current
     Section("Работа в фоне") {
-        Hint(
-            "${vendor.title()} не будит приложения в фоне: виджет не обновится, а " +
-                "напоминание не придёт, пока приложение не открыть. Нажмите пункты по очереди.",
-        )
-        steps.forEach { step ->
-            ExternalRow(step.label, checked = if (step.battery) unrestricted else null) {
-                if (!Background.open(context, step)) {
-                    Toast.makeText(
-                        context,
-                        "Экран «${step.label}» не открылся — ищите его в свойствах приложения",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-            }
-            Hint(step.hint)
-        }
-        if (vendor.pinInRecents) {
+        PhoneLimits(phone)
+        if (vendor != null) {
             Hint(
-                "Ещё закрепите приложение в недавних (замок на карточке): иначе очистка " +
-                    "памяти выгружает его вместе с остальными.",
+                "${vendor.title()} не будит приложения в фоне: виджет не обновится, а " +
+                    "напоминание не придёт, пока приложение не открыть. Нажмите пункты по очереди.",
+            )
+            steps.forEach { step ->
+                ExternalRow(step.label, checked = if (step.battery) phone.unrestricted else null) {
+                    if (!Background.open(context, step)) {
+                        Toast.makeText(
+                            context,
+                            "Экран «${step.label}» не открылся — ищите его в свойствах приложения",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+                Hint(step.hint)
+            }
+            if (vendor.pinInRecents) {
+                Hint(
+                    "Ещё закрепите приложение в недавних (замок на карточке): иначе очистка " +
+                        "памяти выгружает его вместе с остальными.",
+                )
+            }
+        }
+        // После шагов марки: это разрешение, а не выключатель, и нужно оно не
+        // только напоминаниям — звонок для виджетов, подсветка идущей пары,
+        // ждёт того же, а на Android 14+ его по умолчанию нет. Посреди
+        // выключателей уведомлений оно рвало их ряд (просьба Tomon 27.09).
+        if (exact) ExactAlarms(exactAlarms, reminders)
+        if (vendor != null) {
+            Hint(
+                "Не помогло — напишите автору, ссылка в «О приложении», и приложите " +
+                    "«Сведения для отчёта».",
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
-        Hint(
-            "Не помогло — напишите автору, ссылка в «О приложении», и приложите " +
-                "«Сведения для отчёта».",
-        )
     }
 }
 
@@ -756,11 +761,12 @@ private fun ExternalRow(label: String, checked: Boolean? = null, onClick: () -> 
 
 /** Пояснение под выключателем. */
 @Composable
-private fun Hint(text: String) {
+private fun Hint(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
     )
 }
 
@@ -893,24 +899,19 @@ private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
 }
 
 /**
- * Подсказка, когда уведомления запрещены системой.
- *
- * Без разрешения не приходит ни одно уведомление, а переключатели ниже при этом
- * выглядят рабочими: человек включает напоминание о паре и не понимает, почему
- * его нет. Спрашиваем разрешение при первом запуске, но отказ надо пережить —
- * значит нужен путь назад.
- */
-/**
  * Канал выключен в настройках телефона — отдельно от приложения целиком:
  * «Больше не показывать» на уведомлении гасит только его, и выключатель
  * здесь стоял «вкл» при молчащих уведомлениях.
  */
 @Composable
-private fun ChannelOff(channel: String, what: String) {
+private fun ChannelOff(channel: String) {
     val context = LocalContext.current
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
         Text(
-            "$what выключены в настройках телефона — не придёт ни одно.",
+            // Названием канала, как его покажет телефон: «Другие группы
+            // выключены» читалось как «выключены группы» (разбор 28.09).
+            "Уведомления «${ru.whensclass.notify.Notifications.channelName(channel)}» выключены " +
+                "в настройках телефона — не придёт ни одно.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
@@ -976,6 +977,14 @@ private fun PhoneLimits(phone: ru.whensclass.notify.PhoneState) {
     }
 }
 
+/**
+ * Подсказка, когда уведомления запрещены системой.
+ *
+ * Без разрешения не приходит ни одно уведомление, а переключатели ниже при этом
+ * выглядят рабочими: человек включает напоминание о паре и не понимает, почему
+ * его нет. Спрашиваем разрешение при первом запуске, но отказ надо пережить —
+ * значит нужен путь назад.
+ */
 @Composable
 private fun NotificationsDenied(allowed: Boolean) {
     if (allowed) return

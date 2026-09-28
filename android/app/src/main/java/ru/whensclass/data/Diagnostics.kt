@@ -11,6 +11,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.first
 import ru.whensclass.BuildConfig
 import ru.whensclass.notify.LessonAlarms
+import ru.whensclass.notify.Notifications
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.WeekWidget
@@ -85,11 +86,12 @@ internal suspend fun collectDiagnostics(
     // «всё включено», а настоящей причины в нём не было.
     val phone = ru.whensclass.notify.PhoneState.read(context)
     val off = listOfNotNull(
-        "«Скоро пара»".takeIf { phone.lessonChannelOff },
-        "«Изменения»".takeIf { phone.changesChannelOff },
-        "«Сбои сервера»".takeIf { phone.serverChannelOff },
-        "«Другие группы»".takeIf { phone.subgroupChannelOff },
-    )
+        Notifications.CHANNEL_LESSON.takeIf { phone.lessonChannelOff },
+        Notifications.CHANNEL_CHANGES.takeIf { phone.changesChannelOff },
+        Notifications.CHANNEL_SERVER.takeIf { phone.serverChannelOff },
+        Notifications.CHANNEL_SUBGROUP.takeIf { phone.subgroupChannelOff },
+        Notifications.CHANNEL_UPDATE.takeIf { phone.updateChannelOff },
+    ).map { "«${Notifications.channelName(it)}»" }
     if (off.isNotEmpty()) lines += "Каналы выключены в телефоне: ${off.joinToString(", ")}"
     lines += "Фон: " + phone.backgroundLimits.joinToString("; ").ifEmpty { "ограничений не видно" } +
         // Те же слова, что в разделе «Работа в фоне».
