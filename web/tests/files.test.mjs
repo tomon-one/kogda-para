@@ -16,10 +16,13 @@ function walk(dir) {
   });
 }
 
+// Превью ссылки берут мессенджеры, странице оно не нужно — в кэш не идёт.
+const NOT_CACHED = ['sw.js', 'assets/og.png'];
+
 test('сервис-воркер сохраняет все файлы сайта, и только их', () => {
   const sw = readFileSync(join(WEB, 'sw.js'), 'utf8');
   const listed = JSON.parse(sw.match(/var FILES = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"').replace(/,\s*\]/, ']'));
-  const onDisk = walk(WEB).filter((f) => f !== 'sw.js').map((f) => (f === 'index.html' ? './' : f));
+  const onDisk = walk(WEB).filter((f) => !NOT_CACHED.includes(f)).map((f) => (f === 'index.html' ? './' : f));
   assert.deepEqual([...listed].sort(), [...onDisk].sort());
 });
 
