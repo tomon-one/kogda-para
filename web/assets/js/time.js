@@ -35,6 +35,11 @@ function pad(n) {
   return n < 10 ? '0' + n : String(n);
 }
 
+/** Час из Intl: Chrome с hour12: false пишет полночь как «24». */
+export function hourOf(value) {
+  return Number(value) % 24;
+}
+
 /**
  * Момент по часам колледжа: дата строкой и секунды от начала суток.
  * `ms` — миллисекунды эпохи, по умолчанию сейчас.
@@ -44,8 +49,7 @@ export function collegeNow(ms) {
   if (collegeFormat) {
     var parts = {};
     collegeFormat.formatToParts(new Date(ms)).forEach(function (p) { parts[p.type] = p.value; });
-    // Chrome с hour12: false пишет полночь как «24».
-    var hour = Number(parts.hour) % 24;
+    var hour = hourOf(parts.hour);
     return {
       date: parts.year + '-' + parts.month + '-' + parts.day,
       sec: hour * 3600 + Number(parts.minute) * 60 + Number(parts.second),
@@ -114,12 +118,6 @@ export function dayTitle(date, today) {
 
 export function capitalize(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
-
-/** «28 сентября» по дате-строке. */
-export function dayMonth(date) {
-  var d = new Date(utcOf(date));
-  return d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()];
 }
 
 function localDate(ms) {

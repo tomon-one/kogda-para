@@ -31,6 +31,13 @@ export function mainScreen(app) {
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
     head, secondTabs(), content);
 
+  // Сбой и пропажа — на любой вкладке, как в приложении: чужое расписание во
+  // время сбоя иначе выглядело свежим (аудит сайта, W6). На своём — у
+  // сегодняшнего дня, куда страница прокручивается.
+  if (route.kind) {
+    var top = plates(app);
+    if (top) content.appendChild(top);
+  }
   if (route.kind && route.id) {
     content.appendChild(chosenView(app, route.kind, route.id));
   } else if (route.kind === 'teachers') {
@@ -203,9 +210,13 @@ function chosenView(app, kind, id) {
   var box = h('div', { class: 'chosen' },
     h('div', { class: 'chosen-head' },
       h('h2', { class: 'chosen-name' }, name),
-      h('button', { type: 'button', class: 'text-button', onclick: function () { app.go(kind, true); } }, 'К списку')));
+      h('button', { type: 'button', class: 'text-button', onclick: function () { app.toList(kind); } }, 'К списку')));
   if (!ready || other.loading) {
     box.appendChild(h('div', { class: 'centered' }, h('div', { class: 'spinner' })));
+  } else if (other.notFound) {
+    // Сервер ответил: такого нет. Не «проверьте интернет» — ссылка устарела.
+    box.appendChild(explanation(kind === 'teachers' ? 'Такого преподавателя нет в таблице' : 'Такой группы нет в таблице',
+      'Ссылка устарела или название в таблице поменяли. Найдите в списке.'));
   } else if (!other.schedule) {
     box.appendChild(h('p', { class: 'nothing' }, 'Расписание не загрузилось. Проверьте интернет и нажмите ⟳ вверху.'));
   } else {

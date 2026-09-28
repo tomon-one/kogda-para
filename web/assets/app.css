@@ -9,14 +9,16 @@
   --surface: #fff;
   --surface-variant: #e7e8ea;
   --muted: #5e6266;
-  --primary: #d60403;
+  /* Красный колледжа чуть темнее, чем в приложении (#d60403): на розовом
+     «сегодня» и серых кнопках иначе 4,2:1 при нужных 4,5 (аудит сайта, W7). */
+  --primary: #c20302;
   --on-primary: #fff;
-  --today-bg: rgba(214, 4, 3, 0.14);
-  --now-bg: rgba(214, 4, 3, 0.07);
-  --selected-bg: rgba(214, 4, 3, 0.18);
-  --button-border: rgba(214, 4, 3, 0.35);
+  --today-bg: rgba(194, 3, 2, 0.12);
+  --now-bg: rgba(194, 3, 2, 0.07);
+  --selected-bg: rgba(194, 3, 2, 0.16);
+  --button-border: rgba(194, 3, 2, 0.4);
   --divider: #e2e3e5;
-  --outline: #c4c6c9;
+  --outline: #8a8d91;
   --overlay: rgba(0, 0, 0, 0.45);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   color-scheme: light;
@@ -36,7 +38,7 @@
     --selected-bg: rgba(255, 107, 112, 0.18);
     --button-border: rgba(255, 107, 112, 0.35);
     --divider: #262626;
-    --outline: #3a3a3a;
+    --outline: #6e6e6e;
     --overlay: rgba(0, 0, 0, 0.65);
     --shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
@@ -56,7 +58,7 @@
   --selected-bg: rgba(255, 107, 112, 0.18);
   --button-border: rgba(255, 107, 112, 0.35);
   --divider: #262626;
-  --outline: #3a3a3a;
+  --outline: #6e6e6e;
   --overlay: rgba(0, 0, 0, 0.65);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
@@ -67,6 +69,8 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Фокус с клавиатуры не прячется под липкой шапкой (аудит сайта, W7). */
+  scroll-padding-top: 120px;
 }
 
 body {
@@ -102,6 +106,26 @@ a:hover { text-decoration: underline; }
 
 :focus:not(:focus-visible) { outline: none; }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Внутри карточек рамка фокуса — внутрь: снаружи её срезает край карточки. */
+.list-row:focus-visible, .pin-open:focus-visible, .pin-star:focus-visible,
+.role-row:focus-visible, .tab:focus-visible, .segment:focus-visible { outline-offset: -3px; }
+
+/* Ссылка в тексте — не только цветом (WCAG 1.4.1). */
+p a, .point a { text-decoration: underline; }
+
+/* Для чтеца экрана: объявления без места на экране. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
@@ -227,12 +251,10 @@ a:hover { text-decoration: underline; }
   bottom: 0;
   height: 3px;
   background: var(--primary);
-  -webkit-transform: scaleX(0);
   transform: scaleX(0);
 }
 
 .tab.on::after {
-  -webkit-transform: none;
   transform: none;
 }
 .tab.muted { color: var(--muted); }
@@ -356,7 +378,9 @@ a:hover { text-decoration: underline; }
 .day-title + .lesson { border-top: 0; }
 .lesson.now { background: var(--now-bg); }
 
-.lesson-time { width: 92px; flex: none; }
+/* В em, а не px: с крупным шрифтом «09:00–10:30» должно помещаться, как в
+   приложении, где колонка растёт с масштабом шрифта. */
+.lesson-time { width: 5.75em; flex: none; }
 .pair { font-size: 11px; color: var(--muted); }
 .time { font-size: 14px; font-weight: 500; white-space: nowrap; }
 .past .time, .past .subject { color: var(--muted); }
@@ -380,6 +404,16 @@ a:hover { text-decoration: underline; }
   margin-left: 12px;
   padding-left: 12px;
   border-left: 1px solid var(--divider);
+}
+
+/* Узко (телефон 320 px, страница увеличена или крупный шрифт в настройках
+   браузера): время строкой над парой, иначе колонке предмета оставалось по две
+   буквы (аудит сайта, W5, W7). В em — порог растёт со шрифтом браузера. */
+@media (max-width: 21.25em) {
+  .lesson { flex-direction: column; }
+  .lesson-time { width: auto; }
+  .lesson-time .pair, .lesson-time .time, .lesson-time .now-label { display: inline; margin-right: 6px; }
+  .lesson-body { margin: 4px 0 0; padding: 0; border-left: 0; }
 }
 
 .subject {
@@ -421,16 +455,17 @@ a:hover { text-decoration: underline; }
 
 .online-link { margin-top: 2px; }
 
+/* Хост — целиком, строка переносится: ради него адрес и показан, по нему
+   отличают чужую ссылку; многоточие на узком экране оставляло «my.…». */
 .link-where {
-  display: flex;
   font-size: 13px;
   color: var(--muted);
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .link-where.foreign { color: var(--primary); }
-.link-host { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.link-end { flex: none; }
+.link-end { white-space: nowrap; }
 
 .link-buttons { margin: 4px 0 2px; }
 
@@ -612,13 +647,15 @@ a:hover { text-decoration: underline; }
 
 .setting-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   min-height: 52px;
 }
 
 .setting-row + .setting-row { margin-top: 8px; }
-.setting-text { flex: 1; min-width: 0; }
-.setting-buttons { display: flex; flex: none; }
+/* Узко — кнопки строкой ниже, а не поверх названия (аудит сайта, W5). */
+.setting-text { flex: 1 1 140px; min-width: 0; overflow-wrap: break-word; word-wrap: break-word; }
+.setting-buttons { display: flex; flex: none; margin-left: auto; padding: 4px 0; }
 .setting-buttons .action { margin: 0 0 0 8px; }
 /* Наименьшая ширина, как у приложения (GROUP_BUTTON): «Сменить» и «Добавить»
    одной ширины, «Выбрать заново» — в одну строку, шире. */
@@ -650,7 +687,7 @@ a:hover { text-decoration: underline; }
   font-size: 14px;
 }
 
-.segment.on { background: var(--selected-bg); font-weight: 500; }
+.segment.on { background: var(--selected-bg); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary); }
 
 .signature { margin-top: 12px; font-size: 13px; color: var(--muted); }
 
@@ -746,19 +783,18 @@ a:hover { text-decoration: underline; }
   color: var(--fg);
   font-size: 14px;
   box-shadow: var(--shadow);
-  -webkit-transform: translateX(-50%);
   transform: translateX(-50%);
 }
 
 /*
-  Движение. Всё — внутри no-preference: у кого в системе «уменьшить движение»,
-  экраны просто сменяются. Экран перестраивается целиком, поэтому въезд,
+  Движение. Переходы и появления — внутри no-preference: у кого в системе
+  «уменьшить движение», экраны просто сменяются; крутилки загрузки остаются —
+  они не украшение, а знак «идёт работа». Экран перестраивается целиком, поэтому въезд,
   начатый до перестройки, продолжается с того же места: сдвиг --shift ставит
   страница (main.js).
 */
 @media (prefers-reduced-motion: no-preference) {
   .screen.enter-forward > :not(.bottom-bar) {
-    -webkit-animation: enter-forward 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     animation: enter-forward 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
     animation-delay: var(--shift, 0ms);
   }
@@ -844,13 +880,11 @@ a:hover { text-decoration: underline; }
   /* Нажатие: кнопка чуть проседает, строка — только подсветкой. */
   .action, .text-button, .icon-button, .primary-button, .link-button, .segment, .pin-star,
   .list-row, .role-row, .pin-open, .tab, .text-link {
-    transition: background-color 0.15s, opacity 0.15s, -webkit-transform 0.12s;
     transition: background-color 0.15s, opacity 0.15s, transform 0.12s;
   }
 
   .action:active, .text-button:active, .icon-button:active, .primary-button:active,
   .link-button:active, .segment:active, .pin-star:active {
-    -webkit-transform: scale(0.96);
     transform: scale(0.96);
   }
 

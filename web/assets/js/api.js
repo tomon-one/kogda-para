@@ -14,9 +14,10 @@ export function HttpError(status) {
 HttpError.prototype = Object.create(Error.prototype);
 HttpError.prototype.constructor = HttpError;
 
-export function NetError(why) {
+export function NetError(why, timeout) {
   this.name = 'NetError';
   this.message = why || 'нет связи с сервером';
+  this.timeout = !!timeout;
 }
 NetError.prototype = Object.create(Error.prototype);
 NetError.prototype.constructor = NetError;
@@ -27,7 +28,7 @@ function getJson(path) {
   var timeout = new Promise(function (resolve, reject) {
     timer = setTimeout(function () {
       if (controller) controller.abort();
-      reject(new NetError('сервер не ответил за 30 секунд'));
+      reject(new NetError('сервер не ответил за 30 секунд', true));
     }, TIMEOUT_MS);
   });
   var init = { cache: 'no-cache', credentials: 'omit' };

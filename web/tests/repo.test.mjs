@@ -195,3 +195,56 @@ test('ответ на прежний выбор не записывается', 
   globalThis.fetch = realFetch;
   assert.equal(repo.saved(), null);
 });
+
+test('404 при сбое сервера — не пропажа: опечатку в таблице не путать с переименованием', async () => {
+  reset();
+  server = (url) => url === '/v1/meta' ? [200, { gen: 'G1', status: 'stale', since: '2026-09-28T01:00:00Z' }] : [404, {}];
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  await repo.refresh(true);
+  clock += 2 * HOUR;
+  assert.equal((await repo.refresh(true)).kind, 'failed');
+  assert.equal(repo.gone(), false);
+});
+
+test('чужое расписание: 404 — «нет в таблице», а не «нет связи»', async () => {
+  reset();
+  server = healthy('G1', [['/v1/schedule/isp-2?', [200, schedule('isp-2', 'ИСП-2', 'G1')]]]);
+  assert.equal((await repo.otherSchedule('groups', 'nope')).notFound, true);
+  assert.equal((await repo.otherSchedule('groups', 'isp-2')).schedule.gn, 'ИСП-2');
+  server = () => 'down';
+  assert.deepEqual(await repo.otherSchedule('groups', 'isp-2'), {});
+});
+
+test('поле не того типа не ломает страницу: приводится при записи и при чтении', async () => {
+  reset();
+  const odd = schedule('isp-1', 'ИСП-1', 'G1', {
+    bells: { 1: '09:00' },
+    days: [null, { d: '2026-09-28', l: [{ n: 1, s: 'Физика', r: 101, t: 'Иванов' }, { s: 'без номера' }] }],
+  });
+  server = healthy('G1', [['/v1/schedule/isp-1?', [200, odd]]]);
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  assert.equal((await repo.refresh(true)).kind, 'updated');
+  const saved = repo.saved();
+  assert.deepEqual(saved.days, [{ d: '2026-09-28', l: [{ n: 1, s: 'Физика', r: '101' }] }]);
+  assert.deepEqual(saved.bells, {});
+  // Испорченное в хранилище — забывается, а не роняет.
+  store.set('schedule', { days: 'мусор' });
+  assert.equal(repo.saved(), null);
+  assert.equal(store.get('schedule'), null);
+  // Не похоже на расписание вовсе — обновление не удалось, прежнее не тронуто.
+  store.set('schedule', odd);
+  server = healthy('G2', [['/v1/schedule/isp-1?', [200, { error: 'странное' }]]]);
+  assert.equal((await repo.refresh(true)).kind, 'failed');
+  assert.equal(repo.saved().gn, 'ИСП-1');
+});
+
+test('закреплённые за переименованием — без повторов', async () => {
+  reset();
+  store.set('pinnedGroups', ['old', 'new']);
+  store.set('pinnedTeachers', []);
+  server = healthy('G1', [['/v1/schedule/old?', [200, schedule('new', 'Новое', 'G1')]]]);
+  await repo.followRenamedPins([{ id: 'new', name: 'Новое' }], []);
+  assert.deepEqual(repo.pinned('groups'), ['new']);
+  repo.togglePin('groups', 'new');
+  assert.deepEqual(repo.pinned('groups'), []);
+});

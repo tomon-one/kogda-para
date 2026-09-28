@@ -16,6 +16,7 @@ var FILES = [
   './',
   '404.html',
   'manifest.json',
+  'manifest-tested.json',
   'assets/app.css',
   'assets/boot.js',
   'assets/icon.svg',
@@ -44,11 +45,19 @@ var URLS = FILES.map(function (f) { return new URL(f, self.registration.scope).h
 
 self.addEventListener('install', function (event) {
   event.waitUntil(caches.open(CACHE).then(function (cache) {
-    // Мимо HTTP-кэша: иначе в новый кэш легли бы прежние файлы.
+    // Сверяясь с сервером (ETag), а не мимо HTTP-кэша: неизменившиеся файлы
+    // приходят ответом 304 без тела, а не второй раз целиком (аудит, W2).
     return Promise.all(URLS.map(function (url) {
-      return fetch(new Request(url, { cache: 'reload' })).then(function (response) {
+      return fetch(new Request(url, { cache: 'no-cache' })).then(function (response) {
         if (!response.ok) throw new Error(url + ': ' + response.status);
-        return cache.put(url, response);
+        if (url !== URLS[0]) return cache.put(url, response);
+        // Страница — той же сборки, что воркер: попав в выкладку посреди
+        // копирования, он не должен запомнить смесь (аудит сайта, W8). Не та —
+        // установка не удалась, браузер повторит позже.
+        return response.clone().text().then(function (html) {
+          if (html.indexOf('content="' + BUILD + '"') < 0) throw new Error('страница другой сборки');
+          return cache.put(url, response);
+        });
       });
     }));
   }).then(function () { return self.skipWaiting(); }));

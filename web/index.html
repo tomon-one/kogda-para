@@ -21,9 +21,28 @@
 <link rel="stylesheet" href="assets/app.css">
 <script src="assets/boot.js"></script>
 <script type="module" src="assets/js/main.js"></script>
+<!-- Все модули — сразу, а не по мере импортов: без этого до первого экрана
+     четыре круга по сети (аудит сайта, W2). Браузер без modulepreload
+     строки пропустит. -->
+<link rel="modulepreload" href="assets/js/time.js">
+<link rel="modulepreload" href="assets/js/format.js">
+<link rel="modulepreload" href="assets/js/schedule.js">
+<link rel="modulepreload" href="assets/js/search.js">
+<link rel="modulepreload" href="assets/js/store.js">
+<link rel="modulepreload" href="assets/js/api.js">
+<link rel="modulepreload" href="assets/js/repo.js">
+<link rel="modulepreload" href="assets/js/version.js">
+<link rel="modulepreload" href="assets/js/ui/dom.js">
+<link rel="modulepreload" href="assets/js/ui/days.js">
+<link rel="modulepreload" href="assets/js/ui/lists.js">
+<link rel="modulepreload" href="assets/js/ui/today.js">
+<link rel="modulepreload" href="assets/js/ui/settings.js">
+<link rel="modulepreload" href="assets/js/ui/welcome.js">
+<link rel="modulepreload" href="assets/js/ui/report.js">
 </head>
 <body>
 <div id="app"><p class="boot">Загрузка…</p></div>
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
 <noscript><p class="boot">Сайту нужен JavaScript: включите его в настройках браузера.</p></noscript>
 </body>
 </html>

@@ -1,7 +1,17 @@
 // Грузится до страницы, обычным скриптом: тема — до первой отрисовки, чтобы
 // тёмная не мигала светлой; и слово для браузера, которому модули не по силам.
 (function () {
-  var prefix = /^\/tested(\/|$)/.test(location.pathname) ? 'wct:' : 'wc:';
+  var tested = /^\/tested(\/|$)/.test(location.pathname);
+  var prefix = tested ? 'wct:' : 'wc:';
+  // У tested на домашнем экране своё имя — иначе два одинаковых значка
+  // (аудит сайта, W8). Теги стоят в <head> выше этого скрипта.
+  if (tested) {
+    var manifest = document.querySelector('link[rel="manifest"]');
+    if (manifest) manifest.setAttribute('href', 'manifest-tested.json');
+    var title = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (title) title.setAttribute('content', 'Когда пара? tested');
+    document.title = 'Когда пара? tested';
+  }
   try {
     var theme = JSON.parse(localStorage.getItem(prefix + 'theme') || 'null');
     if (theme === 'dark' || theme === 'light') document.documentElement.setAttribute('data-theme', theme);

@@ -3,10 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  addDays, collegeNow, dayOfYear, dayTitle, formatDurationLong, formatSince, plural, weekStart, weekday,
+  addDays, collegeNow, dayOfYear, dayTitle, formatDurationLong, formatSince, hourOf, plural, weekStart,
+  weekday,
 } from '../assets/js/time.js';
 import {
-  isKnownWebinar, isOnline, kindName, linkEnd, linkHost, onlineLabel, replaces, roomLabel, sheetLink,
+  isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel, roomLabel, sheetLink,
   shiftColumn, shortenName,
 } from '../assets/js/format.js';
 import {
@@ -19,8 +20,10 @@ test('время колледжа — Новосибирск, UTC+7', () => {
   const now = collegeNow(Date.UTC(2026, 8, 27, 20, 30, 15));
   assert.equal(now.date, '2026-09-28');
   assert.equal(now.sec, 3 * 3600 + 30 * 60 + 15);
-  // Полночь — 0, а не 24 часа.
   assert.equal(collegeNow(Date.UTC(2026, 8, 27, 17, 0, 0)).sec, 0);
+  // Chrome с hour12: false пишет полночь как «24» — это 0, а не сутки вперёд.
+  assert.equal(hourOf('24'), 0);
+  assert.equal(hourOf('23'), 23);
 });
 
 test('даты строками', () => {
@@ -79,14 +82,11 @@ test('подписи пары', () => {
   assert.equal(shortenName('Трухачев'), 'Трухачев');
 });
 
-test('онлайн, отмена, замена', () => {
+test('онлайн', () => {
   assert.equal(isOnline({ o: 1 }), true);
   assert.equal(isOnline({ u: 'https://x' }), true);
   // Ссылка при кабинете — очная пара, преподаватель на связи.
   assert.equal(isOnline({ u: 'https://x', r: '269' }), false);
-  assert.equal(replaces({ c: 'вместо: Математика' }), 'Математика');
-  assert.equal(replaces({ c: 'преподаватель заболел' }), null);
-  assert.equal(replaces({ c: 'вместо: ' }), null);
 });
 
 test('ссылки на вебинары', () => {
@@ -96,6 +96,14 @@ test('ссылки на вебинары', () => {
   assert.equal(isKnownWebinar('https://mts-link.ru.evil.com/j'), false);
   assert.equal(isKnownWebinar('https://notzoom.us/j'), false);
   assert.equal(isKnownWebinar('https://user@zoom.us/j'), true);
+  // Хост — как у браузера: всё до «@» — учётные данные, «\» — это «/» (аудит сайта, W1).
+  for (const evil of ['https://my.mts-link.ru:443@evil.example/j/333',
+    'https://evil.example\\.mts-link.ru/j/444', 'https://evil.example\\@my.mts-link.ru/j/555']) {
+    assert.equal(isKnownWebinar(evil), false, evil);
+    assert.equal(linkHost(evil), 'evil.example', evil);
+  }
+  assert.equal(isWebLink('javascript:alert(1)'), false);
+  assert.equal(isWebLink('https://zoom.us/j'), true);
   assert.equal(linkHost('https://www.zoom.us/j/1'), 'zoom.us');
   assert.equal(linkEnd('https://my.mts-link.ru/j/100000004/20000000626'), '20000000626');
   assert.equal(linkEnd('https://my.mts-link.ru/j/12345678901234567890/'), '5678901234567890');

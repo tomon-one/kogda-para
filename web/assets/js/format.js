@@ -10,16 +10,6 @@ export function isCancelled(lesson) {
   return !!lesson.x;
 }
 
-var INSTEAD = 'вместо: ';
-
-/** Какую пару эта заменила — из примечания «вместо: X»; null — не замена. */
-export function replaces(lesson) {
-  var note = lesson.c;
-  if (!note || note.indexOf(INSTEAD) !== 0) return null;
-  var what = note.slice(INSTEAD.length).trim();
-  return what || null;
-}
-
 var KINDS = {
   'лек': 'Лекция',
   'пр': 'Практика',
@@ -71,13 +61,26 @@ export function shortenName(fullName) {
  */
 var WEBINAR_DOMAINS = ['mts-link.ru', 'webinar.ru', 'zoom.us'];
 
+/**
+ * Разбор адреса — тот же, что у браузера (URL): что он покажет хостом, туда
+ * «Открыть» и поведёт. Самодельная регулярка ошибалась на «:443@» и «\» —
+ * ссылка на чужой сайт выглядела площадкой колледжа (аудит сайта, W1).
+ */
 function parseUrl(url) {
-  var m = /^([a-z][a-z0-9+.\-]*):\/\/([^\/?#:@]*@)?([^\/?#:]*)(:\d+)?([^?#]*)/i.exec((url || '').trim());
-  if (!m) return null;
-  return { scheme: m[1].toLowerCase(), host: m[3].toLowerCase(), path: m[5] };
+  var text = (url || '').trim();
+  if (!text) return null;
+  try {
+    var u = new URL(text);
+    return { scheme: u.protocol.replace(/:$/, '').toLowerCase(), host: u.hostname.toLowerCase(), path: u.pathname };
+  } catch (e) {
+    return null;
+  }
 }
 
 export function isKnownWebinar(url) {
+  // Обратную косую браузер читает как «/», а java.net.URI в приложении не
+  // разбирает вовсе: и там и тут такой адрес — чужой.
+  if ((url || '').indexOf('\\') >= 0) return false;
   var u = parseUrl(url);
   if (!u || u.scheme !== 'https') return false;
   var host = u.host.replace(/\.$/, '');
@@ -86,7 +89,7 @@ export function isKnownWebinar(url) {
   });
 }
 
-/** «https://www.zoom.us/j/1» → «zoom.us». */
+/** «https://www.zoom.us/j/1» → «zoom.us» — хост, куда поведёт ссылка. */
 export function linkHost(url) {
   var u = parseUrl(url);
   if (!u || !u.host) return url;

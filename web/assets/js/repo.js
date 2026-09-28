@@ -6,7 +6,7 @@
 import * as api from './api.js';
 import * as store from './store.js';
 import { collegeNow, weekStart } from './time.js';
-import { DAYS, coversDay, mergeSecondGroup, ownOnly, windowMark } from './schedule.js';
+import { DAYS, cleanSchedule, coversDay, mergeSecondGroup, ownOnly, windowMark } from './schedule.js';
 
 /** Сколько сервер может молчать при живой сети, прежде чем это сбой, а не чих. */
 var UNREACHABLE_BROKEN_AFTER_MS = 30 * 60 * 1000;
@@ -98,8 +98,21 @@ export function selectSecond(group) {
 
 // ——— состояние ———
 
+/** Забыть сохранённое расписание — после того как на нём упала отрисовка. */
+export function forgetSchedule() {
+  dropSchedule();
+}
+
+/** Сохранённое расписание, приведённое к форме; испорченное — забыть. */
 export function saved() {
-  return store.get('schedule');
+  var body = store.get('schedule');
+  if (!body) return null;
+  try {
+    return cleanSchedule(body);
+  } catch (e) {
+    dropSchedule();
+    return null;
+  }
 }
 
 export function fetchedAt() {
@@ -169,13 +182,12 @@ function isNotFound(error) {
 // ——— обновление ———
 
 /**
- * Пары соседней подгруппы. Не достучались — своё расписание как есть: без
- * пары соседей человек обойдётся, без своих — нет.
+ * Пары соседней подгруппы — запрос уже идёт, рядом со своим. Не достучались —
+ * своё расписание как есть: без пары соседей человек обойдётся, без своих — нет.
  */
-function withSecondGroup(mine, serverOk, from) {
-  var sub = second();
-  if (!sub) return Promise.resolve({ schedule: mine, whole: true });
-  return api.schedule(sub.id, from, DAYS).then(function (extra) {
+function withSecondGroup(mine, serverOk, sub, request) {
+  if (!sub || !request) return Promise.resolve({ schedule: mine, whole: true });
+  return request.then(function (extra) {
     store.remove('secondGone');
     var renamed = extra.g !== sub.id ? { id: extra.g, name: extra.gn } : null;
     return { schedule: mergeSecondGroup(mine, extra), whole: true, secondRenamed: renamed };
@@ -193,6 +205,7 @@ function refreshOnce(force) {
   var asked = subject();
   var teacherMode = isTeacher();
   var own = chosen();
+  var sub = second();
   if (!own) return Promise.resolve({ kind: 'nogroup' });
   var today = collegeNow().date;
   // Неделя — одна на весь заход: запрос через полночь воскресенья не должен
@@ -221,7 +234,12 @@ function refreshOnce(force) {
         store.set('fetchedAt', now);
         return { kind: 'fresh' };
       }
-      var request = teacherMode ? api.teacher(own.id, from, DAYS) : api.schedule(own.id, from, DAYS);
+      // Своё и подгруппа — разом: по очереди своё свежее ждало бы соседку до
+      // тайм-аута (аудит сайта, W2).
+      var request = (teacherMode ? api.teacher(own.id, from, DAYS) : api.schedule(own.id, from, DAYS))
+        .then(cleanSchedule);
+      var subRequest = !teacherMode && sub ? api.schedule(sub.id, from, DAYS).then(cleanSchedule) : null;
+      if (subRequest) subRequest.then(null, function () { /* разберёт withSecondGroup */ });
       return request.then(null, function (error) {
         if (isNotFound(error) && meta && meta.status === 'ok' && noteNotFound('gone', Date.now())) {
           return 'gone';
@@ -233,7 +251,7 @@ function refreshOnce(force) {
         store.remove('unreachable');
         var merging = teacherMode
           ? Promise.resolve({ schedule: fresh, whole: true })
-          : withSecondGroup(fresh, !!meta && meta.status === 'ok', from);
+          : withSecondGroup(fresh, !!meta && meta.status === 'ok', sub, subRequest);
         return merging.then(function (merged) {
           // Пока шёл запрос, человек мог сменить выбор: ответ уже чужой.
           if (subject() !== asked) return { kind: 'fresh' };
@@ -291,19 +309,25 @@ export function cachedTeachers() {
   return store.get('teachers') || [];
 }
 
-/** Свежий список групп; null — сервер не ответил. */
+/** Свежий список: {list} или {busy} — сервер занят (429), или {} — не ответил. */
+function freshList(key, request) {
+  return request().then(function (list) {
+    var clean = (Array.isArray(list) ? list : []).filter(function (x) {
+      return x && typeof x.id === 'string' && typeof x.name === 'string';
+    });
+    store.set(key, clean);
+    return { list: clean };
+  }, function (error) {
+    return error instanceof api.HttpError && error.status === 429 ? { busy: true } : {};
+  });
+}
+
 export function freshGroups() {
-  return api.groups().then(function (list) {
-    store.set('groups', list);
-    return list;
-  }, function () { return null; });
+  return freshList('groups', api.groups);
 }
 
 export function freshTeachers() {
-  return api.teachers().then(function (list) {
-    store.set('teachers', list);
-    return list;
-  }, function () { return null; });
+  return freshList('teachers', api.teachers);
 }
 
 /**
@@ -319,8 +343,10 @@ export function followRenamedPins(groups, teachers) {
       return chain.then(function () {
         return ask(old).then(function (body) {
           if (body.g !== old && ids[body.g]) {
-            var now = store.get(key) || [];
-            store.set(key, now.map(function (id) { return id === old ? body.g : id; }));
+            // Новый id мог быть закреплён и сам — без повтора, иначе звезда
+            // гасла только со второго нажатия (аудит сайта, W6).
+            var now = (store.get(key) || []).map(function (id) { return id === old ? body.g : id; });
+            store.set(key, now.filter(function (id, i) { return now.indexOf(id) === i; }));
           }
         }, function () { /* не ответил — в другой раз */ });
       });
@@ -337,15 +363,19 @@ export function pinned(kind) {
 export function togglePin(kind, id) {
   var key = kind === 'teachers' ? 'pinnedTeachers' : 'pinnedGroups';
   var list = store.get(key) || [];
-  var at = list.indexOf(id);
-  if (at >= 0) list.splice(at, 1);
-  else list.push(id);
-  store.set(key, list);
+  store.set(key, list.indexOf(id) >= 0 ? list.filter(function (x) { return x !== id; }) : list.concat([id]));
 }
 
-/** Чужое расписание — по запросу, не хранится. null — не загрузилось. */
+/**
+ * Чужое расписание — по запросу, не хранится: {schedule} или {notFound} —
+ * сервер такого не знает (ссылка устарела, опечатка), или {} — не загрузилось.
+ */
 export function otherSchedule(kind, id) {
   var from = weekStart(collegeNow().date);
   var request = kind === 'teachers' ? api.teacher(id, from, DAYS) : api.schedule(id, from, DAYS);
-  return request.then(null, function () { return null; });
+  return request.then(function (body) {
+    return { schedule: cleanSchedule(body) };
+  }, function (error) {
+    return isNotFound(error) ? { notFound: true } : {};
+  });
 }

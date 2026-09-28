@@ -181,3 +181,59 @@ export function freeDay(day) {
 export function coversDay(schedule, date) {
   return !!schedule && (schedule.days || []).some(function (d) { return d.d === date; });
 }
+
+function text(value) {
+  if (typeof value === 'string') return value;
+  return typeof value === 'number' ? String(value) : undefined;
+}
+
+/**
+ * Ответ службы — к форме из docs/api.md: чужого типа поле отбрасывается или
+ * приводится, а не роняет отрисовку. Без этого одно поле не того типа
+ * (кабинет числом, звонок строкой) сохранялось и вешало страницу на
+ * «Загрузке…» при каждом открытии, и починка службы уже не помогала (аудит
+ * сайта, W4). Не похоже на расписание вовсе — исключение: обновление не
+ * удалось, прежнее остаётся.
+ */
+export function cleanSchedule(body) {
+  if (!body || typeof body !== 'object' || typeof body.g !== 'string' || !Array.isArray(body.days)) {
+    throw new Error('ответ службы не похож на расписание');
+  }
+  var out = { g: body.g, gn: text(body.gn) || body.g, gen: text(body.gen) || '', bells: {}, days: [] };
+  ['src', 'src_url', 'col', 'kind'].forEach(function (key) {
+    var value = text(body[key]);
+    if (value) out[key] = value;
+  });
+  var cov = body.cov;
+  if (Array.isArray(cov) && cov.length === 2 && typeof cov[0] === 'string' && typeof cov[1] === 'string') {
+    out.cov = [cov[0], cov[1]];
+  }
+  if (body.bells && typeof body.bells === 'object') {
+    Object.keys(body.bells).forEach(function (n) {
+      var range = body.bells[n];
+      if (Array.isArray(range)) out.bells[n] = range.filter(function (t) { return typeof t === 'string'; });
+    });
+  }
+  body.days.forEach(function (day) {
+    if (!day || typeof day.d !== 'string') return;
+    var clean = { d: day.d, l: [] };
+    if (typeof day.row === 'number') clean.row = day.row;
+    (Array.isArray(day.l) ? day.l : []).forEach(function (l) {
+      if (!l || typeof l.n !== 'number') return;
+      var lesson = { n: l.n, s: text(l.s) || 'Занятие' };
+      ['k', 'r', 'u', 'c', 'gr', 'col'].forEach(function (key) {
+        var value = text(l[key]);
+        if (value) lesson[key] = value;
+      });
+      if (Array.isArray(l.t)) {
+        var teachers = l.t.filter(function (t) { return typeof t === 'string'; });
+        if (teachers.length) lesson.t = teachers;
+      }
+      if (l.o) lesson.o = 1;
+      if (l.x) lesson.x = 1;
+      clean.l.push(lesson);
+    });
+    out.days.push(clean);
+  });
+  return out;
+}
