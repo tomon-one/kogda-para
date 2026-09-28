@@ -114,7 +114,8 @@ function onlineLink(url, key) {
   });
   return h('div', { class: 'online-link' },
     h('div', { class: 'link-where' + (known ? '' : ' foreign') },
-      h('span', { class: 'link-host' }, (known ? '' : 'чужой адрес: ') + linkHost(url)),
+      known ? null : 'чужой адрес: ',
+      h('span', { class: 'link-host' }, linkHost(url)),
       // Обычный пробел: перенос — между хостом и хвостом, а не посреди хоста.
       end ? ' ' : null,
       end ? h('span', { class: 'link-end' }, '· …/' + end) : null),

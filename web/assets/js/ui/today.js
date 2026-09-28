@@ -123,7 +123,7 @@ function tabs(app, current, teacherMode) {
   return h('nav', { class: 'tabs', 'aria-label': 'Разделы' }, order.map(function (tab) {
     var on = tab === current;
     return h('button', {
-      type: 'button', class: 'tab' + (on ? ' on' : ''), 'aria-current': on ? 'page' : null,
+      type: 'button', class: 'tab' + (on ? ' on' : ''), 'aria-current': on ? 'page' : null, 'data-key': 'tab:' + tab,
       onclick: function () {
         if (on) return;
         // Своя вкладка — своё расписание; чужая — список.
@@ -153,7 +153,8 @@ function plates(app) {
       h('div', { class: 'plate-title' }, teacherMode ? 'Вас больше нет в таблице' : 'Группы больше нет в таблице'),
       h('div', { class: 'plate-text' }, (teacherMode
         ? 'Имя «' + own.name + '» в таблице записали иначе или убрали. '
-        : 'Группу «' + own.name + '» переименовали, разделили или убрали. ') + 'На экране — последнее, что было.'),
+        : 'Группу «' + own.name + '» переименовали, разделили или убрали. ') +
+        (app.saved() ? 'На экране — последнее, что было.' : 'Выберите заново.')),
       actionButton('Выбрать заново', function () { app.go(teacherMode ? 'pick/self' : 'pick'); })));
   }
   if (app.serverBroken()) {
@@ -181,7 +182,7 @@ function explainMissing(app, schedule, loading, fallback) {
   // Своё — 404 от здорового сервера, а сохранённого нет: сказать сразу, а не
   // «проверьте интернет» (аудит, прогон 2). Час подтверждения нужен только,
   // чтобы не прятать сохранённое.
-  if (!schedule && !loading && fallback !== null && app.goneSuspected()) {
+  if (!schedule && !loading && fallback !== null && app.goneSuspected() && !app.gone()) {
     var teacherMode = app.isTeacher();
     return explanation(teacherMode ? 'Вас с таким именем нет в таблице' : 'Группы с таким названием нет в таблице',
       teacherMode ? 'Имя в таблице записали иначе или убрали. Найдите себя заново.'

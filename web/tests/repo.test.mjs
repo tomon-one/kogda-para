@@ -255,11 +255,24 @@ test('редкие заходы: сбой — от последнего отве
   repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
   await repo.refresh(true);
   const answered = clock;
-  // Двое суток спустя сервер молчит — «не отвечает» с первого же захода, с
-  // давностью от последнего ответа.
+  // Двое суток спустя сервер молчит. Одна неудача — ещё не сбой (своя сеть
+  // могла пропасть); повтор через минуту — «не отвечает», с давностью от
+  // последнего ответа.
   clock += 48 * HOUR;
   server = () => 'down';
   await repo.refresh(false);
+  assert.equal(repo.serverBroken(), false);
+  clock += 60 * 1000;
+  await repo.refresh(false);
   assert.equal(repo.serverState().status, 'unreachable');
   assert.equal(repo.serverState().since, new Date(answered).toISOString());
+});
+
+test('meta сорвался, а расписание пришло — сервер отвечает, «не отвечает» снимается', async () => {
+  reset();
+  store.set('server', { status: 'unreachable', since: '2026-09-28T01:00:00Z' });
+  server = (url) => url === '/v1/meta' ? 'down' : [200, schedule('isp-1', 'ИСП-1', 'G1')];
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  assert.equal((await repo.refresh(true)).kind, 'updated');
+  assert.equal(repo.serverBroken(), false);
 });

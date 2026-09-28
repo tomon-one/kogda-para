@@ -471,8 +471,8 @@ p a, .point a { text-decoration: underline; }
 
 .link-where.foreign { color: var(--primary); }
 .link-host, .link-end { white-space: nowrap; }
-/* Чужой хост бывает любой длины — его можно рвать где угодно. */
-.link-where.foreign .link-host { white-space: normal; overflow-wrap: anywhere; word-break: break-all; }
+/* Чужой хост бывает любой длины: рвётся, только если не влез в строку целиком. */
+.link-where.foreign .link-host { white-space: normal; overflow-wrap: anywhere; }
 
 .link-buttons { margin: 4px 0 2px; }
 
@@ -665,10 +665,10 @@ p a, .point a { text-decoration: underline; }
 .setting-text { flex: 1 1 140px; min-width: 0; overflow-wrap: break-word; word-wrap: break-word; }
 .setting-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; padding: 4px 0; }
 .setting-buttons .action { margin: 2px 0 2px 8px; }
-/* Наименьшая ширина — 7em, около 112 px, как GROUP_BUTTON приложения: «Сменить»
+/* Наименьшая ширина — 8em, 112 px при шрифте кнопки 14px, как GROUP_BUTTON приложения: «Сменить»
    и «Добавить» одной ширины, «Выбрать заново» шире; при увеличении кнопки
    переносятся, а не вылезают за карточку (аудит, прогон 2). */
-.action.fixed { min-width: 7em; white-space: nowrap; }
+.action.fixed { min-width: 8em; white-space: nowrap; }
 
 .beta {
   display: inline-block;
