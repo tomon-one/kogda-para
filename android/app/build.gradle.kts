@@ -22,7 +22,7 @@ android {
         // Правила имени — в docs/versions.md. versionCode просто растёт:
         // по нему приложение узнаёт о новой сборке на сервере.
         versionCode = 5
-        versionName = "pr-Зерно.0.1.4"
+        versionName = "r-Алтай.1.0.0"
     }
     // Tested-сборка (docs/versions.md, «Tested»): отдельное приложение рядом с
     // основным, на нём автор проверяет новое до выкладки всем. Её номер —
@@ -136,7 +136,7 @@ kotlin {
 }
 
 /** Попытка tested-сборки; см. комментарий у versionCode. */
-val TESTED_TRY = 1
+val TESTED_TRY = 2
 
 androidComponents {
     onVariants(selector().withBuildType("candidate")) { variant ->

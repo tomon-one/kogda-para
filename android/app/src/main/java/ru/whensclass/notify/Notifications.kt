@@ -27,8 +27,10 @@ object Notifications {
     const val CHANNEL_LESSON = "lesson_soon"
     const val CHANNEL_CHANGES = "schedule_changes"
     const val CHANNEL_UPDATE = "app_update"
-    // Свои каналы у сбоя сервера и у пропажи подгруппы: раньше они шли
-    // каналом изменений, и выключить одно, не тронув другое, было нельзя.
+    // Свои каналы у сбоя сервера и у пропажи другой группы: раньше они шли
+    // каналом изменений, и выключить одно, не тронув другое, было нельзя. Id
+    // канала пропажи — от «соседней подгруппы» сборок до 0.1.4: новый id
+    // оставил бы у людей прежний канал висеть в настройках телефона.
     const val CHANNEL_SERVER = "server_down"
     const val CHANNEL_SUBGROUP = "subgroup_gone"
 
@@ -38,7 +40,7 @@ object Notifications {
     // Своё для «сервер лежит»: с общим ID_CHANGES новое уведомление об
     // изменениях перезаписывало непрочитанное о сбое и наоборот.
     private const val ID_SERVER = 4
-    // Своё для «подгруппы нет в таблице»: с общим ID_CHANGES оно затирало
+    // Своё для «группы нет в таблице»: с общим ID_CHANGES оно затирало
     // непрочитанное «Расписание изменилось».
     private const val ID_SUBGROUP = 5
 
@@ -68,9 +70,9 @@ object Notifications {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_SUBGROUP,
-                "Соседняя подгруппа",
+                "Другие группы",
                 NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply { description = "Соседней подгруппы не стало в таблице" },
+            ).apply { description = "Одной из выбранных групп не стало в таблице" },
         )
         manager.createNotificationChannel(
             NotificationChannel(

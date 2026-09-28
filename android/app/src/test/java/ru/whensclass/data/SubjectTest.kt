@@ -12,7 +12,7 @@ import org.junit.Test
  * Запрос идёт по сети секунды, и за это время человек успевает сменить группу
  * или роль. Пришедший ответ тогда чужой, и записывать его нельзя: однажды он
  * молча возвращал на экран прежние пары поверх только что выбранных, а позже
- * то же самое повторилось с подгруппой.
+ * то же самое повторилось с подгруппой — теперь с остальными группами.
  *
  * Сравнение целиком, а не по одному полю, — вся защита и держится на нём.
  * Здесь закреплено, что в сравнении участвуют все три части, и что запись
@@ -23,7 +23,7 @@ import org.junit.Test
  */
 class SubjectTest {
 
-    private val asked = Subject(teacher = false, id = "isp-924-1", second = "isp-924-2")
+    private val asked = Subject(teacher = false, id = "isp-924-1", extras = listOf("isp-924-2", "isp-924-3"))
 
     @Test
     fun `сменилась группа — ответ уже чужой`() {
@@ -38,14 +38,21 @@ class SubjectTest {
     }
 
     @Test
-    fun `сменилась подгруппа — ответ уже чужой`() {
-        // Склейка идёт из двух запросов, и с прежней соседкой она не та.
-        assertNotEquals(asked, asked.copy(second = "isp-924-3"))
+    fun `сменилась другая группа — ответ уже чужой`() {
+        // Их пары идут своими запросами, и с прежними группами это не то.
+        assertNotEquals(asked, asked.copy(extras = listOf("isp-924-2", "isp-924-4")))
     }
 
     @Test
-    fun `подгруппу убрали — тоже смена`() {
-        assertNotEquals(asked, asked.copy(second = null))
+    fun `группу убрали или добавили — тоже смена`() {
+        assertNotEquals(asked, asked.copy(extras = listOf("isp-924-2")))
+        assertNotEquals(asked, asked.copy(extras = asked.extras + "isp-924-4"))
+    }
+
+    @Test
+    fun `порядок групп — тоже часть выбора`() {
+        // По порядку раздаются номера значков у пар.
+        assertNotEquals(asked, asked.copy(extras = asked.extras.reversed()))
     }
 
     @Test
@@ -56,7 +63,7 @@ class SubjectTest {
     @Test
     fun `чужой ответ не записывается, свой — записывается`() = runBlocking {
         val written = mutableListOf<String>()
-        val stale = writeIfStillAsked(asked, { asked.copy(second = null) }) {
+        val stale = writeIfStillAsked(asked, { asked.copy(extras = emptyList()) }) {
             written += "чужое"
             "записано"
         }

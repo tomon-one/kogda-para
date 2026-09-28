@@ -3,7 +3,11 @@ package ru.whensclass.data
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
@@ -13,6 +17,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.notify.Notifications
@@ -62,16 +67,17 @@ fun weekStart(today: java.time.LocalDate = ru.whensclass.widget.collegeToday()):
 internal data class Subject(
     val teacher: Boolean,
     val id: String?,
-    val second: String?,
+    /** Остальные выбранные группы, id по порядку. */
+    val extras: List<String> = emptyList(),
 )
 
 /**
  * Записать ответ, только если он всё ещё про то, о чём спрашивали.
  *
  * Кто выбран сейчас, спрашиваем заново прямо перед записью, и всё, что пишет
- * на телефон, — внутри [write]. Подгруппа входит в сравнение наравне с ролью и
- * группой: запрос, начатый до её смены, приносил склейку с прежней соседкой и
- * записывал её поверх новой. `null` — ответ чужой, записано ничего не было.
+ * на телефон, — внутри [write]. Остальные группы входят в сравнение наравне с
+ * ролью и своей: запрос, начатый до их смены, приносил пары прежних и
+ * записывал их поверх новых. `null` — ответ чужой, записано ничего не было.
  */
 internal suspend fun <T : Any> writeIfStillAsked(
     asked: Subject,
@@ -139,10 +145,31 @@ class ScheduleRepository(
         }
         .flowOn(Dispatchers.Default)
 
+    /** Остальные выбранные группы по порядку. */
+    val extraGroups: Flow<List<ExtraGroup>> = store.extraGroups.distinctUntilChanged()
+
+    /** Их расписания, id → снимок. */
+    private val extraSchedules: Flow<Map<String, ScheduleDto>> = store.extraSchedulesJson
+        .distinctUntilChanged()
+        .map { body ->
+            body?.let { runCatching { json.decodeFromString<Map<String, ScheduleDto>>(it) }.getOrNull() }
+                .orEmpty()
+        }
+        .flowOn(Dispatchers.Default)
+
+    /**
+     * Для экрана: своё расписание вместе с парами остальных выбранных групп
+     * ([combineGroups]). Пропавшая из таблицы группа держит своё место в
+     * значках, но её прежних пар не показываем: они могли уже поменяться.
+     */
+    val shownSchedule: Flow<ScheduleDto?> = combine(schedule, extraGroups, extraSchedules) { main, extras, saved ->
+        main?.let { combineGroups(it, extras.map { group -> group.name to saved[group.id]?.takeUnless { group.gone } }) }
+    }.flowOn(Dispatchers.Default)
+
     val fetchedAt: Flow<Long> = store.fetchedAt
 
     /**
-     * Чьё расписание мы сейчас просим: роль, выбранный и соседняя подгруппа.
+     * Чьё расписание мы сейчас просим: роль, выбранный и остальные группы.
      *
      * Запрос идёт по сети секунды, и за это время человек успевает сменить
      * группу или роль. Пришедший ответ тогда чужой, и записывать его нельзя —
@@ -154,7 +181,7 @@ class ScheduleRepository(
         return Subject(
             teacher = teacher,
             id = if (teacher) store.teacherId.first() else store.currentGroupId(),
-            second = store.currentSecondGroupId(),
+            extras = store.currentExtraGroups().map { it.id },
         )
     }
 
@@ -262,54 +289,89 @@ class ScheduleRepository(
     }.getOrDefault(false)
 
     /**
-     * Добавить пары соседней подгруппы, если она выбрана.
+     * Расписания остальных выбранных групп — разом.
      *
-     * Не достучались до неё — показываем своё расписание как есть: без пары
-     * соседей человек всё же обойдётся, а без своих пар — нет.
+     * Не достучались до какой-то — у неё остаётся прежний снимок: своё
+     * расписание от этого не зависит, а экран с прежними чужими парами лучше
+     * пустого места.
      */
-    private suspend fun withSecondGroup(
-        mine: ScheduleDto, serverOk: Boolean, from: java.time.LocalDate,
-    ): Merged {
-        val second = store.currentSecondGroupId() ?: return Merged(mine, whole = true)
-        val extra = try {
-            api.schedule(second, from = from, days = DAYS)
-        } catch (error: HttpFailure) {
-            // 404 при здоровом сервере — соседки больше нет в таблице. Раньше
-            // это было неотличимо от сети: пары соседки молча пропадали, а
-            // обрубок навсегда выключал уведомления.
-            if (error.code == 404 && serverOk &&
-                store.noteSecondNotFound(System.currentTimeMillis())
-            ) {
-                return Merged(mine, whole = true, secondGone = store.secondGroupName.first() ?: second)
+    private suspend fun fetchExtras(
+        extras: List<ExtraGroup>, serverOk: Boolean, from: java.time.LocalDate,
+    ): Extras = coroutineScope {
+        val answers = extras.map { group ->
+            async { group to runCatching { api.schedule(group.id, from = from, days = DAYS) } }
+        }.awaitAll()
+        val result = Extras()
+        for ((group, answer) in answers) {
+            val schedule = answer.getOrElse { error ->
+                if (error is CancellationException) throw error
+                // 404 при здоровом сервере — группы больше нет в таблице. Это не
+                // сеть: её пары молча пропадали бы, а причины никто не узнал бы.
+                if (error is HttpFailure && error.code == 404 && serverOk &&
+                    store.noteExtraNotFound(group.id, System.currentTimeMillis())
+                ) {
+                    result.gone += group
+                }
+                continue
             }
-            return Merged(mine, whole = false)
-        } catch (error: Exception) {
-            return Merged(mine, whole = false)
+            result.found += group.id
+            result.schedules[group.id] = schedule
+            // Группу переименовали: сервер ответил под новым id. Записать его
+            // здесь нельзя — сверка «не сменил ли человек выбор, пока шёл
+            // запрос» сочла бы это чужим ответом. Запишется после неё.
+            if (schedule.groupId != group.id) result.renamed[group.id] = schedule.groupId to schedule.groupName
         }
-        store.clearSecondNotFound()
-        // Соседку переименовали: сервер ответил под новым id. Записать его
-        // прямо здесь нельзя — сверка «не сменил ли человек выбор, пока шёл
-        // запрос» сочла бы это чужим ответом. Отдаём наверх, запишется после.
-        val renamed = extra.takeIf { it.groupId != second }?.let { it.groupId to it.groupName }
-        return Merged(mergeSecondGroup(mine, extra), whole = true, secondRenamed = renamed)
+        result
+    }
+
+    /** Снимка какой-то из остальных групп нет или он не про эту неделю — её пары пора принести. */
+    private suspend fun extrasMissing(groups: List<ExtraGroup>): Boolean {
+        val asked = groups.filterNot { it.gone }
+        if (asked.isEmpty()) return false
+        val saved = extraSchedules.first()
+        return asked.any { !coversToday(saved[it.id]) }
     }
 
     /**
-     * Расписание и признак того, что склейка удалась целиком.
-     *
-     * Когда запрос за парами соседней подгруппы не прошёл, мы показываем своё
-     * расписание без них — так лучше, чем ничего. Но сравнивать такой обрубок с
-     * прежним полным снимком нельзя: разница выглядит как отмена, и человеку
-     * уходило уведомление «убрали 3 пару» на пару, которая никуда не делась.
+     * Записать принесённое остальными группами — внутри сверки выбора.
+     * Переименованные — под новым id, пропавшие — отметкой и, если просили,
+     * уведомлением, не ответившие — с прежним снимком.
      */
-    private data class Merged(
-        val schedule: ScheduleDto,
-        val whole: Boolean,
-        /** Новые id и имя соседней подгруппы, если её переименовали. */
-        val secondRenamed: Pair<String, String>? = null,
-        /** Имя соседней подгруппы, которой больше нет в таблице (подтверждено). */
-        val secondGone: String? = null,
-    )
+    private suspend fun writeExtras(extras: Extras) {
+        extras.renamed.forEach { (old, new) -> store.adoptExtra(old, new.first, new.second) }
+        store.clearExtrasNotFound(extras.found.map { extras.renamed[it]?.first ?: it }.toSet())
+        extras.gone.forEach { group ->
+            // Выбор не стираем, а отмечаем: вернётся группа — вернутся и её
+            // пары. Сказать — один раз и только тому, кто просил сообщать.
+            if (store.markExtraGone(group.id) && store.notifyGroupsGoneEnabled()) {
+                Notifications.subgroupGone(
+                    context,
+                    "Группы ${group.name} сейчас нет в таблице",
+                    "Её пары пока не показываются и вернутся сами, когда она " +
+                        "появится. Если её переименовали — выберите заново в настройках.",
+                )
+            }
+        }
+        if (extras.schedules.isEmpty()) return
+        val keep = store.currentExtraGroups().map { it.id }.toSet()
+        val saved = extraSchedules.first().toMutableMap()
+        extras.schedules.forEach { (id, schedule) ->
+            saved.remove(id)
+            saved[extras.renamed[id]?.first ?: id] = schedule
+        }
+        store.putExtraSchedules(json.encodeToString(saved.filterKeys { it in keep }))
+    }
+
+    /** Что принесли остальные группы. */
+    private class Extras {
+        val schedules = mutableMapOf<String, ScheduleDto>()
+        /** Прежний id → новые id и имя. */
+        val renamed = mutableMapOf<String, Pair<String, String>>()
+        /** Ответили — отметки о пропаже снять. */
+        val found = mutableSetOf<String>()
+        /** Пропажа подтверждена этим заходом. */
+        val gone = mutableListOf<ExtraGroup>()
+    }
 
     /**
      * Списки групп и преподавателей: сохранённый — сразу и без сети, свежий —
@@ -387,15 +449,27 @@ class ScheduleRepository(
     }
 
     /**
-     * Соседняя подгруппа выбрана или снята (`group` = null). Свои пары на
-     * телефоне остаются — без пар прежней соседки, — и без связи экран не
-     * пустеет.
+     * Добавить группы к остальным — в конец, без своей и без повторов, пока
+     * влезает [MAX_GROUPS]. Их пары придут с обновлением; виджеты и
+     * напоминания они не трогают.
      */
-    suspend fun selectSecondGroup(group: GroupDto?) {
-        val saved = schedule.first()
-        val ownOnly = saved?.takeIf { !store.teacherMode() }?.let { json.encodeToString(it.ownOnly()) }
-        store.setSecondGroup(group?.id, group?.name, ownOnly)
-        afterSelection()
+    suspend fun addExtraGroups(groups: List<GroupDto>) {
+        val current = store.currentExtraGroups()
+        val own = store.currentGroupId()
+        val added = groups
+            .filter { group -> group.id != own && current.none { it.id == group.id } }
+            .distinctBy { it.id }
+            .map { ExtraGroup(it.id, it.name) }
+        if (added.isEmpty()) return
+        store.setExtraGroups(current + added)
+        if (refresh(force = true) is RefreshResult.Failed) {
+            ru.whensclass.work.SyncWorker.now(context)
+        }
+    }
+
+    /** Убрать группу из остальных — вместе с её парами на экране, сразу и без сети. */
+    suspend fun removeExtraGroup(id: String) {
+        store.setExtraGroups(store.currentExtraGroups().filter { it.id != id })
     }
 
     /**
@@ -439,10 +513,13 @@ class ScheduleRepository(
         refreshLock.withLock { refreshOnce(force) }
 
     private suspend fun refreshOnce(force: Boolean): RefreshResult = withContext(Dispatchers.IO) {
+        // Снимок сборок до 0.1.4 лежит склеенным с парами соседки: сравнить
+        // его со своими парами значило бы объявить её пары отменёнными.
+        store.migrateGroups()
         val asked = subject()
         val teacherMode = asked.teacher
         val subject = asked.id
-        val second = asked.second
+        val extraGroups = if (teacherMode) emptyList() else store.currentExtraGroups().filter { it.id in asked.extras }
         if (subject == null) return@withContext RefreshResult.NoGroup
         // Неделя — одна на весь заход: запрос, начатый до полуночи воскресенья
         // и кончившийся после, записывал окно прошлой недели с меткой новой.
@@ -457,9 +534,9 @@ class ScheduleRepository(
                 // восьмым днём прошлого окна, gen на сервере тот же — и до
                 // первой правки таблицы приложение показывало один понедельник.
                 store.windowFrom() != windowMark(from) ||
-                // Обрубок без пар соседки держался до следующей правки
-                // таблицы: gen тот же — «уже свежее».
-                store.schedulePartial()
+                // Группу только что добавили или её снимок не дошёл: gen тот
+                // же — «уже свежее», и её пар не было бы до правки таблицы.
+                extrasMissing(extraGroups)
             // Состояние сервера спрашиваем всегда, даже когда идём за
             // расписанием напрямую. Раньше /v1/meta пропускался ровно в
             // тех случаях, ради которых состояние и нужно: при ручном
@@ -513,14 +590,9 @@ class ScheduleRepository(
             // Ответил и сервер, и тот, кому не ответил /v1/meta: отметка «не
             // отвечает» снимается любым удачным ответом.
             store.clearUnreachable()
-            val merged = if (teacherMode) {
-                Merged(fresh, whole = true)
-            } else {
-                withSecondGroup(fresh, serverOk = meta?.status == "ok", from = from)
-            }
-            val full = merged.schedule
+            val extras = fetchExtras(extraGroups, serverOk = meta?.status == "ok", from = from)
 
-            // Пока шёл запрос, человек мог сменить группу, роль или подгруппу.
+            // Пока шёл запрос, человек мог сменить группу, роль или остальные группы.
             // Тогда пришедшее расписание — чужое, и записывать его нельзя: оно
             // молча возвращало на экран прежние пары поверх только что выбранных.
             // Всё, что пишет, — внутри writeIfStillAsked: сверку не забыть и не
@@ -534,50 +606,23 @@ class ScheduleRepository(
                     if (teacherMode) store.adoptTeacher(fresh.groupId, fresh.groupName)
                     else store.adoptGroup(fresh.groupId, fresh.groupName)
                 }
-                merged.secondRenamed?.let { (id, name) -> store.adoptSecondGroup(id, name) }
-                merged.secondGone?.let { name ->
-                    // Не стираем выбор, а отмечаем: вернётся соседка — вернутся и
-                    // её пары. Сказать — один раз, своим
-                    // уведомлением и только тому, кто просил сообщать.
-                    if (store.markSecondGone() && store.notifySubgroupEnabled()) {
-                        Notifications.subgroupGone(
-                            context,
-                            "Соседней подгруппы $name сейчас нет в таблице",
-                            "Её пары пока не показываются и вернутся сами, когда она " +
-                                "появится. Если её переименовали — выберите заново в настройках.",
-                        )
-                    }
-                }
+                writeExtras(extras)
 
                 val previous = schedule.first()
-                val previousPartial = store.schedulePartial()
                 // Окна не было — снимок записан сборкой до 81-й, где обрубок не
                 // помечался: сравнивать с ним нельзя, «добавилась пара» было бы
                 // ложным.
                 val comparable = store.windowFrom() != null
-                store.putSchedule(
-                    json.encodeToString(full), full.generatedAt,
-                    partial = !merged.whole, windowFrom = windowMark(from),
-                )
+                store.putSchedule(json.encodeToString(fresh), fresh.generatedAt, windowFrom = windowMark(from))
                 // Записанное — уже на телефоне. Объявить и переставить будильники
                 // надо и тогда, когда корутину отменили посреди (ушли из
                 // приложения): раньше это глоталось как Failed, изменение не
                 // объявлялось никогда, а будильник об отменённой паре срабатывал.
                 withContext(NonCancellable) {
                     updateWidgets()
-                    // Об изменениях — только по сопоставимому. Обрубок без пар
-                    // соседней подгруппы отличается от целого так же, как отмена:
-                    // сравнивать целое с обрубком нельзя. Раньше обрубок
-                    // записывался, а следующее целое объявляло давние пары соседки
-                    // «добавившимися». Если прежнее — обрубок
-                    // или соседка пропала, сравниваем свои пары со своими: так и
-                    // при её пропаже говорим об отменах своих.
-                    when {
-                        !comparable -> Unit
-                        previousPartial || merged.secondGone != null ->
-                            announceChanges(previous?.ownOnly(), fresh, adopted)
-                        merged.whole -> announceChanges(previous, full, adopted)
-                    }
+                    // Об изменениях — только своей группы: остальные на экране
+                    // для справки, и уведомлять о каждой их замене — шум.
+                    if (comparable) announceChanges(previous, fresh, adopted)
                     LessonAlarms.reschedule(context)
                     // И будильник к звонку: он считается по сетке из снимка, а при
                     // первом запуске её ещё нет. Взведённый в WhensClassApp по
