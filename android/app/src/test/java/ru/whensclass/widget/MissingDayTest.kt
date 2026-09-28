@@ -1,6 +1,5 @@
 package ru.whensclass.widget
 
-import java.time.Duration
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,13 +33,10 @@ class MissingDayTest {
             days = listOfNotNull(first, last).map { DayDto(date = it) },
         )
 
-    private val fresh = System.currentTimeMillis()
-    private val old = System.currentTimeMillis() - Duration.ofHours(13).toMillis()
-
     @Test
     fun `будень внутри окна и листа — выходной, и таблица не нужна`() {
         val answer = missingDay(
-            schedule("2026-09-02", "2026-09-19", "2026-09-12", "2026-09-19"), monday, fresh, false,
+            schedule("2026-09-02", "2026-09-19", "2026-09-12", "2026-09-19"), monday, false,
         )
         assertEquals("Выходной", answer.text)
         assertFalse("колледж уже ответил про этот день", answer.toSource)
@@ -49,7 +45,7 @@ class MissingDayTest {
     @Test
     fun `воскресенье — выходной, даже за краем листа`() {
         // cov кончается субботой — так каждое воскресенье до новой недели.
-        val answer = missingDay(schedule("2026-09-07", "2026-09-12"), sunday, fresh, false)
+        val answer = missingDay(schedule("2026-09-07", "2026-09-12"), sunday, false)
         assertEquals("Выходной", answer.text)
     }
 
@@ -60,23 +56,21 @@ class MissingDayTest {
         val tuesday = LocalDate.of(2026, 9, 15)
         val window = schedule("2026-09-02", "2026-09-19", "2026-09-07", "2026-09-14")
         assertEquals(
-            "Данные устарели",
-            missingDay(window, tuesday, old, false).text,
-        )
-        assertEquals(
             "Сбой: расписание не обновляется",
-            missingDay(window, tuesday, fresh, true).text,
+            missingDay(window, tuesday, true).text,
         )
-        // Свежие данные, сервер цел, а дня всё равно нет на телефоне — «не загружено», не «выходной».
+        // Сервер цел, а дня нет на телефоне — «не загружено», не «выходной».
+        // Давность данных сама по себе не «устарели»: красное — только сбой
+        // (Tomon 28.09).
         assertEquals(
             "Расписание на этот день не загружено",
-            missingDay(window, tuesday, fresh, false).text,
+            missingDay(window, tuesday, false).text,
         )
     }
 
     @Test
     fun `день за краем листа — зовём в таблицу`() {
-        val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, fresh, false)
+        val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, false)
         assertEquals("Расписание на этот день ещё не опубликовано", answer.text)
         // Утверждение о колледже, которое приложение проверить не может: так же
         // выглядит и наш промах с поиском листа. Значит — выход к источнику.
@@ -85,24 +79,9 @@ class MissingDayTest {
 
     @Test
     fun `сбой сервера называем сбоем, а не отсутствием расписания`() {
-        val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, fresh, true)
+        val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, true)
         assertEquals("Сбой: расписание не обновляется", answer.text)
         assertTrue(answer.toSource)
-    }
-
-    @Test
-    fun `при сбое не советуем обновиться, даже если данные успели постареть`() {
-        val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, old, true)
-        // «Нажмите на время в шапке» здесь было бы отправкой к кнопке,
-        // которая при сбое сервера ничего не изменит.
-        assertEquals("Сбой: расписание не обновляется", answer.text)
-    }
-
-    @Test
-    fun `старые данные без сбоя — предлагаем обновиться`() {
-        val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, old, false)
-        assertEquals("Данные устарели", answer.text)
-        assertFalse("сначала стоит просто обновиться", answer.toSource)
     }
 
     @Test
@@ -110,7 +89,7 @@ class MissingDayTest {
         // Раньше воскресенье отвечало «выходной» первой проверкой и для
         // недели: «Выходной: пар в эти дни нет» без выхода к таблице (разбор
         // текстов 27.09).
-        val answer = missingDay(schedule("2026-09-07", "2026-09-12"), sunday, fresh, false, week = true)
+        val answer = missingDay(schedule("2026-09-07", "2026-09-12"), sunday, false, week = true)
         assertEquals("Расписание на эти дни ещё не опубликовано", answer.text)
         assertTrue(answer.toSource)
     }

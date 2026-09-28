@@ -28,14 +28,13 @@ fun collegeToday(): LocalDate = LocalDate.now(COLLEGE_ZONE)
 
 /**
  * Ближайший момент, когда содержимое меняется само: звонок (начало или конец
- * пары) сегодня позже `now`, полночь с минутой — или [also] (момент, когда
- * данные станут несвежими).
+ * пары) сегодня позже `now` или полночь с минутой.
  *
  * Полночь — ближайшие 00:01, а не завтрашние: будильник, заведённый в первую
  * минуту суток, перешагивал сегодняшние 00:01 и вставал на первый звонок, и
  * листание «на завтра» держалось до 09:00.
  */
-fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime, also: LocalDateTime? = null): LocalDateTime {
+fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime): LocalDateTime {
     val midnight = now.toLocalDate().atTime(LocalTime.of(0, 1))
         .let { if (it.isAfter(now)) it else it.plusDays(1) }
     val bell = bells.values.flatten()
@@ -43,7 +42,7 @@ fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime, also: LocalDa
         .map { now.toLocalDate().atTime(it) }
         .filter { it.isAfter(now) }
         .minOrNull()
-    return listOfNotNull(bell, midnight, also?.takeIf { it.isAfter(now) }).min()
+    return listOfNotNull(bell, midnight).min()
 }
 
 /** Короткая подпись дня для виджета: «сегодня, 7 сентября», «пт, 11 сентября». */
@@ -135,13 +134,6 @@ fun formatFetchedShort(millis: Long, nowMillis: Long = System.currentTimeMillis(
         else -> moment.format(DateTimeFormatter.ofPattern("d MMM", RU))
     }
 }
-
-/** Через сколько данные несвежие — тогда виджет об этом говорит. */
-val STALE_AFTER: Duration = Duration.ofHours(12)
-
-/** Данные считаем несвежими через полсуток. [nowMillis] — см. [formatFetchedShort]. */
-fun isStale(millis: Long, nowMillis: Long = System.currentTimeMillis()): Boolean =
-    millis > 0 && nowMillis - millis > STALE_AFTER.toMillis()
 
 /** Момент `now` в миллисекундах — для шапок виджетов, которые получают время колледжа. */
 fun millisOf(now: LocalDateTime): Long = now.atZone(COLLEGE_ZONE).toInstant().toEpochMilli()

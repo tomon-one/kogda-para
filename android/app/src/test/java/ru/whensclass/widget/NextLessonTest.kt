@@ -76,21 +76,18 @@ class NextLessonTest {
     @Test
     fun `пар нет дальше — но почему`() {
         val now = LocalDateTime.of(2026, 9, 26, 19, 0).toLocalDate()
-        val fresh = System.currentTimeMillis()
-        val old = fresh - 13 * 3600 * 1000L
         val endOfSheet = schedule(cov = "2026-09-26")
         assertNull(nextLesson(endOfSheet, now.atTime(19, 0)))
-        assertEquals("Дальше расписание ещё не опубликовано", noNextLesson("ИСП-924/1", endOfSheet, now, fresh, false))
-        assertEquals("Сбой: расписание не обновляется", noNextLesson("ИСП-924/1", endOfSheet, now, fresh, true))
-        assertEquals("Данные устарели", noNextLesson("ИСП-924/1", endOfSheet, now, old, false))
+        assertEquals("Дальше расписание ещё не опубликовано", noNextLesson("ИСП-924/1", endOfSheet, now, false))
+        assertEquals("Сбой: расписание не обновляется", noNextLesson("ИСП-924/1", endOfSheet, now, true))
         // Лист идёт дальше скачанной недели, а в ней пар больше нет: не «дальше
         // пар нет» (за краем недели они есть), а до какого дня их нет (разбор
         // текстов 27.09).
         val window = schedule(now to emptyList(), now.plusDays(2) to emptyList(), cov = "2026-10-10")
-        assertEquals("Пар нет по пн, 28 сент.", noNextLesson("ИСП-924/1", window, now, fresh, false))
+        assertEquals("Пар нет по пн, 28 сент.", noNextLesson("ИСП-924/1", window, now, false))
         assertEquals(
             "Откройте приложение и выберите группу или себя",
-            noNextLesson(null, null, now, fresh, false),
+            noNextLesson(null, null, now, false),
         )
     }
 

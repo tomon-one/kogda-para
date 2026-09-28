@@ -35,18 +35,12 @@ object MidnightUpdater {
      * Ближайший момент, когда виджет должен перерисоваться.
      *
      * Начала и концы пар берутся из сетки звонков, лежащей вместе с расписанием.
-     * Если её нет, остаётся полночь — ждать больше нечего. И момент, когда
-     * данные станут несвежими: время в шапках краснеет в нём, а не на
-     * следующем звонке или в полночь.
+     * Если её нет, остаётся полночь — ждать больше нечего.
      */
     suspend fun nextMoment(context: Context): LocalDateTime {
         val state = runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()
         val bells = state?.let { ScheduleWidget.parse(it.scheduleJson)?.bells }.orEmpty()
-        val staleAt = state?.fetchedAt?.takeIf { it > 0 }?.let {
-            java.time.Instant.ofEpochMilli(it).plus(ru.whensclass.widget.STALE_AFTER)
-                .atZone(ru.whensclass.widget.COLLEGE_ZONE).toLocalDateTime()
-        }
-        return ru.whensclass.widget.nextTick(bells, ru.whensclass.widget.collegeNow(), staleAt)
+        return ru.whensclass.widget.nextTick(bells, ru.whensclass.widget.collegeNow())
     }
 
     suspend fun schedule(context: Context) {

@@ -82,15 +82,6 @@ class DayFormatTest {
     }
 
     @Test
-    fun `свежесть данных считается от полусуток`() {
-        val now = System.currentTimeMillis()
-        assertTrue(!isStale(now))
-        assertTrue(isStale(now - 13 * 60 * 60 * 1000L))
-        // Данных нет вовсе — это не «устарели».
-        assertTrue(!isStale(0))
-    }
-
-    @Test
     fun `короткое время для шапки виджета`() {
         assertEquals("—", formatFetchedShort(0))
         val now = formatFetchedShort(System.currentTimeMillis())

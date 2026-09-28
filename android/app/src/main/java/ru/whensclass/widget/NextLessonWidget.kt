@@ -91,9 +91,7 @@ class NextLessonWidget : GlanceAppWidget() {
             ) {
                 if (lesson == null || next == null) {
                     Text(
-                        noNextLesson(
-                            state?.groupName, schedule, today, state?.fetchedAt ?: 0L, broken,
-                        ),
+                        noNextLesson(state?.groupName, schedule, today, broken),
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
                     if (state?.groupName == null) {
@@ -153,14 +151,11 @@ class NextLessonWidget : GlanceAppWidget() {
                 // здесь значит соврать. Первым словом, а не хвостом: в хвосте
                 // однострочной шапки «сбой» уходил в многоточие, и оставался
                 // красный цвет без причины.
-                // Несвежие данные — тоже первым словом: дневной и недельный
-                // красят время в шапке, а маленький уверенно показывал пару из
-                // позавчерашнего снимка (разбор текстов 27.09).
-                val stale = isStale(state?.fetchedAt ?: 0L)
+                // Красное — только сбой на сервере: старые данные без сбоя
+                // (телефон долго без сети) не «устарело» (Tomon 28.09).
                 val status = when {
                     gone -> "нет в таблице · "
                     broken -> "сбой · "
-                    stale -> "устарело · "
                     else -> ""
                 }
                 // Три строки не влезают в низкую клетку при крупном шрифте, и
@@ -179,7 +174,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            broken || gone || stale -> colors.error
+                            broken || gone -> colors.error
                             ongoing -> colors.accent
                             else -> colors.textDim
                         },
@@ -264,22 +259,20 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
 
 /**
  * Что сказать, когда ближайшей пары нет. «Дальше пар нет» — только если лист
- * покрывает неделю вперёд: иначе это «ещё не опубликовано», «устарели» или
- * «сбой», как у дневного виджета. Раньше «дальше пар нет» стояло и в субботу
+ * покрывает неделю вперёд: иначе это «ещё не опубликовано» или «сбой», как
+ * у дневного виджета. Раньше «дальше пар нет» стояло и в субботу
  * перед неопубликованной неделей — ровно то, от чего чинили 24 сентября.
  */
 internal fun noNextLesson(
     groupName: String?,
     schedule: ScheduleDto?,
     today: LocalDate,
-    fetchedAt: Long,
     broken: Boolean,
 ): String {
     // «…группу или себя»: виджет ставит и преподаватель (разбор текстов 27.09).
     if (groupName == null) return "Откройте приложение и выберите группу или себя"
     if (schedule == null) return "Расписание не загружено"
     if (broken) return "Сбой: расписание не обновляется"
-    if (isStale(fetchedAt)) return "Данные устарели"
     val end = schedule.coverage.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     if (end == null || end.isBefore(today.plusDays(6))) return "Дальше расписание ещё не опубликовано"
     // Пары ищутся только в скачанной неделе, а лист идёт дальше и там пары

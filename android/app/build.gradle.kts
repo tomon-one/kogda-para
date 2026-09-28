@@ -21,8 +21,8 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт:
         // по нему приложение узнаёт о новой сборке на сервере.
-        versionCode = 4
-        versionName = "pr-Зерно.0.1.3"
+        versionCode = 5
+        versionName = "pr-Зерно.0.1.4"
     }
     // Tested-сборка (docs/versions.md, «Tested»): отдельное приложение рядом с
     // основным, на нём автор проверяет новое до выкладки всем. Её номер —

@@ -481,6 +481,7 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            Link("Сайт для айфона и браузера", "https://kogda-para-nsk.ru")
             Link("Нашли ошибку? Напишите автору в Telegram", "https://t.me/toomonn")
             ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth())
             Link("GitHub автора", "https://github.com/tomon-one")
