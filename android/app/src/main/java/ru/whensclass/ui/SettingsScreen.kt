@@ -39,6 +39,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -187,7 +188,7 @@ fun SettingsScreen(
             else if (groupsByName) shortLabels(listOf(groupName.orEmpty()) + extraGroups.map { it.name })
             else (1..extraGroups.size + 1).map { it.toString() }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (marks != null) GroupMark(marks[0], own = true)
+                if (marks != null) GroupMark(marks[0], own = true, modifier = Modifier.widthIn(max = MARK_IN_ROW))
                 Text(
                     groupName ?: "не выбрано",
                     style = MaterialTheme.typography.bodyLarge,
@@ -204,24 +205,31 @@ fun SettingsScreen(
             if (!teacherMode) {
                 // Остальные группы — любые, до шести вместе со своей (Tomon
                 // 28.09). Значок — тот же, что под временем пар.
+                // С ключом: без него после «Убрать» или «Добавить» строка
+                // следующей группы вставала на место ушедшей и забирала её
+                // подсветку нажатия (Tomon 28.09).
                 extraGroups.forEachIndexed { index, group ->
-                    GroupRow(
-                        name = group.name + if (group.gone) " — нет в таблице" else "",
-                        mark = marks?.getOrNull(index + 1),
-                        action = "Убрать",
-                        onAction = { onRemoveGroup(group.id) },
-                    )
+                    key(group.id) {
+                        GroupRow(
+                            name = group.name + if (group.gone) " — нет в таблице" else "",
+                            mark = marks?.getOrNull(index + 1),
+                            action = "Убрать",
+                            onAction = { onRemoveGroup(group.id) },
+                        )
+                    }
                 }
                 // Подгруппы своей группы — строками с «Добавить», как у
                 // добавленных «Убрать»: две кнопки рядом выходили разной
                 // высоты (Tomon 28.09).
                 subgroups.forEach { group ->
-                    GroupRow(
-                        name = group.name,
-                        note = "подгруппа вашей группы",
-                        action = "Добавить",
-                        onAction = { onAddSubgroups(listOf(group)) },
-                    )
+                    key(group.id) {
+                        GroupRow(
+                            name = group.name,
+                            note = "подгруппа вашей группы",
+                            action = "Добавить",
+                            onAction = { onAddSubgroups(listOf(group)) },
+                        )
+                    }
                 }
                 if (extraGroups.size < ru.whensclass.data.MAX_GROUPS - 1) {
                     ActionButton(
@@ -548,6 +556,9 @@ private fun Link(text: String, url: String) {
 /** Ширина кнопок раздела «Группа»: «Сменить» и «Добавить» — одного размера. */
 private val GROUP_BUTTON = 112.dp
 
+/** Самый широкий значок группы у названия в разделе «Группа». */
+private val MARK_IN_ROW = 88.dp
+
 /** Строка группы в разделе «Группа»: название, пометка и одна кнопка. */
 @Composable
 private fun GroupRow(
@@ -561,7 +572,9 @@ private fun GroupRow(
         modifier = Modifier.padding(top = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (mark != null) GroupMark(mark, own = false)
+        // Длинное название в значке — многоточием: целиком оно и так рядом,
+        // а значок во всю строку сжимал его до столбика (Tomon 28.09).
+        if (mark != null) GroupMark(mark, own = false, modifier = Modifier.widthIn(max = MARK_IN_ROW))
         Column(modifier = Modifier.weight(1f).padding(start = if (mark != null) 10.dp else 0.dp, end = 8.dp)) {
             Text(name, style = MaterialTheme.typography.bodyLarge)
             if (note != null) {

@@ -51,14 +51,16 @@ export function settingsScreen(app) {
       : extras.concat([null]).map(function (g, i) { return String(i + 1); });
 
   var group = [row(
-    h('span', { class: 'group-name' }, marks ? groupMark(marks[0], true) : null, own ? own.name : 'не выбрано'),
+    h('span', { class: 'group-name' }, marks ? groupMark(marks[0], true) : null,
+      h('span', { class: 'group-name-text' }, own ? own.name : 'не выбрано')),
     null,
     actionButton(teacherMode ? 'Выбрать заново' : 'Сменить', function () { app.go(teacherMode ? 'pick/self' : 'pick'); }, 'fixed'))];
   if (!teacherMode) {
     // Остальные группы — любые, до шести вместе со своей (Tomon 28.09).
     extras.forEach(function (g, i) {
       group.push(row(
-        h('span', { class: 'group-name' }, marks ? groupMark(marks[i + 1], false) : null, g.name + (g.gone ? ' — нет в таблице' : '')),
+        h('span', { class: 'group-name' }, marks ? groupMark(marks[i + 1], false) : null,
+          h('span', { class: 'group-name-text' }, g.name + (g.gone ? ' — нет в таблице' : ''))),
         null,
         actionButton('Убрать', function () { app.removeExtra(g.id); }, 'fixed', 'remove:' + g.id)));
     });

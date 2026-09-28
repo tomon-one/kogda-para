@@ -53,14 +53,14 @@ fun GroupMarks(slots: List<Int>, names: List<String>, byName: Boolean, modifier:
 
 /** Один значок: своя группа — закрашенный красный, другая — бледно-красный. */
 @Composable
-fun GroupMark(label: String, own: Boolean) {
+fun GroupMark(label: String, own: Boolean, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(4.dp)
     // Растёт со шрифтом, как колонка времени: подпись в sp, значок в dp.
     val side = MARK * LocalDensity.current.fontScale.coerceAtLeast(1f)
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
+        modifier = modifier
             .height(side)
             .defaultMinSize(minWidth = side)
             .background(if (own) colors.primary else colors.primary.copy(alpha = 0.12f), shape)
