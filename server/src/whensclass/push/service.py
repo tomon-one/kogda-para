@@ -19,8 +19,10 @@ import json
 import logging
 import pathlib
 import threading
+import time
 import urllib.parse
 import zoneinfo
+from typing import NamedTuple
 
 import httpx
 
@@ -47,6 +49,21 @@ MAX_SUBSCRIPTIONS = 20000
 REMIND_MIN, REMIND_MAX = 10, 240
 # Изменения про сегодня и завтра: через сутки новость уже не нужна.
 CHANGES_TTL = 12 * 3600
+# Сообщение целиком — до 4 КБ зашифрованным (Apple, RFC 8291: 3993 байта
+# открытого текста); с запасом.
+MAX_PAYLOAD = 3000
+MAX_LINE = 300
+# Одна повторная попытка на 429 и 5xx: через Retry-After, но не дольше двух минут.
+RETRY_AFTER = 30
+RETRY_MAX = 120
+
+
+class Job(NamedTuple):
+    sub: dict
+    message: dict
+    ttl: int
+    # Позже этого (секунды эпохи) повторять незачем: пара уже началась.
+    deadline: float | None = None
 
 
 def endpoint_allowed(endpoint: str) -> bool:
@@ -94,6 +111,10 @@ def parse_subscription(body: object) -> dict:
     changes_on = body.get("changes", False)
     if not isinstance(changes_on, bool):
         raise BadSubscription("changes — true или false")
+    # Какой сайт подписан — туда и ведёт нажатие на уведомление.
+    site = body.get("site", "main")
+    if site not in ("main", "tested"):
+        raise BadSubscription("site — main или tested")
     return {
         "endpoint": endpoint,
         "p256dh": webpush.b64encode(p256dh),
@@ -102,7 +123,16 @@ def parse_subscription(body: object) -> dict:
         "id": subject,
         "changes": changes_on,
         "remind": remind,
+        "site": site,
     }
+
+
+def parse_keys(body: object) -> dict:
+    """Новый адрес и ключи — для переноса подписки (POST /v1/push/move)."""
+    if not isinstance(body, dict) or not isinstance(body.get("old"), str):
+        raise BadSubscription("нужны old, endpoint и keys")
+    full = parse_subscription({**body, "kind": "group", "id": "-"})
+    return {"endpoint": full["endpoint"], "p256dh": full["p256dh"], "auth": full["auth"]}
 
 
 class Push:
@@ -120,6 +150,8 @@ class Push:
         # писать на диск каждую минуту.
         self._reminded: set[tuple[str, str, int]] = set()
         self._reminded_day: str | None = None
+        # Отложить повтор: в тестах подменяется.
+        self._later = _timer
 
     @property
     def enabled(self) -> bool:
@@ -161,8 +193,21 @@ class Push:
                  "новая" if new else "обновлена", _host(sub["endpoint"]),
                  "да" if sub["changes"] else "нет", sub["remind"] or "нет", len(self._subs))
         if new:
-            self._dispatch([(sub, {"t": "hello", "title": "Уведомления включены",
-                                   "body": welcome_text(sub)}, 3600)])
+            self._dispatch([Job(sub, message(sub, "hello", "Уведомления включены",
+                                             welcome_text(sub)), 3600)])
+        return True
+
+    def move(self, old: str, fresh: dict) -> bool:
+        """Браузер сменил подписку сам (pushsubscriptionchange): прежний выбор —
+        на новый адрес. Знать прежний адрес — и есть право: он секретен."""
+        with self._lock:
+            record = self._subs.pop(old, None)
+            if record is None:
+                return False
+            self._subs[fresh["endpoint"]] = {**record, **fresh}
+            self._save()
+        log.info("подписка на уведомления перенесена браузером: %s -> %s",
+                 _host(old), _host(fresh["endpoint"]))
         return True
 
     def unsubscribe(self, endpoint: str, why: str = "выключили") -> None:
@@ -181,27 +226,46 @@ class Push:
 
     # --- рассылка ------------------------------------------------------------
 
-    def _send(self, sub: dict, message: dict, ttl: int) -> None:
+    def _send(self, job: Job, attempt: int = 0) -> None:
         if self.vapid is None:
             return
-        urgency = "high" if message.get("t") == "lesson" else "normal"
+        sub = job.sub
+        kind = job.message["notification"]["data"]["t"]
         try:
-            status = webpush.send(
-                self._client, self.vapid, sub["endpoint"], sub["p256dh"], sub["auth"], message, ttl,
-                urgency=urgency,
+            result = webpush.send(
+                self._client, self.vapid, sub["endpoint"], sub["p256dh"], sub["auth"],
+                job.message, job.ttl, urgency="high" if kind == "lesson" else "normal",
             )
         except (httpx.HTTPError, ValueError) as exc:
             # Адрес — только хост: путь подписки и есть её секрет.
             log.warning("уведомление не ушло (%s): %s", _host(sub["endpoint"]), type(exc).__name__)
+            self._retry(job, attempt, None)
             return
-        if status in webpush.GONE:
-            self.unsubscribe(sub["endpoint"], why=f"служба рассылки ответила {status}")
-        elif status >= 300:
-            log.warning("служба рассылки %s ответила %s", _host(sub["endpoint"]), status)
+        if result.status < 300:
+            return
+        said = f"{result.status}" + (f" {result.reason}" if result.reason else "")
+        if result.status in webpush.GONE or result.reason == "VapidPkHashMismatch":
+            # Подписки нет или она под другим ключом — слать дальше незачем;
+            # страница при открытии подпишется заново.
+            self.unsubscribe(sub["endpoint"], why=f"служба рассылки ответила {said}")
+            return
+        log.warning("служба рассылки %s ответила %s (%s)", _host(sub["endpoint"]), said, kind)
+        if result.status in webpush.RETRY:
+            self._retry(job, attempt, result.retry_after)
 
-    def _dispatch(self, jobs: list[tuple[dict, dict, int]]) -> None:
-        for sub, message, ttl in jobs:
-            self._pool.submit(self._send, sub, message, ttl)
+    def _retry(self, job: Job, attempt: int, after: int | None) -> None:
+        """Одна повторная попытка; напоминание — только пока пара не началась."""
+        if attempt > 0:
+            return
+        delay = min(max(after or RETRY_AFTER, 1), RETRY_MAX)
+        if job.deadline is not None and time.time() + delay >= job.deadline:
+            return
+        again = job._replace(ttl=max(60, job.ttl - delay))
+        self._later(delay, lambda: self._pool.submit(self._send, again, attempt + 1))
+
+    def _dispatch(self, jobs: list[Job]) -> None:
+        for job in jobs:
+            self._pool.submit(self._send, job)
 
     # --- изменения -----------------------------------------------------------
 
@@ -227,8 +291,7 @@ class Push:
         for sub in subs:
             lines = lines_for.get((sub["kind"], sub["id"]))
             if lines:
-                jobs.append((sub, {"t": "changes", "title": "Расписание изменилось",
-                                   "lines": lines}, CHANGES_TTL))
+                jobs.append(Job(sub, changes_message(sub, lines), CHANGES_TTL))
         log.info("изменения в расписании: %d субъектов, %d уведомлений", len(lines_for), len(jobs))
         self._dispatch(jobs)
 
@@ -259,19 +322,65 @@ class Push:
                 if mark in self._reminded:
                     continue
                 self._reminded.add(mark)
-                start = alarm["start"].replace(tzinfo=zone)
-                end = alarm["end"].replace(tzinfo=zone)
-                jobs.append((sub, {
-                    "t": "lesson",
-                    "title": alarm["title"],
-                    "subject": alarm["subject"],
-                    "body": alarm["text"],
-                    "start": int(start.timestamp() * 1000),
-                    "end": int(end.timestamp() * 1000),
-                }, max(60, int((alarm["start"] - now).total_seconds()))))
+                start = alarm["start"].replace(tzinfo=zone).timestamp()
+                end = alarm["end"].replace(tzinfo=zone).timestamp()
+                jobs.append(Job(
+                    sub,
+                    message(sub, "lesson", alarm["title"], alarm["text"], {
+                        "subject": alarm["subject"],
+                        "start": int(start * 1000),
+                        "end": int(end * 1000),
+                    }),
+                    max(60, int((alarm["start"] - now).total_seconds())),
+                    deadline=start,
+                ))
         if jobs:
             log.info("напоминания о паре: %d", len(jobs))
             self._dispatch(jobs)
+
+
+def _timer(delay: float, action) -> None:
+    timer = threading.Timer(delay, action)
+    timer.daemon = True
+    timer.start()
+
+
+def message(sub: dict, kind: str, title: str, body: str, data: dict | None = None) -> dict:
+    """Сообщение в декларативном формате Apple (iOS 18.4+, поиск 28.09):
+    сервис-воркер показывает его сам, а не проснулся или упал — айфон покажет
+    это же и не отзовёт подписку за «невидимое» уведомление. Chrome и Firefox
+    получают тот же JSON в сервис-воркер как обычные данные.
+
+    tag на айфоне уведомления не заменяет (WebKit 258922) — склеивает строки и
+    закрывает прежнее сервис-воркер.
+    """
+    return {
+        "web_push": 8030,
+        "notification": {
+            "title": title,
+            "body": body,
+            "navigate": site_url(sub),
+            "tag": kind,
+            "data": {"t": kind, **(data or {})},
+        },
+        "mutable": True,
+    }
+
+
+def changes_message(sub: dict, lines: list[list[str]]) -> dict:
+    """Изменения: строки — текстом, их дни — рядом, чтобы сервис-воркер склеил
+    с висящим. Не влезает в MAX_PAYLOAD — старые строки прочь, как в шторке."""
+    kept = [[day, text[:MAX_LINE]] for day, text in lines]
+    while True:
+        out = message(sub, "changes", "Расписание изменилось", "\n".join(t for _, t in kept),
+                      {"days": [d for d, _ in kept]})
+        if len(kept) == 1 or len(json.dumps(out, ensure_ascii=False).encode("utf-8")) <= MAX_PAYLOAD:
+            return out
+        kept = kept[1:]
+
+
+def site_url(sub: dict) -> str:
+    return f"https://{settings.domain}/" + ("tested/" if sub.get("site") == "tested" else "")
 
 
 def _host(endpoint: str) -> str:

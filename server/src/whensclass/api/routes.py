@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
+import urllib.parse
 import zoneinfo
 
 from fastapi import APIRouter, Query, Request, Response
 
 from ..config import settings
 from ..domain.teachers import spelling_twin
-from ..push.service import BadSubscription, parse_subscription
+from ..push.service import BadSubscription, parse_keys, parse_subscription
 from ..service.bells import BELLS
 from ..service.refresher import state_dir
 from .etag import etag_for, matches
@@ -33,6 +35,7 @@ from .releases import CHANNELS, latest_release
 # GET и HEAD: nginx пропускает оба, а сторожа по коду ответа ходят HEAD-ом —
 # на @router.get служба отвечала им 405.
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 # Лист кончился больше этого назад — каникулы (канарейка — так же).
@@ -317,9 +320,12 @@ async def push_subscribe(request: Request) -> Response:
     push = request.app.state.push
     if not push.enabled:
         return _error(404, "уведомления сайта не настроены")
+    body = None
     try:
-        sub = parse_subscription(await _json_body(request))
+        body = await _json_body(request)
+        sub = parse_subscription(body)
     except BadSubscription as exc:
+        _rejected(body, exc)
         return _error(422, str(exc))
     store = request.app.state.store
     if store.snapshot is None:
@@ -333,6 +339,36 @@ async def push_subscribe(request: Request) -> Response:
         return _error(404, "группа не найдена" if sub["kind"] == "group" else "преподаватель не найден")
     if not push.subscribe(sub, _today()):
         return _error(503, "подписок слишком много")
+    return Response(status_code=204)
+
+
+def _rejected(body: object, exc: Exception) -> None:
+    """Отвергнутая подписка — в журнал хост её службы рассылки (не адрес): вдруг у
+    какого-то браузера служба своя и её нет в списке (поиск 28.09)."""
+    endpoint = body.get("endpoint") if isinstance(body, dict) else None
+    host = None
+    if isinstance(endpoint, str):
+        try:
+            host = urllib.parse.urlsplit(endpoint).hostname
+        except ValueError:
+            host = None
+    log.info("подписка на уведомления отвергнута (%s): %s", host or "без адреса", exc)
+
+
+@router.post("/v1/push/move")
+async def push_move(request: Request) -> Response:
+    """Браузер сменил подписку сам: сервис-воркер переносит прежний выбор на новую."""
+    push = request.app.state.push
+    if not push.enabled:
+        return _error(404, "уведомления сайта не настроены")
+    body = None
+    try:
+        body = await _json_body(request)
+        fresh = parse_keys(body)
+    except BadSubscription as exc:
+        _rejected(body, exc)
+        return _error(422, str(exc))
+    push.move(body["old"], fresh)
     return Response(status_code=204)
 
 

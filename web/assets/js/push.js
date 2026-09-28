@@ -14,6 +14,8 @@ var TIMEOUT_MS = 30000;
 // Раз в сутки подписка пересылается службе, даже если ничего не менялось:
 // браузер мог сменить её сам, служба — потерять.
 var RESYNC_MS = 24 * 60 * 60 * 1000;
+// Куда вести нажатие на уведомление: корень или /tested/.
+var SITE = store.CHANNEL === 'tested' ? 'tested' : 'main';
 
 export var REMIND_CHOICES = [10, 15, 20, 30, 45, 60, 90, 120, 180, 240];
 
@@ -147,10 +149,11 @@ export function update(next, who) {
       id: who.id,
       changes: !!next.changes,
       remind: next.remind || 0,
+      site: SITE,
     }).then(function () {
       store.set(KEY, {
         changes: !!next.changes, remind: next.remind || 0,
-        kind: who.kind, id: who.id, key: found.key, sent: Date.now(),
+        kind: who.kind, id: who.id, key: found.key, site: SITE, sent: Date.now(),
       });
       return choice();
     });
@@ -182,7 +185,8 @@ export function sync(who) {
   if (!saved || !enabled() || !who) return Promise.resolve(false);
   if (blocker()) return Promise.resolve(false);
   if (Notification.permission !== 'granted') return Promise.resolve(false);
-  var moved = saved.kind !== who.kind || saved.id !== who.id;
+  // Подписки до 29.09 не знали сайта — переслать сразу, а не через сутки.
+  var moved = saved.kind !== who.kind || saved.id !== who.id || saved.site !== SITE;
   if (!moved && Date.now() - (saved.sent || 0) < RESYNC_MS) return Promise.resolve(false);
   return update(choice(), who).then(function () { return true; }, function () { return false; });
 }
