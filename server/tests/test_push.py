@@ -316,6 +316,17 @@ def snapshots(fixture_csv):
     return before, build_index(before), after, build_index(after), day, first
 
 
+def test_new_subscription_gets_a_hello_once(tmp_path):
+    push = Recorder(tmp_path, _vapid())
+    day = dt.date(2026, 9, 29)
+    push.subscribe(service.parse_subscription(_body()), day)
+    push.subscribe(service.parse_subscription(_body(remind=30)), day)
+    assert [m["t"] for _, m, _ in push.sent] == ["hello"]
+    assert push.sent[0][1]["body"] == (
+        "Сюда будут приходить отмены и замены на сегодня и завтра и напоминания о паре."
+    )
+
+
 def test_after_refresh_tells_only_subscribers_of_that_group(tmp_path, snapshots):
     before, bt, after, at, day, first = snapshots
     push = Recorder(tmp_path, _vapid())
@@ -324,6 +335,7 @@ def test_after_refresh_tells_only_subscribers_of_that_group(tmp_path, snapshots)
         _body(id="isp-924-1", endpoint="https://web.push.apple.com/other")), day)
     push.subscribe(service.parse_subscription(
         _body(id="isp-924-2", endpoint="https://web.push.apple.com/quiet", changes=False)), day)
+    push.sent.clear()
     push.after_refresh(before, bt, after, at, day)
     assert len(push.sent) == 1
     sub, message, ttl = push.sent[0]
@@ -338,6 +350,7 @@ def test_reminder_goes_once_at_its_minute(tmp_path, snapshots):
     _, _, after, at, day, _ = snapshots
     push = Recorder(tmp_path, _vapid())
     push.subscribe(service.parse_subscription(_body(id="isp-924-2", changes=False, remind=20)), day)
+    push.sent.clear()
     payload = service._payload(after, at, ("group", "isp-924-2"), day)
     first = changes.reminders(payload, 20, day)[0]
     push.remind(after, at, now=first["at"] - dt.timedelta(minutes=1))
@@ -354,6 +367,7 @@ def test_without_key_nothing_is_sent(tmp_path, snapshots):
     before, bt, after, at, day, _ = snapshots
     push = Recorder(tmp_path, None)
     push.subscribe(service.parse_subscription(_body(id="isp-924-2")), day)
+    push.sent.clear()
     push.after_refresh(before, bt, after, at, day)
     assert push.sent == []
 
@@ -372,7 +386,8 @@ def api(tmp_path, fixture_csv, monkeypatch):
     app = FastAPI()
     app.include_router(routes.router)
     app.state.store = FakeStore(parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE))
-    app.state.push = service.Push(tmp_path, _vapid())
+    # Recorder, а не Push: тест не должен слать в настоящую службу рассылки.
+    app.state.push = Recorder(tmp_path, _vapid())
     return TestClient(app), app.state.push
 
 
