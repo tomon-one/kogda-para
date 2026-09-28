@@ -881,8 +881,12 @@ p a, .point a { text-decoration: underline; }
 
   /* Дышит медленно и мягко у краёв, как в приложении (NowDot): резкое
      мигание отвлекало. Только прозрачностью: сжатие шестипиксельной точки
-     дёргалось по пикселям. */
-  .now-label::before { animation: pulse 2.4s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+     дёргалось по пикселям. Свой слой — мигание идёт мимо основного потока
+     страницы, и его работа точку не придерживает. */
+  .now-label::before {
+    animation: pulse 2.4s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+    will-change: opacity;
+  }
 
   .snackbar { animation: snack-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
   .snackbar.hide { animation: snack-out 0.18s ease-in both; }
