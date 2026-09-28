@@ -11,7 +11,7 @@ var BUILD = '__BUILD__';
 var PREFIX = 'kogda-para ' + self.registration.scope + ' ';
 var CACHE = PREFIX + BUILD;
 
-// Все файлы сайта, кроме превью ссылки (assets/og.png): его берут
+// Все файлы сайта, кроме превью ссылки (assets/og.jpg): его берут
 // мессенджеры. Тест web/tests/files.test.mjs сверяет список с каталогом.
 var FILES = [
   './',
