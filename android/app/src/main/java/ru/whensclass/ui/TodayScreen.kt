@@ -56,6 +56,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.animation.core.Animatable
+import android.provider.Settings as SystemSettings
+import androidx.compose.animation.core.EaseInOutSine
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -859,11 +865,15 @@ private fun LessonRow(
                 )
             }
             if (isNow) {
-                Text(
-                    "идёт сейчас",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    NowDot()
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        "идёт сейчас",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
 
@@ -1308,4 +1318,35 @@ internal fun explainMissing(
         return true
     }
     return false
+}
+
+/**
+ * Точка у «идёт сейчас» — медленно дышит, как на сайте: 2,4 с на вдох и
+ * выдох, мягко у краёв, только прозрачностью — сжатие шестипиксельной точки
+ * дёргалось. С выключенными в системе анимациями стоит на месте.
+ */
+@Composable
+private fun NowDot() {
+    val context = LocalContext.current
+    val still = remember {
+        SystemSettings.Global.getFloat(context.contentResolver, SystemSettings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    }
+    val color = MaterialTheme.colorScheme.primary
+    if (still) {
+        Box(Modifier.size(6.dp).background(color, CircleShape))
+        return
+    }
+    val breath by rememberInfiniteTransition(label = "идёт сейчас").animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(tween(1200, easing = EaseInOutSine), RepeatMode.Reverse),
+        label = "точка",
+    )
+    Box(
+        Modifier
+            .size(6.dp)
+            // Значение читается при отрисовке слоя: дыхание не пересобирает строку.
+            .graphicsLayer { alpha = 0.35f + 0.65f * breath }
+            .background(color, CircleShape),
+    )
 }

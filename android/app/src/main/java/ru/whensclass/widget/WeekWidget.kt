@@ -121,13 +121,12 @@ class WeekWidget : GlanceAppWidget() {
                     // старше сегодняшнего виджет выбрасывает, и при непустом
                     // days под шапкой оставалась пустота без единого слова.
                     // Пустая неделя — как пустой день у дневного виджета: сбой,
-                    // устаревшие данные или «не опубликовано» с выходом к таблице.
+                    // «не загружено» или «не опубликовано» с выходом к таблице.
                     // Раньше всегда «нажмите на время в шапке», хотя при сбое и
                     // при неопубликованном листе обновление не поможет.
                     weekDays(days, today).isEmpty() -> {
                         val missing = missingDay(
-                            schedule, today, state?.fetchedAt ?: 0L,
-                            state?.serverBroken == true, week = true,
+                            schedule, today, state?.serverBroken == true, week = true,
                         )
                         MissingHint(
                             missing.text, colors,
@@ -219,7 +218,7 @@ private fun Header(
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || serverBroken || gone || isStale(fetchedAt, nowMillis) -> colors.error
+                            failed || serverBroken || gone -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },

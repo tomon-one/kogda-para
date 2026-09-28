@@ -44,28 +44,11 @@ class NextTickTest {
     }
 
     @Test
-    fun `момент несвежести — тоже повод перерисовать`() {
-        // Время в шапке краснеет в 19:50, а не в полночь.
-        assertEquals(
-            LocalDateTime.of(2026, 9, 8, 19, 50),
-            nextTick(bells, LocalDateTime.of(2026, 9, 8, 13, 0), also = LocalDateTime.of(2026, 9, 8, 19, 50)),
-        )
-        // Прошедший момент не в счёт.
-        assertEquals(
-            LocalDateTime.of(2026, 9, 9, 0, 1),
-            nextTick(bells, LocalDateTime.of(2026, 9, 8, 13, 0), also = LocalDateTime.of(2026, 9, 8, 7, 50)),
-        )
-    }
-
-    @Test
-    fun `вчера и несвежесть считаются от переданного момента`() {
+    fun `вчера считается от переданного момента`() {
         val fetched = java.time.ZonedDateTime.of(2026, 9, 8, 7, 50, 0, 0, java.time.ZoneId.systemDefault())
             .toInstant().toEpochMilli()
-        val evening = fetched + java.time.Duration.ofHours(12).plusMinutes(1).toMillis()
         val nextDay = fetched + java.time.Duration.ofHours(18).toMillis()
         assertEquals("07:50", formatFetchedShort(fetched, fetched + 60_000))
-        assertEquals(false, isStale(fetched, fetched + 60_000))
-        assertEquals(true, isStale(fetched, evening))
         assertEquals("вчера 07:50", formatFetchedShort(fetched, nextDay))
     }
 }

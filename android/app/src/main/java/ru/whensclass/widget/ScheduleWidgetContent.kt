@@ -116,7 +116,7 @@ fun ScheduleWidgetContent(
             )
             schedule == null -> MissingHint("Расписание ещё не загружено", colors)
             today == null -> {
-                val missing = missingDay(schedule, day, fetchedAt, serverBroken)
+                val missing = missingDay(schedule, day, serverBroken)
                 // К своей колонке и к этому дню, а не в книгу целиком.
                 val link = sheetLink(schedule, day, sourceUrl)
                 MissingHint(
@@ -263,7 +263,7 @@ private fun Header(
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || serverBroken || gone || isStale(fetchedAt, nowMillis) -> colors.error
+                            failed || serverBroken || gone -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },
@@ -442,7 +442,6 @@ internal data class Missing(val text: String, val toSource: Boolean = false, val
 internal fun missingDay(
     schedule: ScheduleDto,
     day: LocalDate,
-    fetchedAt: Long,
     serverBroken: Boolean,
     /** Для недельного виджета — «на эти дни», а не «на этот день». */
     week: Boolean = false,
@@ -471,9 +470,6 @@ internal fun missingDay(
         // Пустой день и наша поломка выглядели одинаково, и человек
         // спокойно ждал расписания, которого мы уже не принесём.
         serverBroken -> Missing("Сбой: расписание не обновляется", toSource = true)
-        // Без «нажмите на время в шапке»: ниже и так «нажмите, чтобы
-        // обновить», и обновляет нажатие на саму надпись.
-        isStale(fetchedAt) -> Missing("Данные устарели")
         // Лист этот день покрывает, а на телефоне его нет — окно не то.
         // Утверждать «выходной» или «не опубликовано» нечем.
         covered -> Missing(
