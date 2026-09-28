@@ -16,11 +16,14 @@ import pathlib
 log = logging.getLogger(__name__)
 
 LATEST = "latest.json"
+# Канал — какое приложение спрашивает: основное или tested-сборка, на которой
+# автор проверяет новое до выкладки всем (docs/versions.md, «Tested»).
+CHANNELS = {"main": LATEST, "tested": "latest-tested.json"}
 
 
-def latest_release(state_dir: pathlib.Path) -> dict | None:
-    """Читает описание последней выложенной сборки. None, если её нет."""
-    path = state_dir / "apk" / LATEST
+def latest_release(state_dir: pathlib.Path, channel: str = "main") -> dict | None:
+    """Читает описание последней выложенной сборки канала. None, если её нет."""
+    path = state_dir / "apk" / CHANNELS[channel]
     try:
         data = json.loads(path.read_text("utf-8"))
     except (OSError, ValueError) as exc:

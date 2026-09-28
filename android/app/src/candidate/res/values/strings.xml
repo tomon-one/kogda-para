@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tested-сборка: названия с пометкой, чтобы на экране и в списке виджетов
+     её не спутать с основной. -->
+<resources>
+    <string name="app_name">Когда пара? tested</string>
+    <string name="widget_day_label">Когда пара? tested — День</string>
+    <string name="widget_week_label">Когда пара? tested — Неделя</string>
+    <string name="widget_next_label">Когда пара? tested — Ближайшая пара</string>
+</resources>

@@ -65,7 +65,8 @@ internal fun newestOnGithub(releases: List<GithubRelease>): ReleaseDto? = releas
     }
     .maxByOrNull { it.versionCode }
 
-private val VERSION_NAME = Regex("""(b|pr|r)-\p{L}+\.(\d+)\.(\d+)\.(\d+)""")
+// «-t2» — tested-сборка (build.gradle.kts): счёт тот же, прежним он не считается.
+private val VERSION_NAME = Regex("""(b|pr|r)-\p{L}+\.(\d+)\.(\d+)\.(\d+)(?:-t\d+)?""")
 
 /**
  * Сборка прежнего счёта. До 27.09.2026 номера дошли до 86-го, а имена были
