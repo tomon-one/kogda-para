@@ -129,6 +129,11 @@ var app = {
     store.set('welcome', true);
     go('pick', true);
   },
+  /** «Вернуться к своему расписанию» — шагом назад, как и «К списку». */
+  toOwn: function () {
+    if (depth > 0) back();
+    else go('', true);
+  },
   /** «К списку» — шагом назад, если пришли из списка, иначе заменой адреса. */
   toList: function (kind) {
     if (depth > 0) back();
@@ -431,14 +436,20 @@ function loadLists(force) {
   });
 }
 
+/** Чужое расписание открыто снова — не старше этого, иначе перезапросить. */
+var OTHER_FRESH_MS = 5 * 60 * 1000;
+
 function loadOther(kind, id) {
   var other = state.other;
-  if (other && other.kind === kind && other.id === id && !other.failed) return;
+  // Тот же и свежий — не качать; иначе показывался снимок первого открытия,
+  // пока жива страница (аудит сайта, W0).
+  if (other && other.kind === kind && other.id === id && !other.failed &&
+    (other.loading || Date.now() - other.at < OTHER_FRESH_MS)) return;
   state.other = { kind: kind, id: id, loading: true, schedule: null };
   repo.otherSchedule(kind, id).then(function (r) {
     if (!state.other || state.other.kind !== kind || state.other.id !== id) return;
     state.other = {
-      kind: kind, id: id, loading: false, schedule: r.schedule || null,
+      kind: kind, id: id, loading: false, schedule: r.schedule || null, at: Date.now(),
       notFound: !!r.notFound, failed: !r.schedule && !r.notFound,
     };
     render();
@@ -635,7 +646,7 @@ window.addEventListener('beforeinstallprompt', function (e) {
 });
 
 function testNotice() {
-  var key = 'wc-test-notice';
+  var key = store.CHANNEL + ':test-notice';
   try {
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
@@ -648,7 +659,15 @@ function testNotice() {
   ], [{ label: 'Понятно', onClick: closeDialog }]);
 }
 
+/**
+ * Счёт — только настоящее открытие, раз за сеанс вкладки: перезагрузка и
+ * возврат «назад» — не новое открытие, как поворот экрана у приложения.
+ */
 function countOpen() {
+  try {
+    if (sessionStorage.getItem(store.CHANNEL + ':counted')) return;
+    sessionStorage.setItem(store.CHANNEL + ':counted', '1');
+  } catch (e) { /* без хранилища сеанса — считать каждый заход */ }
   var tally = app.tally();
   store.set('tally', { opens: tally.opens + 1, since: tally.since || Date.now() });
 }
@@ -665,8 +684,15 @@ function checkWorkerUpdate() {
 }
 
 function registerWorker() {
-  // В разработке файлы меняются на каждом сохранении — кэш только мешал бы.
-  if (build() === 'разработка' || !('serviceWorker' in navigator) || !window.isSecureContext) return;
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+  // В разработке файлы меняются на каждом сохранении — кэш только мешал бы;
+  // воркер, оставшийся от проверки сборки на том же адресе, — снять (аудит, W0).
+  if (build() === 'разработка') {
+    navigator.serviceWorker.getRegistrations().then(function (all) {
+      all.forEach(function (r) { r.unregister(); });
+    }, function () { /* нет — и не надо */ });
+    return;
+  }
   // Сменился воркер при уже работавшем — вышла новая сборка; первый — нет.
   var hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', function () {

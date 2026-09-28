@@ -43,7 +43,7 @@ export function mainScreen(app) {
   } else if (route.kind === 'teachers') {
     if (teacherMode) {
       content.appendChild(h('div', { class: 'back-row' },
-        h('button', { type: 'button', class: 'text-button', onclick: function () { app.go('', true); } },
+        h('button', { type: 'button', class: 'text-button', onclick: app.toOwn },
           'Вернуться к своему расписанию')));
     }
     content.appendChild(othersList(app, 'teachers', teacherMode && own ? own.id : null));
@@ -209,7 +209,9 @@ function chosenView(app, kind, id) {
   var name = known ? known.name : ready && other.schedule ? other.schedule.gn : '';
   var box = h('div', { class: 'chosen' },
     h('div', { class: 'chosen-head' },
-      h('h2', { class: 'chosen-name' }, name),
+      h('div', { class: 'chosen-title' },
+        h('h2', { class: 'chosen-name' }, name),
+        ready && other.at ? h('div', { class: 'fetched' }, formatFetchedAt(other.at)) : null),
       h('button', { type: 'button', class: 'text-button', onclick: function () { app.toList(kind); } }, 'К списку')));
   if (!ready || other.loading) {
     box.appendChild(h('div', { class: 'centered' }, h('div', { class: 'spinner' })));

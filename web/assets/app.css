@@ -141,6 +141,8 @@ p a, .point a { text-decoration: underline; }
   max-width: 640px;
   margin: 0 auto;
   min-height: 100vh;
+  /* На iOS 100vh выше видимой части; где понимают dvh — по видимой. */
+  min-height: 100dvh;
 }
 
 /* ——— шапка ——— */
@@ -425,8 +427,11 @@ p a, .point a { text-decoration: underline; }
 
 .subject.cancelled { text-decoration: line-through; }
 
+/* Вид занятия уходит строкой ниже, а не отнимает место у кабинета: при
+   увеличении номер резался до двух цифр (аудит сайта, W7). */
 .lesson-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   margin-top: 4px;
 }
@@ -605,7 +610,8 @@ p a, .point a { text-decoration: underline; }
   padding: 0 0 8px 4px;
 }
 
-.chosen-name { flex: 1; min-width: 0; font-size: 17px; font-weight: 600; }
+.chosen-title { flex: 1; min-width: 0; }
+.chosen-name { font-size: 17px; font-weight: 600; }
 
 .bottom-bar {
   position: fixed;
