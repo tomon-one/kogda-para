@@ -31,6 +31,8 @@ class ScheduleApi(
     cacheDir: java.io.File,
     private val baseUrl: String = BuildConfig.BASE_URL,
     private val githubApi: String = GITHUB_API,
+    /** «main» — основное приложение, «tested» — сборка для проверки нового (build.gradle.kts). */
+    private val channel: String = BuildConfig.CHANNEL,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -46,10 +48,16 @@ class ScheduleApi(
 
     fun meta(): MetaDto = get("/v1/meta").let(json::decodeFromString)
 
-    fun release(): ReleaseDto = get("/v1/app").let(json::decodeFromString)
+    fun release(): ReleaseDto =
+        get(if (channel == MAIN) "/v1/app" else "/v1/app?channel=$channel").let(json::decodeFromString)
 
-    /** Самая новая сборка среди выпусков на GitHub; null — ни в одном нет файла. */
+    /**
+     * Самая новая сборка среди выпусков на GitHub; null — ни в одном нет файла.
+     * У tested-сборки выпусков нет: на GitHub только основные, а их файл —
+     * другое приложение.
+     */
     fun githubRelease(): ReleaseDto? {
+        if (channel != MAIN) return null
         val request = Request.Builder()
             .url(githubApi.trimEnd('/') + "/repos/$REPO/releases?per_page=10")
             .header("Accept", "application/vnd.github+json")
@@ -152,7 +160,9 @@ class ScheduleApi(
         const val CACHE_BYTES = 2L * 1024 * 1024
         const val GITHUB_API = "https://api.github.com"
         const val REPO = "tomon-one/kogda-para"
-        val OUR_APK = Regex("""/download/kogda-para-\d+\.apk""")
+        const val MAIN = "main"
+        // tested — файлы tested-сборок; чужой пакет всё равно отсечёт genuine().
+        val OUR_APK = Regex("""/download/kogda-para-(tested-)?\d+\.apk""")
         val GITHUB_APK = Regex("""/$REPO/releases/download/[^/]+/kogda-para-\d+\.apk""")
     }
 }

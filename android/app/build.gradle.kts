@@ -24,6 +24,11 @@ android {
         versionCode = 4
         versionName = "pr-Зерно.0.1.3"
     }
+    // Tested-сборка (docs/versions.md, «Tested»): отдельное приложение рядом с
+    // основным, на нём автор проверяет новое до выкладки всем. Её номер —
+    // versionCode × 100 + TESTED_TRY, имя — versionName-tTESTED_TRY: поднять
+    // versionCode и versionName до будущей основной, а TESTED_TRY — с каждой
+    // выложенной tested-сборкой.
 
     signingConfigs {
         create("release") {
@@ -64,6 +69,7 @@ android {
             val url = local.getProperty("WHENSCLASS_BASE_URL")
                 ?: "https://kogda-para-nsk.ru"
             buildConfigField("String", "BASE_URL", "\"$url\"")
+            buildConfigField("String", "CHANNEL", "\"main\"")
         }
         release {
             signingConfig = signingConfigs.getByName("release")
@@ -78,6 +84,17 @@ android {
                 "BASE_URL",
                 "\"https://kogda-para-nsk.ru\"",
             )
+            buildConfigField("String", "CHANNEL", "\"main\"")
+        }
+        create("candidate") {
+            initWith(getByName("release"))
+            // Свой идентификатор — ставится рядом с основным, данные у них
+            // раздельные; название и виджеты — из src/candidate/res. Имя типа — не
+            // «tested»: имена на «test» Gradle не разрешает.
+            applicationIdSuffix = ".tested"
+            // Обновления — своим каналом сервера, без GitHub.
+            buildConfigField("String", "CHANNEL", "\"tested\"")
+            matchingFallbacks += "release"
         }
     }
 
@@ -116,6 +133,18 @@ android {
 
 kotlin {
     jvmToolchain(21)
+}
+
+/** Попытка tested-сборки; см. комментарий у versionCode. */
+val TESTED_TRY = 1
+
+androidComponents {
+    onVariants(selector().withBuildType("candidate")) { variant ->
+        variant.outputs.forEach { output ->
+            output.versionCode.set(output.versionCode.get()!! * 100 + TESTED_TRY)
+            output.versionName.set(output.versionName.get() + "-t$TESTED_TRY")
+        }
+    }
 }
 
 /** Читает файл настроек рядом с проектом: адрес сервера, ключ подписи. */

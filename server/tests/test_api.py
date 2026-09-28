@@ -213,7 +213,7 @@ def test_release_url_is_https(client, monkeypatch):
     """
     from whensclass.api import routes
 
-    monkeypatch.setattr(routes, "latest_release", lambda _: {
+    monkeypatch.setattr(routes, "latest_release", lambda _, channel="main": {
         "versionCode": 1,
         "versionName": "b-Тест.0.0.1",
         "file": "kogda-para-1.apk",
@@ -221,6 +221,24 @@ def test_release_url_is_https(client, monkeypatch):
     body = client.get("/v1/app").json()
     assert body["url"].startswith("https://"), body["url"]
     assert body["url"].endswith("/download/kogda-para-1.apk")
+
+
+def test_tested_channel_has_its_own_release(client, monkeypatch):
+    """Tested-сборка спрашивает свой канал; основное приложение его не видит."""
+    from whensclass.api import routes
+
+    asked = []
+
+    def fake(_, channel="main"):
+        asked.append(channel)
+        return {"versionCode": 401 if channel == "tested" else 4,
+                "versionName": "pr-Зерно.0.1.3", "file": f"kogda-para-{channel}.apk"}
+
+    monkeypatch.setattr(routes, "latest_release", fake)
+    assert client.get("/v1/app").json()["versionCode"] == 4
+    assert client.get("/v1/app?channel=tested").json()["versionCode"] == 401
+    assert client.get("/v1/app?channel=beta").status_code == 404
+    assert asked == ["main", "tested"]
 
 
 def test_teacher_without_lessons_this_sheet_is_not_gone(tmp_path, fixture_csv):

@@ -17,7 +17,7 @@ from ..config import settings
 from ..domain.teachers import spelling_twin
 from ..service.bells import load_bells
 from ..service.refresher import state_dir
-from .releases import latest_release
+from .releases import CHANNELS, latest_release
 from .etag import etag_for, matches
 from .payloads import (
     FILLED_SHARE,
@@ -133,7 +133,11 @@ def healthz(request: Request) -> Response:
 @router.api_route("/v1/app", methods=["GET", "HEAD"])
 def app_release(request: Request) -> Response:
     """Последняя выложенная сборка приложения — чтобы оно знало об обновлении."""
-    release = latest_release(state_dir())
+    channel = request.query_params.get("channel", "main")
+    if channel not in CHANNELS:
+        return Response(status_code=404, content='{"error":"нет такого канала"}',
+                        media_type=JSON)
+    release = latest_release(state_dir(), channel)
     if release is None:
         return Response(status_code=404, content='{"error":"сборка не выложена"}',
                         media_type=JSON)
