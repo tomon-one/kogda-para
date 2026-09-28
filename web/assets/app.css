@@ -879,7 +879,10 @@ p a, .point a { text-decoration: underline; }
     animation-delay: var(--shift, 0ms);
   }
 
-  .now-label::before { animation: pulse 1.6s ease-in-out infinite; }
+  /* Дышит медленно и мягко у краёв, как в приложении (NowDot): резкое
+     мигание отвлекало. Только прозрачностью: сжатие шестипиксельной точки
+     дёргалось по пикселям. */
+  .now-label::before { animation: pulse 2.4s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
 
   .snackbar { animation: snack-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
   .snackbar.hide { animation: snack-out 0.18s ease-in both; }
@@ -953,8 +956,8 @@ p a, .point a { text-decoration: underline; }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: none; }
-  50% { opacity: 0.3; transform: scale(0.7); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 @keyframes snack-in {
