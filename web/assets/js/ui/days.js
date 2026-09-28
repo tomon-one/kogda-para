@@ -101,24 +101,24 @@ function lessonRow(lesson, bells, isNow, key, groups, byName) {
 }
 
 /**
- * Значки выбранных групп под временем (GroupMarks в GroupMarks.kt). Горит у
- * тех, у кого пара есть; своя ярче — так видно совмещённые. Подпись —
- * название (shortLabels) или номер: место в настройках, 1 — своя. Номера — по
- * три в ряд, названия — сколько влезет.
+ * Значки групп под временем (GroupMarks в GroupMarks.kt) — только тех, у кого
+ * пара есть: своя — закрашенным, другие — бледным; пустые рамки путали (Tomon
+ * 28.09). Подпись — название (shortLabels) или номер: место в настройках, 1 —
+ * своя. Номера — по три в ряд, названия — сколько влезет.
  */
 function groupMarks(slots, groups, byName) {
   var whose = slots.slice().sort().map(function (i) { return groups[i]; }).filter(Boolean);
   var labels = byName ? shortLabels(groups) : groups.map(function (g, i) { return String(i + 1); });
   var box = h('div', { class: 'marks' + (byName ? ' names' : ''), role: 'img', 'aria-label': 'Пара у групп: ' + whose.join(', ') });
   labels.forEach(function (label, i) {
-    box.appendChild(groupMark(label, slots.indexOf(i) >= 0, i === 0));
+    if (slots.indexOf(i) >= 0) box.appendChild(groupMark(label, i === 0));
   });
   return box;
 }
 
-/** Один значок: своя — сплошной, другая с этой парой — бледный, без неё — рамка. */
-export function groupMark(label, lit, own) {
-  return h('span', { class: 'mark' + (lit ? ' lit' : '') + (lit && own ? ' own' : ''), 'aria-hidden': 'true' }, String(label));
+/** Один значок: своя группа — закрашенный, другая — бледный. */
+export function groupMark(label, own) {
+  return h('span', { class: 'mark' + (own ? ' own' : ''), 'aria-hidden': 'true' }, String(label));
 }
 
 // Точка у «идёт сейчас» дышит по часам страницы, а не с момента, когда строка
