@@ -140,16 +140,25 @@ class Push:
             log.error("подписки уведомлений не записались: %s", exc)
 
     def subscribe(self, sub: dict, today: dt.date) -> bool:
-        """Записать или заменить подписку. False — мест нет."""
+        """Записать или заменить подписку. False — мест нет.
+
+        Новый адрес — сразу «Уведомления включены»: человек видит, что они
+        доходят, а не ждёт первой отмены пары (Tomon 28.09: проверить на
+        телефоне).
+        """
         with self._lock:
             if not sub["changes"] and not sub["remind"]:
                 self.unsubscribe(sub["endpoint"])
                 return True
-            if sub["endpoint"] not in self._subs and len(self._subs) >= MAX_SUBSCRIPTIONS:
+            new = sub["endpoint"] not in self._subs
+            if new and len(self._subs) >= MAX_SUBSCRIPTIONS:
                 return False
             self._subs[sub["endpoint"]] = {**sub, "since": today.isoformat()}
             self._save()
-            return True
+        if new:
+            self._dispatch([(sub, {"t": "hello", "title": "Уведомления включены",
+                                   "body": welcome_text(sub)}, 3600)])
+        return True
 
     def unsubscribe(self, endpoint: str) -> None:
         with self._lock:
@@ -258,6 +267,15 @@ class Push:
         if jobs:
             log.info("напоминания о паре: %d", len(jobs))
             self._dispatch(jobs)
+
+
+def welcome_text(sub: dict) -> str:
+    what = []
+    if sub["changes"]:
+        what.append("отмены и замены на сегодня и завтра")
+    if sub["remind"]:
+        what.append("напоминания о паре")
+    return "Сюда будут приходить " + " и ".join(what) + "."
 
 
 def _payload(snapshot, teachers, key: tuple[str, str], today: dt.date) -> dict | None:

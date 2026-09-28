@@ -166,7 +166,7 @@ self.addEventListener('push', function (event) {
   }
   var shown = data.t === 'changes' ? showChanges(data)
     : data.t === 'lesson' ? showLesson(data)
-      : self.registration.showNotification('Когда пара?', { body: data.body || '', icon: ICON,
+      : self.registration.showNotification(data.title || 'Когда пара?', { body: data.body || '', icon: ICON,
         data: { url: self.registration.scope } });
   event.waitUntil(shown);
 });
