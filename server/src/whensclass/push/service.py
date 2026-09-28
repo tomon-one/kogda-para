@@ -155,15 +155,22 @@ class Push:
                 return False
             self._subs[sub["endpoint"]] = {**sub, "since": today.isoformat()}
             self._save()
+        # В журнал — служба рассылки и выбор, без адреса и группы: по ним
+        # видно, откуда взялось лишнее «Уведомления включены» (Tomon 28.09).
+        log.info("%s подписка на уведомления: %s, изменения %s, напоминание %s, всего %d",
+                 "новая" if new else "обновлена", _host(sub["endpoint"]),
+                 "да" if sub["changes"] else "нет", sub["remind"] or "нет", len(self._subs))
         if new:
             self._dispatch([(sub, {"t": "hello", "title": "Уведомления включены",
                                    "body": welcome_text(sub)}, 3600)])
         return True
 
-    def unsubscribe(self, endpoint: str) -> None:
+    def unsubscribe(self, endpoint: str, why: str = "выключили") -> None:
         with self._lock:
             if self._subs.pop(endpoint, None) is not None:
                 self._save()
+                log.info("подписка на уведомления снята (%s): %s, осталось %d",
+                         why, _host(endpoint), len(self._subs))
 
     def count(self) -> int:
         return len(self._subs)
@@ -185,14 +192,12 @@ class Push:
             )
         except (httpx.HTTPError, ValueError) as exc:
             # Адрес — только хост: путь подписки и есть её секрет.
-            log.warning("уведомление не ушло (%s): %s",
-                        urllib.parse.urlsplit(sub["endpoint"]).hostname, type(exc).__name__)
+            log.warning("уведомление не ушло (%s): %s", _host(sub["endpoint"]), type(exc).__name__)
             return
         if status in webpush.GONE:
-            self.unsubscribe(sub["endpoint"])
+            self.unsubscribe(sub["endpoint"], why=f"служба рассылки ответила {status}")
         elif status >= 300:
-            log.warning("служба рассылки %s ответила %s",
-                        urllib.parse.urlsplit(sub["endpoint"]).hostname, status)
+            log.warning("служба рассылки %s ответила %s", _host(sub["endpoint"]), status)
 
     def _dispatch(self, jobs: list[tuple[dict, dict, int]]) -> None:
         for sub, message, ttl in jobs:
@@ -267,6 +272,11 @@ class Push:
         if jobs:
             log.info("напоминания о паре: %d", len(jobs))
             self._dispatch(jobs)
+
+
+def _host(endpoint: str) -> str:
+    """Только хост: путь адреса подписки и есть её секрет."""
+    return urllib.parse.urlsplit(endpoint).hostname or "?"
 
 
 def welcome_text(sub: dict) -> str:
