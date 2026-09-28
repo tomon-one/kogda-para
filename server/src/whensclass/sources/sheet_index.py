@@ -24,6 +24,7 @@ from ..parser.csv_schedule import Limits, parse_csv
 from ..service import alerts
 from . import gsheets
 from .gsheets import SheetInfo
+from ..storage.atomic import write_json
 
 log = logging.getLogger(__name__)
 
@@ -63,9 +64,7 @@ class SheetIndex:
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.known, ensure_ascii=False, indent=1), "utf-8")
-        tmp.replace(self.path)
+        write_json(self.path, self.known, indent=1)
 
     def remember(self, title: str, gid: str | None, first: dt.date, last: dt.date) -> None:
         if gid is not None:
@@ -268,7 +267,7 @@ def resolve_window(
     first = resolve_for(start, state_dir, deep=deep)
     sheets = [first]
 
-    if settings.sheet_title or settings.sheet_gid:
+    if settings.sheet_gid:
         return sheets
 
     end = start + dt.timedelta(days=days - 1)
@@ -369,9 +368,7 @@ def _remember_miss(state_dir: pathlib.Path, day: dt.date) -> None:
     misses[day.isoformat()] = now.isoformat()
     try:
         path = _misses_path(state_dir)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(misses), "utf-8")
-        tmp.replace(path)
+        write_json(path, misses)
     except OSError as exc:
         log.warning("память о ненайденном листе не записалась: %s", exc)
 
@@ -385,13 +382,9 @@ def resolve_for(
     Аварийная настройка из окружения перебивает всё. `deep` — искать в сети,
     даже если недавно уже искали и не нашли.
     """
-    if settings.sheet_title and not settings.sheet_gid:
-        # Сбой настройки, не сети: сказать сразу и словами про лист.
-        raise SheetNotFound(
-            "WHENSCLASS_SHEET_TITLE задан без WHENSCLASS_SHEET_GID — лист читается только по gid"
-        )
-    if settings.sheet_title or settings.sheet_gid:
-        return settings.sheet_title or "", settings.sheet_gid
+    if settings.sheet_gid:
+        # Имя — только подпись в ответе и журнале.
+        return f"gid {settings.sheet_gid}", settings.sheet_gid
 
     index = SheetIndex(state_dir)
     remembered = index.covering(day)

@@ -21,7 +21,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .api.routes import router
 from .config import settings
-from .service.bells import load_bells
+from .service.bells import BELLS
 from .service.refresher import Refresher, state_dir
 from .storage.snapshot_store import SnapshotStore
 
@@ -31,15 +31,8 @@ log = logging.getLogger(__name__)
 def before_each_lesson(minutes: int) -> list[tuple[str, tuple[int, int]]]:
     """Во сколько обновляться перед каждой парой: за `minutes` до звонка."""
     out: list[tuple[str, tuple[int, int]]] = []
-    for number, times in sorted(load_bells().items()):
-        start = times[0] if times else None
-        if not start:
-            continue
-        try:
-            hour, minute = (int(x) for x in start.split(":", 1))
-        except ValueError:
-            log.warning("не понял время начала %r у пары %s", start, number)
-            continue
+    for number, (start, _) in sorted(BELLS.items()):
+        hour, minute = (int(x) for x in start.split(":"))
         total = hour * 60 + minute - minutes
         if total < 0:
             continue
@@ -59,12 +52,6 @@ async def lifespan(app: FastAPI):
     logging.getLogger("httpx").setLevel(logging.WARNING)
     directory = state_dir()
     directory.mkdir(parents=True, exist_ok=True)
-
-    if settings.sheet_title and not settings.sheet_gid:
-        log.error(
-            "WHENSCLASS_SHEET_TITLE задан без WHENSCLASS_SHEET_GID: с 14 сентября 2026 "
-            "лист читается только по gid, по имени служба его не найдёт"
-        )
 
     if settings.exit_ssh and not re.fullmatch(r"[^@\s]+@[^:\s]+:\d+", settings.exit_ssh):
         log.error(
@@ -102,16 +89,13 @@ async def lifespan(app: FastAPI):
     # И между делом поглядываем, не появился ли лист новее. Ночного поиска
     # мало: неделю выкладывают среди дня, а узнать об этом лучше в тот же
     # час — переход между листами это самое опасное место в службе.
-    # С ключом такая проверка стоит одного маленького запроса; без ключа
-    # списка листов нет вовсе, поэтому и заводится только с ключом.
-    if settings.sheets_api_key:
-        scheduler.add_job(
-            refresher.look_for_new_sheet,
-            CronTrigger(hour=f"{first}-{last}", minute="*/30"),
-            id="watch-sheets",
-            max_instances=1,
-            coalesce=True,
-        )
+    scheduler.add_job(
+        refresher.look_for_new_sheet,
+        CronTrigger(hour=f"{first}-{last}", minute="*/30"),
+        id="watch-sheets",
+        max_instances=1,
+        coalesce=True,
+    )
 
     # Отдельный заход перед каждой парой: расписание правят и за десять минут
     # до звонка, а как раз в этот момент в него и смотрят.

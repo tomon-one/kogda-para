@@ -25,8 +25,8 @@ from ..parser.csv_schedule import Limits, check_shift, parse_export, shift_seed
 from ..sources import gsheets, sheet_index
 from ..storage import history
 from . import alerts
-from .renames import RenameBook
 from ..storage.snapshot_store import SnapshotStore
+from ..storage.atomic import write_json
 
 log = logging.getLogger(__name__)
 
@@ -47,8 +47,6 @@ class Refresher:
         self.state_dir = state_dir
         self.status = "empty"          # empty | ok | stale
         self.checked_at: dt.datetime | None = None
-        # Кого как переименовали: по старому id отвечаем расписанием нового.
-        self.renames = RenameBook(state_dir)
         # С какого момента и почему не обновляемся. Лежит на диске: службу
         # перезапускают при каждой выкладке, а «лежим с четверга» должно
         # пережить перезапуск, иначе двое суток выглядят как минута.
@@ -135,10 +133,7 @@ class Refresher:
 
     def _save_seen_titles(self) -> None:
         try:
-            tmp = self._seen_path.with_suffix(".tmp")
-            names = sorted(self._seen_titles or ())
-            tmp.write_text(json.dumps(names, ensure_ascii=False), "utf-8")
-            tmp.replace(self._seen_path)
+            write_json(self._seen_path, sorted(self._seen_titles or ()))
         except OSError as exc:
             log.warning("имена листов для слежки не записались: %s", exc)
 
@@ -200,12 +195,6 @@ class Refresher:
                     self._sheets = None
                 self.status = "ok"
                 self._recovered()
-                # Лист тот же — и состав id тот же: переименование, которое
-                # ждёт подтверждения, дождалось его временем.
-                try:
-                    self.renames.tick()
-                except Exception as exc:
-                    log.warning("книга переименований не подтвердилась: %s", exc)
                 return False
 
             parsed = self._parse(texts, today)
@@ -264,13 +253,6 @@ class Refresher:
             )
             self._sheets = None
 
-        previous = self.store.snapshot
-        try:
-            previous_teachers = self.store.teachers
-        except Exception as exc:
-            # Индекс прежнего снимка нужен только книге переименований.
-            log.warning("индекс преподавателей прежнего снимка не собрался: %s", exc)
-            previous_teachers = None
         try:
             self.store.put(snapshot, dt.datetime.now(dt.timezone.utc), teachers=teachers)
         except OSError as exc:
@@ -314,13 +296,6 @@ class Refresher:
                 + ". Присмотреться — не сдвиг ли колонок (руководство по серверу, «Когда что-то "
                 "не так»).",
             )
-        if previous is not None and previous_teachers is not None:
-            try:
-                self.renames.record(previous, snapshot, previous_teachers, self.store.teachers)
-            except Exception as exc:
-                # Книга — удобство поверх расписания, ронять из-за неё
-                # обновление нельзя.
-                log.warning("книга переименований не обновилась: %s", exc)
         log.info(
             "снимок обновлён: лист %r, %d групп, %d пар",
             snapshot.sheet_title, len(snapshot.groups), snapshot.total_lessons(),
@@ -334,12 +309,10 @@ class Refresher:
         перехода между листами — самого опасного места в службе. Раньше новый
         лист искался только ночью, и о неделе, выложенной в пятницу днём, мы
         узнавали в субботу. Три дня форы на починку стоят одного запроса
-        в полчаса.
-
-        Без ключа не работает и не должна: там список листов — это выгрузка
-        книги на два десятка мегабайт.
+        в полчаса. Без ключа Sheets API список листов не получить — тогда
+        просто False.
         """
-        if not settings.sheets_api_key or settings.freeze:
+        if settings.freeze:
             return False
         with self._lock:
             return self._look()
@@ -484,7 +457,6 @@ class Refresher:
             )
             if sent:
                 self._alerted = True
-                self._alerted_kinds[kind] = now
         self._save_failing()
 
     def _recovered(self) -> None:
@@ -503,7 +475,6 @@ class Refresher:
         for kind in FAIL_KINDS:
             alerts.forget(kind)
         self.failing_since, self.last_error, self._alerted = None, None, False
-        self._alerted_kinds = {}
         self._fetch_since = None
         self._fetch_only = True
         self._save_failing()
@@ -513,24 +484,19 @@ class Refresher:
             if self.failing_since is None:
                 self._failing_path.unlink(missing_ok=True)
                 return
-            tmp = self._failing_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({
+            write_json(self._failing_path, {
                 "since": self.failing_since.isoformat(),
                 "error": self.last_error,
                 "fetch_only": self._fetch_only,
                 "alerted": self._alerted,
-                # Когда ушла тревога — по каждому виду: окно тишины живёт в
-                # памяти, и перезапуск посреди сбоя повторял её сразу, а
-                # с одним «последним видом» — тревогу о формате после сетевой.
-                "alerted_kinds": {k: at.isoformat() for k, at in self._alerted_kinds.items()},
                 "fetch_since": self._fetch_since.isoformat() if self._fetch_since else None,
-            }, ensure_ascii=False), "utf-8")
-            tmp.replace(self._failing_path)
+            })
         except OSError as exc:
             log.warning("состояние сбоя не записалось: %s", exc)
 
     def _load_failing(self) -> None:
-        self._alerted_kinds: dict[str, dt.datetime] = {}
+        # Когда уходила тревога каждого вида, помнит alerts.json (keep_in
+        # выше): перезапуск посреди сбоя её не повторит.
         self._fetch_since: dt.datetime | None = None
         try:
             data = json.loads(self._failing_path.read_text("utf-8"))
@@ -539,13 +505,6 @@ class Refresher:
             self._alerted = bool(data.get("alerted"))
             # Старые файлы без признака — сбой не сетевой: показывать как был.
             self._fetch_only = bool(data.get("fetch_only", False))
-            kinds = dict(data.get("alerted_kinds") or {})
-            if data.get("alerted_at") and data.get("alerted_kind"):
-                # Файл до 26.09.2026: одна тревога.
-                kinds.setdefault(data["alerted_kind"], data["alerted_at"])
-            for kind, at in kinds.items():
-                self._alerted_kinds[kind] = dt.datetime.fromisoformat(at)
-                alerts.remember(kind, self._alerted_kinds[kind])
             if data.get("fetch_since"):
                 self._fetch_since = dt.datetime.fromisoformat(data["fetch_since"])
         except (OSError, ValueError, KeyError, TypeError):

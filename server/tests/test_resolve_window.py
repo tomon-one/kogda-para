@@ -139,7 +139,7 @@ def test_manual_override_stops_any_search(tmp_path, index, resolves, monkeypatch
     Её ставят руками, когда поиск сломался, а расписание нужно сегодня, —
     и лезть после этого в книгу было бы прямым непослушанием.
     """
-    monkeypatch.setattr(si.settings, "sheet_title", CURRENT[0])
+    monkeypatch.setattr(si.settings, "sheet_gid", "656498718")
     index(CURRENT, NEXT)
     resolves([CURRENT])
 

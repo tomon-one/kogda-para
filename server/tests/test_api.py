@@ -24,23 +24,9 @@ class FakeStore:
         return self.known.get(teacher_id)
 
 
-class FakeRenames:
-    """Книга переименований: одна группа и один преподаватель под старыми id."""
-
-    groups = {"isp-924-2-old": "isp-924-2"}
-    teachers: dict[str, str] = {}
-
-    def group(self, gid):
-        return self.groups.get(gid)
-
-    def teacher(self, tid):
-        return self.teachers.get(tid)
-
-
 class FakeRefresher:
     status = "ok"
     checked_at = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
-    renames = FakeRenames()
     failing_since = None
     last_error = None
 
@@ -65,20 +51,6 @@ def client(fixture_csv):
     app.state.store = FakeStore(snapshot)
     app.state.refresher = FakeRefresher()
     return TestClient(app)
-
-
-def test_renamed_group_answers_under_its_old_id(client):
-    """Старый id отвечает расписанием новой группы, а в ответе — её новый id.
-
-    По нему приложение перепишет выбор у себя и перестанет зависеть от памяти
-    сервера. Без книги переименований старый id — это 404 и пустой виджет
-    у всей группы.
-    """
-    fresh = client.get("/v1/schedule/isp-924-2?from=2026-09-07&days=3").json()
-    old = client.get("/v1/schedule/isp-924-2-old?from=2026-09-07&days=3")
-    assert old.status_code == 200
-    assert old.json() == fresh
-    assert old.json()["g"] == "isp-924-2"
 
 
 def test_schedule_points_into_the_sheet(client):
@@ -336,31 +308,6 @@ def test_health_is_503_when_today_is_only_a_skeleton(fixture_csv):
     assert "не дописан" in response.json()["reason"]
 
 
-def test_id_waiting_for_rename_confirmation_is_503_not_free_days_or_404(fixture_csv):
-    """Переименование, которое книга распознала,
-    40 минут ждёт подтверждения — и по старому id шли пустые дни. Телефон
-    писал их поверх своих и слал «убрали пару». А 404 через час давал «вас
-    больше нет» — вечером подтверждение ждёт ночи. Теперь «временно»."""
-    snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
-    app = FastAPI()
-    app.include_router(router)
-    store = FakeStore(snapshot, known={"otpusk-o-o": "Отпусков Олег Олегович"})
-    app.state.store = store
-
-    class Renaming(FakeRenames):
-        pending_teachers = {"otpusk-o-o": {"to": "otpuskov-o-o", "seen": 1}}
-        pending_groups = {"isp-924-2-staroe": {"to": "isp-924-2", "seen": 1}}
-
-    refresher = FakeRefresher()
-    refresher.renames = Renaming()
-    app.state.refresher = refresher
-    client = TestClient(app)
-    assert client.get("/v1/teacher/otpusk-o-o?from=2026-09-07&days=3").status_code == 503
-    assert client.get("/v1/schedule/isp-924-2-staroe?from=2026-09-07").status_code == 503
-    assert client.get("/v1/schedule/nikogda-ne-bylo?from=2026-09-07").status_code == 404
-
-
-
 def test_cancelled_lesson_carries_x_and_c(client, fixture_csv):
     """Признаки отмены и причины в JSON не проверял ни один тест —
     выброси их, и отменённые пары у всех пришли бы как обычные."""
@@ -400,26 +347,6 @@ def test_routes_cut_the_unpublished_tail_by_today(monkeypatch):
     assert body["cov"] == ["2026-09-21", "2026-09-26"]
     teacher = client.get("/v1/teacher/ivanov-i-i?from=2026-09-21&days=13").json()
     assert teacher["cov"] == ["2026-09-21", "2026-09-26"]
-
-
-def test_teacher_route_follows_the_rename_book(fixture_csv, monkeypatch):
-    """Обращение /v1/teacher к книге переименований тоже не было
-    закреплено: старый id отвечает расписанием нового, в ответе — новый g."""
-    snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
-    app = FastAPI()
-    app.include_router(router)
-    store = FakeStore(snapshot)
-    app.state.store = store
-    real = next(iter(store.teachers.names))
-
-    class Book(FakeRenames):
-        teachers = {"old-teacher": real}
-
-    refresher = FakeRefresher()
-    refresher.renames = Book()
-    app.state.refresher = refresher
-    body = TestClient(app).get("/v1/teacher/old-teacher?from=2026-09-07&days=3")
-    assert body.status_code == 200 and body.json()["g"] == real
 
 
 def test_broken_snapshot_on_disk_falls_back_to_the_previous(tmp_path, fixture_csv):

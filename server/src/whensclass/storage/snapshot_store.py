@@ -15,6 +15,7 @@ import threading
 
 from ..domain.models import GroupRef, Lesson, SheetPlace, Snapshot
 from ..domain.teachers import TeacherIndex, build_index
+from .atomic import write_json
 
 log = logging.getLogger(__name__)
 
@@ -90,9 +91,7 @@ class SnapshotStore:
         seen = {k: v for k, v in seen.items() if isinstance(v, dict) and v.get("seen", "") >= cutoff}
         self._seen = seen
         try:
-            tmp = self.seen_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(seen, ensure_ascii=False), "utf-8")
-            tmp.replace(self.seen_path)
+            write_json(self.seen_path, seen)
         except OSError as exc:
             # Удобство, а не снимок: из-за него запись снимка не считается неудачной.
             log.warning("список знакомых преподавателей не записался: %s", exc)
@@ -129,9 +128,7 @@ class SnapshotStore:
             except OSError as exc:
                 log.warning("не смог сохранить предыдущий снимок: %s", exc)
         payload = {"generated": generated.isoformat(), "snapshot": _to_dict(snapshot)}
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False), "utf-8")
-        tmp.replace(self.path)  # атомарно: читатель не увидит половину файла
+        write_json(self.path, payload)
 
 
 def _to_dict(snapshot: Snapshot) -> dict:
@@ -197,9 +194,7 @@ def _from_dict(data: dict) -> Snapshot:
                     teachers=tuple(x["teachers"]),
                     room=x["room"],
                     url=x["url"],
-                    # Снимок на диске мог быть записан до того, как
-                    # признак появился: тогда его просто нет.
-                    online=x.get("online", x["url"] is not None),
+                    online=x["online"],
                     cancelled=x["cancelled"],
                     note=x.get("note"),
                 )
