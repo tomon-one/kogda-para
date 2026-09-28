@@ -192,3 +192,19 @@ function copyFallback(text) {
   document.body.removeChild(area);
   return ok;
 }
+
+/** Сайт открыт значком с домашнего экрана, а не во вкладке браузера. */
+export function standalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+    navigator.standalone === true;
+}
+
+/** iPhone и iPad; iPadOS называет себя Mac, но с касаниями. */
+export function isIos() {
+  var ua = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+export function isAndroid() {
+  return /Android/.test(navigator.userAgent || '');
+}

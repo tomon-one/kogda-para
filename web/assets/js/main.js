@@ -157,7 +157,7 @@ var app = {
   loadLists: loadLists,
   refresh: refresh,
   pick: pick,
-  /** Подгруппы своей группы — одной кнопкой, остаёмся в настройках. */
+  /** Подгруппа своей группы из строки «Добавить» — остаёмся в настройках. */
   addExtras: function (groups) {
     repo.addExtras(groups);
     render();

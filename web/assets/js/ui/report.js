@@ -1,7 +1,7 @@
 // Сведения для отчёта (Diagnostics.kt, Report.kt). Никуда сами не уходят:
 // человек смотрит, копирует и отправляет сам.
 
-import { h, dialog, closeDialog, copyText, snackbar } from './dom.js';
+import { h, dialog, closeDialog, copyText, snackbar, standalone } from './dom.js';
 import { VERSION, build } from '../version.js';
 import { CHANNEL, persistent } from '../store.js';
 import { browserZone, formatShort, parseIso } from '../time.js';
@@ -10,10 +10,8 @@ export function reportText(app) {
   var lines = [];
   lines.push('Когда пара? ' + VERSION + (CHANNEL === 'tested' ? ' tested' : '') + ' (' + build() + ')');
   lines.push('Браузер: ' + navigator.userAgent);
-  var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-    navigator.standalone === true;
   lines.push('Экран: ' + window.innerWidth + '×' + window.innerHeight +
-    (standalone ? ', открыт значком' : ', вкладка браузера'));
+    (standalone() ? ', открыт значком' : ', вкладка браузера'));
   var own = app.chosen();
   if (app.isTeacher()) {
     lines.push('Преподаватель: ' + (own ? own.name + ' [' + own.id + ']' : 'не выбран [—]'));

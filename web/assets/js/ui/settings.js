@@ -1,7 +1,9 @@
 // Настройки (SettingsScreen.kt) — без того, чего у сайта нет: виджетов, работы
-// в фоне, уведомлений и обновления приложения.
+// в фоне, уведомлений и обновления приложения. Порядок тот же: группа, своё
+// для этого телефона (значок, приложение), таблица, оформление, данные и «О
+// сайте» (Tomon 28.09).
 
-import { h, icon, actionButton, actionLink, externalLink, snackbar } from './dom.js';
+import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid } from './dom.js';
 import { sheetLink } from '../format.js';
 import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
 import { groupMark } from './days.js';
@@ -95,6 +97,8 @@ export function settingsScreen(app) {
 
   var link = sheetLink(app.saved(), app.now().date, app.server().src_url);
   var install = app.installPrompt();
+  var ios = isIos();
+  var android = !ios && isAndroid();
 
   return h('div', { class: 'screen settings' },
     h('header', { class: 'topbar' },
@@ -103,35 +107,50 @@ export function settingsScreen(app) {
     h('main', { class: 'content cards' },
       section(teacherMode ? 'Преподаватель' : 'Группа', group),
 
-      section('Оформление', segmented(
-        [['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']],
-        app.theme(), app.setTheme)),
+      // Только во вкладке браузера: открытому значком он ни к чему. Шаги — для
+      // этого телефона; есть кнопка браузера — она вместо шагов (разбор 28.09).
+      standalone() ? null : section('Значок на экране', [
+        h('p', null, 'Сайт можно открыть значком с домашнего экрана, как приложение.'),
+        install ? actionButton('Добавить значок', app.install) : null,
+        !install && !android ? h('p', null, 'iPhone и iPad: в Safari «Поделиться» → «На экран „Домой“».') : null,
+        !install && !ios ? h('p', null, 'Android: меню браузера → «Добавить на главный экран».') : null,
+      ]),
+
+      // На айфоне его не поставить.
+      ios ? null : section('Приложение для Android', [
+        h('p', null, 'Виджеты на домашнем экране, напоминания о парах и уведомления об отменах и заменах.'),
+        actionLink('Скачать', '/download/latest.apk'),
+        h('p', { class: 'small' }, externalLink('Как поставить',
+          'https://github.com/tomon-one/kogda-para/blob/master/docs/install.md')),
+      ]),
 
       section('Расписание', [
+        // Дня нет в ответе (воскресенье, каникулы) — ссылка ведёт на ближайший
+        // следующий; у преподавателя — колонка группы первой пары, без пар —
+        // только строка дня (sheetLink).
         h('p', null, 'Сайт забирает его при открытии и раз в час, пока страница открыта; сервер читает ' +
           'таблицу колледжа чаще и перед каждой парой. Кнопка ниже ' +
-          (teacherMode ? 'откроет таблицу на сегодняшнем дне, у колонки группы первой пары.'
-            : 'откроет таблицу на вашей колонке и сегодняшнем дне.')),
+          (teacherMode ? 'откроет таблицу на сегодняшнем дне, а если его в таблице нет — на ближайшем ' +
+            'следующем; в день с парами — у колонки группы первой из них.'
+            : 'откроет таблицу на вашей колонке и сегодняшнем дне, а если его в таблице нет — на ' +
+              'ближайшем следующем.')),
         link ? actionLink('Открыть таблицу колледжа', link)
           : actionButton('Открыть таблицу колледжа', function () { snackbar('Адрес таблицы ещё не получен от сервера'); }),
       ]),
 
-      section('Значок на экране', [
-        h('p', null, 'Сайт можно открыть значком с домашнего экрана, как приложение.'),
-        h('p', null, 'iPhone и iPad: в Safari «Поделиться» → «На экран „Домой“».'),
-        h('p', null, 'Android: меню браузера → «Добавить на главный экран».'),
-        install ? actionButton('Добавить значок', app.install) : null,
-      ]),
+      section('Оформление', segmented(
+        [['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']],
+        app.theme(), app.setTheme)),
 
-      section('Данные', h('p', null, (teacherMode
-        ? 'На сервер уходит выбранное имя, как оно записано в таблице колледжа. Больше ничего: '
-        : 'На сервер уходят только названия вашей группы и других, если вы их выбрали. ' +
-          'Больше ничего: ни имени, ') +
-        'ни номера телефона, ни местоположения. Учётной записи нет, аналитики и рекламы нет, ' +
-        'выбор хранится только в этом браузере. Когда смотрите чужое расписание, серверу уходит, ' +
-        'чьё именно: иначе его неоткуда взять. Всё для вашего удобства.')),
-
-      section('Ответственность', [
+      // Два текста, которые читают один раз, — одной карточкой (Tomon 28.09).
+      section('Данные и ответственность', [
+        h('p', null, (teacherMode
+          ? 'На сервер уходит выбранное имя, как оно записано в таблице колледжа. Больше ничего: '
+          : 'На сервер уходят только названия вашей группы и других, если вы их выбрали. ' +
+            'Больше ничего: ни имени, ') +
+          'ни номера телефона, ни местоположения. Учётной записи нет, аналитики и рекламы нет, ' +
+          'выбор хранится только в этом браузере. Когда смотрите чужое расписание, серверу уходит, ' +
+          'чьё именно: иначе его неоткуда взять. Всё для вашего удобства.'),
         h('p', null, 'Что написано в таблице колледжа, то и покажет сайт: за ошибки, замены и ' +
           'опоздавшие обновления автор не отвечает.'),
         h('p', null, 'Если однажды что-то сломается, автор постарается починить, но сроков не обещает. ' +
@@ -139,23 +158,14 @@ export function settingsScreen(app) {
           'неправильно. Сверяйтесь с таблицей, когда это важно.'),
       ]),
 
-      section('Приложение для Android', [
-        h('p', null, 'Виджеты на домашнем экране, напоминания о парах и уведомления об отменах и заменах.'),
-        actionLink('Скачать', '/download/latest.apk'),
-        h('p', { class: 'small' }, externalLink('Как поставить',
-          'https://github.com/tomon-one/kogda-para/blob/master/docs/install.md')),
-      ]),
-
+      // «Я преподаватель» отсюда убрано: тот же переход — первой строкой
+      // списка, куда ведёт «Сменить» (Tomon 28.09).
       section('О сайте', [
         h('p', null, 'Неофициальный сайт для студентов и преподавателей НГОК.'),
         h('p', null, externalLink('Нашли ошибку? Напишите автору в Telegram', 'https://t.me/toomonn')),
         h('p', null, h('button', { type: 'button', class: 'text-link', 'data-key': 'report', onclick: app.showReport }, 'Сведения для отчёта')),
         h('p', null, externalLink('Исходный код', 'https://github.com/tomon-one/kogda-para')),
         h('p', null, externalLink('GitHub автора', 'https://github.com/tomon-one')),
-        h('p', null, h('button', {
-          type: 'button', class: 'text-link',
-          onclick: function () { app.go(teacherMode ? 'pick' : 'pick/self'); },
-        }, teacherMode ? 'Я студент' : 'Я преподаватель')),
         h('p', { class: 'muted small' }, 'Версия ' + VERSION + (CHANNEL === 'tested' ? ' tested' : '') + ', сборка ' + build()),
         h('p', { class: 'signature' }, 'Создано Tomon'),
       ])));

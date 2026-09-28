@@ -724,17 +724,6 @@ p a, .point a { text-decoration: underline; }
    переносятся, а не вылезают за карточку (аудит, прогон 2). */
 .action.fixed { min-width: 8em; white-space: nowrap; }
 
-.beta {
-  display: inline-block;
-  padding: 0 5px;
-  border: 1px solid var(--primary);
-  border-radius: 6px;
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--primary);
-  vertical-align: 2px;
-}
-
 .segmented {
   display: flex;
   flex-wrap: wrap;
