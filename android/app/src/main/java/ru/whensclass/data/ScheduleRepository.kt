@@ -163,7 +163,11 @@ class ScheduleRepository(
      * значках, но её прежних пар не показываем: они могли уже поменяться.
      */
     val shownSchedule: Flow<ScheduleDto?> = combine(schedule, extraGroups, extraSchedules) { main, extras, saved ->
-        main?.let { combineGroups(it, extras.map { group -> group.name to saved[group.id]?.takeUnless { group.gone } }) }
+        main?.let {
+            // Своя среди остальных бывает только из старого выбора — дважды не показываем.
+            val others = extras.filter { group -> group.id != it.groupId }
+            combineGroups(it, others.map { group -> group.name to saved[group.id]?.takeUnless { group.gone } })
+        }
     }.flowOn(Dispatchers.Default)
 
     val fetchedAt: Flow<Long> = store.fetchedAt

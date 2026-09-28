@@ -126,7 +126,10 @@ export function removeExtra(id) {
 export function migrateGroups() {
   var sub = store.get('second');
   if (!sub && store.get('partial') == null) return;
-  if (sub && !store.get('extras')) {
+  // Прежняя версия давала выбрать соседкой свою же группу — такую не
+  // переносим: она встала бы в список второй раз (Tomon 28.09).
+  var group = store.get('group');
+  if (sub && !store.get('extras') && !(group && group.id === sub.id)) {
     var g = store.get('secondGone');
     store.set('extras', [{ id: sub.id, name: sub.name, gone: !!(g && g.confirmed), goneSince: g ? g.since : null }]);
   }
@@ -205,7 +208,8 @@ function extraSchedules() {
  */
 export function shown() {
   var main = saved();
-  var list = extras();
+  // Своя среди остальных бывает только из старого выбора — дважды не показываем.
+  var list = extras().filter(function (g) { return !main || g.id !== main.g; });
   if (!main || !list.length) return main;
   var schedules = extraSchedules();
   return combineGroups(main, list.map(function (g) { return [g.name, g.gone ? null : schedules[g.id] || null]; }));
