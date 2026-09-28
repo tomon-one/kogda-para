@@ -181,16 +181,17 @@ fun SettingsScreen(
             // Название и кнопка одной строкой: столбиком раздел выходил
             // вдвое выше, а читается так же. Кнопки раздела — одной ширины
             // (Tomon 28.09).
-            // Номера у групп — только когда пары ими и подписаны: названия
-            // и так стоят в строке.
-            val numbered = !teacherMode && extraGroups.isNotEmpty() && !groupsByName
+            // С другими группами у каждой — её значок, как под временем пар:
+            // номер или короткое название (Tomon 28.09).
+            val marks = if (teacherMode || extraGroups.isEmpty()) null
+            else if (groupsByName) shortLabels(listOf(groupName.orEmpty()) + extraGroups.map { it.name })
+            else (1..extraGroups.size + 1).map { it.toString() }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // С другими группами — номер 1, как у значков под временем пар.
-                if (numbered) GroupMark("1", own = true)
+                if (marks != null) GroupMark(marks[0], own = true)
                 Text(
                     groupName ?: "не выбрано",
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f).padding(start = if (numbered) 10.dp else 0.dp, end = 8.dp),
+                    modifier = Modifier.weight(1f).padding(start = if (marks != null) 10.dp else 0.dp, end = 8.dp),
                 )
                 ActionButton(
                     label = if (teacherMode) "Выбрать заново" else "Сменить",
@@ -202,11 +203,11 @@ fun SettingsScreen(
 
             if (!teacherMode) {
                 // Остальные группы — любые, до шести вместе со своей (Tomon
-                // 28.09). Номер — тот же, что у значков под временем пар.
+                // 28.09). Значок — тот же, что под временем пар.
                 extraGroups.forEachIndexed { index, group ->
                     GroupRow(
                         name = group.name + if (group.gone) " — нет в таблице" else "",
-                        mark = if (numbered) "${index + 2}" else null,
+                        mark = marks?.getOrNull(index + 1),
                         action = "Убрать",
                         onAction = { onRemoveGroup(group.id) },
                     )
