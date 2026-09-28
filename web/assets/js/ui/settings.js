@@ -3,7 +3,7 @@
 
 import { h, icon, actionButton, actionLink, externalLink, snackbar } from './dom.js';
 import { sheetLink } from '../format.js';
-import { MAX_GROUPS, subgroupsOf } from '../schedule.js';
+import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
 import { groupMark } from './days.js';
 import { VERSION, build } from '../version.js';
 import { CHANNEL } from '../store.js';
@@ -44,19 +44,21 @@ export function settingsScreen(app) {
   var own = app.chosen();
   var extras = app.extras();
   var byName = app.groupsByName();
-  // Номера у групп — только когда пары ими и подписаны: названия и так в строке.
-  var numbered = !teacherMode && extras.length > 0 && !byName;
+  // С другими группами у каждой — её значок, как под временем пар: номер или
+  // короткое название (Tomon 28.09).
+  var marks = teacherMode || !extras.length ? null
+    : byName ? shortLabels([own ? own.name : ''].concat(extras.map(function (g) { return g.name; })))
+      : extras.concat([null]).map(function (g, i) { return String(i + 1); });
 
-  // С другими группами — номера, как у значков под временем пар; своя — 1.
   var group = [row(
-    h('span', { class: 'group-name' }, numbered ? groupMark(1, true) : null, own ? own.name : 'не выбрано'),
+    h('span', { class: 'group-name' }, marks ? groupMark(marks[0], true) : null, own ? own.name : 'не выбрано'),
     null,
     actionButton(teacherMode ? 'Выбрать заново' : 'Сменить', function () { app.go(teacherMode ? 'pick/self' : 'pick'); }, 'fixed'))];
   if (!teacherMode) {
     // Остальные группы — любые, до шести вместе со своей (Tomon 28.09).
     extras.forEach(function (g, i) {
       group.push(row(
-        h('span', { class: 'group-name' }, numbered ? groupMark(i + 2, false) : null, g.name + (g.gone ? ' — нет в таблице' : '')),
+        h('span', { class: 'group-name' }, marks ? groupMark(marks[i + 1], false) : null, g.name + (g.gone ? ' — нет в таблице' : '')),
         null,
         actionButton('Убрать', function () { app.removeExtra(g.id); }, 'fixed', 'remove:' + g.id)));
     });

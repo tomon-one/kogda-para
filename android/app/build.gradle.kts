@@ -136,7 +136,7 @@ kotlin {
 }
 
 /** Попытка tested-сборки; см. комментарий у versionCode. */
-val TESTED_TRY = 3
+val TESTED_TRY = 4
 
 androidComponents {
     onVariants(selector().withBuildType("candidate")) { variant ->

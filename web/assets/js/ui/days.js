@@ -111,14 +111,17 @@ function groupMarks(slots, groups, byName) {
   var labels = byName ? shortLabels(groups) : groups.map(function (g, i) { return String(i + 1); });
   var box = h('div', { class: 'marks' + (byName ? ' names' : ''), role: 'img', 'aria-label': 'Пара у групп: ' + whose.join(', ') });
   labels.forEach(function (label, i) {
-    if (slots.indexOf(i) >= 0) box.appendChild(groupMark(label, i === 0));
+    if (slots.indexOf(i) >= 0) box.appendChild(groupMark(label, i === 0, groups[i]));
   });
   return box;
 }
 
-/** Один значок: своя группа — закрашенный, другая — бледный. */
-export function groupMark(label, own) {
-  return h('span', { class: 'mark' + (own ? ' own' : ''), 'aria-hidden': 'true' }, String(label));
+/**
+ * Один значок: своя группа — закрашенный, другая — бледный. `name` — полное
+ * название во всплывающей подсказке: длинное в значке обрезано.
+ */
+export function groupMark(label, own, name) {
+  return h('span', { class: 'mark' + (own ? ' own' : ''), 'aria-hidden': 'true', title: name || null }, String(label));
 }
 
 // Точка у «идёт сейчас» дышит по часам страницы, а не с момента, когда строка
