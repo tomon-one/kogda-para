@@ -92,6 +92,9 @@ class Refresher:
         # неудачный заход мог объявить stale поверх только что удавшегося.
         # Замок повторный: слежка за книгой сама зовёт refresh.
         self._lock = threading.RLock()
+        # Кому сказать, что снимок сменился: уведомления сайта (push.service).
+        # (прежний снимок, его преподаватели, новый, его преподаватели, сегодня)
+        self.on_update = None
 
     def refresh(self, today: dt.date | None = None, force: bool = False) -> bool:
         """Перечитывает таблицу. True, если снимок обновился."""
@@ -253,6 +256,7 @@ class Refresher:
             )
             self._sheets = None
 
+        before = (self.store.snapshot, self.store.teachers) if self.on_update else (None, None)
         try:
             self.store.put(snapshot, dt.datetime.now(dt.timezone.utc), teachers=teachers)
         except OSError as exc:
@@ -274,6 +278,7 @@ class Refresher:
             # не уходило, а первый чих сети сразу давал stale. О диске — своя тревога выше.
             self.status = "ok"
             self._recovered()
+            self._announce(before, snapshot, teachers, today)
             return True
         if self._disk_alerted:
             self._disk_alerted = False
@@ -287,6 +292,7 @@ class Refresher:
             history.archive(self.state_dir, gid, text, digest, rejected=dropped)
         self.status = "ok"
         self._recovered()
+        self._announce(before, snapshot, teachers, today)
         if self._suspicions:
             # Лист принят, но похож на сдвиг, которого признак соседа не увидел.
             # Раз в шесть часов, как всё.
@@ -301,6 +307,15 @@ class Refresher:
             snapshot.sheet_title, len(snapshot.groups), snapshot.total_lessons(),
         )
         return True
+
+    def _announce(self, before, snapshot, teachers, today: dt.date) -> None:
+        """Сказать подписчикам об изменениях; их поломка — не поломка обновления."""
+        if self.on_update is None:
+            return
+        try:
+            self.on_update(before[0], before[1], snapshot, teachers, today)
+        except Exception:
+            log.exception("уведомления об изменениях не посчитались")
 
     def look_for_new_sheet(self) -> bool:
         """Не появился ли в книге лист, которого мы ещё не видели.
