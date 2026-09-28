@@ -3,6 +3,8 @@
 
 import { h, icon, actionButton, actionLink, externalLink, snackbar } from './dom.js';
 import { sheetLink } from '../format.js';
+import { MAX_GROUPS, subgroupsOf } from '../schedule.js';
+import { groupMark } from './days.js';
 import { VERSION, build } from '../version.js';
 import { CHANNEL } from '../store.js';
 
@@ -40,18 +42,42 @@ function segmented(options, selected, onPick) {
 export function settingsScreen(app) {
   var teacherMode = app.isTeacher();
   var own = app.chosen();
-  var sub = app.second();
+  var extras = app.extras();
+  var byName = app.groupsByName();
+  // Номера у групп — только когда пары ими и подписаны: названия и так в строке.
+  var numbered = !teacherMode && extras.length > 0 && !byName;
 
-  var group = [row(own ? own.name : 'не выбрано', null,
+  // С другими группами — номера, как у значков под временем пар; своя — 1.
+  var group = [row(
+    h('span', { class: 'group-name' }, numbered ? groupMark(1, true, true) : null, own ? own.name : 'не выбрано'),
+    null,
     actionButton(teacherMode ? 'Выбрать заново' : 'Сменить', function () { app.go(teacherMode ? 'pick/self' : 'pick'); }, 'fixed'))];
   if (!teacherMode) {
-    group.push(row(
-      h('span', null, 'Подгруппа ', h('span', { class: 'beta' }, 'beta')),
-      sub ? sub.name + (app.secondGone() ? ' — нет в таблице' : '') : 'не выбрана',
-      sub ? [
-        actionButton('Заменить', function () { app.go('pick/second'); }, 'fixed'),
-        actionButton('Убрать', function () { app.pick('second', null); }, 'fixed'),
-      ] : actionButton('Добавить', function () { app.go('pick/second'); }, 'fixed')));
+    // Остальные группы — любые, до шести вместе со своей (Tomon 28.09).
+    extras.forEach(function (g, i) {
+      group.push(row(
+        h('span', { class: 'group-name' }, numbered ? groupMark(i + 2, true, false) : null, g.name + (g.gone ? ' — нет в таблице' : '')),
+        null,
+        actionButton('Убрать', function () { app.removeExtra(g.id); }, 'fixed', 'remove:' + g.id)));
+    });
+    var room = MAX_GROUPS - 1 - extras.length;
+    var subgroups = own ? subgroupsOf(own.name, app.state.groups || []).filter(function (g) {
+      return !extras.some(function (x) { return x.id === g.id; });
+    }).slice(0, room) : [];
+    if (room > 0) {
+      group.push(h('div', { class: 'setting-actions' },
+        actionButton('Добавить группу', function () { app.go('pick/extra'); }, 'fixed', 'add-group'),
+        subgroups.length ? actionButton(subgroups.length === 1 ? 'Добавить ' + subgroups[0].name : 'Добавить подгруппы',
+          function () { app.addExtras(subgroups); }, 'fixed', 'add-subgroups') : null));
+    }
+    if (extras.length) {
+      // Названия или номера под временем пар (Tomon 28.09).
+      group.push(h('div', { class: 'setting-sub' }, 'Подписи у пар'));
+      group.push(segmented([['Названия', 'names'], ['Номера', 'numbers']], byName ? 'names' : 'numbers',
+        function (value) { app.setGroupsByName(value === 'names'); }));
+    }
+    group.push(h('p', { class: 'muted small' },
+      'Пары других групп — на экране расписания рядом со своими, подписи под временем — чья пара.'));
   }
 
   var link = sheetLink(app.saved(), app.now().date, app.server().src_url);
@@ -86,7 +112,7 @@ export function settingsScreen(app) {
 
       section('Данные', h('p', null, (teacherMode
         ? 'На сервер уходит выбранное имя, как оно записано в таблице колледжа. Больше ничего: '
-        : 'На сервер уходит только название вашей группы — и подгруппы, если вы её выбрали. ' +
+        : 'На сервер уходят только названия вашей группы и других, если вы их выбрали. ' +
           'Больше ничего: ни имени, ') +
         'ни номера телефона, ни местоположения. Учётной записи нет, аналитики и рекламы нет, ' +
         'выбор хранится только в этом браузере. Когда смотрите чужое расписание, серверу уходит, ' +

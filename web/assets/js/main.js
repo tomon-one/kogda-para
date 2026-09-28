@@ -65,7 +65,10 @@ function parseRoute() {
   var parts = hash.split('/');
   var head = parts[0];
   if (head === 'settings') return { screen: 'settings' };
-  if (head === 'pick') return { screen: 'pick', mode: parts[1] === 'self' ? 'self' : parts[1] === 'second' ? 'second' : 'group' };
+  // «pick/second» — адрес до веб-0.2.0, мог остаться в истории вкладки.
+  if (head === 'pick') {
+    return { screen: 'pick', mode: parts[1] === 'self' ? 'self' : parts[1] === 'extra' || parts[1] === 'second' ? 'extra' : 'group' };
+  }
   if (head === 'teachers' || head === 'groups') {
     // Id строит служба из названия: латиница, цифры, дефис. Прочее из адреса
     // в запрос не пускать: «..%2F» nginx раскодирует в чужой путь (аудит, W1).
@@ -104,19 +107,26 @@ var app = {
   canGoBack: function () { return !!repo.chosen(); },
   isTeacher: repo.isTeacher,
   chosen: repo.chosen,
-  second: repo.second,
+  extras: repo.extras,
   saved: repo.saved,
+  /** Своё расписание вместе с парами остальных выбранных групп — для экрана. */
+  shown: repo.shown,
   fetchedAt: repo.fetchedAt,
   server: repo.serverState,
   serverBroken: repo.serverBroken,
   gone: repo.gone,
   goneSuspected: repo.goneSuspected,
-  secondGone: repo.secondGone,
   pinned: repo.pinned,
   now: function () { return collegeNow(); },
   scrollTarget: function () { return collegeNow().date; },
   togglePin: function (kind, id) { repo.togglePin(kind, id); },
   theme: function () { return store.get('theme') || 'system'; },
+  /** Подписи выбранных групп у пар: названиями (по умолчанию) или номерами. */
+  groupsByName: function () { return store.get('groupLabels') !== 'numbers'; },
+  setGroupsByName: function (byName) {
+    store.set('groupLabels', byName ? 'names' : 'numbers');
+    render();
+  },
   setTheme: function (theme) {
     store.set('theme', theme);
     // Без перестройки экрана: тогда цвета перетекают, а не щёлкают.
@@ -147,14 +157,24 @@ var app = {
   loadLists: loadLists,
   refresh: refresh,
   pick: pick,
+  /** Подгруппы своей группы — одной кнопкой, остаёмся в настройках. */
+  addExtras: function (groups) {
+    repo.addExtras(groups);
+    render();
+    refresh(true, false);
+  },
+  removeExtra: function (id) {
+    repo.removeExtra(id);
+    render();
+  },
   tally: function () { return store.get('tally') || { opens: 0, since: 0 }; },
 };
 
 function pick(mode, row) {
-  if (mode === 'second') {
-    repo.selectSecond(row);
+  if (mode === 'extra') {
+    repo.addExtras([row]);
     // В настройки — шагом назад, а не новой записью: иначе «назад» оттуда
-    // снова открывал настройки (аудит сайта, W5, W0). «Убрать» — уже там.
+    // снова открывал настройки (аудит сайта, W5, W0).
     if (app.route.screen === 'pick' && stepsNow() > 0) back();
     else if (app.route.screen !== 'settings') go('settings', true);
     else render();
@@ -195,7 +215,7 @@ function onRoute() {
     route = { screen: 'pick', mode: 'group' };
     history.replaceState({ steps: stepsNow(), pending: pending }, '', location.pathname + location.search + '#pick');
   }
-  if (route.screen === 'pick' && route.mode === 'second' && repo.isTeacher()) {
+  if (route.screen === 'pick' && route.mode === 'extra' && repo.isTeacher()) {
     route = { screen: 'settings' };
   }
   var wasOwn = app.route.screen === 'main' && !app.route.kind;
@@ -786,6 +806,8 @@ function registerWorker() {
 // ——— запуск ———
 
 window.__whensclassStarted = true;
+// Снимок до веб-0.2.0 склеен с парами соседней подгруппы — до первого показа.
+repo.migrateGroups();
 applyTheme();
 countOpen();
 // К сегодняшнему дню и на первом заходе, а не только при смене экрана: со

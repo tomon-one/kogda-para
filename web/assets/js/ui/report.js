@@ -19,8 +19,12 @@ export function reportText(app) {
     lines.push('Преподаватель: ' + (own ? own.name + ' [' + own.id + ']' : 'не выбран [—]'));
   } else {
     lines.push('Группа: ' + (own ? own.name + ' [' + own.id + ']' : 'не выбрана [—]'));
-    var sub = app.second();
-    if (sub) lines.push('Подгруппа: ' + sub.name + ' [' + sub.id + ']' + (app.secondGone() ? ', нет в таблице' : ''));
+    var extras = app.extras();
+    if (extras.length) {
+      lines.push('Ещё группы: ' + extras.map(function (g) {
+        return g.name + ' [' + g.id + ']' + (g.gone ? ', нет в таблице' : '');
+      }).join('; '));
+    }
   }
   var schedule = app.saved();
   if (!schedule) {

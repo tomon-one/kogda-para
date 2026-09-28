@@ -6,7 +6,7 @@
 import * as api from './api.js';
 import * as store from './store.js';
 import { collegeNow, weekStart } from './time.js';
-import { DAYS, cleanSchedule, coversDay, mergeSecondGroup, ownOnly, windowMark } from './schedule.js';
+import { DAYS, MAX_GROUPS, cleanSchedule, combineGroups, coversDay, ownOnly, windowMark } from './schedule.js';
 
 /** Сколько сервер может молчать при живой сети, прежде чем это сбой, а не чих. */
 var UNREACHABLE_BROKEN_AFTER_MS = 30 * 60 * 1000;
@@ -28,14 +28,35 @@ export function chosen() {
   return isTeacher() ? store.get('teacher') : store.get('group');
 }
 
-export function second() {
-  return isTeacher() ? null : store.get('second');
+/**
+ * Остальные выбранные группы по порядку: [{id, name, gone, goneSince}]. Их
+ * пары на экране рядом со своими; своя сюда не входит (ExtraGroup в
+ * ScheduleMerge.kt).
+ */
+export function extras() {
+  if (isTeacher()) return [];
+  var list = store.get('extras');
+  return Array.isArray(list) ? list : [];
+}
+
+function setExtras(list) {
+  var kept = list.slice(0, MAX_GROUPS - 1);
+  if (kept.length) store.set('extras', kept);
+  else store.remove('extras');
+  // Снимки убранных — прочь: иначе при новом выборе той же группы её
+  // прежние пары вернулись бы на экран.
+  var schedules = store.get('extraSchedules');
+  if (!schedules) return;
+  var left = {};
+  kept.forEach(function (g) { if (schedules[g.id]) left[g.id] = schedules[g.id]; });
+  if (Object.keys(left).length) store.set('extraSchedules', left);
+  else store.remove('extraSchedules');
 }
 
 function subject() {
   var own = chosen();
-  var sub = second();
-  return (isTeacher() ? 't:' : 's:') + (own ? own.id : '') + '|' + (sub ? sub.id : '');
+  return (isTeacher() ? 't:' : 's:') + (own ? own.id : '') + '|' +
+    extras().map(function (g) { return g.id; }).join(',');
 }
 
 function dropSchedule() {
@@ -52,20 +73,17 @@ function clearGone() {
 export function selectGroup(group) {
   var current = store.get('group');
   var unchanged = !isTeacher() && current && current.id === group.id;
-  var sameGroup = current && current.id === group.id;
-  var gone = store.get('gone');
-  var wasGone = !isTeacher() && gone && gone.confirmed;
   store.set('role', 'student');
   store.set('group', { id: group.id, name: group.name });
   clearGone();
   if (unchanged) return;
   // Расписание прежней группы нельзя показывать ни секунды.
   dropSchedule();
-  // Соседняя подгруппа была парой к прежней группе. Но перевыбор после
-  // «группы больше нет» — обычно та же группа под новым именем.
-  if (!sameGroup && !wasGone) {
-    store.remove('second');
-    store.remove('secondGone');
+  // Остальные группы остаются: выбрать можно любые, к своей они не
+  // привязаны. Кроме новой своей — дважды одну не показываем.
+  var list = store.get('extras') || [];
+  if (list.some(function (g) { return g.id === group.id; })) {
+    setExtras(list.filter(function (g) { return g.id !== group.id; }));
   }
 }
 
@@ -80,20 +98,49 @@ export function selectSelf(teacher) {
 }
 
 /**
- * Соседняя подгруппа выбрана или снята (`group` = null). Свои пары остаются —
- * без пар прежней соседки, с пометкой «неполное», — и без связи экран не пустеет.
+ * Добавить группы к остальным — в конец, без своей и без повторов, пока
+ * влезает MAX_GROUPS. Их пары придут с обновлением.
  */
-export function selectSecond(group) {
-  var saved = store.get('schedule');
-  if (group) store.set('second', { id: group.id, name: group.name });
-  else store.remove('second');
-  store.remove('secondGone');
-  if (saved && !isTeacher()) {
-    store.set('schedule', ownOnly(saved));
-    store.set('partial', true);
-  } else {
-    dropSchedule();
+export function addExtras(groups) {
+  var list = extras();
+  var own = chosen();
+  (groups || []).forEach(function (g) {
+    if (own && g.id === own.id) return;
+    if (list.some(function (x) { return x.id === g.id; })) return;
+    list = list.concat([{ id: g.id, name: g.name }]);
+  });
+  setExtras(list);
+}
+
+/** Убрать группу из остальных — вместе с её парами, сразу и без сети. */
+export function removeExtra(id) {
+  setExtras(extras().filter(function (g) { return g.id !== id; }));
+}
+
+/**
+ * Перевод со «соседней подгруппы» (до веб-0.2.0) на список групп. Снимок там
+ * лежал склеенным с парами соседки — оставляем свои: остальные теперь
+ * хранятся отдельно и склеиваются только для экрана. Второй раз ничего не
+ * делает.
+ */
+export function migrateGroups() {
+  var sub = store.get('second');
+  if (!sub && store.get('partial') == null) return;
+  if (sub && !store.get('extras')) {
+    var g = store.get('secondGone');
+    store.set('extras', [{ id: sub.id, name: sub.name, gone: !!(g && g.confirmed), goneSince: g ? g.since : null }]);
   }
+  var saved = store.get('schedule');
+  if (saved) {
+    try {
+      store.set('schedule', ownOnly(cleanSchedule(saved)));
+    } catch (e) {
+      dropSchedule();
+    }
+  }
+  store.remove('second');
+  store.remove('secondGone');
+  store.remove('partial');
 }
 
 // ——— состояние ———
@@ -139,9 +186,29 @@ export function gone() {
   return !!(g && g.confirmed);
 }
 
-export function secondGone() {
-  var g = store.get('secondGone');
-  return !!(g && g.confirmed);
+/** Снимки остальных групп, приведённые к форме: {id: расписание}. Испорченный — без него. */
+function extraSchedules() {
+  var body = store.get('extraSchedules') || {};
+  var out = {};
+  Object.keys(body).forEach(function (id) {
+    try {
+      out[id] = cleanSchedule(body[id]);
+    } catch (e) { /* испорченный — как не пришедший */ }
+  });
+  return out;
+}
+
+/**
+ * Для экрана: своё расписание вместе с парами остальных групп. Пропавшая из
+ * таблицы держит место в значках, но её прежних пар не показываем: они могли
+ * уже поменяться.
+ */
+export function shown() {
+  var main = saved();
+  var list = extras();
+  if (!main || !list.length) return main;
+  var schedules = extraSchedules();
+  return combineGroups(main, list.map(function (g) { return [g.name, g.gone ? null : schedules[g.id] || null]; }));
 }
 
 function putServerState(status, srcUrl, since) {
@@ -176,6 +243,18 @@ function noteNotFound(key, now) {
   return !!g.confirmed;
 }
 
+/** 404 у одной из остальных групп; true — подтверждено повтором через час. */
+function noteExtraNotFound(id, now) {
+  var confirmed = false;
+  store.set('extras', extras().map(function (g) {
+    if (g.id !== id) return g;
+    if (g.goneSince == null) return Object.assign({}, g, { goneSince: now });
+    if (now - g.goneSince >= GONE_CONFIRM_MS) confirmed = true;
+    return g;
+  }));
+  return confirmed;
+}
+
 function online() {
   return typeof navigator === 'undefined' || navigator.onLine !== false;
 }
@@ -187,30 +266,52 @@ function isNotFound(error) {
 // ——— обновление ———
 
 /**
- * Пары соседней подгруппы — запрос уже идёт, рядом со своим. Не достучались —
- * своё расписание как есть: без пары соседей человек обойдётся, без своих — нет.
+ * Ответы остальных групп — запросы уже идут, рядом со своим. Не ответившая —
+ * с прежним снимком: своё от неё не зависит.
  */
-function withSecondGroup(mine, serverOk, sub, request) {
-  if (!sub || !request) return Promise.resolve({ schedule: mine, whole: true });
-  return request.then(function (extra) {
-    store.remove('secondGone');
-    var renamed = extra.g !== sub.id ? { id: extra.g, name: extra.gn } : null;
-    return { schedule: mergeSecondGroup(mine, extra), whole: true, secondRenamed: renamed };
-  }, function (error) {
-    // 404 при здоровом сервере, повторённое через час, — соседки больше нет.
-    // Выбор не стираем: вернётся она — вернутся и её пары.
-    if (isNotFound(error) && serverOk && noteNotFound('secondGone', Date.now())) {
-      return { schedule: mine, whole: true, secondGone: true };
+function collectExtras(requests, serverOk) {
+  return Promise.all(requests.map(function (r) {
+    return r.request.then(function (schedule) {
+      return { group: r.group, schedule: schedule };
+    }, function (error) {
+      // 404 при здоровом сервере, повторённое через час, — группы нет в
+      // таблице. Выбор не стираем: вернётся она — вернутся и её пары.
+      var gone = isNotFound(error) && serverOk && noteExtraNotFound(r.group.id, Date.now());
+      return { group: r.group, gone: gone };
+    });
+  }));
+}
+
+/** Записать ответы остальных: переименования, пропажи, снимки. */
+function writeExtras(answers) {
+  var schedules = store.get('extraSchedules') || {};
+  var list = extras().map(function (g) {
+    var answer = answers.filter(function (a) { return a.group.id === g.id; })[0];
+    if (!answer) return g;
+    if (answer.schedule) {
+      var id = answer.schedule.g || g.id;
+      delete schedules[g.id];
+      schedules[id] = answer.schedule;
+      return { id: id, name: answer.schedule.gn || g.name };
     }
-    return { schedule: mine, whole: false };
+    return answer.gone ? Object.assign({}, g, { gone: true }) : g;
   });
+  store.set('extraSchedules', schedules);
+  setExtras(list);
+}
+
+/** Снимка какой-то из остальных групп нет или он не про сегодня — её пора принести. */
+function extrasMissing(today) {
+  var schedules = store.get('extraSchedules') || {};
+  return extras().some(function (g) { return !g.gone && !coversDay(schedules[g.id], today); });
 }
 
 function refreshOnce(force) {
+  migrateGroups();
   var asked = subject();
   var teacherMode = isTeacher();
   var own = chosen();
-  var sub = second();
+  var others = extras();
   if (!own) return Promise.resolve({ kind: 'nogroup' });
   var today = collegeNow().date;
   // Неделя — одна на весь заход: запрос через полночь воскресенья не должен
@@ -218,7 +319,8 @@ function refreshOnce(force) {
   var from = weekStart(today);
   var outdated = !coversDay(saved(), today) ||
     store.get('window') !== windowMark(from) ||
-    !!store.get('partial');
+    // Группу только что добавили или её снимок не дошёл: gen тот же.
+    extrasMissing(today);
   var meta = null;
 
   return api.meta().then(function (m) { meta = m; }, function () { meta = null; })
@@ -249,13 +351,16 @@ function refreshOnce(force) {
         store.set('fetchedAt', now);
         return { kind: 'fresh' };
       }
-      // Своё и подгруппа — разом, а не по очереди (аудит сайта, W2). На экран
-      // своё попадает вместе с соседкой: её молчание ограничено тайм-аутом
+      // Своё и остальные — разом, а не по очереди (аудит сайта, W2). На экран
+      // своё попадает вместе с ними: их молчание ограничено тайм-аутом
       // запроса, 30 секунд.
       var request = (teacherMode ? api.teacher(own.id, from, DAYS) : api.schedule(own.id, from, DAYS))
         .then(cleanSchedule);
-      var subRequest = !teacherMode && sub ? api.schedule(sub.id, from, DAYS).then(cleanSchedule) : null;
-      if (subRequest) subRequest.then(null, function () { /* разберёт withSecondGroup */ });
+      var extraRequests = others.map(function (g) {
+        var r = api.schedule(g.id, from, DAYS).then(cleanSchedule);
+        r.then(null, function () { /* разберёт collectExtras */ });
+        return { group: g, request: r };
+      });
       return request.then(null, function (error) {
         if (isNotFound(error) && meta && meta.status === 'ok' && noteNotFound('gone', Date.now())) {
           return 'gone';
@@ -268,21 +373,17 @@ function refreshOnce(force) {
         store.set('lastOk', Date.now());
         // Расписание пришло — сервер отвечает, даже если meta сорвался.
         if (serverState().status === STATUS_UNREACHABLE) putServerState('ok', null, null);
-        var merging = teacherMode
-          ? Promise.resolve({ schedule: fresh, whole: true })
-          : withSecondGroup(fresh, !!meta && meta.status === 'ok', sub, subRequest);
-        return merging.then(function (merged) {
+        return collectExtras(extraRequests, !!meta && meta.status === 'ok').then(function (answers) {
           // Пока шёл запрос, человек мог сменить выбор: ответ уже чужой.
           if (subject() !== asked) return { kind: 'fresh' };
           // Ответ под другим id — группу или преподавателя переименовали.
           if (fresh.g !== own.id) {
             store.set(teacherMode ? 'teacher' : 'group', { id: fresh.g, name: fresh.gn });
           }
-          if (merged.secondRenamed) store.set('second', merged.secondRenamed);
-          store.set('schedule', merged.schedule);
+          if (answers.length) writeExtras(answers);
+          store.set('schedule', fresh);
           store.set('gen', fresh.gen);
           store.set('fetchedAt', Date.now());
-          store.set('partial', !merged.whole);
           store.set('window', windowMark(from));
           return { kind: 'updated' };
         });

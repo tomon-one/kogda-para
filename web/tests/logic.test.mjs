@@ -11,7 +11,7 @@ import {
   shiftColumn, shortenName,
 } from '../assets/js/format.js';
 import {
-  currentLessonNumber, dayIndex, daysWithGaps, freeDay, lessonTime, mergeSecondGroup, ownOnly, windowMark,
+  combineGroups, currentLessonNumber, dayIndex, daysWithGaps, freeDay, lessonTime, ownOnly, shortLabels, subgroupsOf, windowMark,
 } from '../assets/js/schedule.js';
 import { letterOf, lettered, matchesQuery } from '../assets/js/search.js';
 
@@ -167,7 +167,7 @@ test('идущая пара — конец включительно до сек�
   assert.equal(lessonTime(bells, 5), null);
 });
 
-test('склейка подгрупп', () => {
+test('другие группы: склейка, значки, подгруппы, перевод старого снимка', () => {
   const mine = {
     g: 'isp-924-1', gn: 'ИСП-924/1',
     days: [{ d: '2026-09-28', l: [
@@ -183,15 +183,34 @@ test('склейка подгрупп', () => {
       { n: 3, s: 'Право', o: 1 },
     ] }],
   };
-  const merged = mergeSecondGroup(mine, theirs);
-  assert.deepEqual(merged.days[0].l.map((l) => [l.n, l.s, l.gr || null]), [
-    [1, 'Физика', null],
-    [2, 'Химия', 'ИСП-924/1'],
-    [2, 'Химия', 'ИСП-924/2'],
-    [3, 'Право', 'ИСП-924/2'],
+  const third = { g: 'isp-924-3', gn: 'ИСП-924/3', days: [{ d: '2026-09-28', l: [{ n: 2, s: 'Химия', r: '103' }] }] };
+  const merged = combineGroups(mine, [['ИСП-924/2', theirs], ['ИСП-924/3', third], ['ИСП-924/4', null]]);
+  assert.deepEqual(merged.groupNames, ['ИСП-924/1', 'ИСП-924/2', 'ИСП-924/3', 'ИСП-924/4']);
+  // Общая — одна строка с отметками всех; разные кабинеты — разные строки,
+  // своя выше; пары без своей — без 0.
+  assert.deepEqual(merged.days[0].l.map((l) => [l.n, l.s, l.r || null, l.slots]), [
+    [1, 'Физика', '101', [0, 1]],
+    [2, 'Химия', '102', [0]],
+    [2, 'Химия', '103', [1, 2]],
+    [3, 'Право', null, [1]],
   ]);
+  assert.equal(combineGroups(mine, []), mine);
+  // Подгруппы своей группы — по номеру, без себя и без чужих.
+  const groups = ['ИСП-924/2', 'ИСП-924/1', 'ИСП-9241/1', 'ИСП-924', 'ИСП-924/10'].map((n) => ({ id: n, name: n }));
+  assert.deepEqual(subgroupsOf('ИСП-924/1', groups).map((g) => g.name), ['ИСП-924/2', 'ИСП-924/10']);
+  assert.deepEqual(subgroupsOf('ИСП-924', groups), []);
+  // Подписи у пар: подгруппы той же группы, что своя, — коротко.
+  assert.deepEqual(shortLabels(['ИСП-924/1', 'ИСП-924/2', 'ИСП-925/1']), ['/1', '/2', 'ИСП-925/1']);
+  assert.deepEqual(shortLabels(['ДИ-926', 'ИСП-924/2']), ['ДИ-926', 'ИСП-924/2']);
+  // Снимок до веб-0.2.0 лежал склеенным с подписями — свои обратно.
+  const old = { g: 'isp-924-1', gn: 'ИСП-924/1', days: [{ d: '2026-09-28', l: [
+    { n: 1, s: 'Физика', r: '101' },
+    { n: 2, s: 'Химия', r: '102', gr: 'ИСП-924/1' },
+    { n: 2, s: 'Химия', r: '103', gr: 'ИСП-924/2' },
+    { n: 3, s: 'Право', o: 1, gr: 'ИСП-924/2' },
+  ] }] };
   // Свои пары обратно — без чужих и без своей подписи.
-  const own = ownOnly(merged);
+  const own = ownOnly(old);
   assert.deepEqual(own.days[0].l, mine.days[0].l);
   // У преподавателя подпись группы — не «чужая пара».
   const teacher = { kind: 'teacher', gn: 'Иванова', days: [{ d: 'x', l: [{ n: 1, s: 'А', gr: 'ИСП-1' }] }] };
