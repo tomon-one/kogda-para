@@ -17,7 +17,7 @@ function walk(dir) {
 }
 
 // Превью ссылки берут мессенджеры, странице оно не нужно — в кэш не идёт.
-const NOT_CACHED = ['sw.js', 'assets/og.png'];
+const NOT_CACHED = ['sw.js', 'assets/og.jpg'];
 
 test('сервис-воркер сохраняет все файлы сайта, и только их', () => {
   const sw = readFileSync(join(WEB, 'sw.js'), 'utf8');
