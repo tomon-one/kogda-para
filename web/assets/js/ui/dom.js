@@ -107,7 +107,9 @@ export function closeDialog() {
   }, 150);
   document.body.classList.remove('dialog-open');
   setBackground(false);
-  if (d.restore && d.restore.focus) d.restore.focus();
+  var target = d.restore && document.body.contains(d.restore) ? d.restore
+    : d.restoreKey ? document.querySelector('[data-key="' + d.restoreKey + '"]') : null;
+  if (target && target.focus) target.focus();
 }
 
 /** Окно с заголовком, телом и кнопками [{label, onClick}]. */
@@ -135,7 +137,11 @@ export function dialog(title, body, buttons) {
     if (!items.length) return;
     var first = items[0];
     var last = items[items.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
+    // Фокус ушёл из окна (щелчок по тексту окна) — вернуть внутрь.
+    if (!card.contains(document.activeElement)) {
+      e.preventDefault();
+      (e.shiftKey ? last : first).focus();
+    } else if (e.shiftKey && document.activeElement === first) {
       e.preventDefault();
       last.focus();
     } else if (!e.shiftKey && document.activeElement === last) {
@@ -144,7 +150,10 @@ export function dialog(title, body, buttons) {
     }
   };
   document.addEventListener('keydown', onKey);
-  openDialog = { el: overlay, onKey: onKey, restore: document.activeElement };
+  // Кнопку, с которой открыли, запомнить ключом: экран под окном могут
+  // перестроить, и сам узел пропадёт (аудит, прогон 2).
+  var from = document.activeElement;
+  openDialog = { el: overlay, onKey: onKey, restore: from, restoreKey: from && from.getAttribute && from.getAttribute('data-key') };
   document.body.appendChild(overlay);
   document.body.classList.add('dialog-open');
   setBackground(true);

@@ -37,7 +37,7 @@ function schedule(id, name, gen, extra) {
 
 function reset() {
   ['role', 'group', 'teacher', 'second', 'schedule', 'gen', 'fetchedAt', 'window', 'partial', 'server',
-    'unreachable', 'gone', 'secondGone'].forEach(store.remove);
+    'unreachable', 'gone', 'secondGone', 'lastOk'].forEach(store.remove);
   clock = MONDAY_NOON;
   requests = [];
 }
@@ -247,4 +247,19 @@ test('закреплённые за переименованием — без п
   assert.deepEqual(repo.pinned('groups'), ['new']);
   repo.togglePin('groups', 'new');
   assert.deepEqual(repo.pinned('groups'), []);
+});
+
+test('редкие заходы: сбой — от последнего ответа сервера, а не от цепочки неудач', async () => {
+  reset();
+  server = healthy('G1', [['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]]]);
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  await repo.refresh(true);
+  const answered = clock;
+  // Двое суток спустя сервер молчит — «не отвечает» с первого же захода, с
+  // давностью от последнего ответа.
+  clock += 48 * HOUR;
+  server = () => 'down';
+  await repo.refresh(false);
+  assert.equal(repo.serverState().status, 'unreachable');
+  assert.equal(repo.serverState().since, new Date(answered).toISOString());
 });

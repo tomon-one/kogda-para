@@ -61,16 +61,24 @@ export function mainScreen(app) {
   return screen;
 }
 
+/**
+ * Почему у ⟳ крестик, а не галочка; null — всё хорошо. Та же строка уходит
+ * чтецу экрана, чтобы он не сказал «обновлено» при крестике (аудит, прогон 2).
+ */
+export function refreshLabel(app) {
+  if (app.state.refreshFailed) return 'Не удалось обновить расписание';
+  if (app.gone()) return app.isTeacher() ? 'Вас нет в таблице' : 'Группы нет в таблице';
+  if (app.server().status === STATUS_UNREACHABLE) return 'Сервер расписания не отвечает';
+  if (app.serverBroken()) return 'Сервер не смог обновить расписание';
+  return null;
+}
+
 function topbar(app, own) {
   var s = app.state;
   var title = h('h1', { class: 'topbar-title name' }, own ? own.name : '');
   onLongPress(title, function () { showTally(app); });
 
-  var broken = null;
-  if (s.refreshFailed) broken = 'Не удалось обновить расписание';
-  else if (app.gone()) broken = app.isTeacher() ? 'Вас нет в таблице' : 'Группы нет в таблице';
-  else if (app.server().status === STATUS_UNREACHABLE) broken = 'Сервер расписания не отвечает';
-  else if (app.serverBroken()) broken = 'Сервер не смог обновить расписание';
+  var broken = refreshLabel(app);
 
   var spinning = s.refreshing || s.spinningDown;
   var refreshIcon;
@@ -90,9 +98,12 @@ function topbar(app, own) {
     if (spinning) refreshIcon.style.setProperty('--spin-shift', -((Date.now() - s.spinStart) % 450) + 'ms');
     label = 'Обновить расписание';
   }
+  // Пока крутится — не disabled, а aria-disabled и пропуск нажатий:
+  // выключенная кнопка теряет фокус клавиатуры (аудит, прогон 2).
   var refresh = h('button', {
-    type: 'button', class: 'icon-button', 'aria-label': label, title: label,
-    disabled: spinning, onclick: function () { app.refresh(true, true); },
+    type: 'button', class: 'icon-button', 'aria-label': label, title: label, 'data-key': 'refresh',
+    'aria-disabled': spinning ? 'true' : null,
+    onclick: function () { if (!spinning) app.refresh(true, true); },
   }, refreshIcon);
 
   return h('header', { class: 'topbar' },
@@ -154,8 +165,9 @@ function plates(app) {
       h('div', { class: 'plate-text' },
         (unreachable ? 'Браузер не достучался до сервера. ' : 'Не удалось прочитать таблицу. ') +
         'Пары могли поменяться.'),
-      server.since ? h('div', { class: 'plate-since' },
-        'Сбой с ' + formatSince(server.since) + '. На экране — таблица, какой она была до сбоя.') : null,
+      server.since ? h('div', { class: 'plate-since' }, unreachable
+        ? 'Последний ответ сервера — ' + formatSince(server.since) + '. На экране — то, что пришло тогда.'
+        : 'Сбой с ' + formatSince(server.since) + '. На экране — таблица, какой она была до сбоя.') : null,
       link ? actionLink('Открыть таблицу колледжа', link) : null));
   }
   return out.length ? h('div', { class: 'plates' }, out) : null;
@@ -166,6 +178,16 @@ function plates(app) {
  * без единого слова читается как поломка.
  */
 function explainMissing(app, schedule, loading, fallback) {
+  // Своё — 404 от здорового сервера, а сохранённого нет: сказать сразу, а не
+  // «проверьте интернет» (аудит, прогон 2). Час подтверждения нужен только,
+  // чтобы не прятать сохранённое.
+  if (!schedule && !loading && fallback !== null && app.goneSuspected()) {
+    var teacherMode = app.isTeacher();
+    return explanation(teacherMode ? 'Вас с таким именем нет в таблице' : 'Группы с таким названием нет в таблице',
+      teacherMode ? 'Имя в таблице записали иначе или убрали. Найдите себя заново.'
+        : 'Её переименовали, разделили или убрали. Выберите заново.', null, false,
+      actionButton('Выбрать заново', function () { app.go(teacherMode ? 'pick/self' : 'pick'); }));
+  }
   if (!schedule && loading) {
     return explanation('Расписание загружается', 'Обычно это несколько секунд.', null, true);
   }
@@ -181,12 +203,13 @@ function explainMissing(app, schedule, loading, fallback) {
   return null;
 }
 
-function explanation(title, text, link, busy) {
+function explanation(title, text, link, busy, action) {
   return h('div', { class: 'explanation' },
     busy ? h('div', { class: 'spinner' }) : null,
     h('h2', null, title),
     h('p', null, text),
-    link ? actionLink('Открыть таблицу колледжа', link) : null);
+    link ? actionLink('Открыть таблицу колледжа', link) : null,
+    action || null);
 }
 
 function ownView(app, content) {
@@ -223,6 +246,7 @@ function chosenView(app, kind, id) {
     box.appendChild(h('p', { class: 'nothing' }, 'Расписание не загрузилось. Проверьте интернет и нажмите ⟳ вверху.'));
   } else {
     var missing = explainMissing(app, other.schedule, false, null);
+    if (other.failed && other.schedule) box.appendChild(h('p', { class: 'nothing' }, 'Не обновилось — на экране прежнее.'));
     box.appendChild(missing || dayCards(other.schedule, app.now(), null, null));
   }
   return box;

@@ -53,7 +53,7 @@ function letteredList(rows, onPick) {
     return h('div', { class: 'letter-section' },
       h('h3', { class: 'letter' }, section.letter),
       h('div', { class: 'list-card' }, section.rows.map(function (row) {
-        return h('button', { type: 'button', class: 'list-row', onclick: function () { onPick(row); } }, row.name);
+        return h('button', { type: 'button', class: 'list-row', 'data-key': 'pick:' + row.id, onclick: function () { onPick(row); } }, row.name);
       })));
   });
 }
@@ -136,17 +136,21 @@ export function othersList(app, kind, selfId) {
     function row(item, isSelf) {
       var on = pins.indexOf(item.id) >= 0;
       return h('div', { class: 'pin-row' },
-        h('button', { type: 'button', class: 'pin-open', onclick: function () { app.go(kind + '/' + encodeURIComponent(item.id)); } },
+        h('button', { type: 'button', class: 'pin-open', 'data-key': 'open:' + item.id, onclick: function () { app.go(kind + '/' + encodeURIComponent(item.id)); } },
           h('span', null, item.name),
           isSelf ? h('span', { class: 'self-mark' }, 'это вы') : null),
         h('button', {
           type: 'button', class: 'pin-star' + (on ? ' on' : '') + (item.id === popped ? ' pop' : ''),
-          'aria-pressed': on ? 'true' : 'false', 'aria-label': 'Закрепить наверху списка',
+          'aria-pressed': on ? 'true' : 'false', 'aria-label': 'Закрепить наверху списка: ' + item.name,
+          'data-key': 'star:' + item.id,
           onclick: function () {
             app.togglePin(kind, item.id);
             popped = item.id;
             fill();
             popped = null;
+            // Список перестроен — фокус на ту же звезду, а не на body.
+            var star = results.querySelector('[data-key="star:' + item.id + '"]');
+            if (star) star.focus();
           },
         }, on ? '★' : '☆'));
     }
