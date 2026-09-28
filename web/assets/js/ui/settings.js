@@ -49,14 +49,14 @@ export function settingsScreen(app) {
 
   // С другими группами — номера, как у значков под временем пар; своя — 1.
   var group = [row(
-    h('span', { class: 'group-name' }, numbered ? groupMark(1, true, true) : null, own ? own.name : 'не выбрано'),
+    h('span', { class: 'group-name' }, numbered ? groupMark(1, true) : null, own ? own.name : 'не выбрано'),
     null,
     actionButton(teacherMode ? 'Выбрать заново' : 'Сменить', function () { app.go(teacherMode ? 'pick/self' : 'pick'); }, 'fixed'))];
   if (!teacherMode) {
     // Остальные группы — любые, до шести вместе со своей (Tomon 28.09).
     extras.forEach(function (g, i) {
       group.push(row(
-        h('span', { class: 'group-name' }, numbered ? groupMark(i + 2, true, false) : null, g.name + (g.gone ? ' — нет в таблице' : '')),
+        h('span', { class: 'group-name' }, numbered ? groupMark(i + 2, false) : null, g.name + (g.gone ? ' — нет в таблице' : '')),
         null,
         actionButton('Убрать', function () { app.removeExtra(g.id); }, 'fixed', 'remove:' + g.id)));
     });
@@ -64,20 +64,29 @@ export function settingsScreen(app) {
     var subgroups = own ? subgroupsOf(own.name, app.state.groups || []).filter(function (g) {
       return !extras.some(function (x) { return x.id === g.id; });
     }).slice(0, room) : [];
+    // Подгруппы своей группы — строками с «Добавить», как у добавленных
+    // «Убрать»: две кнопки рядом выходили разной высоты (Tomon 28.09).
+    subgroups.forEach(function (g) {
+      group.push(row(g.name, 'подгруппа вашей группы',
+        actionButton('Добавить', function () { app.addExtras([g]); }, 'fixed', 'add:' + g.id)));
+    });
     if (room > 0) {
       group.push(h('div', { class: 'setting-actions' },
-        actionButton('Добавить группу', function () { app.go('pick/extra'); }, 'fixed', 'add-group'),
-        subgroups.length ? actionButton(subgroups.length === 1 ? 'Добавить ' + subgroups[0].name : 'Добавить подгруппы',
-          function () { app.addExtras(subgroups); }, 'fixed', 'add-subgroups') : null));
+        actionButton(extras.length || subgroups.length ? 'Добавить другую группу' : 'Добавить группу',
+          function () { app.go('pick/extra'); }, null, 'add-group')));
     }
-    if (extras.length) {
+    if (!extras.length) {
+      group.push(h('p', { class: 'muted small' }, 'Пары других групп можно видеть в расписании рядом со своими.'));
+    } else {
       // Названия или номера под временем пар (Tomon 28.09).
       group.push(h('div', { class: 'setting-sub' }, 'Подписи у пар'));
       group.push(segmented([['Названия', 'names'], ['Номера', 'numbers']], byName ? 'names' : 'numbers',
         function (value) { app.setGroupsByName(value === 'names'); }));
+      // Что значат значки — здесь, где их выбирают (Tomon 28.09).
+      group.push(h('p', { class: 'muted small' },
+        'Под временем пары — группы, у которых она есть: ваша закрашена, остальные бледные. ' +
+        'Пары, которых у вашей группы нет, — на сером фоне.'));
     }
-    group.push(h('p', { class: 'muted small' },
-      'Пары других групп — на экране расписания рядом со своими, подписи под временем — чья пара.'));
   }
 
   var link = sheetLink(app.saved(), app.now().date, app.server().src_url);

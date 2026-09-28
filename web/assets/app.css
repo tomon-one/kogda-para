@@ -407,8 +407,8 @@ p a, .point a { text-decoration: underline; }
   vertical-align: 1px;
 }
 
-/* Значки выбранных групп под временем (GroupMarks.kt): своя — сплошной,
-   другая с этой парой — бледный, без неё — рамка. По три в ряд. */
+/* Значки групп под временем (GroupMarks.kt) — только тех, у кого пара есть:
+   своя — закрашенный, другая — бледный. Номера — по три в ряд. */
 .marks {
   display: flex;
   flex-wrap: wrap;
@@ -419,23 +419,25 @@ p a, .point a { text-decoration: underline; }
 .mark {
   display: inline-block;
   box-sizing: border-box;
-  width: 18px;
+  min-width: 18px;
   height: 18px;
   margin: 0 4px 4px 0;
-  border: 1px solid var(--outline);
+  padding: 0 4px;
   border-radius: 4px;
+  background: var(--mark-bg);
+  color: var(--primary);
   font-size: 11px;
-  line-height: 16px;
+  font-weight: 600;
+  line-height: 18px;
   text-align: center;
-  color: var(--muted);
+  white-space: nowrap;
 }
+
+.mark.own { background: var(--primary); color: var(--on-primary); }
 
 /* Названиями — сколько влезет в колонку; длинное — многоточием. */
 .marks.names { width: auto; }
-.marks.names .mark { width: auto; min-width: 18px; max-width: 100%; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.mark.lit { border-color: transparent; background: var(--mark-bg); color: var(--primary); font-weight: 600; }
-.mark.own { background: var(--primary); color: var(--on-primary); }
+.marks.names .mark { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 
 /* Пара только у других групп: видно сразу, а не только по значкам. */
 .lesson.foreign { background: var(--foreign-bg); }
