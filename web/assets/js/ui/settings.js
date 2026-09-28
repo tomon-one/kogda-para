@@ -3,7 +3,7 @@
 // для этого телефона (значок, приложение), таблица, оформление, данные и «О
 // сайте» (Tomon 28.09).
 
-import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, dialog, closeDialog } from './dom.js';
+import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, isFirefox, dialog, closeDialog } from './dom.js';
 import { sheetLink, durationShort } from '../format.js';
 import { REMIND_CHOICES } from '../push.js';
 import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
@@ -52,9 +52,9 @@ function switchRow(label, on, onChange, key) {
 
 /**
  * Уведомления: считает и шлёт их служба (push.js). На айфоне — beta, на
- * остальных — альфа-тест: там они идут через серверы Google, а до них с
- * сервера достаётся не всегда (Tomon 28.09). Каждое ограничение, которое не
- * обойти, — строкой-предупреждением рядом.
+ * остальных — альфа-тест: там они идут через серверы Google (у Firefox —
+ * Mozilla), а до Google с сервера достаётся не всегда (Tomon 28.09). Каждое
+ * ограничение, которое не обойти, — строкой-предупреждением рядом.
  */
 function notifications(app, teacherMode) {
   var ios = isIos();
@@ -65,8 +65,11 @@ function notifications(app, teacherMode) {
       '«Домой», на iOS 16.4 и новее. Добавьте значок — раздел выше — откройте сайт им и включите здесь.'));
   }
   if (why === 'unsupported') {
-    return section(title, h('p', null, 'Этот браузер не умеет уведомления сайтов' +
-      (ios ? ': нужна iOS 16.4 или новее.' : '.')));
+    // Firefox в приватном окне выключает сервис-воркеры, а с ними и
+    // уведомления: «не умеет» там неправда (Tomon 28.09).
+    return section(title, h('p', null, ios
+      ? 'Этот браузер не умеет уведомления сайтов: нужна iOS 16.4 или новее.'
+      : 'Этот браузер не умеет уведомления сайтов или не даёт их в этом окне — например, в приватном.'));
   }
   if (why === 'denied') {
     return section(title, h('p', null, 'Уведомления для этого сайта запрещены в настройках браузера — ' +
@@ -120,11 +123,13 @@ function notifications(app, teacherMode) {
       'напоминание приходится на перемену, а не на пару.'));
     body.push(h('p', { class: 'warning small' }, ios
       ? 'Нестабильно: айфон может задержать напоминание.'
-      : 'Нестабильно: браузер может задержать напоминание или не показать его. Надёжнее — приложение.'));
+      : 'Нестабильно: браузер может задержать напоминание или не показать его.' +
+        (isAndroid() ? ' Надёжнее — приложение.' : '')));
   }
   if (!ios) {
-    body.push(h('p', { class: 'warning small' }, 'Альфа-тест: на Android и компьютере уведомления идут через ' +
-      'серверы Google и могут не дойти.'));
+    // Сервер до Google достаёт не всегда; у Firefox служба рассылки — Mozilla.
+    body.push(h('p', { class: 'warning small' }, 'Альфа-тест: уведомления идут через серверы ' +
+      (isFirefox() ? 'Mozilla' : 'Google') + ' и могут не дойти.'));
   }
   return section(title, body);
 }
