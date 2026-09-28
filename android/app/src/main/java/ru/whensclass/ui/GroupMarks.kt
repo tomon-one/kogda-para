@@ -1,7 +1,6 @@
 package ru.whensclass.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -16,22 +15,24 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Значки выбранных групп под временем пары. Горит у тех, у кого эта пара
- * есть; своя ярче остальных — так видно совмещённые (Tomon 28.09).
+ * Значки групп под временем пары — только тех, у кого эта пара есть: своя —
+ * закрашенным, другие — бледным. Так видно совмещённые (Tomon 28.09): пустые
+ * рамки для групп без пары только путали.
  *
  * Подпись — название ([shortLabels]) или номер: место группы в настройках,
  * своя — 1. Что именно — выбирается в настройках. Номера — по три в ряд,
- * шесть групп — два ряда; названия — сколько влезет в колонку времени.
+ * названия — сколько влезет в колонку времени.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -46,39 +47,37 @@ fun GroupMarks(slots: List<Int>, names: List<String>, byName: Boolean, modifier:
             .then(if (byName) Modifier else Modifier.widthIn(max = (MARK + 4.dp) * MARKS_IN_ROW * scale))
             .clearAndSetSemantics { contentDescription = "Пара у групп: " + whose.joinToString(", ") },
     ) {
-        labels.forEachIndexed { slot, label -> GroupMark(label, lit = slot in slots, own = slot == 0) }
+        labels.forEachIndexed { slot, label -> if (slot in slots) GroupMark(label, own = slot == 0) }
     }
 }
 
-/**
- * Один значок. Своя группа — сплошной красный, другая с этой парой —
- * бледно-красный, без неё — только рамка.
- */
+/** Один значок: своя группа — закрашенный красный, другая — бледно-красный. */
 @Composable
-fun GroupMark(label: String, lit: Boolean, own: Boolean) {
+fun GroupMark(label: String, own: Boolean) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(4.dp)
     // Растёт со шрифтом, как колонка времени: подпись в sp, значок в dp.
     val side = MARK * LocalDensity.current.fontScale.coerceAtLeast(1f)
-    val (fill, text) = when {
-        lit && own -> colors.primary to colors.onPrimary
-        lit -> colors.primary.copy(alpha = 0.12f) to colors.primary
-        else -> Color.Transparent to colors.onSurfaceVariant
-    }
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .height(side)
             .defaultMinSize(minWidth = side)
-            .background(fill, shape)
-            .then(if (lit) Modifier else Modifier.border(1.dp, colors.outline, shape))
+            .background(if (own) colors.primary else colors.primary.copy(alpha = 0.12f), shape)
             .padding(horizontal = 4.dp),
     ) {
         Text(
             label,
-            fontSize = 11.sp,
-            fontWeight = if (lit) FontWeight.SemiBold else FontWeight.Normal,
-            color = text,
+            // Высота строки — своя, по размеру цифр: без неё бралась строка
+            // основного текста, втрое выше значка, и подпись съезжала вниз
+            // (Tomon 28.09).
+            style = TextStyle(
+                fontSize = 11.sp,
+                lineHeight = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+            ),
+            color = if (own) colors.onPrimary else colors.primary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

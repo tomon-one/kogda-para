@@ -186,7 +186,7 @@ fun SettingsScreen(
             val numbered = !teacherMode && extraGroups.isNotEmpty() && !groupsByName
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // С другими группами — номер 1, как у значков под временем пар.
-                if (numbered) GroupMark("1", lit = true, own = true)
+                if (numbered) GroupMark("1", own = true)
                 Text(
                     groupName ?: "не выбрано",
                     style = MaterialTheme.typography.bodyLarge,
@@ -204,43 +204,34 @@ fun SettingsScreen(
                 // Остальные группы — любые, до шести вместе со своей (Tomon
                 // 28.09). Номер — тот же, что у значков под временем пар.
                 extraGroups.forEachIndexed { index, group ->
-                    Row(
-                        modifier = Modifier.padding(top = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (numbered) GroupMark("${index + 2}", lit = true, own = false)
-                        Text(
-                            group.name + if (group.gone) " — нет в таблице" else "",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f).padding(start = if (numbered) 10.dp else 0.dp, end = 8.dp),
-                        )
-                        ActionButton(
-                            label = "Убрать",
-                            onClick = { onRemoveGroup(group.id) },
-                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
-                            top = 0.dp,
-                        )
-                    }
+                    GroupRow(
+                        name = group.name + if (group.gone) " — нет в таблице" else "",
+                        mark = if (numbered) "${index + 2}" else null,
+                        action = "Убрать",
+                        onAction = { onRemoveGroup(group.id) },
+                    )
                 }
-                val room = ru.whensclass.data.MAX_GROUPS - 1 - extraGroups.size
-                if (room > 0) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ActionButton(
-                            label = "Добавить группу",
-                            onClick = onAddGroup,
-                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
-                        )
-                        if (subgroups.isNotEmpty()) {
-                            ActionButton(
-                                label = if (subgroups.size == 1) "Добавить ${subgroups.single().name}"
-                                else "Добавить подгруппы",
-                                onClick = { onAddSubgroups(subgroups) },
-                                modifier = Modifier.widthIn(min = GROUP_BUTTON),
-                            )
-                        }
-                    }
+                // Подгруппы своей группы — строками с «Добавить», как у
+                // добавленных «Убрать»: две кнопки рядом выходили разной
+                // высоты (Tomon 28.09).
+                subgroups.forEach { group ->
+                    GroupRow(
+                        name = group.name,
+                        note = "подгруппа вашей группы",
+                        action = "Добавить",
+                        onAction = { onAddSubgroups(listOf(group)) },
+                    )
                 }
-                if (extraGroups.isNotEmpty()) {
+                if (extraGroups.size < ru.whensclass.data.MAX_GROUPS - 1) {
+                    ActionButton(
+                        label = if (extraGroups.isEmpty() && subgroups.isEmpty()) "Добавить группу"
+                        else "Добавить другую группу",
+                        onClick = onAddGroup,
+                    )
+                }
+                if (extraGroups.isEmpty()) {
+                    Hint("Пары других групп можно видеть в расписании рядом со своими.")
+                } else {
                     // Названия или номера под временем пар (Tomon 28.09).
                     Text(
                         "Подписи у пар",
@@ -252,12 +243,13 @@ fun SettingsScreen(
                         selected = groupsByName,
                         onPick = onGroupsByName,
                     )
+                    // Что значат значки — здесь, где их выбирают (Tomon 28.09).
+                    Hint(
+                        "Под временем пары — группы, у которых она есть: ваша закрашена, " +
+                            "остальные бледные. Пары, которых у вашей группы нет, — на сером фоне. " +
+                            "Виджеты, напоминания и уведомления об изменениях — только о вашей группе.",
+                    )
                 }
-                Hint(
-                    "Пары других групп — на экране расписания рядом со своими, подписи под " +
-                        "временем — чья пара. Виджеты, напоминания и уведомления об изменениях — " +
-                        "только о своей группе.",
-                )
             }
         }
 
@@ -554,6 +546,39 @@ private fun Link(text: String, url: String) {
 
 /** Ширина кнопок раздела «Группа»: «Сменить» и «Добавить» — одного размера. */
 private val GROUP_BUTTON = 112.dp
+
+/** Строка группы в разделе «Группа»: название, пометка и одна кнопка. */
+@Composable
+private fun GroupRow(
+    name: String,
+    action: String,
+    onAction: () -> Unit,
+    mark: String? = null,
+    note: String? = null,
+) {
+    Row(
+        modifier = Modifier.padding(top = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (mark != null) GroupMark(mark, own = false)
+        Column(modifier = Modifier.weight(1f).padding(start = if (mark != null) 10.dp else 0.dp, end = 8.dp)) {
+            Text(name, style = MaterialTheme.typography.bodyLarge)
+            if (note != null) {
+                Text(
+                    note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        ActionButton(
+            label = action,
+            onClick = onAction,
+            modifier = Modifier.widthIn(min = GROUP_BUTTON),
+            top = 0.dp,
+        )
+    }
+}
 
 /** Насколько заранее можно попросить напоминание. */
 private val NOTIFY_OPTIONS = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180, 240)
