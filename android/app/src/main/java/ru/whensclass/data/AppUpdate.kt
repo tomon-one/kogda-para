@@ -154,6 +154,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         const val APK = "application/vnd.android.package-archive"
         /** Больше этого сборка не бывает: она весит около 2,5 МБ. */
         const val MAX_SIZE = 64L * 1024 * 1024
+        /** Экран проверяет сборку не чаще раза в полчаса ([checkForScreen]). */
+        const val CHECK_EVERY_MILLIS = 30L * 60 * 1000
     }
 
     /**
@@ -168,6 +170,26 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         data class Available(val release: ReleaseDto) : Check
         data object UpToDate : Check
         data object Failed : Check
+    }
+
+    /** Последняя проверка экрана: когда и что ответили. */
+    @Volatile private var lastCheck: Pair<Long, Check>? = null
+
+    /**
+     * Проверка для экрана: при открытии, по возвращении в приложение не чаще
+     * [CHECK_EVERY_MILLIS], по уведомлению о версии — всегда. Раньше экран
+     * проверял один раз при создании: нажатие на «Вышла версия» по живому
+     * экрану открывало настройки с прежними сведениями — без «Обновить» или
+     * с прежней сборкой (четвёртый аудит, В28 прогона 1), а поворот экрана
+     * спрашивал /v1/app заново (М23). Не пора — прежний ответ.
+     */
+    suspend fun checkForScreen(force: Boolean): Check {
+        val now = System.currentTimeMillis()
+        val cached = lastCheck
+        if (!force && cached != null && cached.second != Check.Failed &&
+            now - cached.first in 0 until CHECK_EVERY_MILLIS
+        ) return cached.second
+        return check().also { lastCheck = now to it }
     }
 
     suspend fun check(): Check = withContext(Dispatchers.IO) {

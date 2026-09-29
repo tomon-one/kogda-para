@@ -59,6 +59,48 @@ object ScheduleDiff {
         (lesson.groups ?: fresh.groupName.takeIf { !fresh.isTeacher })
             ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet().orEmpty()
 
+    private fun norm(subject: String): String =
+        subject.lowercase().map { if (it.isLetterOrDigit()) it else ' ' }.joinToString("")
+            .split(' ').filter { it.isNotEmpty() }.joinToString(" ")
+
+    private fun distance(a: String, b: String): Int {
+        val row = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            var prev = row[0]
+            row[0] = i
+            for (j in 1..b.length) {
+                val keep = row[j]
+                row[j] = minOf(row[j] + 1, row[j - 1] + 1, prev + if (a[i - 1] == b[j - 1]) 0 else 1)
+                prev = keep
+            }
+        }
+        return row[b.length]
+    }
+
+    /**
+     * Та же пара под чуть другим названием: исправили опечатку, регистр или
+     * точку («Обествознание» → «Обществознание»), или у одной записи полное
+     * «А / Б», у другой — только «А». Раньше это уходило строками «убрали» и
+     * «добавилась» (четвёртый аудит, М35 прогона 1). Как same_subject в
+     * server/src/whensclass/push/changes.py — правила одни.
+     */
+    internal fun sameSubject(a: String, b: String): Boolean {
+        if (a == b) return true
+        val na = norm(a)
+        val nb = norm(b)
+        if (na == nb) return true
+        val headA = norm(a.substringBefore('/'))
+        if (headA.isNotEmpty() && headA == norm(b.substringBefore('/'))) return true
+        return minOf(na.length, nb.length) >= 8 && distance(na, nb) <= 2
+    }
+
+    /**
+     * Хост, куда поведёт ссылка, — для «чужой адрес: …». «\» браузер читает
+     * как «/» и ведёт на хост до неё (М24); кривой адрес — сам адрес.
+     */
+    internal fun urlHost(url: String): String =
+        runCatching { java.net.URI(url.trim().replace('\\', '/')).host }.getOrNull() ?: url
+
     private fun compareNumber(
         day: String,
         number: Int,
@@ -78,6 +120,14 @@ object ScheduleDiff {
         fun say(text: String) = changes.add(Change(day, text))
         fun groups(lesson: LessonDto) = groupsOf(lesson, fresh)
         fun overlap(a: LessonDto, b: LessonDto) = (groups(a) intersect groups(b)).isNotEmpty()
+        // Только эти группы записи — в её порядке.
+        fun listed(lesson: LessonDto, keep: Set<String>) =
+            lesson.groups.orEmpty().split(",").map { it.trim() }.filter { it in keep }.joinToString(", ")
+        // Группы на этом номере до и после: у преподавателя записи склеены из
+        // групп, и к паре присоединяется или уходит группа — «добавилась» и
+        // «убрали» только о ней, а не о всей записи (М34).
+        val beforeGroups = was.flatMap { groups(it) }.toSet()
+        val afterGroups = now.flatMap { groups(it) }.toSet()
 
         // Что от прежнего набора ещё не нашло себе пару в новом.
         val unmatched = was.toMutableList()
@@ -89,7 +139,8 @@ object ScheduleDiff {
         for (lesson in now) {
             val instead = lesson.replaces ?: continue
             if (lesson.isCancelled || was.any { it.subject == lesson.subject }) continue
-            val index = unmatched.indexOfFirst { it.subject == instead }
+            var index = unmatched.indexOfFirst { it.subject == instead }
+            if (index < 0) index = unmatched.indexOfFirst { sameSubject(it.subject, instead) }
             if (index < 0) continue
             unmatched.removeAt(index)
             replaced += lesson
@@ -111,6 +162,11 @@ object ScheduleDiff {
                 it.subject == lesson.subject && overlap(it, lesson)
             }
             if (index < 0) index = unmatched.indexOfFirst { it.subject == lesson.subject }
+            // Та же пара под чуть другим названием — у тех же групп (у
+            // преподавателя — пересекающихся) и с тем же преподавателем.
+            if (index < 0) index = unmatched.indexOfFirst {
+                sameSubject(it.subject, lesson.subject) && overlap(it, lesson) && it.teachers == lesson.teachers
+            }
             if (index < 0) {
                 // Та же пара раздвоилась на записи: новость, только если часть
                 // отменили или вернули — у преподавателя «ИСП-924/1,
@@ -133,6 +189,12 @@ object ScheduleDiff {
             }
             val previous = unmatched.removeAt(index)
             val tag = whose(lesson)
+            if (fresh.isTeacher) {
+                val added = groups(lesson) - beforeGroups
+                if (added.isNotEmpty()) say("добавилась $number пара (${listed(lesson, added)}): ${lesson.subject}")
+                val left = groups(previous) - afterGroups
+                if (left.isNotEmpty()) say("убрали $number пару (${listed(previous, left)}): ${previous.subject}")
+            }
             when {
                 !previous.isCancelled && lesson.isCancelled ->
                     say("отменили $number пару$tag: ${lesson.subject}")
@@ -179,7 +241,7 @@ object ScheduleDiff {
                 url == null || url == previous.url -> Unit
                 !isKnownWebinar(url) ->
                     say("у $number пары$tag ${if (previous.url == null) "появилась" else "сменилась"} " +
-                        "ссылка — чужой адрес: ${runCatching { java.net.URI(url).host }.getOrNull() ?: url}")
+                        "ссылка — чужой адрес: ${urlHost(url)}")
                 previous.url == null -> say("у $number пары$tag появилась ссылка")
                 else -> say("у $number пары$tag сменилась ссылка")
             }
@@ -188,6 +250,13 @@ object ScheduleDiff {
         unmatched.forEach { gone ->
             // Та же пара слилась из нескольких записей в одну — не новость.
             if (now.any { it.subject == gone.subject }) return@forEach
+            if (fresh.isTeacher && gone.groups != null) {
+                // Все её группы на номере остались — запись просто склеилась
+                // с другой.
+                val left = groups(gone) - afterGroups
+                if (left.isNotEmpty()) say("убрали $number пару (${listed(gone, left)}): ${gone.subject}")
+                return@forEach
+            }
             say("убрали $number пару${whose(gone)}: ${gone.subject}")
         }
     }

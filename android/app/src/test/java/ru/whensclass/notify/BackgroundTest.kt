@@ -19,6 +19,11 @@ class BackgroundTest {
         assertEquals(Vendor.SAMSUNG, Vendor.of("samsung", "samsung"))
         assertEquals(Vendor.TRANSSION, Vendor.of("TECNO MOBILE LIMITED", "TECNO"))
         assertEquals(Vendor.TRANSSION, Vendor.of("INFINIX MOBILITY LIMITED", "Infinix"))
+        assertEquals(Vendor.OPPO, Vendor.of("realme", "realme"))
+        assertEquals(Vendor.OPPO, Vendor.of("OnePlus", "OnePlus"))
+        assertEquals(Vendor.OPPO, Vendor.of("OPPO", "OPPO"))
+        assertEquals(Vendor.VIVO, Vendor.of("vivo", "vivo"))
+        assertEquals(Vendor.VIVO, Vendor.of("vivo", "iQOO"))
         // Остальным раздел не нужен: обычный Android будит приложение сам.
         assertNull(Vendor.of("Google", "google"))
         assertNull(Vendor.of(null, null))

@@ -116,7 +116,9 @@ fun ScheduleWidgetContent(
             )
             schedule == null -> MissingHint("Расписание ещё не загружено", colors)
             today == null -> {
-                val missing = missingDay(schedule, day, serverBroken)
+                val missing = missingDay(
+                    schedule, day, serverBroken, checked = checkedToday(fetchedAt, now.toLocalDate()),
+                )
                 // К своей колонке и к этому дню, а не в книгу целиком.
                 val link = sheetLink(schedule, day, sourceUrl)
                 MissingHint(
@@ -439,12 +441,23 @@ private fun HiddenLine(text: String, day: LocalDate, colors: Palette) {
  */
 internal data class Missing(val text: String, val toSource: Boolean = false, val off: Boolean = false)
 
+/**
+ * Проверял ли телефон сервер с начала сегодняшнего дня. Нет — «ещё не
+ * опубликовано» утверждать нечем: телефон, который не будят в фоне (или без
+ * сети), с четверга не видел недели, которую колледж выложил в пятницу
+ * (четвёртый аудит, В20 прогона 1).
+ */
+internal fun checkedToday(fetchedAt: Long, today: LocalDate): Boolean =
+    fetchedAt >= today.atStartOfDay(COLLEGE_ZONE).toInstant().toEpochMilli()
+
 internal fun missingDay(
     schedule: ScheduleDto,
     day: LocalDate,
     serverBroken: Boolean,
     /** Для недельного виджета — «на эти дни», а не «на этот день». */
     week: Boolean = false,
+    /** Телефон проверял сервер сегодня ([checkedToday]). */
+    checked: Boolean = true,
 ): Missing {
     val covered = schedule.coverage.size == 2 && runCatching {
         !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
@@ -472,7 +485,7 @@ internal fun missingDay(
         serverBroken -> Missing("Сбой: расписание не обновляется", toSource = true)
         // Лист этот день покрывает, а на телефоне его нет — окно не то.
         // Утверждать «выходной» или «не опубликовано» нечем.
-        covered -> Missing(
+        covered || !checked -> Missing(
             if (week) "Расписание на эти дни не загружено" else "Расписание на этот день не загружено",
         )
         // Единственное объяснение, которое приложение проверить не может:

@@ -114,6 +114,8 @@ fun SettingsScreen(
     onNotifyServer: (Boolean) -> Unit = {},
     onNotifyGroupsGone: (Boolean) -> Unit = {},
     focusUpdate: Boolean,
+    /** Прокрутили к «Версии» — больше не нужно (М63). */
+    onUpdateFocused: () -> Unit = {},
     checkingUpdate: Boolean,
     updateChecked: Boolean,
     updateFailed: Boolean,
@@ -147,8 +149,14 @@ fun SettingsScreen(
 
     // Пришли по значку обновления — сразу прокручиваем к нему: раздел стоит
     // внизу, и искать его глазами не надо.
+    // Один раз за приход: раньше любая правка выше «Версии» (добавить
+    // группу, включить напоминания, вернуться из выбора) снова уносила экран
+    // вниз (четвёртый аудит, М63 прогона 1).
     LaunchedEffect(focusUpdate, updateOffset) {
-        if (focusUpdate && updateOffset > 0) scroll.animateScrollTo(updateOffset)
+        if (focusUpdate && updateOffset > 0) {
+            scroll.animateScrollTo(updateOffset)
+            onUpdateFocused()
+        }
     }
 
     Scaffold(
@@ -691,7 +699,12 @@ private fun PinWidgets() {
 private fun BackgroundWork(phone: ru.whensclass.notify.PhoneState, exactAlarms: Boolean, reminders: Boolean) {
     val vendor = remember { Vendor.current() }
     val steps = remember(vendor) { vendor?.let { Background.steps(it) }.orEmpty() }
-    val exact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    // Строка «Точное время» — только там, где его выдаёт человек: на Android 12.
+    // С 13-го приложение получает его при установке (USE_EXACT_ALARM, В22), и
+    // строка с вечной галочкой только занимала бы место; не выдано вдруг —
+    // показать.
+    val exact = Build.VERSION.SDK_INT in Build.VERSION_CODES.S..Build.VERSION_CODES.S_V2 ||
+        (Build.VERSION.SDK_INT > Build.VERSION_CODES.S_V2 && !exactAlarms)
     if (vendor == null && !exact && phone.backgroundLimits.isEmpty() && phone.zoneWarning == null) return
     val context = LocalContext.current
     Section("Работа в фоне") {
@@ -722,7 +735,7 @@ private fun BackgroundWork(phone: ru.whensclass.notify.PhoneState, exactAlarms: 
         }
         // После шагов марки: это разрешение, а не выключатель, и нужно оно не
         // только напоминаниям — звонок для виджетов, подсветка идущей пары,
-        // ждёт того же, а на Android 14+ его по умолчанию нет. Посреди
+        // ждёт того же. Посреди
         // выключателей уведомлений оно рвало их ряд (просьба Tomon 27.09).
         if (exact) ExactAlarms(exactAlarms, reminders)
         if (vendor != null) {
@@ -864,22 +877,37 @@ private fun Section(
  * открывался чужой экран. Галочка слева от значка говорит, что там сейчас,
  * значок — что нажатие уводит наружу.
  *
- * До Android 12 разрешения не существовало — там раздел просто не нужен.
+ * До Android 12 разрешения не существовало, с 13-го оно выдаётся при
+ * установке (USE_EXACT_ALARM) — строка нужна только Android 12.
  */
 @Composable
 private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
     val context = LocalContext.current
     // runCatching, как у остальных переходов: на части прошивок такого экрана
-    // нет, и голый вызов ронял приложение.
+    // нет, и голый вызов ронял приложение. Не открылся — сказать и открыть
+    // свойства приложения, как у шагов марки: раньше нажатие молчало (В22).
     val open = {
-        runCatching {
+        val opened = runCatching {
             context.startActivity(
                 Intent(
                     Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
                     Uri.parse("package:${context.packageName}"),
                 ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
+        }.isSuccess
+        if (!opened) {
+            Toast.makeText(
+                context,
+                "Экран «Будильники и напоминания» не открылся — ищите его в свойствах приложения",
+                Toast.LENGTH_LONG,
+            ).show()
+            runCatching {
+                context.startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
         }
         Unit
     }

@@ -312,6 +312,8 @@ private fun App(
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
     // Свежие списки за этот заход уже пришли — дальше хватит их.
     var listsFresh by remember { mutableStateOf(false) }
+    // «Повторить» — в сеть, даже если сохранённые моложе 12 часов.
+    var listsRetry by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
     // Какой список показывать на экране выбора: null — по текущей роли.
     var pickTeacher by rememberSaveable { mutableStateOf<Boolean?>(null) }
@@ -357,6 +359,14 @@ private fun App(
         if (groups.isNullOrEmpty()) repository.cachedGroups().takeIf { it.isNotEmpty() }?.let { groups = it }
         if (teachers.isNullOrEmpty()) repository.cachedTeachers().takeIf { it.isNotEmpty() }?.let { teachers = it }
         if (listsFresh) return@LaunchedEffect
+        // Свежие списки — не чаще раза в LISTS_FRESH_MILLIS, если сохранённые
+        // есть: как на сайте (М23). «Повторить» и пустой список — сразу.
+        val age = System.currentTimeMillis() - container.store.listsFetchedAt()
+        if (!listsRetry && !groups.isNullOrEmpty() && !teachers.isNullOrEmpty() && age in 0 until LISTS_FRESH_MILLIS) {
+            listsFresh = true
+            return@LaunchedEffect
+        }
+        listsRetry = false
         val (freshGroups, freshTeachers) = coroutineScope {
             val g = async { repository.freshGroups() }
             val t = async { repository.freshTeachers() }
@@ -369,6 +379,7 @@ private fun App(
         if (teachers == null) teachers = emptyList()
         if (freshGroups != null && freshTeachers != null) {
             listsFresh = true
+            container.store.setListsFetchedAt(System.currentTimeMillis())
             repository.followRenamedPins(freshGroups, freshTeachers)
         }
     }
@@ -386,6 +397,7 @@ private fun App(
     // «Повторить» у списков — заново и сеть, даже если свежие уже приходили.
     val retryLists: () -> Unit = {
         listsFresh = false
+        listsRetry = true
         reloadKey++
     }
 
@@ -407,14 +419,20 @@ private fun App(
     val refreshNow: () -> Unit = {
         scope.launch {
             refreshing = true
-            listsFresh = false
+            // Списки на ⟳ не перезапрашиваются: они — раз в 12 часов (М23).
             reloadKey++
             // Напрямую, без WorkManager: он вправе отложить задачу на минуты,
             // а человек только что нажал кнопку и ждёт ответа сейчас.
             val result = container.repository.refresh(force = true)
-            refreshFailed = result is RefreshResult.Failed
+            refreshFailed = result is RefreshResult.Failed || result is RefreshResult.Partial
             when (result) {
-                is RefreshResult.Failed -> refreshError = refreshFailure(result.error)
+                is RefreshResult.Failed -> refreshError = refreshFailure(result.error, teacherMode)
+                // Своё обновилось, другие группы — не все: без галочки и с
+                // именами тех, чьи прежние пары на экране (В4).
+                is RefreshResult.Partial -> refreshError =
+                    (if (result.missed.size == 1) "Не обновилась группа ${result.missed[0]}"
+                    else "Не обновились группы ${result.missed.joinToString(", ")}") +
+                        ": на экране их прежние пары"
                 // Сервер здоров, группы нет: сказать об этом, а не молча
                 // погасить ⟳ крестиком «сервер не смог».
                 RefreshResult.Gone -> refreshError =
@@ -426,10 +444,16 @@ private fun App(
         }
     }
 
-    // Проверяем обновление один раз при запуске: чаще незачем, сборки выходят
-    // не по расписанию.
-    LaunchedEffect(Unit) {
-        (container.updates.check() as? AppUpdate.Check.Available)?.let { update = it.release }
+    // Проверяем обновление при открытии, по возвращении — не чаще раза в
+    // полчаса, по уведомлению о версии — всегда: живой экран иначе показывал
+    // сведения с момента своего создания (В28).
+    LaunchedEffect(openSeq, ScreenClock.resumes) {
+        when (val result = container.updates.checkForScreen(force = openUpdate && openSeq > 0)) {
+            is AppUpdate.Check.Available -> update = result.release
+            AppUpdate.Check.UpToDate -> update = null
+            // Не дозвонились — известное прежде не забываем.
+            AppUpdate.Check.Failed -> Unit
+        }
     }
 
     // И сразу забираем свежее расписание: после установки новой версии старые
@@ -595,6 +619,7 @@ private fun App(
                             scope.launch { container.store.setNotifyGroupsGone(on) }
                         },
                         focusUpdate = focusUpdate,
+                        onUpdateFocused = { focusUpdate = false },
                         checkingUpdate = checkingUpdate,
                         updateChecked = updateChecked,
                         updateFailed = updateFailed,
@@ -725,12 +750,17 @@ private fun App(
  * «занят», а «расписания на сервере ещё нет» (api.md); занятость nginx
  * отвечает 429.
  */
-internal fun refreshFailure(error: Throwable): String = when (error) {
+/** Свежие списки групп и преподавателей — не чаще этого, если сохранённые есть. */
+internal const val LISTS_FRESH_MILLIS = 12L * 60 * 60 * 1000
+
+internal fun refreshFailure(error: Throwable, teacher: Boolean = false): String = when (error) {
     is ru.whensclass.data.HttpFailure -> when (error.code) {
         429 -> "Сервер занят, попробуйте через минуту"
-        // 503 — когда снимка нет вовсе (новый сервер, потерянные данные) и до
-        // 40 минут, пока сервер подтверждает переименование группы: «нет
-        // расписания» соврало бы всей переименованной группе (разбор текстов 27.09).
+        // Первый час после пропажи: код ответа человеку ничего не говорил и
+        // выглядел поломкой приложения (четвёртый аудит, М50 прогона 1).
+        404 -> if (teacher) "Вас не нашлось в таблице. Не вернётся за час — выберите себя заново"
+        else "Группы не нашлось в таблице. Не вернётся за час — выберите её заново"
+        // 503 — когда снимка нет вовсе (новый сервер, потерянные данные).
         503 -> "Сервер сейчас не отдаёт это расписание, на экране прежнее. Не пройдёт за час — " +
             "напишите автору в Telegram: @toomonn"
         else -> "Не удалось обновить: сервер ответил ${error.code}"

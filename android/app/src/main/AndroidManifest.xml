@@ -11,11 +11,19 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Точное время напоминания. Без него система вправе отложить будильник
          на десятки минут, и предупреждение приходит, когда пара уже идёт.
-         Разрешение выдаётся человеком в настройках телефона; не выдали —
-         приложение ставит неточный будильник и продолжает работать. -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+         С Android 13 — USE_EXACT_ALARM: выдаётся при
+         установке и не отбирается (правило Google Play о нём на файл вне
+         магазина не распространяется, а напоминание о паре — будильник по
+         календарю). SCHEDULE_EXACT_ALARM на 14+ по умолчанию не выдан, и
+         напоминание «за 20 минут» приходило во время пары (четвёртый аудит,
+         В22 прогона 1); он нужен только Android 12, где его выдаёт человек в
+         настройках телефона; не выдали — будильник неточный. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
     <!-- Системное окно «Разрешить работу в фоне?». Спрашивается только по
-         кнопке в разделе «Работа в фоне» — на Xiaomi, Huawei, Honor и Samsung,
+         кнопке в разделе «Работа в фоне» — на телефонах из списка марок,
          где без этого не приходят обновление и будильники звонка. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Без него Huawei на EMUI 10–11 не открывает чужому приложению свой

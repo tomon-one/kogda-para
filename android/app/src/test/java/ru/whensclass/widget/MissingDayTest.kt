@@ -78,6 +78,18 @@ class MissingDayTest {
     }
 
     @Test
+    fun `телефон сегодня сервер не проверял — «не загружено», а не «не опубликовано»`() {
+        // Телефон, который не будят в фоне, с четверга не видел недели,
+        // выложенной в пятницу (В20 прогона 1 аудита 4).
+        val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, false, checked = false)
+        assertEquals("Расписание на этот день не загружено", answer.text)
+        assertTrue(!answer.toSource)
+        val start = monday.atStartOfDay(COLLEGE_ZONE).toInstant().toEpochMilli()
+        assertTrue(checkedToday(start, monday))
+        assertTrue(!checkedToday(start - 1, monday))
+    }
+
+    @Test
     fun `сбой сервера называем сбоем, а не отсутствием расписания`() {
         val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, true)
         assertEquals("Сбой: расписание не обновляется", answer.text)

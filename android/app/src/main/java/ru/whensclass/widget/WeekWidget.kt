@@ -127,6 +127,7 @@ class WeekWidget : GlanceAppWidget() {
                     weekDays(days, today).isEmpty() -> {
                         val missing = missingDay(
                             schedule, today, state?.serverBroken == true, week = true,
+                            checked = checkedToday(state?.fetchedAt ?: 0L, today),
                         )
                         MissingHint(
                             missing.text, colors,

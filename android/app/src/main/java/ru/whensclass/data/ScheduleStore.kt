@@ -81,21 +81,18 @@ class ScheduleStore(private val context: Context) {
     /** О каком сбое (по его `since`) телефон уже сказал уведомлением. */
     /**
      * С какого момента сервер не отвечает вовсе, хотя сеть у телефона есть.
-     * Запоминается первый раз и держится, пока сервер не ответит.
+     * Запоминается первый раз и держится, пока сервер не ответит
+     * ([clearUnreachable] — на любой удачный ответ). Раньше серия рвалась,
+     * если телефон не проверял сервер дольше трёх часов (ночь, Doze): утром
+     * тот же сбой объявлялся заново и «с 07:40» вместо «с вечера» (четвёртый
+     * аудит, М49 прогона 1).
      */
     suspend fun noteUnreachable(now: java.time.Instant): java.time.Instant {
         var first = now
         context.dataStore.edit { prefs ->
             val known = prefs[KEY_UNREACHABLE_SINCE]
                 ?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-            val last = prefs[KEY_UNREACHABLE_LAST]
-                ?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-            // Неудачи — подряд: между двумя случайными с разницей в несколько
-            // часов сервер отвечал, и они не складываются в «не отвечает с
-            // утра».
-            val streak = known != null && last != null &&
-                java.time.Duration.between(last, now) < UNREACHABLE_STREAK_GAP
-            if (streak) first = known!! else prefs[KEY_UNREACHABLE_SINCE] = now.toString()
+            if (known != null) first = known else prefs[KEY_UNREACHABLE_SINCE] = now.toString()
             prefs[KEY_UNREACHABLE_LAST] = now.toString()
         }
         return first
@@ -611,6 +608,18 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_GROUPS] = body }
     }
 
+    /**
+     * Когда списки групп и преподавателей пришли свежими целиком. Раньше они
+     * качались на каждый новый экран и каждое ⟳; сайт берёт их раз в 12 часов
+     * (четвёртый аудит, М23 прогона 1).
+     */
+    suspend fun listsFetchedAt(): Long =
+        context.dataStore.data.first()[KEY_LISTS_AT]?.toLongOrNull() ?: 0L
+
+    suspend fun setListsFetchedAt(millis: Long) {
+        context.dataStore.edit { it[KEY_LISTS_AT] = millis.toString() }
+    }
+
     /** Список преподавателей: полторы сотни имён, качать их каждый раз незачем. */
     val teachersJson: Flow<String?> = context.dataStore.data.map { it[KEY_TEACHERS] }
 
@@ -682,6 +691,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUP_ID = stringPreferencesKey("group_id")
         val KEY_SERVER_SINCE = stringPreferencesKey("server_since")
         val KEY_STALE_NOTIFIED = stringPreferencesKey("stale_notified")
+        val KEY_LISTS_AT = stringPreferencesKey("lists_at")
         val KEY_PENDING_CHANGES = stringPreferencesKey("pending_changes")
         val KEY_UNREACHABLE_SINCE = stringPreferencesKey("unreachable_since")
         val KEY_GONE_SINCE = stringPreferencesKey("gone_since")
@@ -703,7 +713,6 @@ class ScheduleStore(private val context: Context) {
          * рвалась каждый раз — «сервер не отвечает» без открытия приложения
          * не наступал никогда.
          */
-        val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(3)
         /** Счёт показов виджета — не чаще раза в столько. */
         const val DRAW_COUNT_GAP_MILLIS = 3L * 60 * 60 * 1000
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")

@@ -26,7 +26,10 @@ enum class Vendor(
     HUAWEI("Huawei", pinInRecents = true),
     HONOR("Honor", pinInRecents = true),
     SAMSUNG("Samsung", pinInRecents = false),
-    TRANSSION("Tecno", pinInRecents = true);
+    TRANSSION("Tecno", pinInRecents = true),
+    /** OPPO, realme и OnePlus — прошивка ColorOS (у realme — realme UI на ней). */
+    OPPO("OPPO", pinInRecents = true),
+    VIVO("vivo", pinInRecents = true);
 
     /** Как марку называют люди: Redmi, а не Xiaomi. */
     fun title(brand: String? = Build.BRAND): String =
@@ -38,6 +41,9 @@ enum class Vendor(
             "poco" to "POCO",
             "infinix" to "Infinix",
             "itel" to "itel",
+            "realme" to "realme",
+            "oneplus" to "OnePlus",
+            "iqoo" to "iQOO",
         )
 
         fun current(): Vendor? = of(Build.MANUFACTURER, Build.BRAND)
@@ -55,6 +61,11 @@ enum class Vendor(
                 names.any { it == "samsung" } -> SAMSUNG
                 // У Transsion производитель — «TECNO MOBILE LIMITED» и т. п.
                 names.any { n -> listOf("tecno", "infinix", "itel").any { n.startsWith(it) } } -> TRANSSION
+                // realme — 13 % продаж в России за 2025 год, вровень с Tecno;
+                // ColorOS и Funtouch гасят приложения в фоне (dontkillmyapp:
+                // 3 из 5). Раньше у них не было ни шага (четвёртый аудит, В19).
+                names.any { it in setOf("oppo", "realme", "oneplus") } -> OPPO
+                names.any { it in setOf("vivo", "iqoo") } -> VIVO
                 else -> null
             }
         }
@@ -189,6 +200,63 @@ object Background {
                     SettingsTarget.Action("com.samsung.android.sm.ACTION_BATTERY", pkg = "com.samsung.android.lool"),
                     APP_DETAILS,
                 ),
+            ),
+        )
+        Vendor.OPPO -> listOf(
+            BackgroundStep(
+                label = "Автозапуск",
+                hint = "Включите «Разрешить автозапуск» у «Когда пара?». На новых " +
+                    "прошивках — в свойствах приложения, «Использование батареи».",
+                targets = listOf(
+                    SettingsTarget.Screen(
+                        "com.coloros.safecenter",
+                        "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+                    ),
+                    SettingsTarget.Screen(
+                        "com.coloros.safecenter",
+                        "com.coloros.safecenter.startupapp.StartupAppListActivity",
+                    ),
+                    SettingsTarget.Screen(
+                        "com.oppo.safe",
+                        "com.oppo.safe.permission.startup.StartupAppListActivity",
+                    ),
+                    SettingsTarget.Screen(
+                        "com.oneplus.security",
+                        "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity",
+                    ),
+                    APP_DETAILS,
+                ),
+            ),
+            BackgroundStep(
+                label = "Работа в фоне",
+                hint = "Нажмите «Разрешить», а в свойствах приложения, «Использование " +
+                    "батареи», — «Разрешить работу в фоне».",
+                targets = IGNORE_OPTIMIZATIONS + APP_DETAILS,
+                battery = true,
+            ),
+        )
+        Vendor.VIVO -> listOf(
+            BackgroundStep(
+                label = "Автозапуск",
+                hint = "Разрешите «Когда пара?».",
+                targets = listOf(
+                    SettingsTarget.Screen(
+                        "com.vivo.permissionmanager",
+                        "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
+                    ),
+                    SettingsTarget.Screen(
+                        "com.iqoo.secure",
+                        "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager",
+                    ),
+                    APP_DETAILS,
+                ),
+            ),
+            BackgroundStep(
+                label = "Работа в фоне",
+                hint = "Нажмите «Разрешить», а в «Батарее» разрешите высокое " +
+                    "энергопотребление в фоне.",
+                targets = IGNORE_OPTIMIZATIONS + APP_DETAILS,
+                battery = true,
             ),
         )
         Vendor.TRANSSION -> listOf(

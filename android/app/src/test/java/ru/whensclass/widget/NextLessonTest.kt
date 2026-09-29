@@ -80,6 +80,7 @@ class NextLessonTest {
         assertNull(nextLesson(endOfSheet, now.atTime(19, 0)))
         assertEquals("Дальше расписание ещё не опубликовано", noNextLesson("ИСП-924/1", endOfSheet, now, false))
         assertEquals("Сбой: расписание не обновляется", noNextLesson("ИСП-924/1", endOfSheet, now, true))
+        assertEquals("Дальше расписание не загружено", noNextLesson("ИСП-924/1", endOfSheet, now, false, checked = false))
         // Лист идёт дальше скачанной недели, а в ней пар больше нет: не «дальше
         // пар нет» (за краем недели они есть), а до какого дня их нет (разбор
         // текстов 27.09).
