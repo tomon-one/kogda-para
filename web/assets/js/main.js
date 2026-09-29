@@ -894,9 +894,23 @@ function registerWorker() {
   }
   // Сменился воркер при уже работавшем — вышла новая сборка; первый — нет.
   var hadController = !!navigator.serviceWorker.controller;
+  // Первое открытие после выкладки отдаёт прежняя сборка из кэша, а новая
+  // встаёт за ним через секунды. Пока страницу не трогали — показать новую
+  // сразу: иначе новая сборка доходила только при следующем открытии, а на
+  // быстрой перезагрузке — и не при нём (Tomon 29.09).
+  var touched = false;
+  ['pointerdown', 'keydown', 'wheel'].forEach(function (type) {
+    window.addEventListener(type, function () { touched = true; }, { capture: true, passive: true });
+  });
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     // Первый захват воркером — не новая сборка; следующие — новая.
-    if (hadController) workerUpdated = true;
+    if (hadController) {
+      workerUpdated = true;
+      if (!touched && document.visibilityState === 'visible' && !document.querySelector('.overlay')) {
+        location.reload();
+        return;
+      }
+    }
     hadController = true;
   });
   // После первого показа и обновления: файлы для воркера не спорят за сеть с
