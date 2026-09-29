@@ -353,7 +353,7 @@ test('другая группа, не пришедшая с новым gen, пе
     ['/v1/schedule/isp-2?', [429, { error: 'занят' }]],
   ]);
   const partial = await repo.refresh(false);
-  assert.deepEqual(partial, { kind: 'partial', missed: ['ИСП-2'] });
+  assert.deepEqual(partial, { kind: 'partial', missed: ['ИСП-2'], fresh: [] });
   server = healthy('G2', [
     ['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G2')]],
     ['/v1/schedule/isp-2?', [200, schedule('isp-2', 'ИСП-2', 'G2')]],
@@ -425,4 +425,49 @@ test('принудительное при идущем принудительн�
   assert.equal((await b).kind, 'updated');
   globalThis.fetch = realFetch;
   assert.equal(repo.saved().gn, 'ИСП-9');
+});
+
+test('сервер занят (429 на meta) — ни своего, ни других групп не просим', async () => {
+  // Прогон 2 аудита 4: при лимите nginx каждая попытка стоила N+2 запросов.
+  reset();
+  server = (url) => (url === '/v1/meta' ? [429, { error: 'занят' }] : [200, schedule('isp-1', 'ИСП-1', 'G1')]);
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  repo.addExtras([{ id: 'isp-2', name: 'ИСП-2' }]);
+  requests = [];
+  const result = await repo.refresh(true);
+  assert.equal(result.kind, 'failed');
+  assert.equal(result.error.status, 429);
+  assert.deepEqual(requests, ['/v1/meta']);
+});
+
+test('только что добавленная группа не пришла — «её пары придут», первое 404 — не «не обновилась»', async () => {
+  // Прогон 2 аудита 4: у новой группы прежних пар нет, а неподтверждённое 404
+  // гоняло обновление каждую минуту.
+  reset();
+  server = healthy('G1', [
+    ['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]],
+    ['/v1/schedule/isp-2?', [429, { error: 'занят' }]],
+  ]);
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  repo.addExtras([{ id: 'isp-2', name: 'ИСП-2' }]);
+  assert.deepEqual(await repo.refresh(true), { kind: 'partial', missed: ['ИСП-2'], fresh: ['ИСП-2'] });
+
+  // Группу переименовали: первое 404 — подозрение, заход удачный.
+  server = healthy('G1', [['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]]]);
+  assert.equal((await repo.refresh(true)).kind, 'updated');
+});
+
+test('неудача вечером и утром через ночь — не «не отвечает»', async () => {
+  // Прогон 2 аудита 4 (М49): цепочка рвётся после трёх часов без проверок.
+  reset();
+  server = () => 'down';
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  store.set('lastOk', clock - 11 * HOUR);
+  await repo.refresh(false);
+  clock += 10 * HOUR;
+  await repo.refresh(false);
+  assert.notEqual(repo.serverState().status, repo.STATUS_UNREACHABLE);
+  clock += 60 * 1000;
+  await repo.refresh(false);
+  assert.equal(repo.serverState().status, repo.STATUS_UNREACHABLE);
 });

@@ -259,6 +259,12 @@ function retryRemove() {
   }, function () { /* в другой раз */ });
 }
 
+/** Выбор сменился, а служба о нём ещё не знает: пересылка не прошла. */
+export function behind(who) {
+  var saved = store.get(KEY);
+  return !!(saved && enabled() && who && (saved.kind !== who.kind || saved.id !== who.id));
+}
+
 /**
  * При открытии и после смены своей группы: служба должна знать нынешнюю
  * подписку и нынешнюю группу. Молча; true — переслано, false — не нужно,

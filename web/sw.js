@@ -163,8 +163,19 @@ function showChanges(data) {
       // идут по дням (М33).
       var mine = fresh.filter(live);
       var newest = kept.filter(function (l) { return mine.some(function (m) { return m[1] === l[1]; }); });
-      kept = newest.length >= MAX_LINES ? newest.slice(0, MAX_LINES)
-        : kept.filter(function (l) { return newest.indexOf(l) < 0; }).slice(-(MAX_LINES - newest.length)).concat(newest);
+      if (newest.length >= MAX_LINES) {
+        kept = newest.slice(0, MAX_LINES);
+      } else {
+        // Из висящих уходят сначала строки о более далёком дне, в одном дне —
+        // более старые: сегодняшнее важнее завтрашнего (прогон 2).
+        var rest = kept.filter(function (l) { return newest.indexOf(l) < 0; });
+        var order = rest.map(function (l, i) { return i; }).sort(function (a, b) {
+          var da = rest[a][0] || '', db = rest[b][0] || '';
+          return da < db ? -1 : da > db ? 1 : b - a;
+        });
+        var keep = order.slice(0, MAX_LINES - newest.length);
+        kept = rest.filter(function (l, i) { return keep.indexOf(i) >= 0; }).concat(newest);
+      }
     }
     // Все строки про прошедшие дни (телефон вышел в сеть назавтра) — не
     // показывать вчерашнее как новость (М37).

@@ -10,6 +10,8 @@ import { DAYS, MAX_GROUPS, cleanSchedule, combineGroups, coversDay, ownOnly, win
 
 /** Сколько сервер может молчать при живой сети, прежде чем это сбой, а не чих. */
 var UNREACHABLE_BROKEN_AFTER_MS = 30 * 60 * 1000;
+/** Неудачи с таким перерывом — не одна цепочка (UNREACHABLE_STREAK_GAP приложения). */
+var UNREACHABLE_STREAK_GAP_MS = 3 * 60 * 60 * 1000;
 /** 404 подтверждается повтором не раньше чем через час: опечатку колледж чинит быстрее. */
 var GONE_CONFIRM_MS = 60 * 60 * 1000;
 
@@ -229,7 +231,8 @@ function putServerState(status, srcUrl, since) {
 /** Отметить неудачу связи: начало цепочки неудач подряд и их число. */
 function noteUnreachable(now) {
   var u = store.get('unreachable');
-  var streak = !!u;
+  // Вечерняя неудача и утренняя — не две подряд (прогон 2).
+  var streak = !!u && now - (u.last || 0) < UNREACHABLE_STREAK_GAP_MS;
   var chain = { since: streak ? u.since : now, last: now, count: streak ? (u.count || 1) + 1 : 1 };
   store.set('unreachable', chain);
   return chain;
@@ -288,9 +291,13 @@ function collectExtras(requests, serverOk) {
       return { group: r.group, schedule: schedule };
     }, function (error) {
       // 404 при здоровом сервере, повторённое через час, — группы нет в
-      // таблице. Выбор не стираем: вернётся она — вернутся и её пары.
-      var gone = isNotFound(error) && serverOk && noteExtraNotFound(r.group.id, Date.now());
-      return { group: r.group, gone: gone, missed: !gone && !r.group.gone };
+      // таблице. Выбор не стираем: вернётся она — вернутся и её пары. Первое
+      // 404 — только подозрение: не «не обновилась» с повтором каждую минуту
+      // (прогон 2), как и у своей группы.
+      var notFound = isNotFound(error) && serverOk;
+      var gone = notFound && noteExtraNotFound(r.group.id, Date.now());
+      var saved = store.get('extraSchedules') || {};
+      return { group: r.group, gone: gone, missed: !gone && !r.group.gone && !notFound, fresh: !saved[r.group.id] };
     });
   }));
 }
@@ -342,12 +349,12 @@ function refreshOnce(force) {
     extrasMissing();
   var meta = null;
 
-  var busy = false;
+  var busy = null;
   return api.meta().then(function (m) { meta = m; }, function (error) {
     meta = null;
     // 429 — сервер ответил, он занят (лимит nginx на адрес оператора): это не
     // «не отвечает», и плашки сбоя из-за него не будет (М22).
-    busy = error instanceof api.HttpError && error.status === 429;
+    busy = error instanceof api.HttpError && error.status === 429 ? error : null;
   })
     .then(function () {
       var now = Date.now();
@@ -370,6 +377,8 @@ function refreshOnce(force) {
           putServerState(STATUS_UNREACHABLE, null, new Date(since).toISOString());
         }
       }
+      // Занят — своё и другие группы упрутся в тот же лимит: не тратить его (прогон 2).
+      if (busy) return { kind: 'failed', error: busy };
       if (!force && !outdated && meta && meta.gen === store.get('gen')) {
         // Данные те же, но проверку показать надо: иначе кажется, что кнопка
         // обновления не работает.
@@ -413,10 +422,12 @@ function refreshOnce(force) {
           // Своё пришло, другие — не все: без галочки и с их именами (В4).
           // Уже убранные пока шёл запрос — не в счёт.
           var chosenIds = extras().map(function (g) { return g.id; });
-          var missed = answers.filter(function (a) {
+          var missedAnswers = answers.filter(function (a) {
             return a.missed && chosenIds.indexOf(a.group.id) >= 0;
-          }).map(function (a) { return a.group.name; });
-          return missed.length ? { kind: 'partial', missed: missed } : { kind: 'updated' };
+          });
+          var missed = missedAnswers.map(function (a) { return a.group.name; });
+          var loadedNone = missedAnswers.filter(function (a) { return a.fresh; }).map(function (a) { return a.group.name; });
+          return missed.length ? { kind: 'partial', missed: missed, fresh: loadedNone } : { kind: 'updated' };
         });
       });
     })

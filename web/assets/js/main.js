@@ -179,6 +179,7 @@ var app = {
   tally: function () { return store.get('tally') || { opens: 0, since: 0 }; },
   render: function () { render(); },
   pushBlocker: push.blocker,
+  pushBehind: function () { return push.behind(pushSubject()); },
   pushChoice: push.choice,
   pushEnabled: push.enabled,
   /** Включить, поменять или выключить уведомления; ответ — снаружи, строкой внизу. */
@@ -212,11 +213,14 @@ var pushTries = 0;
  * перезагрузки страницы, и всё это время приходило о прежней группе
  * (четвёртый аудит, В3 прогона 1).
  */
-function syncPush() {
+function syncPush(again) {
   clearTimeout(pushRetry);
+  if (again) pushTries = 0;
   push.sync(pushSubject()).then(function (result) {
     if (result !== 'failed') {
       pushTries = 0;
+      // Строка «сервер ещё не знает» в настройках — убрать.
+      if (result === true && app.route.screen === 'settings') render();
       return;
     }
     if (++pushTries > 5) return;
@@ -600,7 +604,7 @@ function loadOther(kind, id) {
 }
 
 function failText(result) {
-  if (result.kind === 'partial') return partialText(result.missed);
+  if (result.kind === 'partial') return partialText(result.missed, result.fresh || []);
   if (result.kind === 'gone') {
     return repo.isTeacher() ? 'Вас больше нет в таблице — выберите себя заново'
       : 'Группы больше нет в таблице — выберите заново';
@@ -621,9 +625,23 @@ function failText(result) {
   return 'Не удалось обновить: сервер прислал непонятный ответ';
 }
 
-function partialText(missed) {
-  return (missed.length === 1 ? 'Не обновилась группа ' + missed[0]
-    : 'Не обновились группы ' + missed.join(', ')) + ': на экране их прежние пары';
+/**
+ * Своё пришло, другие группы — не все. Про прежние пары — только если они
+ * есть: у только что добавленной группы их нет (partialText в MainActivity.kt).
+ */
+function partialText(missed, fresh) {
+  var one = missed.length === 1;
+  var names = missed.join(', ');
+  var isNew = function (name) { return fresh.indexOf(name) >= 0; };
+  if (missed.every(isNew)) {
+    return one ? 'Не загрузилась группа ' + names + ': её пары придут со следующим обновлением'
+      : 'Не загрузились группы ' + names + ': их пары придут со следующим обновлением';
+  }
+  if (!missed.some(isNew)) {
+    return one ? 'Не обновилась группа ' + names + ': на экране её прежние пары'
+      : 'Не обновились группы ' + names + ': на экране их прежние пары';
+  }
+  return 'Не обновились группы ' + names + ': пары придут со следующим обновлением';
 }
 
 var flashTimer = null;
@@ -763,6 +781,9 @@ setInterval(tick, 10000);
 // Раз в час, пока страница открыта, — как фоновое обновление у приложения.
 setInterval(function () {
   if (document.visibilityState !== 'hidden') refresh(false, false);
+  // Смена группы так и не дошла до службы — пробовать снова, а не до
+  // перезагрузки: всё это время приходило бы о прежней (прогон 2).
+  if (push.behind(pushSubject())) syncPush(true);
 }, 60 * 60 * 1000);
 
 document.addEventListener('visibilitychange', function () {
@@ -779,6 +800,7 @@ document.addEventListener('visibilitychange', function () {
   if (emptyList(state.groups) || emptyList(state.teachers)) loadLists(true);
   // Вернулись на страницу — сверить, не прошло ли и минуты.
   if (Date.now() - state.lastRefresh > 60000) refresh(false, false);
+  if (push.behind(pushSubject())) syncPush(true);
 });
 
 window.addEventListener('popstate', function () {

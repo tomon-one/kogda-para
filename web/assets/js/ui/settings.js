@@ -3,7 +3,7 @@
 // для этого телефона (значок, приложение), таблица, оформление, данные и «О
 // сайте» (Tomon 28.09).
 
-import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, isFirefox, dialog, closeDialog, copyText } from './dom.js';
+import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isIpad, isAndroid, isChrome, dialog, closeDialog, copyText } from './dom.js';
 import { sheetLink, durationShort, tileLabel } from '../format.js';
 import { REMIND_CHOICES, lastRemind, revoked, service } from '../push.js';
 import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
@@ -58,12 +58,15 @@ function switchRow(label, on, onChange, key) {
  */
 function notifications(app, teacherMode) {
   var ios = isIos();
+  // На айпаде — про айпад (прогон 2): формы «на …е», «…а», «…».
+  var pad = isIpad();
+  var device = pad ? ['айпаде', 'айпада', 'айпад'] : ['айфоне', 'айфона', 'айфон'];
   var title = [h('span', null, 'Уведомления'), ' ', h('span', { class: 'badge' }, ios ? 'beta' : 'альфа-тест')];
   var why = app.pushBlocker();
   if (why === 'home') {
     // У значка своё хранилище: выбор из Safari туда не переезжает (WebKit
     // 181849) — группу придётся выбрать ещё раз (М53).
-    return section(title, h('p', null, 'На айфоне уведомления приходят только сайту со значком на экране ' +
+    return section(title, h('p', null, 'На ' + device[0] + ' уведомления приходят только сайту со значком на экране ' +
       '«Домой», на iOS 16.4 и новее. Добавьте значок — раздел выше — и откройте сайт им: там ' +
       'выберите группу ещё раз (у значка свои настройки) и включите уведомления.'));
   }
@@ -82,7 +85,7 @@ function notifications(app, teacherMode) {
     // Куда идти — своё у айфона со значком; в окне инкогнито Chrome
     // разрешения не дать вовсе (М54).
     return section(title, h('p', null, ios
-      ? 'Уведомления запрещены: разрешите их в настройках айфона — «Уведомления» → «Когда пара?' +
+      ? 'Уведомления запрещены: разрешите их в настройках ' + device[1] + ' — «Уведомления» → «Когда пара?' +
         (CHANNEL === 'tested' ? ' tested' : '') + '».'
       : 'Уведомления для этого сайта запрещены в настройках браузера или это окно инкогнито — ' +
         'разрешите их в настройках браузера, в обычном окне.'));
@@ -120,6 +123,9 @@ function notifications(app, teacherMode) {
 
   var body = [
     lost ? h('p', { class: 'warning small' }, 'Браузер отключил уведомления этого сайта — включите их снова.') : null,
+    // Смена группы не дошла до службы — сказать, а не молчать (прогон 2).
+    !lost && app.pushBehind() ? h('p', { class: 'warning small' },
+      'Сервер ещё не знает о новом выборе: уведомления пока о прежнем расписании.') : null,
     // Как в приложении: о других группах уведомлений нет (М8).
     teacherMode ? null : h('p', { class: 'muted small' }, 'Только о вашей группе, не о других.'),
     switchRow('Сообщать об изменениях', now.changes, function (on) {
@@ -139,7 +145,7 @@ function notifications(app, teacherMode) {
       }, 'fixed', 'remind-minutes', 'За сколько предупредить: ' + durationShort(now.remind) + '. Изменить')));
     body.push(h('p', { class: 'muted small' }, 'Напоминание о первой паре дня или между парами.'));
     body.push(h('p', { class: 'warning small' }, ios
-      ? 'Нестабильно: айфон может задержать напоминание.'
+      ? 'Нестабильно: ' + device[2] + ' может задержать напоминание.'
       : 'Нестабильно: браузер может задержать напоминание или не показать его.' +
         (isAndroid() ? ' Надёжнее — приложение.' : '')));
   }
@@ -149,9 +155,10 @@ function notifications(app, teacherMode) {
     body.push(h('p', { class: 'warning small' }, 'Альфа-тест: уведомления идут через серверы ' +
       service() + ' и могут не дойти.'));
   }
-  if (isAndroid() && !isFirefox()) {
+  if (isAndroid() && isChrome()) {
     // Chrome на Android сам читает текст уведомлений и может спрятать
     // обычное за пометкой «возможный спам»; сайту это не обойти (Tomon 28.09).
+    // Только Chrome: у Samsung Internet и Яндекса такой пометки нет (прогон 2).
     body.push(h('p', { class: 'warning small' }, 'Chrome может спрятать уведомление за пометкой ' +
       '«возможный спам»: откройте его и разрешите этот сайт всегда.'));
   }
@@ -271,8 +278,10 @@ export function settingsScreen(app) {
     : byName ? shortLabels([own ? own.name : ''].concat(extras.map(function (g) { return g.name; })))
       : extras.concat([null]).map(function (g, i) { return String(i + 1); });
 
+  // Значок, повторяющий название целиком, только сжимал его — как у других групп (М16, прогон 2).
+  var ownMark = marks && own && marks[0] !== own.name ? marks[0] : null;
   var group = [row(
-    h('span', { class: 'group-name' }, marks ? groupMark(marks[0], true) : null,
+    h('span', { class: 'group-name' }, ownMark ? groupMark(ownMark, true) : null,
       h('span', { class: 'group-name-text' }, own ? own.name : 'не выбрано')),
     null,
     actionButton(teacherMode ? 'Выбрать заново' : 'Сменить', function () { app.go(teacherMode ? 'pick/self' : 'pick'); }, 'fixed'))];
@@ -382,7 +391,8 @@ export function settingsScreen(app) {
         // перечень — как в записи на сервере (М18, М52, М80).
         h('p', null, 'Пока включены уведомления, сервер хранит адрес и ключи, по которым этот браузер ' +
           'их принимает, ' + (teacherMode ? 'выбранное имя' : 'вашу группу') + ', что присылать, какой ' +
-          'сайт и когда вы его открывали последний раз. Доставляет их служба браузера — Apple, Google, ' +
+          'сайт и когда вы его открывали последний раз, а если ' + (teacherMode ? 'имени' : 'группы') +
+          ' не станет в таблице — когда об этом сообщили. Доставляет их служба браузера — Apple, Google, ' +
           'Mozilla или Microsoft: текст ей не виден. Выключите — запись сотрётся.'),
         h('p', null, 'Что написано в таблице колледжа, то и покажет сайт: за ошибки, замены и ' +
           'опоздавшие обновления автор не отвечает.'),
