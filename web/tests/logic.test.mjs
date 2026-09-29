@@ -8,7 +8,7 @@ import {
 } from '../assets/js/time.js';
 import {
   isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel, roomLabel, sheetLink,
-  shiftColumn, shortenName,
+  shiftColumn, shortenName, tileLabel,
 } from '../assets/js/format.js';
 import {
   combineGroups, currentLessonNumber, dayIndex, daysWithGaps, freeDay, lessonTime, ownOnly, shortLabels, subgroupsOf, windowMark,
@@ -237,4 +237,12 @@ test('поиск и буквы', () => {
   assert.equal(letterOf('«Кавычки»'), '#');
   assert.deepEqual(lettered([{ name: 'Б1' }, { name: 'А1' }, { name: 'Б2' }], (x) => x.name)
     .map((s) => [s.letter, s.rows.length]), [['Б', 2], ['А', 1]]);
+});
+
+test('плитки выбора минут — как в приложении (tileLabel в ReminderDialog.kt)', () => {
+  const labels = [10, 15, 20, 30, 45, 60, 90, 120, 180, 240].map(tileLabel);
+  assert.deepEqual(labels, [
+    ['10', 'мин'], ['15', 'мин'], ['20', 'мин'], ['30', 'мин'], ['45', 'мин'],
+    ['1', 'час'], ['1,5', 'часа'], ['2', 'часа'], ['3', 'часа'], ['4', 'часа'],
+  ]);
 });

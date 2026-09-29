@@ -103,7 +103,7 @@ fun TeacherScreen(
                 onClick = { browsing = true },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             ) {
-                Text(ownScheduleTitle)
+                Text(ownScheduleTitle, maxLines = 1, softWrap = false, autoSize = FIT)
             }
         }
         return
@@ -153,7 +153,7 @@ fun TeacherScreen(
 
     if (ownSchedule != null) {
         TextButton(onClick = { browsing = false }, modifier = Modifier.padding(start = 8.dp)) {
-            Text("Вернуться к своему расписанию")
+            Text("Вернуться к своему расписанию", maxLines = 1, softWrap = false, autoSize = FIT)
         }
     }
 
@@ -280,7 +280,7 @@ private fun ChosenTeacher(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onBack) { Text("К списку") }
+            TextButton(onClick = onBack) { Text("К списку", maxLines = 1, softWrap = false) }
         }
 
         when {

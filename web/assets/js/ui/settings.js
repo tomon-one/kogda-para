@@ -4,7 +4,7 @@
 // сайте» (Tomon 28.09).
 
 import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, isFirefox, dialog, closeDialog, copyText } from './dom.js';
-import { sheetLink, durationShort } from '../format.js';
+import { sheetLink, durationShort, tileLabel } from '../format.js';
 import { REMIND_CHOICES, lastRemind, revoked, service } from '../push.js';
 import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
 import { groupMark } from './days.js';
@@ -69,7 +69,7 @@ function notifications(app, teacherMode) {
   }
   if (why === 'webview') {
     return section(title, h('p', null, 'Во встроенном браузере приложения уведомлений нет — откройте ' +
-      'сайт в Chrome или Яндекс Браузере. Выбор группы там придётся сделать ещё раз.'));
+      'сайт в Chrome, Яндекс Браузере или любом другом. Выбор группы там придётся сделать ещё раз.'));
   }
   if (why === 'unsupported') {
     // Firefox в приватном окне выключает сервис-воркеры, а с ними и
@@ -131,18 +131,13 @@ function notifications(app, teacherMode) {
     }, 'push-remind'),
   ];
   if (now.remind > 0) {
-    var select = h('select', { class: 'minutes', 'aria-label': 'За сколько предупредить' });
-    REMIND_CHOICES.forEach(function (m) {
-      var option = h('option', { value: String(m) }, durationShort(m));
-      option.selected = m === now.remind;
-      select.appendChild(option);
-    });
-    select.addEventListener('change', function () {
-      app.setPush({ changes: now.changes, remind: parseInt(select.value, 10) });
-    });
-    body.push(h('label', { class: 'switch-row' }, h('span', null, 'За сколько предупредить'), select));
-    body.push(h('p', { class: 'muted small' }, 'О первой паре дня — всегда. О следующих — только если ' +
-      'напоминание приходится на перемену, а не на пару.'));
+    // Кнопка с выбранным, выбор — в своём окне (Tomon 29.09): выпадающий
+    // список браузера выглядел чужим, и своего времени в нём не было.
+    body.push(h('div', { class: 'value-row' }, h('span', null, 'За сколько предупредить'),
+      actionButton(durationShort(now.remind), function () {
+        remindDialog(now.remind, function (m) { app.setPush({ changes: now.changes, remind: m }); });
+      }, 'fixed', 'remind-minutes', 'За сколько предупредить: ' + durationShort(now.remind) + '. Изменить')));
+    body.push(h('p', { class: 'muted small' }, 'Напоминание о первой паре дня или между парами.'));
     body.push(h('p', { class: 'warning small' }, ios
       ? 'Нестабильно: айфон может задержать напоминание.'
       : 'Нестабильно: браузер может задержать напоминание или не показать его.' +
@@ -161,6 +156,72 @@ function notifications(app, teacherMode) {
       '«возможный спам»: откройте его и разрешите этот сайт всегда.'));
   }
   return section(title, body);
+}
+
+/** Границы своего времени — те же, что у службы (REMIND_MIN, REMIND_MAX в push/service.py). */
+var REMIND_MIN = 10;
+var REMIND_MAX = 240;
+
+/**
+ * Окно выбора минут (ReminderDialog.kt): сверху крестик, быстрый выбор
+ * плитками — нажатие сразу сохраняет, — внизу своё время.
+ */
+function remindDialog(current, onPick) {
+  var quick = REMIND_CHOICES.indexOf(current) >= 0;
+  var input = h('input', {
+    type: 'text', inputmode: 'numeric', pattern: '[0-9]*', maxlength: '3', autocomplete: 'off',
+    class: 'own-input', placeholder: 'Например, 47', 'aria-label': 'Своё время, минут',
+  });
+  if (!quick) input.value = String(current);
+  var field = h('label', { class: 'own-field' }, input, h('span', { class: 'own-unit', 'aria-hidden': 'true' }, 'мин'));
+  var done = actionButton('Готово', submit, 'fixed');
+  var hint = h('p', { class: 'muted small own-hint' }, 'От ' + REMIND_MIN + ' до ' + REMIND_MAX + ' минут (' + (REMIND_MAX / 60) + ' часа)');
+
+  function value() {
+    var n = parseInt(input.value, 10);
+    return /^[0-9]{1,3}$/.test(input.value) && n >= REMIND_MIN && n <= REMIND_MAX ? n : 0;
+  }
+  function update() {
+    var digits = input.value.replace(/[^0-9]/g, '').slice(0, 3);
+    if (digits !== input.value) input.value = digits;
+    var ok = !!value();
+    done.disabled = !ok;
+    hint.classList.toggle('error', !!input.value && !ok);
+    field.classList.toggle('chosen', !quick && input.value === String(current));
+  }
+  function submit() {
+    var m = value();
+    if (!m) return;
+    closeDialog();
+    onPick(m);
+  }
+  input.addEventListener('input', update);
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submit();
+    }
+  });
+  update();
+
+  dialog('За сколько предупредить', [
+    h('div', { class: 'dialog-caption' }, 'Быстрый выбор'),
+    h('div', { class: 'tiles', role: 'radiogroup', 'aria-label': 'Быстрый выбор' }, REMIND_CHOICES.map(function (m) {
+      var label = tileLabel(m);
+      var on = m === current;
+      return h('button', {
+        type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false', 'aria-label': durationShort(m),
+        class: 'tile' + (on ? ' on' : ''),
+        onclick: function () {
+          closeDialog();
+          onPick(m);
+        },
+      }, h('span', { class: 'tile-number' }, label[0]), h('span', { class: 'tile-unit' }, label[1]));
+    })),
+    h('div', { class: 'dialog-caption' }, 'Своё время'),
+    h('div', { class: 'own-row' }, field, done),
+    hint,
+  ], [], { close: true, cls: 'remind-dialog' });
 }
 
 var SITE = 'https://kogda-para-nsk.ru';
@@ -250,7 +311,7 @@ export function settingsScreen(app) {
         function (value) { app.setGroupsByName(value === 'names'); }));
       // Что значат значки — здесь, где их выбирают (Tomon 28.09).
       group.push(h('p', { class: 'muted small' },
-        'Под временем пары — группы, у которых она есть: ваша закрашена, остальные бледные. ' +
+        'Под часами пары — группы, у которых она есть: ваша закрашена, остальные более бледные. ' +
         'Пары, которых у вашей группы нет, — на сером фоне.'));
     }
   }
