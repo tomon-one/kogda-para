@@ -460,6 +460,7 @@ class Push:
         subs = [s for s in self._snapshot_subs() if s.get("changes") and not s.get("gone")]
         if not subs:
             return
+        suspects = self._suspects(before, snapshot, today)
         lines_for: dict[tuple[str, str], list[list[str]]] = {}
         for key in {(s["kind"], s["id"]) for s in subs}:
             try:
@@ -472,6 +473,11 @@ class Push:
                 # Сбой одного не глушит остальных (В27).
                 log.exception("изменения для %s не посчитались", key[0])
                 continue
+            if suspects:
+                if key[0] == "group" and key[1] in suspects["ids"]:
+                    continue
+                lines = [x for x in lines
+                         if not any(f"({n}" in x[1] or f", {n}" in x[1] for n in suspects["names"])]
             if lines:
                 lines_for[key] = lines
         if not lines_for:
@@ -483,6 +489,28 @@ class Push:
                 jobs.append(Job(sub, changes_message(sub, lines), changes_ttl(lines)))
         log.info("изменения в расписании: %d субъектов, %d уведомлений", len(lines_for), len(jobs))
         self._dispatch(jobs)
+
+    def _suspects(self, before, snapshot, today: dt.date) -> dict | None:
+        """Группы, чья правка похожа на пары соседа (сдвиг, который отказ не
+        поймал): им — без уведомлений, владельцу — тревога (М32)."""
+        from ..parser.csv_schedule import neighbour_runs
+
+        try:
+            ids = neighbour_runs(snapshot, before, today)
+        except Exception:  # noqa: BLE001
+            log.exception("сверка с соседями для уведомлений упала")
+            return None
+        if not ids:
+            return None
+        names = sorted(g.name for g in snapshot.groups if g.id in ids)
+        log.warning("правка похожа на пары соседа у %s — уведомления им не шлю", ", ".join(names))
+        alerts.notify(
+            "push-shift",
+            f"Правка листа у групп {', '.join(names[:6])} похожа на пары соседа (сдвиг ячеек?) — "
+            "уведомления сайта им не ушли. Присмотреться (руководство по серверу, «Когда "
+            "что-то не так»).",
+        )
+        return {"ids": ids, "names": names}
 
     # --- напоминания ---------------------------------------------------------
 

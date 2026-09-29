@@ -802,3 +802,31 @@ def test_teacher_without_lessons_now_still_gets_changes(tmp_path, snapshots):
     assert tid not in after_index.names
     new = service._payload(after, after_index, ("teacher", tid), day, known.get)
     assert new is not None and all(not d["l"] for d in new["days"])
+
+
+def test_shift_of_two_neighbours_is_not_sent_to_them(tmp_path, snapshots, monkeypatch):
+    """Сдвиг у двух соседних групп отказом не ловится (порог — три), а
+    уходил им уведомлением с парами соседа (М32). Теперь им — ничего,
+    владельцу — тревога; остальным — как обычно."""
+    before, bt, after, at, day, first = snapshots
+    import copy
+
+    shifted = copy.deepcopy(before)
+    order = []
+    for g in shifted.groups:
+        if g.id not in order:
+            order.append(g.id)
+    a, b, c = order[1], order[2], order[3]
+    shifted.schedule[b][day] = list(before.schedule[a][day])
+    shifted.schedule[c][day] = list(before.schedule[b][day])
+    said = []
+    monkeypatch.setattr(service.alerts, "notify", lambda kind, text, **k: said.append(kind))
+    push = Recorder(tmp_path, _vapid())
+    for gid in (b, c):
+        push.subscribe(service.parse_subscription(
+            _body(id=gid, endpoint=f"https://web.push.apple.com/{gid}")), day)
+    push.sent.clear()
+    from whensclass.domain.teachers import build_index
+
+    push.after_refresh(before, bt, shifted, build_index(shifted), day)
+    assert push.sent == [] and said == ["push-shift"]

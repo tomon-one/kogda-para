@@ -90,11 +90,29 @@ def test_unreachable_sheet_breaks_the_lookup(tmp_path, monkeypatch):
         sheets,
         {
             "расписание групп 01.-05.09": ("2026-09-02", "2026-09-12"),
-            "расписание групп 14.-19.09": ConnectionError,
+            "расписание групп 14.-19.09": RuntimeError,
         },
     )
 
     with pytest.raises(LookupError, match="добраться не вышло"):
+        si.resolve_for(DAY, tmp_path)
+
+
+def test_sheet_unread_only_by_network_is_a_network_failure(tmp_path, monkeypatch):
+    """Сеть легла в момент поиска: это сетевой сбой с получасом льготы, а не
+    «лист не нашёлся» со stale сразу (М39 прогона 1 аудита 4)."""
+    import httpx
+
+    sheets = visible("расписание групп 01.-05.09", "расписание групп 14.-19.09")
+    setup_lookup(
+        monkeypatch,
+        sheets,
+        {
+            "расписание групп 01.-05.09": ("2026-09-02", "2026-09-12"),
+            "расписание групп 14.-19.09": httpx.ConnectError,
+        },
+    )
+    with pytest.raises(httpx.ConnectError):
         si.resolve_for(DAY, tmp_path)
 
 

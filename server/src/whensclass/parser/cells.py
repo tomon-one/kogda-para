@@ -68,6 +68,20 @@ _CANCEL_FOR_RE = re.compile(
     r"\bотмен\w*[\s\-–—:,.]*(?:замена[\s\-–—:,.]*)?(?=(?:кураторск|классн)\w*\s+час)",
     re.IGNORECASE,
 )
+# То же с причиной между «отмена» и часом, и с опечаткой в слове: «Иностранный
+# язык (Пр) Отмена Преподаватель заболел. Куратрский час» уходило отменой с
+# часом в причине (четвёртый аудит, М29 прогона 1). Причина — в приписку.
+_CANCEL_REASON_FOR_RE = re.compile(
+    r"\bотмен\w*[\s\-–—:,.]*(?P<why>\S.{0,80}?)[\s.,;:]+"
+    r"(?P<hour>(?:кура?т\w*|классн\w*)\s+час)[\s.]*$",
+    re.IGNORECASE,
+)
+# «замена, кураторский час» в строке преподавателя, перед именем: пару отдали
+# часу, а показывалась прежняя (М29). Имя, приклеенное без пробела, — отдельно.
+_TEACHER_ROW_FOR_RE = re.compile(
+    r"^\s*замена[\s,.:;-]*(?P<hour>(?:кура?т\w*|классн\w*)\s+час)[\s,.;:-]*",
+    re.IGNORECASE,
+)
 
 # Опечатка в слове «онлайн» — «онлай», «ондлайн», «онлдайн»: раньше пара
 # становилась очной с аудиторией-словом, а когда колледж ставил ссылку,
@@ -91,7 +105,10 @@ _JOURNAL_RE = re.compile(
 JOURNAL_NOTE = "задание в электронном журнале"
 
 # Служебная заглушка колледжа вместо имени: не человек, в списке ей не место.
-_VACANCY_RE = re.compile(r"^вакансия\b", re.IGNORECASE)
+# «Куратор» — должность, а не фамилия: 25.09 он попал в /v1/teachers, и кто
+# его выбрал, назавтра получил «вас нет в таблице» (четвёртый аудит, М31
+# прогона 1). «Кураторова» — фамилия: после слова нужна граница.
+_VACANCY_RE = re.compile(r"^(?:вакансия|куратор|преподаватель)\b", re.IGNORECASE)
 
 # Имя без единой буквы — тоже не человек: прочерк, вопрос, точка как заглушка
 # («-», «?», «Иванов И. И., .»). Такое имя давало пустой идентификатор, индекс
@@ -333,16 +350,30 @@ def parse_lesson(
         return None
     subject_text = normalize(subject_raw)
     handed = _CANCEL_FOR_RE.search(subject_text)
+    handed_why = None
     if handed and subject_text[: handed.start()].strip():
         subject_text = _CANCEL_FOR_RE.sub("ЗАМЕНА ", subject_text, count=1)
+    elif (late := _CANCEL_REASON_FOR_RE.search(subject_text)) \
+            and subject_text[: late.start()].strip():
+        handed_why = late.group("why").strip(" .,;:")
+        subject_text = f"{subject_text[: late.start()].rstrip()} ЗАМЕНА Кураторский час" \
+            if late.group("hour").casefold().startswith("кур") \
+            else f"{subject_text[: late.start()].rstrip()} ЗАМЕНА Классный час"
+    teacher_text = normalize(teacher_raw)
+    row_for = _TEACHER_ROW_FOR_RE.match(teacher_text)
+    if row_for and "замена" not in subject_text.casefold():
+        hour = "Кураторский час" if row_for.group("hour").casefold().startswith("кур") \
+            else "Классный час"
+        subject_text = f"{subject_text} ЗАМЕНА {hour}"
+        teacher_text = teacher_text[row_for.end():]
     subject, cancel_a, note = _extract_cancellation(subject_text, tail="note")
     room_text, cancel_b, room_note = _extract_cancellation(normalize(room_raw), tail="keep")
     if _NOTHING_RE.match(subject):
         subject = ""
     if _NOTHING_RE.match(room_text):
         room_text = ""
-    note = note or room_note
-    teachers = split_teachers(normalize(teacher_raw))
+    note = note or room_note or handed_why
+    teachers = split_teachers(teacher_text)
     cancelled = cancel_a or cancel_b
     if _JOURNAL_RE.match(room_text):
         room_text, cancelled = "", True
@@ -371,9 +402,9 @@ def parse_lesson(
         subject = subject[: in_room.start()].strip(" ,;.")
 
     subject, kind = _split_kind(subject)
-    if replaced is not None and (subject[:1].islower() or subject.isupper()):
-        # «замена кураторский час», «ЗАМЕНА КУРАТОРСКИЙ ЧАС».
-        subject = subject[:1].upper() + subject[1:].lower()
+    if replaced is not None and subject.isupper():
+        # «ЗАМЕНА КУРАТОРСКИЙ ЧАС».
+        subject = subject[:1] + subject[1:].lower()
 
     url = None
     room: str | None = None
@@ -384,8 +415,12 @@ def parse_lesson(
         found = _URL_RE.search(room_text)
         if found:
             url = found.group(0)
-        else:
-            room = room_text.replace("\n", " ").strip()
+        # Что рядом со ссылкой — место: «269 https://…» — кабинет, «онлайн 12
+        # https://…» — комната; раньше номер при ссылке пропадал (четвёртый
+        # аудит, М28 прогона 1).
+        rest = room_text.replace(url, " ") if url else room_text
+        room = " ".join(rest.replace("\n", " ").split()).strip(" ,;") or None
+        if room is not None:
             online_room = _online_room(room)
             if online_room is not None:
                 # Слово «онлайн» — не место. Оставляя его аудиторией,
@@ -412,6 +447,13 @@ def parse_lesson(
         # у неё нет «o» (docs/api.md).
         room, online = in_room.group(1).strip(" .,;"), False
 
+    if subject[:1].islower():
+        # Первая буква — заглавная у всех пар, а не только у замен: иначе
+        # «кураторский час» и «Кураторский час» выходили разными предметами,
+        # и сравнение слало «добавилась» и «убрали» о той же паре
+        # (четвёртый аудит, М30 прогона 1). После ссылки: адрес не трогаем.
+        subject = subject[:1].upper() + subject[1:]
+
     if not subject:
         # Пустое название выглядит поломкой, а выдумывать предмет нельзя —
         # говорим то, что знаем точно. Раньше заглушка была только для пары
@@ -425,7 +467,10 @@ def parse_lesson(
         teachers=teachers,
         room=room,
         url=url,
-        online=online or (url is not None and not in_room),
+        # Ссылка без места — онлайн; ссылка при кабинете — очная пара, где
+        # преподаватель на связи по ссылке (docs/api.md). Раньше кабинет при
+        # ссылке становился «онлайн-комнатой» (М28).
+        online=online or (url is not None and not in_room and room is None),
         cancelled=cancelled,
         note=note,
     )
