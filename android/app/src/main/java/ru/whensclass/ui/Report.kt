@@ -34,17 +34,23 @@ import androidx.compose.ui.unit.dp
  * ради чего экран открыт.
  */
 @Composable
-fun ReportLink(load: suspend () -> String, modifier: Modifier = Modifier) {
+fun ReportLink(
+    load: suspend () -> String,
+    modifier: Modifier = Modifier,
+    /** Среди ссылок «О приложении» — как они, а не неприметной строкой (Tomon 29.09: ровно). */
+    asLink: Boolean = false,
+) {
     var open by remember { mutableStateOf(false) }
     if (open) ReportDialog(load) { open = false }
 
     Text(
         "Сведения для отчёта",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = if (asLink) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+        color = if (asLink) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = if (asLink) androidx.compose.ui.text.font.FontWeight.Medium else null,
         modifier = modifier
             .clickable { open = true }
-            .padding(vertical = 8.dp),
+            .then(if (asLink) Modifier.padding(top = 10.dp, bottom = 2.dp) else Modifier.padding(vertical = 8.dp)),
     )
 }
 

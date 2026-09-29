@@ -110,7 +110,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
         ) {
             // Кнопка называет действие, а не согласие с текстом выше.
             // Жмёт и преподаватель: «Я преподаватель» — только на следующем экране.
-            Text("Выбрать расписание", maxLines = 1, softWrap = false, autoSize = FIT)
+            Text("Выбрать расписание", maxLines = 1, autoSize = FIT)
         }
 
         Text(

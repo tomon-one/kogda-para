@@ -53,12 +53,29 @@ object LessonAlarms {
         // значит звать на пары, которых, может, уже нет: экран и виджеты в это время пишут «нет в таблице».
         if (state.gone) return
         val schedule = ScheduleWidget.parse(state.scheduleJson) ?: return
+        // Висит напоминание о паре, которую с тех пор отменили или убрали, —
+        // снять: рядом с «отменили N пару» оно звало на неё (tested 602).
+        Notifications.shownLessonKey(app)?.let { key ->
+            if (!stillOn(schedule, key)) Notifications.lessonGone(app)
+        }
         plan(schedule, minutes)
             // Своя и соседняя подгруппы дают две пары в одно время —
             // напоминание об этом должно быть одно.
             .distinctBy { it.at }
             .take(MAX_ALARMS)
             .forEachIndexed { index, alarm -> schedule(app, index, alarm) }
+    }
+
+    /** Есть ли ещё пара из ключа напоминания («2026-09-29T21:47|Физика»), не отменённая. */
+    internal fun stillOn(schedule: ScheduleDto, key: String): Boolean {
+        val start = key.substringBefore('|')
+        val subject = key.substringAfter('|')
+        val date = start.take(10)
+        val time = start.drop(11).take(5)
+        return schedule.days.firstOrNull { it.date == date }?.lessons?.any { lesson ->
+            !lesson.isCancelled && lesson.subject == subject &&
+                schedule.bells[lesson.number.toString()]?.getOrNull(0) == time
+        } == true
     }
 
     /** Что и когда напомнить. Вынесено отдельно, чтобы можно было проверить. */
@@ -237,6 +254,7 @@ class LessonAlarmReceiver : BroadcastReceiver() {
             text,
             intent.getStringExtra(LessonAlarms.EXTRA_DAY),
             until = end?.let { ru.whensclass.widget.millisOf(it) },
+            key = "$start|$subject",
         )
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {

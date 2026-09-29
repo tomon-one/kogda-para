@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -121,7 +123,12 @@ internal fun ReminderDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -
                 .widthIn(max = 420.dp)
                 .fillMaxWidth(),
         ) {
-            Column(modifier = Modifier.padding(start = 20.dp, end = 10.dp, top = 10.dp, bottom = 20.dp)) {
+            // Прокрутка — на низком экране (телефон боком) окно выше экрана.
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 10.dp, top = 10.dp, bottom = 20.dp),
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "За сколько предупредить",
@@ -163,7 +170,8 @@ internal fun ReminderDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -
                             label = "Готово",
                             onClick = submit,
                             enabled = valid,
-                            modifier = Modifier.width(ROW_BUTTON),
+                            // Уже строки настроек: полю нужно место под «Например, 47».
+                            modifier = Modifier.width(96.dp),
                             top = 0.dp,
                             side = 8.dp,
                         )
@@ -235,7 +243,6 @@ private fun QuickTile(minutes: Int, selected: Boolean, onClick: () -> Unit, modi
             fontWeight = FontWeight.SemiBold,
             color = fg,
             maxLines = 1,
-            softWrap = false,
             autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = 22.sp, stepSize = 1.sp),
             modifier = Modifier.padding(horizontal = 4.dp).clearAndSetSemantics {},
         )
@@ -288,7 +295,7 @@ private fun MinutesField(
                     if (value.isEmpty()) {
                         Text(
                             "Например, 47",
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             maxLines = 1,
                             softWrap = false,

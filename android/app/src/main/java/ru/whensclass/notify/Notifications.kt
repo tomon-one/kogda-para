@@ -115,8 +115,13 @@ object Notifications {
     }
 
     /** `until` — конец пары: к нему напоминание снимается само. */
-    fun lessonSoon(context: Context, title: String, text: String, day: String?, until: Long? = null) {
-        show(context, CHANNEL_LESSON, ID_LESSON, title, text, day, until = until)
+    fun lessonSoon(
+        context: Context, title: String, text: String, day: String?, until: Long? = null,
+        /** Какая пара: «2026-09-29T21:47|Физика» — чтобы снять, если её отменят. */
+        key: String? = null,
+    ) {
+        show(context, CHANNEL_LESSON, ID_LESSON, title, text, day, until = until,
+            extras = key?.let { android.os.Bundle().apply { putString(EXTRA_LESSON_KEY, it) } })
     }
 
     /**
@@ -146,6 +151,20 @@ object Notifications {
      */
     fun serverBack(context: Context) {
         runCatching { NotificationManagerCompat.from(context).cancel(ID_SERVER) }
+    }
+
+    private const val EXTRA_LESSON_KEY = "ru.whensclass.lesson"
+
+    /** Какую пару называет висящее напоминание ([lessonSoon], `key`). */
+    fun shownLessonKey(context: Context): String? = runCatching {
+        context.getSystemService(android.app.NotificationManager::class.java)
+            ?.activeNotifications?.firstOrNull { it.id == ID_LESSON }
+            ?.notification?.extras?.getString(EXTRA_LESSON_KEY)
+    }.getOrNull()
+
+    /** Снять напоминание о паре: её отменили или убрали. */
+    fun lessonGone(context: Context) {
+        runCatching { NotificationManagerCompat.from(context).cancel(ID_LESSON) }
     }
 
     /** Висит ли непрочитанное «Расписание изменилось». */
@@ -183,6 +202,7 @@ object Notifications {
         day: String?,
         update: Boolean = false,
         until: Long? = null,
+        extras: android.os.Bundle? = null,
     ): Boolean {
         if (!allowed(context)) return false
         ensureChannels(context)
@@ -205,6 +225,7 @@ object Notifications {
 
         val builder = NotificationCompat.Builder(context, channel)
         until?.let { builder.setTimeoutAfter((it - System.currentTimeMillis()).coerceAtLeast(60_000L)) }
+        extras?.let { builder.addExtras(it) }
         val notification = builder
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)

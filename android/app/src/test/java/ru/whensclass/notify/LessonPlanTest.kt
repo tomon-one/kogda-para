@@ -152,4 +152,13 @@ class LessonPlanTest {
         val during = LessonAlarms.plan(day(lesson(1), lesson(2), lesson(3)), minutes = 20, now = noon)
         assertEquals(emptyList<Int>(), during.map { it.lesson.number })
     }
+
+    @Test
+    fun `напоминание о паре, которую отменили, снимается, о прежней — нет`() {
+        // tested 602: рядом с «отменили 2 пару» висело напоминание о ней.
+        val key = "2026-09-08T10:40|Пара 2"
+        assertEquals(true, LessonAlarms.stillOn(day(lesson(1), lesson(2)), key))
+        assertEquals(false, LessonAlarms.stillOn(day(lesson(1), lesson(2, cancelled = true)), key))
+        assertEquals(false, LessonAlarms.stillOn(day(lesson(1)), key))
+    }
 }
