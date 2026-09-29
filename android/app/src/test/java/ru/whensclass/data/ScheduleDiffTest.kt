@@ -286,4 +286,43 @@ class ScheduleDiffTest {
             texts(was, now),
         )
     }
+    @Test
+    fun `преподавателю — только о группе, что пришла или ушла`() {
+        // Склеенная запись берёт самое длинное название: приходило «убрали 2
+        // пару (Л-926/4)» про группу, у которой ничего не менялось (М34).
+        // Правила — как в server/src/whensclass/push/changes.py.
+        val joined = texts(
+            schedule(lesson(2, "Физическая культура", groups = "Л-926/4"), kind = "teacher"),
+            schedule(lesson(2, "Физическая культура / Адаптивная физическая культура", groups = "Л-1126, Л-926/4"), kind = "teacher"),
+        )
+        assertEquals(listOf("добавилась 2 пара (Л-1126): Физическая культура / Адаптивная физическая культура"), joined)
+        val left = texts(
+            schedule(lesson(5, "Физическая культура.", groups = "ГД-926/3, ПД-925/1, ПД-925/2, ПД-925/3"), kind = "teacher"),
+            schedule(lesson(5, "Физическая культура", groups = "ГД-926/3"), kind = "teacher"),
+        )
+        assertEquals(listOf("убрали 5 пару (ПД-925/1, ПД-925/2, ПД-925/3): Физическая культура."), left)
+    }
+
+    @Test
+    fun `исправили написание — пара та же`() {
+        // М35: «Обествознание» → «Обществознание» уходило «убрали» и «добавилась».
+        for ((old, new) in listOf(
+            "Обествознание" to "Обществознание",
+            "кураторский час" to "Кураторский час",
+            "Физическая культура / Адаптивная физическая культура" to "Физическая культура",
+        )) {
+            assertEquals(emptyList<String>(), texts(schedule(lesson(2, old, room = "301")), schedule(lesson(2, new, room = "301"))))
+        }
+        assertEquals(2, texts(schedule(lesson(2, "Физика")), schedule(lesson(2, "Химия"))).size)
+    }
+
+    @Test
+    fun `обратная косая в ссылке — чужой адрес с хостом до неё`() {
+        // М24: браузер читает «\» как «/» и ведёт на evil.com.
+        val now = texts(
+            schedule(lesson(1, "Право", online = true)),
+            schedule(lesson(1, "Право", online = true, url = "https://evil.com\\my.mts-link.ru/j/1")),
+        )
+        assertEquals(listOf("у 1 пары появилась ссылка — чужой адрес: evil.com"), now)
+    }
 }

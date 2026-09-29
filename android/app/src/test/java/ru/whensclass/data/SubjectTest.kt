@@ -87,4 +87,13 @@ class SubjectTest {
         now = asked.copy(id = "isp-924-3")
         assertNull(writeIfStillAsked(asked, { now }) { "записано" })
     }
+    @Test
+    fun `своё сверяется без других групп`() = runBlocking {
+        // «Убрать» другую группу посреди обновления выбрасывало и своё свежее
+        // (М4 прогона 1 аудита 4): своё пишется по роли и группе, другие — по
+        // нынешнему выбору.
+        val removed = asked.copy(extras = listOf("isp-924-2"))
+        assertEquals("записано", writeIfStillAsked(asked.own(), { removed.own() }) { "записано" })
+        assertNull(writeIfStillAsked(asked.own(), { removed.copy(id = "isp-924-3").own() }) { "записано" })
+    }
 }

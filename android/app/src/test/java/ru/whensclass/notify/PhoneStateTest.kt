@@ -44,4 +44,25 @@ class PhoneStateTest {
         assertEquals(MAX_CHANGE_LINES, merged.size)
         assertEquals("изменение 12", merged.last().second)
     }
+
+    @Test
+    fun `повтор строки встаёт на своё последнее место`() {
+        // «вернули → отменили → вернули» читалось последней строкой «отменили»
+        // (контроль №1 прогона 1 аудита 4).
+        val today = LocalDate.of(2026, 9, 29)
+        val back = "2026-09-29" to "вернули 2 пару: Физика"
+        val off = "2026-09-29" to "отменили 2 пару: Физика"
+        assertEquals(listOf(off, back), mergeChanges(listOf(back, off), listOf(back), today))
+    }
+
+    @Test
+    fun `свежая правка длиннее шторки — сначала сегодня`() {
+        // Строки идут по дням: «последние восемь» выбрасывали сегодняшнее ради
+        // завтрашнего (М33).
+        val today = LocalDate.of(2026, 9, 29)
+        val fresh = (1..3).map { "2026-09-29" to "сегодня $it" } + (1..7).map { "2026-09-30" to "завтра $it" }
+        val merged = mergeChanges(listOf("2026-09-29" to "висело"), fresh, today)
+        assertEquals(MAX_CHANGE_LINES, merged.size)
+        assertEquals("сегодня 1", merged.first().second)
+    }
 }

@@ -91,7 +91,10 @@ class NextLessonWidget : GlanceAppWidget() {
             ) {
                 if (lesson == null || next == null) {
                     Text(
-                        noNextLesson(state?.groupName, schedule, today, broken),
+                        noNextLesson(
+                            state?.groupName, schedule, today, broken,
+                            checked = checkedToday(state?.fetchedAt ?: 0L, today),
+                        ),
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
                     if (state?.groupName == null) {
@@ -268,13 +271,17 @@ internal fun noNextLesson(
     schedule: ScheduleDto?,
     today: LocalDate,
     broken: Boolean,
+    /** Телефон проверял сервер сегодня: иначе «не опубликовано» утверждать нечем (В20). */
+    checked: Boolean = true,
 ): String {
     // «…группу или себя»: виджет ставит и преподаватель (разбор текстов 27.09).
     if (groupName == null) return "Откройте приложение и выберите группу или себя"
     if (schedule == null) return "Расписание не загружено"
     if (broken) return "Сбой: расписание не обновляется"
     val end = schedule.coverage.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-    if (end == null || end.isBefore(today.plusDays(6))) return "Дальше расписание ещё не опубликовано"
+    if (end == null || end.isBefore(today.plusDays(6))) {
+        return if (checked) "Дальше расписание ещё не опубликовано" else "Дальше расписание не загружено"
+    }
     // Пары ищутся только в скачанной неделе, а лист идёт дальше и там пары
     // есть: «Дальше пар нет» было неправдой (разбор текстов 27.09). Честно —
     // до какого дня их нет.
