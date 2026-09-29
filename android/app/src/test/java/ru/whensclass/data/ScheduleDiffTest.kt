@@ -127,17 +127,17 @@ class ScheduleDiffTest {
 
     @Test
     fun `замена преподавателя при том же предмете — новость`() {
-        val was = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Иванов И. И.")))
-        val now = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Петров П. П.")))
+        val was = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Ортега К.")))
+        val now = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Андерсон Т.")))
         assertEquals(
-            listOf("у 2 пары другой преподаватель: Петров П. П."),
+            listOf("у 2 пары другой преподаватель: Андерсон Т."),
             ScheduleDiff.compare(was, now).map { it.text },
         )
     }
 
     @Test
     fun `пустой преподаватель — не замена, его просто ещё не вписали`() {
-        val was = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Иванов И. И.")))
+        val was = schedule(LessonDto(number = 2, subject = "Физика", teachers = listOf("Ортега К.")))
         val now = schedule(LessonDto(number = 2, subject = "Физика"))
         assertEquals(emptyList<ScheduleDiff.Change>(), ScheduleDiff.compare(was, now))
     }
@@ -163,15 +163,15 @@ class ScheduleDiffTest {
         // Раньше ссылка была веткой того же when и при замене преподавателя
         // в том же обновлении молчала.
         val was = schedule(
-            LessonDto(number = 1, subject = "Физика", teachers = listOf("Иванов И. И."),
+            LessonDto(number = 1, subject = "Физика", teachers = listOf("Ортега К."),
                 online = 1, url = "https://my.mts-link.ru/j/1"),
         )
         val now = schedule(
-            LessonDto(number = 1, subject = "Физика", teachers = listOf("Петров П. П."),
+            LessonDto(number = 1, subject = "Физика", teachers = listOf("Андерсон Т."),
                 online = 1, url = "https://my.mts-link.ru/j/2"),
         )
         assertEquals(
-            listOf("у 1 пары другой преподаватель: Петров П. П.", "у 1 пары сменилась ссылка"),
+            listOf("у 1 пары другой преподаватель: Андерсон Т.", "у 1 пары сменилась ссылка"),
             texts(was, now),
         )
     }
@@ -279,10 +279,10 @@ class ScheduleDiffTest {
     fun `переезд не теряется за сменой преподавателя`() {
         // Одна ветка when на пару: «другой преподаватель» закрывал собой
         // «переехала», и человек шёл в старый кабинет (разбор текстов 27.09).
-        val was = schedule(LessonDto(number = 2, subject = "Физика", room = "101", teachers = listOf("Иванов И. И.")))
-        val now = schedule(LessonDto(number = 2, subject = "Физика", room = "205", teachers = listOf("Петров П. П.")))
+        val was = schedule(LessonDto(number = 2, subject = "Физика", room = "101", teachers = listOf("Ортега К.")))
+        val now = schedule(LessonDto(number = 2, subject = "Физика", room = "205", teachers = listOf("Андерсон Т.")))
         assertEquals(
-            listOf("у 2 пары другой преподаватель: Петров П. П.", "2 пара переехала в каб. 205"),
+            listOf("у 2 пары другой преподаватель: Андерсон Т.", "2 пара переехала в каб. 205"),
             texts(was, now),
         )
     }
@@ -301,6 +301,19 @@ class ScheduleDiffTest {
             schedule(lesson(5, "Физическая культура", groups = "ГД-926/3"), kind = "teacher"),
         )
         assertEquals(listOf("убрали 5 пару (ПД-925/1, ПД-925/2, ПД-925/3): Физическая культура."), left)
+    }
+
+    @Test
+    fun `преподавателю при другом предмете у тех же групп — и убрали, и добавилась`() {
+        // Замена предмета у той же группы глушилась как склейка (прогон 2 аудита 4).
+        val swapped = texts(
+            schedule(lesson(3, "Физика", groups = "ИСП-924/1"), kind = "teacher"),
+            schedule(lesson(3, "Астрономия", groups = "ИСП-924/1"), kind = "teacher"),
+        )
+        assertEquals(
+            listOf("добавилась 3 пара (ИСП-924/1): Астрономия", "убрали 3 пару (ИСП-924/1): Физика"),
+            swapped.sorted(),
+        )
     }
 
     @Test

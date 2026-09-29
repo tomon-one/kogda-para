@@ -65,4 +65,17 @@ class PhoneStateTest {
         assertEquals(MAX_CHANGE_LINES, merged.size)
         assertEquals("сегодня 1", merged.first().second)
     }
+
+    @Test
+    fun `из висящих строк сначала уходит завтрашнее, а не сегодняшнее`() {
+        // Утром висело «отменили 1 пару» и шесть строк о завтра, днём пришли ещё
+        // две о завтра: сегодняшняя пропадала (прогон 2 аудита 4).
+        val today = LocalDate.of(2026, 9, 29)
+        val pending = listOf("2026-09-29" to "отменили 1 пару") + (1..6).map { "2026-09-30" to "завтра $it" }
+        val fresh = (7..8).map { "2026-09-30" to "завтра $it" }
+        val merged = mergeChanges(pending, fresh, today)
+        assertEquals(MAX_CHANGE_LINES, merged.size)
+        assertEquals("отменили 1 пару", merged.first().second)
+        assertEquals(fresh, merged.takeLast(2))
+    }
 }

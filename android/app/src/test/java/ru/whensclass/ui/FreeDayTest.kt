@@ -44,4 +44,15 @@ class FreeDayTest {
         assertFalse(freeOwnDay(foreign.copy(lessons = foreign.lessons.map { it.copy(slots = listOf(0)) }), listOf("ИСП-924/1", "ИСП-924/2")))
         assertEquals(LocalDate.parse("2026-09-30").dayOfWeek.value, 3)
     }
+
+    @Test
+    fun `экран давно не трогали — в пустой сегодняшний день другая строка, только студенту`() {
+        val now = LocalDateTime.of(2026, 9, 29, 15, 0)
+        val idle = "Непросто решить, чем занять свободный день, да?"
+        assertEquals(idle, freeDay(tuesday, now = now, idle = true))
+        assertEquals(idle, freeDay(tuesday, nextFree = true, now = now, idle = true))
+        assertTrue(freeDay(tuesday, teacher = true, now = now, idle = true) != idle)
+        assertTrue(freeDay("2026-09-30", now = now, idle = true) != idle)
+        assertTrue(freeDay(tuesday, now = now) != idle)
+    }
 }

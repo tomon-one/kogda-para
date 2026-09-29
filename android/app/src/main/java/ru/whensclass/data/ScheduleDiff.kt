@@ -251,9 +251,11 @@ object ScheduleDiff {
             // Та же пара слилась из нескольких записей в одну — не новость.
             if (now.any { it.subject == gone.subject }) return@forEach
             if (fresh.isTeacher && gone.groups != null) {
-                // Все её группы на номере остались — запись просто склеилась
-                // с другой.
-                val left = groups(gone) - afterGroups
+                // Все её группы на номере остались при той же паре — запись
+                // просто склеилась с другой. При другом предмете у тех же групп
+                // это замена, и «убрали» прежний нужен (прогон 2 аудита 4).
+                val kept = now.filter { sameSubject(it.subject, gone.subject) }.flatMap { groups(it) }.toSet()
+                val left = groups(gone) - kept
                 if (left.isNotEmpty()) say("убрали $number пару (${listed(gone, left)}): ${gone.subject}")
                 return@forEach
             }

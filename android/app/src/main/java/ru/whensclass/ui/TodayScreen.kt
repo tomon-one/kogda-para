@@ -70,6 +70,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -636,9 +638,32 @@ fun ScheduleDays(
         if (days.any { it.date >= want }) wanted = null
     }
 
+    // Экран открыт и никто его не трогал [IDLE_MILLIS] — в пустой сегодняшний
+    // день другая строка ([freeDay]). Счёт — пока экран на виду; касание или
+    // прокрутка — сначала.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    val visible = lifecycle.currentStateFlow.collectAsState().value
+        .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    var touches by remember { mutableIntStateOf(0) }
+    var idle by remember { mutableStateOf(false) }
+    LaunchedEffect(touches, visible) {
+        idle = false
+        if (visible) {
+            kotlinx.coroutines.delay(IDLE_MILLIS)
+            idle = true
+        }
+    }
+
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    touches++
+                }
+            }
+        },
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -648,6 +673,7 @@ fun ScheduleDays(
                 day, schedule.bells, now, teacher = schedule.isTeacher,
                 groups = schedule.groupNames, groupsByName = groupsByName,
                 nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
+                idle = idle,
             )
         }
     }
@@ -712,6 +738,8 @@ private fun DayCard(
     groupsByName: Boolean = true,
     /** Следующий день — будний и тоже без своих пар ([freeOwnDay]). */
     nextFree: Boolean = false,
+    /** Экран давно не трогали ([IDLE_MILLIS]). */
+    idle: Boolean = false,
 ) {
     val today = now.toLocalDate()
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
@@ -736,7 +764,7 @@ private fun DayCard(
 
             if (day.lessons.isEmpty()) {
                 Text(
-                    if (day.absent) absentDay(day.date) else freeDay(day.date, teacher, nextFree, now),
+                    if (day.absent) absentDay(day.date) else freeDay(day.date, teacher, nextFree, now, idle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
@@ -747,7 +775,7 @@ private fun DayCard(
                 // видел пары в субботу (четвёртый аудит, М9 прогона 1).
                 if (groups.isNotEmpty() && day.lessons.none { 0 in it.slots }) {
                     Text(
-                        freeDay(day.date, teacher, nextFree, now),
+                        freeDay(day.date, teacher, nextFree, now, idle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
@@ -801,6 +829,8 @@ internal fun freeDay(
     /** Следующий день — будний, пришёл с сервера и тоже без своих пар. */
     nextFree: Boolean = false,
     now: java.time.LocalDateTime? = null,
+    /** Экран открыт [IDLE_MILLIS] без касаний. */
+    idle: Boolean = false,
 ): String {
     val day = runCatching { LocalDate.parse(date) }.getOrNull()
         ?: return "Пар нет"
@@ -810,6 +840,7 @@ internal fun freeDay(
     if (day.dayOfWeek == DayOfWeek.SUNDAY) return "Выходной"
     // Преподавателю — только прежние фразы: новые пишутся студенту.
     if (!teacher) {
+        if (idle && now != null && now.toLocalDate() == day) return "Непросто решить, чем занять свободный день, да?"
         if (nextFree) return "Пар нет. Повезло дважды"
         if (now != null && now.toLocalDate() == day && now.hour < 12) return "Пар нет. Можно открыть шторы"
     }
@@ -845,6 +876,9 @@ private val FREE = listOf(
 
 /** Ещё одна — только студенту. */
 private val FREE_STUDENT = listOf("Пар нет. Можно одичать")
+
+/** Сколько экран стоит нетронутым, пока строка свободного дня не сменится. */
+internal const val IDLE_MILLIS = (5 * 60 + 8) * 1000L
 
 @Composable
 private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false) {
