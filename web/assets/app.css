@@ -299,25 +299,47 @@ p a, .point a { text-decoration: underline; }
 .explanation h2 { font-size: 16px; font-weight: 600; }
 .explanation p { margin-top: 8px; font-size: 14px; color: var(--muted); }
 
+/*
+  Размеры кнопок — одни на весь сайт, как в приложении (Controls.kt, Tomon
+  29.09: «все элементы ровные, единого неизменяемого размера»). Высота не
+  зависит от надписи: надпись в одну строку, не влезла — многоточие. Кнопки в
+  строке с названием — одной ширины (.fixed), остальные — во всю ширину
+  карточки, и смена надписи их не двигает.
+*/
 .action {
   display: inline-block;
+  height: 44px;
   margin-top: 6px;
-  padding: 9px 14px;
+  padding: 0 14px;
   border-radius: 10px;
   background: var(--surface-variant);
   color: var(--primary);
   font-size: 14px;
   font-weight: 500;
+  line-height: 44px;
   text-align: center;
   text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
 }
 
 .action:hover { text-decoration: none; }
 .action:active { opacity: 0.7; }
+.action:disabled { color: var(--muted); opacity: 0.7; }
+
+.card > .action, .setting-actions .action, .plate .action, .explanation .action, .load-failed .action {
+  display: block;
+  width: 100%;
+}
 
 .text-button {
   display: inline-block;
-  padding: 10px 12px;
+  height: 40px;
+  padding: 0 12px;
+  line-height: 40px;
+  white-space: nowrap;
   color: var(--primary);
   font-size: 14px;
   font-weight: 500;
@@ -449,8 +471,8 @@ p a, .point a { text-decoration: underline; }
 /* Длинное название в значке — многоточием: целиком оно и так рядом. */
 .group-name .mark { margin: 0 10px 0 0; flex: none; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
 .setting-sub { margin: 12px 0 6px; }
-.setting-actions { display: flex; flex-wrap: wrap; margin-top: 10px; }
-.setting-actions .action { margin: 0 8px 8px 0; }
+.setting-actions { margin-top: 10px; }
+.setting-actions .action { margin: 0; }
 
 .lesson-body {
   flex: 1;
@@ -537,15 +559,21 @@ p a, .point a { text-decoration: underline; }
 .link-button,
 .action.link-button {
   display: inline-block;
+  height: 28px;
   margin: 0 4px 0 0;
-  padding: 4px 10px;
+  padding: 0 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
   border: 1px solid var(--button-border);
   border-radius: 14px;
   background: none;
   color: var(--primary);
   font-size: 12px;
   font-weight: 500;
-  line-height: 18px;
+  line-height: 26px;
 }
 
 /* ——— списки ——— */
@@ -723,10 +751,10 @@ p a, .point a { text-decoration: underline; }
 .setting-text { flex: 1 1 140px; min-width: 0; overflow-wrap: break-word; word-wrap: break-word; }
 .setting-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; padding: 4px 0; }
 .setting-buttons .action { margin: 2px 0 2px 8px; }
-/* Наименьшая ширина — 8em, 112 px при шрифте кнопки 14px, как GROUP_BUTTON приложения: «Сменить»
-   и «Добавить» одной ширины, «Выбрать заново» шире; при увеличении кнопки
-   переносятся, а не вылезают за карточку (аудит, прогон 2). */
-.action.fixed { min-width: 8em; white-space: nowrap; }
+/* Одна ширина — 116 px, как ROW_BUTTON приложения: «Сменить», «Убрать», «Добавить»,
+   «Скопировать», минуты напоминания; узко — кнопки строкой ниже, а не поверх
+   названия (аудит, прогон 2). */
+.action.fixed { width: 116px; padding: 0 8px; }
 
 /* Пометка у заголовка: beta, альфа-тест. */
 .badge {
@@ -774,36 +802,38 @@ p a, .point a { text-decoration: underline; }
 }
 .switch:checked { background: var(--primary); }
 .switch:checked::after { transform: translateX(18px); }
-.switch:focus-visible, .minutes:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.minutes {
-  flex: none;
-  min-height: 36px;
-  padding: 0 8px;
-  border: 1px solid var(--button-border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--primary);
-  font: inherit;
-  font-weight: 600;
+.switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* Строка с кнопкой-значением: «За сколько предупредить» и «20 мин». */
+.value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
 }
+.value-row > span { flex: 1 1 auto; min-width: 0; padding-right: 8px; }
+.value-row .action { flex: none; margin-top: 0; }
 /* Ограничение, которое не вышло обойти, — рядом с тем, что оно портит. */
 .card p.warning, .warning { color: var(--primary); }
 
 .segmented {
   display: flex;
-  flex-wrap: wrap;
+  height: 44px;
   padding: 3px;
   border-radius: 10px;
   background: var(--surface-variant);
 }
 
 .segment {
-  flex: 1 1 auto;
-  padding: 0 8px;
-  min-height: 42px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 38px;
+  padding: 0 6px;
   border-radius: 8px;
   text-align: center;
   font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .segment.on { background: var(--selected-bg); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary); }
@@ -828,8 +858,13 @@ p a, .point a { text-decoration: underline; }
 .primary-button {
   display: block;
   width: 100%;
+  height: 48px;
   margin-top: 32px;
-  padding: 14px 24px;
+  padding: 0 24px;
+  line-height: 48px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-radius: 12px;
   background: var(--primary);
   color: var(--on-primary);
@@ -874,6 +909,67 @@ p a, .point a { text-decoration: underline; }
 .dialog-body p + p, .dialog-body p + pre { margin-top: 10px; }
 .dialog-buttons { display: flex; justify-content: flex-end; margin-top: 8px; }
 .dialog-buttons .text-button { margin-left: 4px; }
+
+/* Заголовок окна с крестиком справа (окно выбора минут). */
+.dialog-head { display: flex; align-items: center; margin: -8px -12px 4px 0; }
+.dialog-head .dialog-title { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+.dialog-close { width: 40px; height: 40px; color: var(--muted); }
+.dialog-caption { margin: 12px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
+
+/* Окно выбора минут (ReminderDialog.kt): плитки 5 × 2 одной высоты и ширины. */
+.remind-dialog { padding-bottom: 20px; }
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-gap: 8px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  min-width: 0;
+  border-radius: 12px;
+  background: var(--surface-variant);
+  color: var(--fg);
+  overflow: hidden;
+}
+.tile.on { background: var(--primary); color: var(--on-primary); }
+.tile-number { font-size: 22px; font-weight: 600; line-height: 26px; white-space: nowrap; }
+.tile-unit { font-size: 11px; line-height: 14px; opacity: 0.75; }
+.tile:focus-visible, .own-field:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+.own-row { display: flex; align-items: center; }
+.own-row .action { flex: none; margin: 0 0 0 8px; }
+.own-field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--surface-variant);
+  box-shadow: inset 0 0 0 1.5px transparent;
+  cursor: text;
+}
+.own-field.chosen { box-shadow: inset 0 0 0 1.5px var(--primary); }
+.own-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+}
+.own-input::placeholder { color: var(--muted); opacity: 0.8; }
+.own-unit { flex: none; margin-left: 6px; font-size: 14px; color: var(--muted); }
+.own-hint { margin-top: 6px; }
+.own-hint.error { color: var(--primary); }
 
 .tally-number { font-size: 28px; font-weight: 700; }
 
@@ -1009,13 +1105,13 @@ p a, .point a { text-decoration: underline; }
   .dialog { animation: dialog-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
   /* Нажатие: кнопка чуть проседает, строка — только подсветкой. */
-  .action, .text-button, .icon-button, .primary-button, .link-button, .segment, .pin-star,
+  .action, .text-button, .icon-button, .primary-button, .link-button, .segment, .pin-star, .tile,
   .list-row, .role-row, .pin-open, .tab, .text-link {
     transition: background-color 0.15s, opacity 0.15s, transform 0.12s;
   }
 
   .action:active, .text-button:active, .icon-button:active, .primary-button:active,
-  .link-button:active, .segment:active, .pin-star:active {
+  .link-button:active, .segment:active, .pin-star:active, .tile:active {
     transform: scale(0.96);
   }
 

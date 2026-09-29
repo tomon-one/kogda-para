@@ -13,7 +13,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -22,6 +24,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 /**
@@ -59,6 +63,21 @@ import kotlin.math.roundToInt
  * Анимация считается в фазах разметки и отрисовки, а не пересобирает дерево
  * на каждый кадр: в списке настроек это заметно.
  */
+
+/**
+ * Размеры кнопок — одни на всё приложение (Tomon 29.09: «все элементы ровные,
+ * единого неизменяемого размера»). Высота кнопки не зависит от надписи и
+ * крупного шрифта: надпись в одну строку и, если не влезает, мельчает сама
+ * ([FIT]). Кнопки в строке с текстом — одной ширины [ROW_BUTTON], остальные
+ * — во всю ширину карточки, и смена надписи («Проверка…») их не двигает.
+ */
+val BUTTON_HEIGHT = 44.dp
+
+/** Ширина кнопки в строке с названием: «Сменить», «Убрать», «Скопировать», минуты. */
+val ROW_BUTTON = 116.dp
+
+/** Надпись, которой тесно, мельчает до 11 sp, а не рвётся на две строки. */
+internal val FIT = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 14.sp, stepSize = 0.5.sp)
 
 /**
  * Движение бегунка.
@@ -177,6 +196,7 @@ fun <T> Segmented(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .height(BUTTON_HEIGHT)
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(3.dp)
@@ -187,7 +207,7 @@ fun <T> Segmented(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 42.dp)
+                    .fillMaxHeight()
                     .clip(RoundedCornerShape(8.dp))
                     .background(
                         if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent,
@@ -201,6 +221,9 @@ fun <T> Segmented(
                     fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
                     color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
+                    softWrap = false,
+                    autoSize = FIT,
+                    modifier = Modifier.padding(horizontal = 6.dp),
                 )
             }
         }
@@ -284,7 +307,7 @@ fun ActionButton(
     enabled: Boolean = true,
     /** Отступ сверху — от строки над кнопкой; в одной строке с текстом не нужен. */
     top: Dp = 6.dp,
-    /** Поля слева и справа: у кнопок в ряд на всю ширину — уже, чтобы влезло слово. */
+    /** Поля слева и справа: у кнопок в ряд и в строке — уже, чтобы влезло слово. */
     side: Dp = 14.dp,
     /** Что читать чтецу экрана вместо надписи: «Убрать ИСП-924/2», а не «Убрать». */
     spoken: String? = null,
@@ -298,7 +321,8 @@ fun ActionButton(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(if (spoken != null) Modifier.semantics { contentDescription = spoken } else Modifier)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = side, vertical = 9.dp),
+            .height(BUTTON_HEIGHT)
+            .padding(horizontal = side),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -308,6 +332,9 @@ fun ActionButton(
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
+            maxLines = 1,
+            softWrap = false,
+            autoSize = FIT,
             color = if (enabled) {
                 MaterialTheme.colorScheme.primary
             } else {

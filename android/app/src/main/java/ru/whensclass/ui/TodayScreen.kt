@@ -547,6 +547,7 @@ private fun Explanation(title: String, text: String, sourceUrl: String? = null, 
             ActionButton(
                 label = "Открыть таблицу колледжа",
                 onClick = { openLink(context, url) },
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -1140,6 +1141,7 @@ private fun ServerBroken(
                 ActionButton(
                     label = "Открыть таблицу колледжа",
                     onClick = { openLink(context, url) },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -1181,7 +1183,7 @@ private fun Gone(groupName: String, teacherMode: Boolean, onRepick: () -> Unit) 
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            ActionButton(label = "Выбрать заново", onClick = onRepick)
+            ActionButton(label = "Выбрать заново", onClick = onRepick, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -1353,7 +1355,14 @@ private fun LinkButton(label: String, onClick: () -> Unit) {
         // непонятно, куда именно нажимать.
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
     ) {
-        Text(label, style = MaterialTheme.typography.labelMedium)
+        // Хост ссылки бывает длинным: в одну строку с многоточием, кнопка
+        // остаётся своей высоты.
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 

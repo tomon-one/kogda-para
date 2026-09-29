@@ -117,15 +117,23 @@ export function closeDialog() {
   if (target && target.focus) target.focus();
 }
 
-/** Окно с заголовком, телом и кнопками [{label, onClick}]. */
-export function dialog(title, body, buttons) {
+/**
+ * Окно с заголовком, телом и кнопками [{label, onClick}]. `opts.close` —
+ * крестик справа от заголовка (окно выбора минут): тогда кнопок внизу может
+ * не быть вовсе.
+ */
+export function dialog(title, body, buttons, opts) {
   closeDialog();
-  var card = h('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
-    h('h2', { class: 'dialog-title' }, title),
+  var heading = h('h2', { class: 'dialog-title' }, title);
+  var card = h('div', { class: 'dialog' + (opts && opts.cls ? ' ' + opts.cls : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+    opts && opts.close
+      ? h('div', { class: 'dialog-head' }, heading,
+        h('button', { type: 'button', class: 'icon-button dialog-close', 'aria-label': 'Закрыть', onclick: closeDialog }, icon('close')))
+      : heading,
     h('div', { class: 'dialog-body' }, body),
-    h('div', { class: 'dialog-buttons' }, buttons.map(function (b) {
+    buttons.length ? h('div', { class: 'dialog-buttons' }, buttons.map(function (b) {
       return h('button', { type: 'button', class: 'text-button', onclick: b.onClick || closeDialog }, b.label);
-    })));
+    })) : null);
   var overlay = h('div', { class: 'overlay' }, card);
   overlay.addEventListener('click', function (e) {
     if (e.target === overlay) closeDialog();
@@ -138,7 +146,7 @@ export function dialog(title, body, buttons) {
       return;
     }
     if (e.key !== 'Tab') return;
-    var items = card.querySelectorAll('button, a[href]');
+    var items = card.querySelectorAll('button:not([disabled]), a[href], input');
     if (!items.length) return;
     var first = items[0];
     var last = items[items.length - 1];

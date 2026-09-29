@@ -178,3 +178,12 @@ export function durationShort(minutes) {
   if (minutes % 60 === 0) return (minutes / 60) + ' ч';
   return Math.floor(minutes / 60) + ' ч ' + (minutes % 60) + ' мин';
 }
+
+/** Подпись плитки выбора минут: число крупно, единица мелко (tileLabel в ReminderDialog.kt). */
+export function tileLabel(minutes) {
+  if (minutes < 60) return [String(minutes), 'мин'];
+  if (minutes === 60) return ['1', 'час'];
+  if (minutes % 60 === 0) return [String(minutes / 60), 'часа'];
+  if (minutes % 30 === 0) return [Math.floor(minutes / 60) + ',5', 'часа'];
+  return [durationShort(minutes), ''];
+}

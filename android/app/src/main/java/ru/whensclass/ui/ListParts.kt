@@ -159,7 +159,7 @@ internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?, 
                 .padding(vertical = 4.dp),
         )
         // Связь вернулась — повторить здесь же, а не перезапуском.
-        onRetry?.let { ActionButton(label = "Повторить", onClick = it) }
+        onRetry?.let { ActionButton(label = "Повторить", onClick = it, modifier = Modifier.fillMaxWidth()) }
         loadDiagnostics?.let { ReportLink(it) }
     }
 }

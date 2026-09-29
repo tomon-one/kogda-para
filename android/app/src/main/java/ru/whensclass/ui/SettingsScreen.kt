@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -24,12 +22,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +32,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -50,12 +43,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -73,7 +60,6 @@ import ru.whensclass.widget.NextLessonWidgetReceiver
 import ru.whensclass.widget.ScheduleWidgetReceiver
 import ru.whensclass.widget.ThemeChoice
 import ru.whensclass.widget.WeekWidgetReceiver
-import ru.whensclass.widget.formatDurationShort
 
 /**
  * Настройки и короткий честный рассказ о данных.
@@ -133,14 +119,14 @@ fun SettingsScreen(
     sheetUrl: () -> String?,
     onBack: () -> Unit,
 ) {
-    var askOwnTime by rememberSaveable { mutableStateOf(false) }
-    if (askOwnTime) {
-        OwnTimeDialog(
+    var askMinutes by rememberSaveable { mutableStateOf(false) }
+    if (askMinutes) {
+        ReminderDialog(
             current = notifyBefore,
-            onDismiss = { askOwnTime = false },
+            onDismiss = { askMinutes = false },
             onPick = {
                 onNotifyBefore(it)
-                askOwnTime = false
+                askMinutes = false
             },
         )
     }
@@ -207,8 +193,9 @@ fun SettingsScreen(
                 ActionButton(
                     label = if (teacherMode) "Выбрать заново" else "Сменить",
                     onClick = onChangeGroup,
-                    modifier = Modifier.widthIn(min = GROUP_BUTTON),
+                    modifier = Modifier.width(ROW_BUTTON),
                     top = 0.dp,
+                    side = 8.dp,
                 )
             }
 
@@ -248,6 +235,7 @@ fun SettingsScreen(
                         label = if (extraGroups.isEmpty() && subgroups.isEmpty()) "Добавить группу"
                         else "Добавить другую группу",
                         onClick = onAddGroup,
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     )
                 }
                 if (extraGroups.isEmpty()) {
@@ -266,8 +254,8 @@ fun SettingsScreen(
                     )
                     // Что значат значки — здесь, где их выбирают (Tomon 28.09).
                     Hint(
-                        "Под временем пары — группы, у которых она есть: ваша закрашена, " +
-                            "остальные бледные. Пары, которых у вашей группы нет, — на сером фоне. " +
+                        "Под часами пары — группы, у которых она есть: ваша закрашена, " +
+                            "остальные более бледные. Пары, которых у вашей группы нет, — на сером фоне. " +
                             "Виджеты, напоминания и уведомления об изменениях — только о вашей группе.",
                     )
                 }
@@ -287,22 +275,17 @@ fun SettingsScreen(
                 // каждой паре, и человек вправе знать об этом до того, как
                 // решит, что напоминания сломались.
                 Text(
-                    "О первой паре дня — всегда. О следующих — только если " +
-                        "напоминание приходится на перемену, а не на пару.",
+                    "Напоминание о первой паре дня или между парами.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 10.dp),
                 )
-                // Одной строкой с выпадающим списком: одиннадцать фишек в три
-                // ряда занимали полэкрана ради одной настройки (просьба Tomon
-                // 27.09). Разброс по-прежнему большой: кому-то хватит десяти
-                // минут, кому-то ехать через весь город, а кому-то ровно сорок
-                // семь — для того «Своё время…».
-                MinutesPicker(
-                    current = notifyBefore,
-                    onPick = onNotifyBefore,
-                    onOwn = { askOwnTime = true },
-                )
+                // Строка с кнопкой, выбор — в своём окне (Tomon 29.09): одиннадцать
+                // фишек прямо в карточке занимали полэкрана (27.09), а
+                // стандартное выпадающее меню выглядело чужим. Разброс большой:
+                // кому-то хватит десяти минут, кому-то ехать через весь город,
+                // а кому-то ровно сорок семь — для того своё время.
+                MinutesRow(current = notifyBefore, onOpen = { askMinutes = true })
             }
 
             // У каждого вида уведомлений — свой выключатель и свой канал:
@@ -318,8 +301,7 @@ fun SettingsScreen(
             if (notifyServer && notifications && phone.serverChannelOff) {
                 ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SERVER)
             }
-            Hint("Если расписание не обновляется дольше двух часов — один раз за сбой; " +
-                "уведомление уберётся само, когда сервер починится.")
+            Hint("Если расписание не обновляется дольше двух часов.")
 
             // Только студенту с другими выбранными группами: остальным
             // этого уведомления не бывает.
@@ -328,7 +310,7 @@ fun SettingsScreen(
                 if (notifyGroupsGone && notifications && phone.subgroupChannelOff) {
                     ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SUBGROUP)
                 }
-                Hint("Если одной из выбранных групп не стало в таблице — один раз.")
+                Hint("Если одной из выбранных групп не стало в таблице.")
             }
 
             SwitchRow("Сообщать о новых версиях", notifyUpdates, onNotifyUpdates)
@@ -370,6 +352,7 @@ fun SettingsScreen(
             val context = LocalContext.current
             ActionButton(
                 label = "Открыть таблицу колледжа",
+                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     val url = sheetUrl()
                     if (url == null) {
@@ -442,6 +425,7 @@ fun SettingsScreen(
                     label = if (installing) "Скачивается…" else "Обновить приложение",
                     onClick = onUpdate,
                     enabled = !installing,
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 updateError?.let { why ->
                     Text(
@@ -478,6 +462,7 @@ fun SettingsScreen(
                     },
                     onClick = onCheckUpdate,
                     enabled = !checkingUpdate,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -574,9 +559,6 @@ private fun Link(text: String, url: String) {
     )
 }
 
-/** Ширина кнопок раздела «Группа»: «Сменить» и «Добавить» — одного размера. */
-private val GROUP_BUTTON = 112.dp
-
 /** Самый широкий значок группы у названия в разделе «Группа». */
 private val MARK_IN_ROW = 88.dp
 
@@ -612,59 +594,14 @@ private fun GroupRow(
         ActionButton(
             label = action,
             onClick = onAction,
-            modifier = Modifier.widthIn(min = GROUP_BUTTON),
+            modifier = Modifier.width(ROW_BUTTON),
             top = 0.dp,
+            side = 8.dp,
             // Несколько одинаковых «Убрать» — какую группу уберёт нажатие,
             // чтец не говорил (М20).
             spoken = "$action $name",
         )
     }
-}
-
-/** Насколько заранее можно попросить напоминание. */
-private val NOTIFY_OPTIONS = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180, 240)
-private const val MIN_NOTIFY = 10
-private const val MAX_NOTIFY = 240
-
-/**
- * Своё время напоминания.
- *
- * Границы взяты из здравого смысла: меньше десяти минут предупреждать поздно,
- * дольше четырёх часов — уже не про эту пару.
- */
-@Composable
-private fun OwnTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
-    var value by remember { mutableStateOf(current.takeIf { it > 0 }?.toString().orEmpty()) }
-    val minutes = value.toIntOrNull()
-    val valid = minutes != null && minutes in MIN_NOTIFY..MAX_NOTIFY
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("За сколько предупредить") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = { new -> value = new.filter { it.isDigit() }.take(3) },
-                    label = { Text("Минут") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
-                Text(
-                    // Поле принимает минуты, ими и говорим: «до четырёх часов»
-                    // заставляло считать в уме.
-                    "От $MIN_NOTIFY до $MAX_NOTIFY минут (${MAX_NOTIFY / 60} часа)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { minutes?.let(onPick) }, enabled = valid) { Text("Сохранить") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-    )
 }
 
 /**
@@ -697,13 +634,13 @@ private fun PinWidgets() {
     }
     Section("Виджеты") {
         Hint("Добавить на домашний экран — лаунчер спросит, куда поставить.")
-        // Три кнопки одним рядом и одной ширины (Tomon 28.09); «Ближайшая
-        // пара» переносится на две строки, соседи тянутся за ней по высоте.
+        // Три кнопки одним рядом, одной ширины и высоты (Tomon 28.09, 29.09):
+        // «Ближайшая пара» на узком экране мельчает, а не растягивает ряд.
         Row(
-            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            val tile = Modifier.weight(1f).fillMaxHeight()
+            val tile = Modifier.weight(1f)
             ActionButton(label = "День", onClick = { pin(ScheduleWidgetReceiver::class.java) }, modifier = tile, side = 6.dp)
             ActionButton(label = "Неделя", onClick = { pin(WeekWidgetReceiver::class.java) }, modifier = tile, side = 6.dp)
             ActionButton(
@@ -816,63 +753,6 @@ private fun Hint(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/**
- * «За сколько предупредить · 20 мин ▾» — одной строкой. Выбранное в списке
- * отмечено галочкой и для экранного чтеца.
- */
-@Composable
-private fun MinutesPicker(current: Int, onPick: (Int) -> Unit, onOwn: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable(onClickLabel = "Выбрать время") { open = true },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text("За сколько предупредить", style = MaterialTheme.typography.bodyLarge)
-        Box {
-            Text(
-                formatDurationShort(current) + " ▾",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-            )
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                NOTIFY_OPTIONS.forEach { minutes ->
-                    MinutesItem(formatDurationShort(minutes), selected = minutes == current) {
-                        open = false
-                        onPick(minutes)
-                    }
-                }
-                val own = current !in NOTIFY_OPTIONS
-                MinutesItem(
-                    if (own) "Своё: ${formatDurationShort(current)}…" else "Своё время…",
-                    selected = own,
-                ) {
-                    open = false
-                    onOwn()
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MinutesItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(label) },
-        onClick = onClick,
-        trailingIcon = if (selected) {
-            { Icon(Icons.Default.Check, contentDescription = null) }
-        } else {
-            null
-        },
-        modifier = Modifier.semantics { this.selected = selected },
-    )
-}
-
 @Composable
 private fun Section(
     title: String,
@@ -945,11 +825,11 @@ private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
         Unit
     }
     ExternalRow("Точное время", checked = allowed, onClick = open)
-    val what = if (reminders) "напоминание и подсветку на виджетах" else "подсветку на виджетах"
+    val what = if (reminders) "напоминание и выделение на виджетах" else "выделение на виджетах"
     Text(
         if (allowed) {
-            if (reminders) "Напоминание придёт минута в минуту, подсветка на виджетах сменится со звонком."
-            else "Подсветка идущей пары на виджетах сменится со звонком."
+            if (reminders) "Напоминание придёт правильно, выделение на виджетах сменится со звонком."
+            else "Выделение идущей пары на виджетах сменится со звонком."
         } else {
             "Без него система может сдвинуть $what. Нажмите — разрешение " +
                 "выдаётся в настройках телефона."
@@ -972,12 +852,13 @@ private fun ChannelOff(channel: String) {
             // Названием канала, как его покажет телефон: «Другие группы
             // выключены» читалось как «выключены группы» (разбор 28.09).
             "Уведомления «${ru.whensclass.notify.Notifications.channelName(channel)}» выключены " +
-                "в настройках телефона — не придёт ни одно.",
+                "в настройках телефона.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
         ActionButton(
             label = "Включить",
+            modifier = Modifier.fillMaxWidth(),
             onClick = {
                 runCatching {
                     context.startActivity(
@@ -1015,6 +896,7 @@ private fun PhoneLimits(phone: ru.whensclass.notify.PhoneState) {
             )
             ActionButton(
                 label = "Открыть настройки приложения",
+                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     runCatching {
                         context.startActivity(
@@ -1063,6 +945,7 @@ private fun NotificationsDenied(allowed: Boolean) {
         )
         ActionButton(
             label = "Разрешить",
+            modifier = Modifier.fillMaxWidth(),
             onClick = {
                 runCatching {
                     context.startActivity(
