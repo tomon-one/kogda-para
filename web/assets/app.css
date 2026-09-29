@@ -1105,3 +1105,6 @@ p a, .point a { text-decoration: underline; }
 .notfound h1 { font-size: 24px; font-weight: 700; }
 .notfound p { margin-top: 8px; color: var(--muted); }
 .notfound .primary-button:hover { text-decoration: none; }
+
+/* Код в «Поделиться» — белым квадратом и в тёмной теме: камера читает его и так. */
+.share-qr { display: block; margin: 0 auto 8px; width: 200px; height: 200px; border-radius: 8px; image-rendering: pixelated; }
