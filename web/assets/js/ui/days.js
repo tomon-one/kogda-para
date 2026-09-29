@@ -3,7 +3,7 @@
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
 import { dayTitle, capitalize } from '../time.js';
-import { currentLessonNumber, daysWithGaps, freeDay, lessonTime, shortLabels } from '../schedule.js';
+import { currentLessonNumber, daysWithGaps, freeDay, freeOwnDay, lessonTime, shortLabels } from '../schedule.js';
 import {
   isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
@@ -19,12 +19,13 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
   var teacher = schedule.kind === 'teacher';
   var placed = false;
   var list = h('div', { class: 'days' });
-  days.forEach(function (day) {
+  days.forEach(function (day, i) {
     if (before && !placed && beforeDay && day.d >= beforeDay) {
       list.appendChild(before);
       placed = true;
     }
-    list.appendChild(dayCard(day, schedule.bells || {}, now, teacher, schedule.groupNames || [], byName !== false));
+    var nextFree = freeOwnDay(days[i + 1], schedule.groupNames || []);
+    list.appendChild(dayCard(day, schedule.bells || {}, now, teacher, schedule.groupNames || [], byName !== false, nextFree));
   });
   if (before && !placed) {
     if (days.length && beforeDay && days[days.length - 1].d < beforeDay) list.appendChild(before);
@@ -33,7 +34,7 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
   return list;
 }
 
-function dayCard(day, bells, now, teacher, groups, byName) {
+function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   var isToday = day.d === now.date;
   var past = day.d < now.date;
   var current = isToday ? currentLessonNumber(bells, day.d, now) : null;
@@ -44,13 +45,13 @@ function dayCard(day, bells, now, teacher, groups, byName) {
   }, h('h3', { class: 'day-title' }, dayTitle(day.d, now.date)));
 
   if (!lessons.length) {
-    card.appendChild(h('p', { class: 'day-empty' }, freeDay(day)));
+    card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
     return card;
   }
   // Своих пар нет, а у выбранных групп есть: «пар нет» — над их серыми
   // строками, как пишет виджет приложения (четвёртый аудит, М9 прогона 1).
   if (groups.length && lessons.every(function (l) { return isForeign(l, groups); })) {
-    card.appendChild(h('p', { class: 'day-empty' }, freeDay(day)));
+    card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
   }
   lessons.forEach(function (lesson) {
     // Пара только у других групп — не «идёт сейчас»: человек на ней не сидит.

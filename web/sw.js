@@ -25,6 +25,7 @@ var FILES = [
   'assets/icon-192.png',
   'assets/icon-512.png',
   'assets/apple-touch-icon.png',
+  'assets/qr.png',
   'assets/js/api.js',
   'assets/js/format.js',
   'assets/js/main.js',

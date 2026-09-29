@@ -3,7 +3,7 @@
 // для этого телефона (значок, приложение), таблица, оформление, данные и «О
 // сайте» (Tomon 28.09).
 
-import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, isFirefox, dialog, closeDialog } from './dom.js';
+import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, isFirefox, dialog, closeDialog, copyText } from './dom.js';
 import { sheetLink, durationShort } from '../format.js';
 import { REMIND_CHOICES, lastRemind, revoked, service } from '../push.js';
 import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
@@ -163,6 +163,42 @@ function notifications(app, teacherMode) {
   return section(title, body);
 }
 
+var SITE = 'https://kogda-para-nsk.ru';
+var REPO = 'https://github.com/tomon-one/kogda-para';
+
+/**
+ * «Поделиться» (Tomon 29.09; ShareDialog в приложении): код для камеры,
+ * ссылки на сайт и на исходный код с копированием, системное «Отправить»,
+ * где оно есть. Код ведёт в репозиторий: оттуда и сайт, и файл приложения.
+ */
+function share() {
+  function copyRow(label, url) {
+    return h('div', { class: 'setting-row' },
+      h('div', { class: 'setting-text' }, h('div', { class: 'muted small' }, label), url.replace('https://', '')),
+      h('div', { class: 'setting-buttons' }, actionButton('Скопировать', function () {
+        copyText(url).then(function (ok) { snackbar(ok ? 'Скопировано' : 'Скопировать не вышло — выделите ссылку вручную'); });
+      }, 'fixed', null, 'Скопировать ссылку: ' + label)));
+  }
+  var text = '«Когда пара?» — расписание НГОК на экране телефона: ' + SITE +
+    '\nПриложение для Android и исходный код: ' + REPO;
+  var buttons = [{ label: 'Закрыть' }];
+  if (navigator.share) {
+    buttons.unshift({
+      label: 'Отправить',
+      onClick: function () {
+        navigator.share({ title: 'Когда пара?', text: text }).then(null, function () { /* передумали */ });
+      },
+    });
+  }
+  dialog('Поделиться', [
+    h('img', { class: 'share-qr', src: 'assets/qr.png', width: '200', height: '200',
+      alt: 'Код со ссылкой на исходный код и файл приложения' }),
+    h('p', { class: 'muted small' }, 'Наведите камеру — откроется страница приложения: оттуда и файл, и сайт.'),
+    copyRow('Сайт', SITE),
+    copyRow('Исходный код', REPO),
+  ], buttons);
+}
+
 export function settingsScreen(app) {
   var teacherMode = app.isTeacher();
   var own = app.chosen();
@@ -302,6 +338,7 @@ export function settingsScreen(app) {
         h('p', null, h('button', { type: 'button', class: 'text-link', 'data-key': 'report', onclick: app.showReport }, 'Сведения для отчёта')),
         h('p', null, externalLink('Исходный код', 'https://github.com/tomon-one/kogda-para')),
         h('p', null, externalLink('GitHub автора', 'https://github.com/tomon-one')),
+        h('p', null, h('button', { type: 'button', class: 'text-link', 'data-key': 'share', onclick: share }, 'Поделиться')),
         h('p', { class: 'muted small' }, 'Версия ' + VERSION + (CHANNEL === 'tested' ? ' tested' : '') + ', сборка ' + build()),
         h('p', { class: 'signature' }, 'Создано Tomon'),
       ])));

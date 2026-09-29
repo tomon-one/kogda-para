@@ -490,6 +490,10 @@ fun SettingsScreen(
                         "серверу уходит, чьё именно: иначе его неоткуда взять. " +
                         "Всё для вашего удобства."
                 } + "\n\n" +
+                    // GitHub — запасной путь к новой версии, когда сервер не
+                    // отвечает: он видит адрес телефона (четвёртый аудит, М81).
+                    "Когда сервер не отвечает, приложение спрашивает у GitHub, не вышла ли новая " +
+                    "версия, и берёт её оттуда: GitHub видит адрес телефона.\n\n" +
                     "Что написано в таблице колледжа, то и покажет приложение: за " +
                     "ошибки, замены и опоздавшие обновления автор не отвечает.\n\n" +
                     "Если однажды что-то сломается, автор постарается починить, но " +
@@ -518,11 +522,17 @@ fun SettingsScreen(
             ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth())
             Link("Исходный код", "https://github.com/tomon-one/kogda-para")
             Link("GitHub автора", "https://github.com/tomon-one")
+            ShareLink(modifier = Modifier.fillMaxWidth())
             Text(
                 "Создано Tomon",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 12.dp),
+            )
+            Text(
+                "Собрано задолго до рассвета",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

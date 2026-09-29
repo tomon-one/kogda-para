@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -641,10 +642,11 @@ fun ScheduleDays(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         header?.let { item(key = "header") { it() } }
-        items(days, key = { it.date }) { day ->
+        itemsIndexed(days, key = { _, day -> day.date }) { index, day ->
             DayCard(
                 day, schedule.bells, now, teacher = schedule.isTeacher,
                 groups = schedule.groupNames, groupsByName = groupsByName,
+                nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
             )
         }
     }
@@ -707,6 +709,8 @@ private fun DayCard(
     /** Выбранные группы по порядку, первая — своя; пусто — группа одна. */
     groups: List<String> = emptyList(),
     groupsByName: Boolean = true,
+    /** Следующий день — будний и тоже без своих пар ([freeOwnDay]). */
+    nextFree: Boolean = false,
 ) {
     val today = now.toLocalDate()
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
@@ -731,7 +735,7 @@ private fun DayCard(
 
             if (day.lessons.isEmpty()) {
                 Text(
-                    if (day.absent) absentDay(day.date) else freeDay(day.date),
+                    if (day.absent) absentDay(day.date) else freeDay(day.date, teacher, nextFree, now),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
@@ -742,7 +746,7 @@ private fun DayCard(
                 // видел пары в субботу (четвёртый аудит, М9 прогона 1).
                 if (groups.isNotEmpty() && day.lessons.none { 0 in it.slots }) {
                     Text(
-                        freeDay(day.date),
+                        freeDay(day.date, teacher, nextFree, now),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
@@ -790,14 +794,33 @@ private fun DayCard(
  * поэтому у одного и того же дня она всегда одна: подмигнуть — не то же самое,
  * что мельтешить.
  */
-private fun freeDay(date: String): String {
+internal fun freeDay(
+    date: String,
+    teacher: Boolean = false,
+    /** Следующий день — будний, пришёл с сервера и тоже без своих пар. */
+    nextFree: Boolean = false,
+    now: java.time.LocalDateTime? = null,
+): String {
     val day = runCatching { LocalDate.parse(date) }.getOrNull()
         ?: return "Пар нет"
     // Заголовок карточки день уже назвал, поэтому повторять его тут нечем.
     // В воскресенье пар не бывает никогда — радоваться нечему, это просто
     // так устроено, и слово выбрано соответствующее.
-    return if (day.dayOfWeek == DayOfWeek.SUNDAY) "Выходной"
-    else FREE[day.dayOfYear % FREE.size]
+    if (day.dayOfWeek == DayOfWeek.SUNDAY) return "Выходной"
+    // Преподавателю — только прежние фразы: новые пишутся студенту.
+    if (!teacher) {
+        if (nextFree) return "Пар нет. Повезло дважды"
+        if (now != null && now.toLocalDate() == day && now.hour < 12) return "Пар нет. Можно открыть шторы"
+    }
+    val phrases = if (teacher) FREE else FREE + FREE_STUDENT
+    return phrases[day.dayOfYear % phrases.size]
+}
+
+/** День будний, пришёл с сервера и без своих пар — для «повезло дважды». */
+internal fun freeOwnDay(day: DayDto, groups: List<String>): Boolean {
+    val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: return false
+    if (day.absent || date.dayOfWeek == DayOfWeek.SUNDAY) return false
+    return if (groups.isEmpty()) day.lessons.isEmpty() else day.lessons.none { 0 in it.slots }
 }
 
 /**
@@ -818,6 +841,9 @@ private val FREE = listOf(
     "Пар нет. Совсем",
     "Пусто. Так тоже бывает",
 )
+
+/** Ещё одна — только студенту. */
+private val FREE_STUDENT = listOf("Пар нет. Можно одичать")
 
 @Composable
 private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false) {

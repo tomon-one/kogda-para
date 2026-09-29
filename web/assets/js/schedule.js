@@ -216,16 +216,34 @@ var FREE = [
   'Пар нет. Совсем',
   'Пусто. Так тоже бывает',
 ];
+/** Ещё одна — только студенту. */
+var FREE_STUDENT = ['Пар нет. Можно одичать'];
 
 /**
- * Что написать в день без пар. Строка выбирается по дате, у одного дня она
- * всегда одна. Воскресенье и день, которого в ответе нет, — «Выходной».
+ * Что написать в день без пар (freeDay в TodayScreen.kt — правила одни).
+ * Строка выбирается по дате. Воскресенье и день, которого в ответе нет, —
+ * «Выходной». Студенту: следующий будний тоже пуст — «повезло дважды»,
+ * сегодня до полудня — про шторы; преподавателю — только прежние фразы.
+ * `now` — {date, sec} (collegeNow).
  */
-export function freeDay(day) {
+export function freeDay(day, teacher, nextFree, now) {
   if (day.absent) return 'Выходной';
   if (!isDate(day.d)) return 'Пар нет';
   if (weekday(day.d) === 6) return 'Выходной';
-  return FREE[dayOfYear(day.d) % FREE.length];
+  if (!teacher) {
+    if (nextFree) return 'Пар нет. Повезло дважды';
+    if (now && now.date === day.d && now.sec < 12 * 3600) return 'Пар нет. Можно открыть шторы';
+  }
+  var phrases = teacher ? FREE : FREE.concat(FREE_STUDENT);
+  return phrases[dayOfYear(day.d) % phrases.length];
+}
+
+/** День будний, пришёл с сервера и без своих пар — для «повезло дважды». */
+export function freeOwnDay(day, groups) {
+  if (!day || day.absent || !isDate(day.d) || weekday(day.d) === 6) return false;
+  var lessons = day.l || [];
+  if (!groups || !groups.length) return !lessons.length;
+  return lessons.every(function (l) { return (l.slots || []).indexOf(0) < 0; });
 }
 
 /** Есть ли в сохранённом окне сегодняшний день. */
