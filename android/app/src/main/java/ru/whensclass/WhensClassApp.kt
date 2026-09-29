@@ -15,7 +15,7 @@ class WhensClassApp : Application() {
         // Снимок сборок до 0.1.4 склеен с парами соседней подгруппы, а
         // виджеты теперь только о своей: перевести до первой перерисовки.
         CoroutineScope(Dispatchers.Default).launch {
-            AppContainer.get(this@WhensClassApp).store.migrateGroups()
+            runCatching { AppContainer.get(this@WhensClassApp).store.migrateGroups() }
         }
         SyncWorker.schedule(this)
         CoroutineScope(Dispatchers.Default).launch { MidnightUpdater.schedule(this@WhensClassApp) }

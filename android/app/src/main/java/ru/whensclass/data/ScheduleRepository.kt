@@ -306,7 +306,9 @@ class ScheduleRepository(
         // Считаем только тогда, когда виджет и правда стоит на экране.
         // Перерисовка пустого места ответом не была: счётчик обещает, что
         // столько раз расписание показали вместо таблицы.
-        if (widgetsPlaced()) store.countWidgetDraw()
+        // Счётчик — не повод падать: при забитой памяти запись бросает, а
+        // виджеты уже перерисованы (М66).
+        if (widgetsPlaced()) runCatching { store.countWidgetDraw() }
     }
 
     private suspend fun widgetsPlaced(): Boolean = runCatching {

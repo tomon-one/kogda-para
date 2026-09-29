@@ -3,10 +3,9 @@ package ru.whensclass.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import ru.whensclass.work.SyncWorker
 
-class ScheduleWidgetReceiver : GlanceAppWidgetReceiver() {
+class ScheduleWidgetReceiver : OwnWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = ScheduleWidget()
 
     override fun onUpdate(

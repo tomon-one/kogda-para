@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
         )
         // Ответ — тот же, что при открытии заново: счёт ответов не должен
         // потерять нажатия оттого, что экран теперь не пересоздаётся.
-        lifecycleScope.launch { AppContainer.get(applicationContext).store.countOpen() }
+        lifecycleScope.launch { runCatching { AppContainer.get(applicationContext).store.countOpen() } }
     }
 
     override fun onResume() {
@@ -139,7 +139,7 @@ class MainActivity : ComponentActivity() {
         // настоящем открытии: поворот экрана пересоздаёт Activity, и открытие
         // засчитывалось заново — счётчик обещает ответы, а не перевороты.
         if (savedInstanceState == null) {
-            lifecycleScope.launch { AppContainer.get(applicationContext).store.countOpen() }
+            lifecycleScope.launch { runCatching { AppContainer.get(applicationContext).store.countOpen() } }
         }
 
         // Виджет мог попросить открыть конкретный день, а уведомление о

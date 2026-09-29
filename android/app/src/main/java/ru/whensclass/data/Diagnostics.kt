@@ -48,14 +48,17 @@ internal suspend fun collectDiagnostics(
 
     // Опознаватель рядом с именем: имя человек прочтёт сам, а искать
     // расписание на сервере я буду по идентификатору.
-    lines += if (store.teacherMode()) {
+    val teacher = store.teacherMode()
+    lines += if (teacher) {
         "Преподаватель: ${store.teacherName.first() ?: "не выбран"} " +
             "[${store.teacherId.first() ?: "—"}]"
     } else {
         "Группа: ${store.groupName.first() ?: "не выбрана"} " +
             "[${store.groupId.first() ?: "—"}]"
     }
-    store.currentExtraGroups().takeIf { it.isNotEmpty() }?.let { extras ->
+    // Только у студента, как на сайте: у преподавателя других групп нет, а
+    // оставшийся от старого выбора список экран прячет (М6).
+    if (!teacher) store.currentExtraGroups().takeIf { it.isNotEmpty() }?.let { extras ->
         lines += "Ещё группы: " + extras.joinToString(", ") {
             "${it.name} [${it.id}]" + if (it.gone) " — нет в таблице" else ""
         }
@@ -82,6 +85,12 @@ internal suspend fun collectDiagnostics(
     lines += "Сервер: ${store.serverStatus.first()}"
     lines += widgets(context)
     lines += reminders(context, store)
+    // Выключатели сообщений: на жалобу «не приходят сообщения об отменах»
+    // первая причина — выключатель, а в отчёте его не было (М51).
+    fun yes(on: Boolean) = if (on) "да" else "нет"
+    lines += "Сообщать: изменения ${yes(store.notifyChangesEnabled())}, " +
+        "сбои ${yes(store.notifyServerEnabled())}, версии ${yes(store.notifyUpdatesEnabled())}, " +
+        "пропажа групп ${yes(store.notifyGroupsGoneEnabled())}"
     // То, что телефон делает с приложением сам: раньше отчёт показывал
     // «всё включено», а настоящей причины в нём не было.
     val phone = ru.whensclass.notify.PhoneState.read(context)

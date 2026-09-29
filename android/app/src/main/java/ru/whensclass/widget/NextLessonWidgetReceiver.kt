@@ -3,9 +3,8 @@ package ru.whensclass.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
 
-class NextLessonWidgetReceiver : GlanceAppWidgetReceiver() {
+class NextLessonWidgetReceiver : OwnWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = NextLessonWidget()
 
     override fun onUpdate(
