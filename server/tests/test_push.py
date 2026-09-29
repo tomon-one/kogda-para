@@ -251,6 +251,64 @@ def test_teacher_lessons_are_tagged_with_groups():
     assert changes.compare(old, new) == [(TUE, "отменили 2 пару (ИСП-924/2): Физика")]
 
 
+def test_teacher_sees_only_the_group_that_joined_or_left():
+    """Склеенная запись берёт самое длинное название, и оно меняется, когда к
+    паре присоединяется или уходит группа: приходило «убрали 2 пару
+    (Л-926/4)» про группу, у которой ничего не менялось (М34 прогона 1
+    аудита 4). ScheduleDiff.kt — так же."""
+    def teacher(lessons):
+        return {"g": "t1", "gn": "Иванчиков И. И.", "kind": "teacher",
+                "days": [{"d": TUE, "l": lessons}]}
+
+    joined = changes.compare(
+        teacher([_l(2, "Физическая культура", gr="Л-926/4")]),
+        teacher([_l(2, "Физическая культура / Адаптивная физическая культура",
+                    gr="Л-1126, Л-926/4")]),
+    )
+    assert joined == [
+        (TUE, "добавилась 2 пара (Л-1126): Физическая культура / Адаптивная физическая культура")
+    ]
+    left = changes.compare(
+        teacher([_l(5, "Физическая культура.", gr="ГД-926/3, ПД-925/1, ПД-925/2, ПД-925/3")]),
+        teacher([_l(5, "Физическая культура", gr="ГД-926/3")]),
+    )
+    assert left == [(TUE, "убрали 5 пару (ПД-925/1, ПД-925/2, ПД-925/3): Физическая культура.")]
+
+
+@pytest.mark.parametrize("old, new", [
+    ("Обествознание", "Обществознание"),
+    ("кураторский час", "Кураторский час"),
+    ("Физическая культура / Адаптивная физическая культура", "Физическая культура"),
+])
+def test_spelling_fix_is_not_a_change(old, new):
+    """Исправили написание — пара та же: без «убрали» и «добавилась» (М35)."""
+    was = _group({TUE: [_l(2, old, t=["Иванов И. И."], r="301")]})
+    assert changes.compare(was, _group({TUE: [_l(2, new, t=["Иванов И. И."], r="301")]})) == []
+    # Другой преподаватель — уже другая пара.
+    assert len(changes.compare(was, _group({TUE: [_l(2, new, t=["Петров П. П."], r="301")]}))) == 2
+
+
+@pytest.mark.parametrize("url, host", [
+    ("https://[ссылка", "https://[ссылка"),
+    ("https://my.mts-link.ru／j/1", "https://my.mts-link.ru／j/1"),
+    ("https://evil.com\\my.mts-link.ru/j/1", "evil.com"),
+])
+def test_crooked_or_backslash_link_is_foreign_and_does_not_break(url, host):
+    """Кривая ссылка роняла сводку всем подписчикам (В27), а «\\» выдавал
+    чужой адрес за площадку колледжа (М24)."""
+    old = _group({TUE: [_l(1, "Право", o=1)]})
+    new = _group({TUE: [_l(1, "Право", o=1, u=url)]})
+    assert changes.compare(old, new) == [(TUE, f"у 1 пары появилась ссылка — чужой адрес: {host}")]
+
+
+def test_trimmed_changes_keep_today():
+    """Больше восьми строк — режется завтрашний хвост, а не сегодня (М33)."""
+    old = _group({"2026-09-28": [_l(1, "А")], TUE: [_l(n, f"Б{n}") for n in range(1, 9)]})
+    new = _group({"2026-09-28": [_l(1, "А", x=1)], TUE: [_l(n, f"Б{n}", x=1) for n in range(1, 9)]})
+    lines = changes.change_lines(old, new, dt.date(2026, 9, 28))
+    assert len(lines) == 8 and lines[0] == ["2026-09-28", "пн, 28 сентября: отменили 1 пару: А"]
+
+
 def test_only_today_and_tomorrow_with_day_and_date():
     old = _group({"2026-09-28": [_l(1, "А")], TUE: [_l(1, "Б")], "2026-09-30": [_l(1, "В")]})
     new = _group({"2026-09-28": [_l(1, "А", x=1)], TUE: [_l(1, "Б", x=1)],
@@ -442,14 +500,15 @@ def test_api_without_key_says_so(tmp_path, api):
     assert client.post("/v1/push/subscribe", json=_body()).status_code == 404
 
 
-def test_changes_fit_the_push_size_newest_kept():
+def test_changes_fit_the_push_size_first_kept():
+    """Не влезает — прочь хвост: строки идут по дням, сначала сегодня (М33)."""
     sub = service.parse_subscription(_body())
     lines = [["2026-09-29", f"вт, 29 сентября: {i} " + "очень длинная строка " * 40] for i in range(8)]
     out = service.changes_message(sub, lines)
     raw = json.dumps(out, ensure_ascii=False).encode("utf-8")
     assert len(raw) <= service.MAX_PAYLOAD
     body = out["notification"]["body"].split("\n")
-    assert body[-1].startswith("вт, 29 сентября: 7 ")
+    assert body[0].startswith("вт, 29 сентября: 0 ") and len(body) < 8
     assert len(body) == len(out["notification"]["data"]["days"])
 
 
@@ -514,9 +573,232 @@ def test_browser_moved_subscription_keeps_the_choice(api):
     assert list(push._subs) == ["https://web.push.apple.com/new"]
     moved = push._subs["https://web.push.apple.com/new"]
     assert moved["id"] == "isp-924-2" and moved["remind"] == 45 and moved["p256dh"] == fresh["keys"]["p256dh"]
-    # Чужой адрес вместо нового — отказ; неизвестный прежний — ничего не меняет.
+    # Чужой адрес вместо нового — отказ; неизвестный прежний — 404 (сервис-
+    # воркер по нему сбросит отметку, и страница перешлёт подписку, М75) и
+    # ничего не меняет.
     bad = {**body, "old": "https://web.push.apple.com/new", "endpoint": "https://10.0.0.1/x"}
     assert client.post("/v1/push/move", json=bad).status_code == 422
     assert client.post("/v1/push/move", json={**body, "old": "https://web.push.apple.com/none"}
-                       ).status_code == 204
+                       ).status_code == 404
     assert list(push._subs) == ["https://web.push.apple.com/new"]
+
+
+# --- четвёртый аудит, прогон 1: рассылка ------------------------------------------
+
+
+def test_key_off_the_curve_and_control_chars_are_refused():
+    """65 байт с 0x04 впереди — ещё не ключ: такую подписку служба принимала и
+    не снимала никогда (В16). Адрес с \\t проходил urlsplit и ронял httpx мимо
+    журнала (М76)."""
+    bad_key = {"p256dh": b64encode(b"\x04" + b"\x01" * 64), "auth": b64encode(b"0123456789abcdef")}
+    with pytest.raises(service.BadSubscription, match="кривой"):
+        service.parse_subscription(_body(keys=bad_key))
+    assert not service.endpoint_allowed("https://web.push.apple.com/a\tb")
+    assert not service.endpoint_allowed("https://web.push.apple.com/a b")
+
+
+def test_services_have_their_own_queues():
+    assert service.family("https://fcm.googleapis.com/fcm/send/x") == "google"
+    assert service.family("https://web.push.apple.com/x") == "apple"
+    assert service.family("https://wns2-db5p.notify.windows.com/w/?token=1") == "microsoft"
+    assert service.family("https://updates.push.services.mozilla.com/wpush/v2/x") == "mozilla"
+
+
+def test_undeliverable_subscription_is_dropped_only_if_the_service_works(sending):
+    """Пять отказов подряд — подписка снята, если та же служба рассылки за это
+    время доставляла другим. Сбой всей службы (или нашего ключа) подписки не
+    стирает (В16)."""
+    push, answers, later = sending
+    dead = service.parse_subscription(_body(endpoint="https://web.push.apple.com/dead"))
+    alive = service.parse_subscription(_body(endpoint="https://web.push.apple.com/alive"))
+    for sub in (dead, alive):
+        push._subs[sub["endpoint"]] = sub
+
+    def hello(sub):
+        return service.Job(sub, service.message(sub, "hello", "т", "б"), 60)
+
+    for _ in range(service.DROP_AFTER_FAILS):
+        answers.append(webpush.Result(400, "BadDeviceToken"))
+        push._send(hello(dead))
+    assert push.count() == 2, "служба не доставила никому — не снимать"
+    # Служба заработала для других, а эта всё так же не доставляется.
+    answers.append(webpush.Result(201))
+    push._send(hello(alive))
+    answers.append(webpush.Result(400, "BadDeviceToken"))
+    push._send(hello(dead))
+    assert list(push._subs) == ["https://web.push.apple.com/alive"]
+    # Удачная доставка обнуляет счёт.
+    for _ in range(service.DROP_AFTER_FAILS - 1):
+        answers.append(webpush.Result(400))
+        push._send(hello(alive))
+    answers.append(webpush.Result(201))
+    push._send(hello(alive))
+    answers.append(webpush.Result(400))
+    push._send(hello(alive))
+    assert push.count() == 1
+
+
+def test_any_error_in_sending_is_logged_not_lost(sending, monkeypatch, caplog):
+    push, answers, later = sending
+    sub = service.parse_subscription(_body())
+    push._subs[sub["endpoint"]] = sub
+
+    def boom(*a, **k):
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(webpush, "send", boom)
+    push._send(service.Job(sub, service.message(sub, "hello", "т", "б"), 60))
+    assert "RuntimeError" in caplog.text and push.count() == 1
+
+
+def test_too_large_message_is_ours_not_the_subscriptions(sending, monkeypatch):
+    push, answers, later = sending
+    sub = service.parse_subscription(_body())
+    push._subs[sub["endpoint"]] = sub
+
+    def big(*a, **k):
+        raise webpush.TooLarge("5000 байт")
+
+    monkeypatch.setattr(webpush, "send", big)
+    for _ in range(service.DROP_AFTER_FAILS + 1):
+        push._send(service.Job(sub, service.message(sub, "hello", "т", "б"), 60))
+    assert push.count() == 1 and not push._fails
+
+
+def test_reminder_is_not_sent_after_the_lesson_started(sending):
+    """Очередь продержала напоминание до начала пары — оно уже не уходит (В6)."""
+    push, answers, later = sending
+    sub = service.parse_subscription(_body())
+    answers.append(webpush.Result(201))
+    push._send(service.Job(sub, service.message(sub, "lesson", "т", "б"), 600, deadline=1))
+    assert answers == [webpush.Result(201)]
+
+
+def test_retry_queue_is_bounded():
+    delayed = service._Delayed(limit=1)
+    assert delayed.add(3600, lambda: None) is True
+    assert delayed.add(3600, lambda: None) is False
+
+
+def test_whole_service_failing_alarms_the_owner(sending, monkeypatch):
+    """Сплошной отказ службы рассылки был виден только в журнале (М38)."""
+    push, answers, later = sending
+    said = []
+    monkeypatch.setattr(service.alerts, "notify", lambda kind, text, **k: said.append((kind, text)))
+    sub = service.parse_subscription(_body())
+    push._subs[sub["endpoint"]] = sub
+    for _ in range(service.ALARM_MIN_FAILS):
+        answers.append(webpush.Result(403, "BadJwtToken"))
+        push._send(service.Job(sub, service.message(sub, "hello", "т", "б"), 60))
+    push._checked -= service.CHECK_EVERY
+    push._check(None, None, dt.date(2026, 9, 29), fresh=False)
+    assert said and said[0][0] == "push-apple" and "BadJwtToken" in said[0][1]
+
+
+def test_changes_live_until_the_end_of_their_last_day():
+    """Было — 12 часов при любом дне (контроль №5, М37)."""
+    import zoneinfo
+
+    zone = zoneinfo.ZoneInfo("Asia/Novosibirsk")
+    evening = dt.datetime(2026, 9, 29, 20, 0, tzinfo=zone)
+    tomorrow = [["2026-09-29", "а"], ["2026-09-30", "б"]]
+    assert service.changes_ttl(tomorrow, evening) == 28 * 3600
+    assert service.changes_ttl([["2026-09-29", "а"]], evening) == 4 * 3600
+    assert service.changes_ttl([["2026-09-29", "а"]],
+                               dt.datetime(2026, 9, 29, 23, 59, 50, tzinfo=zone)) == 60
+
+
+def test_missed_reminder_minute_is_caught_up_once(tmp_path, snapshots):
+    """Выкладка в минуту напоминания его теряла (М25); догонялка после
+    перезапуска не повторяет ушедшее — отметки на диске."""
+    _, _, after, at, day, _ = snapshots
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(service.parse_subscription(_body(id="isp-924-2", changes=False, remind=20)), day)
+    push.sent.clear()
+    first = changes.reminders(service._payload(after, at, ("group", "isp-924-2"), day), 20, day)[0]
+    push.remind(after, at, now=first["at"] + dt.timedelta(minutes=3))
+    assert len(push.sent) == 1
+    again = Recorder(tmp_path, push.vapid)
+    again.remind(after, at, now=first["at"] + dt.timedelta(minutes=4))
+    assert again.sent == []
+    # После начала пары не догоняется.
+    late = Recorder(tmp_path / "другой", push.vapid)
+    late._subs = dict(push._subs)
+    late.remind(after, at, now=first["start"] + dt.timedelta(minutes=1))
+    assert late.sent == []
+
+
+def test_freeze_stops_reminders_and_changes(tmp_path, snapshots, monkeypatch):
+    """Заморозка — снимок заведомо чужой: напоминания по нему не шлются (М36)."""
+    before, bt, after, at, day, _ = snapshots
+    monkeypatch.setattr(service.settings, "freeze", True)
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(service.parse_subscription(_body(id="isp-924-2", remind=20)), day)
+    push.sent.clear()
+    first = changes.reminders(service._payload(after, at, ("group", "isp-924-2"), day), 20, day)[0]
+    push.remind(after, at, now=first["at"])
+    push.after_refresh(before, bt, after, at, day)
+    assert push.sent == []
+
+
+def test_one_failing_subject_does_not_silence_the_rest(tmp_path, snapshots, monkeypatch):
+    """Сбой подсчёта у одной группы ронял сводку всем (В27)."""
+    before, bt, after, at, day, first = snapshots
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(service.parse_subscription(_body(id="isp-924-2")), day)
+    push.subscribe(service.parse_subscription(
+        _body(id="isp-924-1", endpoint="https://web.push.apple.com/other")), day)
+    push.sent.clear()
+    real = changes.change_lines
+
+    def flaky(old, new, today):
+        if new.get("g") == "isp-924-1":
+            raise ValueError("Invalid IPv6 URL")
+        return real(old, new, today)
+
+    monkeypatch.setattr(changes, "change_lines", flaky)
+    push.after_refresh(before, bt, after, at, day)
+    assert [j.sub["id"] for j in push.sent] == ["isp-924-2"]
+
+
+def test_gone_group_gets_one_notice_then_is_dropped(tmp_path, snapshots, monkeypatch):
+    """Группу переименовали — подписчик сайта молчал навсегда, запись вечна
+    (В21). Через час — «выберите заново», через две недели — стёрта; вернулась
+    группа — всё как было."""
+    _, _, after, at, day, _ = snapshots
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(service.parse_subscription(_body(id="isp-924-9", remind=20)), day)
+    push.sent.clear()
+    clock = [1000.0]
+    monkeypatch.setattr(service.time, "monotonic", lambda: clock[0])
+    push._checked = -1e9
+    push._check(after, at, day, fresh=True)
+    assert push.sent == []
+    clock[0] += service.GONE_NOTICE_AFTER + service.CHECK_EVERY
+    push._check(after, at, day, fresh=True)
+    assert [j.message["notification"]["title"] for j in push.sent] == ["Группы больше нет в таблице"]
+    clock[0] += service.CHECK_EVERY
+    push._check(after, at, day, fresh=True)
+    assert len(push.sent) == 1, "одно уведомление, не каждые десять минут"
+    clock[0] += service.CHECK_EVERY
+    push._check(after, at, day + dt.timedelta(days=service.GONE_DROP_DAYS), fresh=True)
+    assert push.count() == 0
+
+
+def test_teacher_without_lessons_now_still_gets_changes(tmp_path, snapshots):
+    """У почасовика пару отдали замене — в новом снимке его нет, но он был в
+    прежних: приложение говорит «убрали», сайт молчал (М41)."""
+    before, bt, after, at, day, _ = snapshots
+    tid = next(iter(bt.names))
+    known = {tid: bt.names[tid]}
+    for gid, by_date in after.schedule.items():
+        for d, lessons in by_date.items():
+            by_date[d] = [dataclasses.replace(x, teachers=tuple(t for t in x.teachers
+                                                                  if t != bt.names[tid]))
+                          for x in lessons]
+    from whensclass.domain.teachers import build_index
+
+    after_index = build_index(after)
+    assert tid not in after_index.names
+    new = service._payload(after, after_index, ("teacher", tid), day, known.get)
+    assert new is not None and all(not d["l"] for d in new["days"])

@@ -63,6 +63,7 @@ async def lifespan(app: FastAPI):
     store = SnapshotStore(directory)
     refresher = Refresher(store, directory)
     push = Push(directory, load_vapid())
+    push.known_teacher = store.known_teacher
     refresher.on_update = push.after_refresh
     app.state.store = store
     app.state.refresher = refresher
@@ -111,9 +112,12 @@ async def lifespan(app: FastAPI):
             max_instances=1,
             coalesce=True,
         )
-    # Напоминания о паре для сайта: раз в минуту, в начале минуты.
+    # Напоминания о паре для сайта: раз в минуту, в начале минуты. Там же —
+    # тревога о службах рассылки и пропавшие группы подписчиков (только при
+    # ok: на отвергнутом листе «группы нет» было бы неправдой).
     scheduler.add_job(
-        lambda: push.remind(store.snapshot, store.teachers if push.count() else None),
+        lambda: push.remind(store.snapshot, store.teachers if push.count() else None,
+                            fresh=refresher.status == "ok"),
         CronTrigger(minute="*", second=2),
         id="push-remind",
         max_instances=1,

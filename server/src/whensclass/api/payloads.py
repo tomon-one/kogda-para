@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from ..config import settings
 from ..domain.models import Lesson, SheetPlace, Snapshot, a1_column
-from ..domain.teachers import TeacherIndex, teacher_id as person_id
+from ..domain.teachers import TeacherIndex, spelling_twin, teacher_id as person_id
 
 API_VERSION = 1
 
@@ -229,6 +229,41 @@ def teachers_payload(index: TeacherIndex, generated: datetime) -> dict:
             for tid, name in sorted(index.names.items(), key=lambda x: x[1])
         ],
     }
+
+
+def teacher_answer(
+    snapshot: Snapshot,
+    index: TeacherIndex,
+    known_teacher,
+    teacher_id: str,
+    start: date,
+    days: int,
+    generated: datetime,
+    bells: dict[str, list[str]] | None = None,
+    today: date | None = None,
+) -> dict | None:
+    """Ответ /v1/teacher. None — такого преподавателя нет.
+
+    Краткая запись «Фамилия И. О.», сведённая к полному имени, отвечает
+    расписанием полного. Кого нет в этом листе, но кто был в прежних
+    (`known_teacher`, 60 дней), — днями без пар: отпуск, неделя без часов, а не
+    «вас больше нет». Колледж исправил опечатку в имени — 404: пустые дни
+    говорили бы «пар нет», а человек найдёт себя под верным именем. Тем же
+    путём считают уведомления сайта (четвёртый аудит, М41 прогона 1).
+    """
+    def build(tid: str, known_name: str | None = None) -> dict | None:
+        return teacher_payload(snapshot, index, tid, start, days, generated,
+                               bells=bells, known_name=known_name, today=today)
+
+    body = build(teacher_id)
+    if body is None and (full := index.aliases.get(teacher_id)):
+        body = build(full)
+    if body is not None:
+        return body
+    name = known_teacher(teacher_id)
+    if not name or spelling_twin(index, name):
+        return None
+    return build(teacher_id, known_name=name)
 
 
 def teacher_payload(
