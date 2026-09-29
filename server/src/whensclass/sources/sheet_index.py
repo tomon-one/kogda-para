@@ -19,7 +19,7 @@ import httpx
 
 from ..api.payloads import filled_until
 from ..config import settings
-from ..domain.models import SourceFormatChanged
+from ..domain.models import SheetTooSmall, SourceFormatChanged
 from ..parser.csv_schedule import Limits, parse_csv
 from ..service import alerts
 from . import gsheets
@@ -418,6 +418,13 @@ def resolve_for(
             # Закрытую таблицу поиск выдавал за «добраться не вышло», и
             # владелец шёл смотреть сеть и ключ, а не доступ. Наверх — как в заходе по gid.
             raise
+        except SheetTooSmall as exc:
+            # Каркас дат без пар или один-два дня — лист прочитан, колледж его
+            # только заводит (каникулы, начало семестра). Это «ещё не
+            # выложено», а не «добраться не вышло»: раньше такой лист уводил
+            # службу в stale с красным у всех (четвёртый аудит, В14 прогона 1).
+            log.info("лист %r ещё не заполнен: %s", sheet.title, exc)
+            continue
         except SourceFormatChanged as exc:
             # «Не похож на расписание групп» — обычно честный отказ: в книге
             # лежат и календарный график, и расписание аудиторий. Но если так

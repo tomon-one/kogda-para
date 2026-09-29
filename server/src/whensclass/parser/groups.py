@@ -21,9 +21,8 @@ from ..domain.models import GroupRef, SourceFormatChanged, a1_column
 log = logging.getLogger(__name__)
 
 _HEADER_PREFIX = "Дисциплина Преподаватель "
-# Шапка блока с опечаткой во втором слове — «Преподаватели» — та же шапка:
-# раньше такая колонка молча выпадала, и группа пропадала из снимка при ok.
-_HEADER_RE = re.compile(r"^Дисциплина\s+Преподавател\S*\s+(.+)$")
+# Латинские буквы, неотличимые от кириллицы на глаз: «Дисциплинa» с «a».
+_LOOKALIKE = str.maketrans("aceopxykABCEHKMOPTXY", "асеорхукАВСЕНКМОРТХУ")
 _ROOM_MARK = "Ауд."
 _BLOCK_WIDTH = 4
 _SPLIT_RE = re.compile(r"\s+и\s+")
@@ -56,14 +55,51 @@ def _has_id(name: str) -> bool:
     return True
 
 
+def _distance(a: str, b: str) -> int:
+    """Расстояние правки — для коротких слов, построчно."""
+    row = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (x != y))
+    return row[-1]
+
+
+def _near(word: str, target: str) -> bool:
+    """Слово шапки с опечаткой — то же слово: до двух правок, регистр и
+    латинские двойники не в счёт."""
+    if abs(len(word) - len(target)) > 2:
+        return False
+    word = word.translate(_LOOKALIKE).casefold()
+    return word == target or _distance(word, target) <= 2
+
+
+def _block_head(text: str) -> tuple[bool, str | None]:
+    """Ячейка главного заголовка: (шапка ли блока, хвост с именами или None).
+
+    «Дисциплина Преподаватель ИСП-924/1». Опечатка в слове шапки — «Дисциплна»,
+    «дисциплина», «Дисциплины», латинская «a», «Преподаватели» — та же шапка:
+    раньше такой блок не становился ни группой, ни безымянным, и группа молча
+    уходила в 404 при ok (четвёртый аудит, В9 прогона 1).
+    """
+    parts = text.split(None, 2)
+    if not parts or not _near(parts[0], "дисциплина"):
+        return False, None
+    if len(parts) < 3 or not _near(parts[1], "преподаватель"):
+        return True, None
+    if parts[0] != "Дисциплина" or not parts[1].startswith("Преподавател"):
+        _warn_once(("шапка", parts[0], parts[1]),
+                   "в главном заголовке «%s %s» — считаю шапкой блока", parts[0], parts[1])
+    return True, parts[2]
+
+
 def _row_columns(row: list[str]) -> dict[int, list[str]]:
     """Колонка -> имена групп, объявленные в этой строке."""
     found: dict[int, list[str]] = {}
     for col, cell in enumerate(row):
-        text = (cell or "").replace("\xa0", " ").strip()
-        m = _HEADER_RE.match(text)
-        if m:
-            names = split_group_names(m.group(1))
+        _, tail = _block_head((cell or "").replace("\xa0", " ").strip())
+        if tail:
+            names = split_group_names(tail)
             if names:
                 found[col] = names
     return found
@@ -80,7 +116,7 @@ def header_blocks(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> set[in
         if len(_row_columns(row)) >= min_groups:
             return {
                 col for col, cell in enumerate(row)
-                if (cell or "").replace("\xa0", " ").strip().startswith("Дисциплина")
+                if _block_head((cell or "").replace("\xa0", " ").strip())[0]
             }
     return set()
 

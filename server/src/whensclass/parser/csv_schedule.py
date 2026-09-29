@@ -25,6 +25,7 @@ from ..domain.models import (
     SheetPlace,
     SheetTooSmall,
     Snapshot,
+    ChangedAgainstPrevious,
     SourceFormatChanged,
     a1_column,
 )
@@ -92,6 +93,11 @@ SPILL_REJECT = 5
 # группы за версию, у сдвига — 4–6.
 NAME_SUBJECTS_REJECT = 3
 VERTICAL_DAYS_REJECT = 3
+# Съехала неделя одной колонки — не отказ, а подозрение с тревогой: 25.09
+# 17:32 колледж так переставил неделю КП-923 (с КП-1124 у них одна колонка) и
+# трое суток правил её поверх, а отказ залипал на всём листе (четвёртый аудит,
+# В12 прогона 1). Отказ — когда так съехали хотя бы две колонки.
+VERTICAL_SHIFTED_COLUMNS_REJECT = 2
 # То же на одном дне у многих групп: честно — до 4 групп за день (14.09
 # 13:40), у сдвига в последний день листа — 21 и 135.
 VERTICAL_GROUPS_REJECT = 10
@@ -477,7 +483,8 @@ def _validate(
     """Проверяет, что разобранное похоже на расписание, а не на обломки."""
     if len(snapshot.dates) < limits.min_dates:
         raise SheetTooSmall(
-            f"нашёл всего {len(snapshot.dates)} дней, ожидал не меньше {limits.min_dates}"
+            f"нашёл всего {len(snapshot.dates)} дней, ожидал не меньше {limits.min_dates}",
+            starts=min(snapshot.dates, default=None),
         )
     for k, (a, b) in enumerate(zip(seen_order, seen_order[1:])):
         if b <= a:
@@ -503,7 +510,8 @@ def _validate(
     total = snapshot.total_lessons()
     if total < limits.min_lessons:
         raise SheetTooSmall(
-            f"нашёл всего {total} пар, ожидал не меньше {limits.min_lessons}"
+            f"нашёл всего {total} пар, ожидал не меньше {limits.min_lessons}",
+            starts=min(snapshot.dates, default=None),
         )
     # Сдвиг по содержимому здесь не проверяется: его зовут явно служба (с
     # историей прежнего снимка) и канарейка. Раньше он шёл дважды — здесь без
@@ -552,7 +560,8 @@ def check_shift(
     даты, что есть в обоих.
 
     Возвращает подозрения, которые отказом не стали: «у многих групп
-    незнакомые предметы» (`_warn_strangers`) — их служба шлёт тревогой.
+    незнакомые предметы» (`_warn_strangers`) и неделя одной группы, съехавшая
+    по вертикали (`_check_vertical`), — их служба шлёт тревогой.
     """
     seed = seed or {}
     first: dict[int, str] = {}
@@ -561,11 +570,11 @@ def check_shift(
     order = [first[c] for c in sorted(first)]
     names = {g.id: g.name for g in snapshot.groups}
     _check_name_subjects(snapshot)
+    suspicions: list[str] = []
     if previous is not None:
         _judge_against_previous(snapshot, previous, order, names)
-        _check_vertical(snapshot, previous, names)
+        suspicions += _check_vertical(snapshot, previous, names)
     history = {gid: set(seed.get(gid, ())) for gid in snapshot.schedule}
-    suspicions: list[str] = []
     for day in snapshot.dates:
         _judge_neighbours(snapshot, day, history, order, names)
         suspicions += _warn_strangers(snapshot, day, history)
@@ -584,7 +593,8 @@ def _shift_message(votes: int, start: str, day: date, k: int, how: str) -> str:
 
 
 def _series(
-    order: list[str], k: int, score, threshold: int, names: dict[str, str], day: date, how: str
+    order: list[str], k: int, score, threshold: int, names: dict[str, str], day: date, how: str,
+    error: type[SourceFormatChanged] = SourceFormatChanged,
 ) -> None:
     """Серия групп подряд, у которых `score(i, j)` — «чужого больше своего»."""
     votes, start = 0, None
@@ -597,9 +607,7 @@ def _series(
             votes += 1
             start = start or gid
             if votes >= threshold:
-                raise SourceFormatChanged(
-                    _shift_message(votes, names.get(start, start), day, k, how)
-                )
+                raise error(_shift_message(votes, names.get(start, start), day, k, how))
         elif own > theirs:
             votes, start = 0, None
 
@@ -646,14 +654,21 @@ def _judge_against_previous(
             )
 
         for k in SHIFT_OFFSETS:
-            _series(order, k, score, PREV_RUN_REJECT, names, day, "против прежней версии")
+            _series(
+                order, k, score, PREV_RUN_REJECT, names, day, "против прежней версии",
+                ChangedAgainstPrevious,
+            )
 
 
-def _check_vertical(snapshot: Snapshot, previous: Snapshot, names: dict[str, str]) -> None:
-    """Отказ, если пары группы на нескольких днях съехали на номер-два против
-    прежней версии: так выглядит «удалить ячейки, сдвиг вверх» в её блоке."""
+def _check_vertical(snapshot: Snapshot, previous: Snapshot, names: dict[str, str]) -> list[str]:
+    """Пары групп на нескольких днях съехали на номер-два против прежней
+    версии: так выглядит «удалить ячейки, сдвиг вверх» в блоке. Отказ — в
+    двух колонках и больше или у многих групп в один день; в одной колонке
+    (у групп, которые её делят, это одна правка) — подозрение, строкой."""
     common = sorted(set(snapshot.dates) & set(previous.dates))
+    column = {g.id: g.column for g in snapshot.groups}
     same_day: dict[tuple[date, int], list[str]] = {}
+    shifted: dict[object, str] = {}
     for gid in snapshot.schedule:
         for step in (-2, -1, 1, 2):
             days = []
@@ -670,19 +685,26 @@ def _check_vertical(snapshot: Snapshot, previous: Snapshot, names: dict[str, str
                     days.append(day)
                     same_day.setdefault((day, step), []).append(gid)
             if len(days) >= VERTICAL_DAYS_REJECT:
-                raise SourceFormatChanged(
+                shifted.setdefault(
+                    column.get(gid, gid),
                     f"у группы {names.get(gid, gid)} пары съехали на {abs(step)} "
                     f"{'номер' if abs(step) == 1 else 'номера'} "
                     f"{'вверх' if step > 0 else 'вниз'} на {len(days)} днях с {days[0]} — "
                     "похоже на сдвиг ячеек по вертикали"
                 )
+                break  # одна группа — одна строка, даже если сошлись два шага
     for (day, step), gids in sorted(same_day.items()):
         if len(gids) >= VERTICAL_GROUPS_REJECT:
-            raise SourceFormatChanged(
+            raise ChangedAgainstPrevious(
                 f"{day} у {len(gids)} групп, начиная с {names.get(gids[0], gids[0])}, пары "
                 f"съехали на {abs(step)} {'номер' if abs(step) == 1 else 'номера'} — похоже "
                 "на сдвиг ячеек по вертикали"
             )
+    if len(shifted) >= VERTICAL_SHIFTED_COLUMNS_REJECT:
+        raise ChangedAgainstPrevious("; ".join(list(shifted.values())[:2]))
+    for message in shifted.values():
+        log.warning("%s — в одной колонке, лист принят, но присмотреться", message)
+    return list(shifted.values())
 
 
 def _same_but_number(a: Lesson, b: Lesson) -> bool:

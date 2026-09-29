@@ -255,6 +255,32 @@ def test_teacher_day_waits_for_all_his_groups():
     assert body["cov"] == ["2026-09-21", "2026-10-03"]
 
 
+def test_group_on_practice_does_not_hide_teacher_days():
+    """Группа ушла на практику — колонка пуста до конца листа. Её край резал
+    всем её преподавателям дни после себя, включая сегодняшние пары в других
+    группах (В15 прогона 1 аудита 4). Край — по группам, у которых он ведёт
+    пары с понедельника этой недели; сегодня не режется никогда."""
+    from whensclass.api.payloads import teacher_payload
+    from whensclass.domain.models import Lesson
+    from whensclass.domain.teachers import build_index
+
+    snap = _filling({**{d: 10 for d in WEEK}, **{d: 10 for d in NEXT}})
+    for gid in ("g-0", "g-7"):
+        for day in snap.schedule[gid]:
+            snap.schedule[gid][day] = [
+                Lesson(number=1 if gid == "g-0" else 2, subject="Физика", teachers=("Иванов И. И.",))
+            ]
+    for day in NEXT:
+        del snap.schedule["g-7"][day]  # g-7 на практике с 28.09
+    index = build_index(snap)
+    tid = next(iter(index.names))
+    tuesday = NEXT[1]
+    body = teacher_payload(snap, index, tid, NEXT[0], 6, GENERATED, today=tuesday)
+    assert body["cov"] == ["2026-09-21", "2026-10-03"]
+    today_ = next(d for d in body["days"] if d["d"] == tuesday.isoformat())
+    assert [x["n"] for x in today_["l"]] == [1]
+
+
 def test_today_and_past_are_never_cut():
     """Сегодня недописано — всё равно выложено: за краем сегодняшнего дня
     виджет сказал бы «не опубликовано» про идущие пары."""

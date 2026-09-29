@@ -12,7 +12,7 @@ import re
 
 from ..domain.models import Lesson
 from ..domain.teachers import PATRONYMIC_RE
-from .groups import _warn_once  # неувязка листа — состояние, а не событие: в журнал раз
+from .groups import _distance, _warn_once  # неувязка листа — состояние, а не событие: в журнал раз
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +80,15 @@ _ROOM_NUMBER_TAIL = re.compile(
 # Прочерк или «нет» вместо предмета или аудитории — пусто, а не пара «—» в
 # 9:00 и не «каб. -».
 _NOTHING_RE = re.compile(r"^(?:[\W_]*|нет)$", re.IGNORECASE)
+
+# «Элжур» в колонке аудитории (с 25.09.2026; 02.10 — 486 пар у 159 групп) —
+# задание в электронном журнале вместо пары, «грубо говоря отмена» (Tomon
+# 29.09). Кабинетом оно было ложью: пара выходила очной, и переход с онлайна
+# объявлялся «снова очная» и «переехала: Элжур» (четвёртый аудит, В7 прогона 1).
+_JOURNAL_RE = re.compile(
+    r"^(?:эл\.?\s*-?\s*жур(?:нал)?|электронный\s+журнал)[\s.]*$", re.IGNORECASE
+)
+JOURNAL_NOTE = "задание в электронном журнале"
 
 # Служебная заглушка колледжа вместо имени: не человек, в списке ей не место.
 _VACANCY_RE = re.compile(r"^вакансия\b", re.IGNORECASE)
@@ -273,16 +282,6 @@ def replaced_subject(subject: str) -> tuple[str, str] | None:
     return " ".join(old_name.split()).strip(" ,;.") or before, after
 
 
-def _distance(a: str, b: str) -> int:
-    """Расстояние правки — для коротких слов, построчно."""
-    row = list(range(len(b) + 1))
-    for i, x in enumerate(a, 1):
-        prev, row[0] = row[0], i
-        for j, y in enumerate(b, 1):
-            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (x != y))
-    return row[-1]
-
-
 _UNASSIGNED_ROOMS = frozenset({"0", "1"})
 
 
@@ -345,6 +344,9 @@ def parse_lesson(
     note = note or room_note
     teachers = split_teachers(normalize(teacher_raw))
     cancelled = cancel_a or cancel_b
+    if _JOURNAL_RE.match(room_text):
+        room_text, cancelled = "", True
+        note = f"{note}; {JOURNAL_NOTE}" if note else JOURNAL_NOTE
 
     if not subject and not room_text and not teachers:
         if not cancelled:

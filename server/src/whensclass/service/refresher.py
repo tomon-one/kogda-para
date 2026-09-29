@@ -19,7 +19,7 @@ import zoneinfo
 import httpx
 
 from ..config import settings
-from ..domain.models import SheetTooSmall, SourceFormatChanged, a1_column
+from ..domain.models import ChangedAgainstPrevious, SheetTooSmall, SourceFormatChanged, a1_column
 from ..domain.teachers import build_index
 from ..parser.csv_schedule import Limits, check_shift, parse_export, shift_seed
 from ..sources import gsheets, sheet_index
@@ -67,6 +67,14 @@ class Refresher:
         # по systemd стирал бы это без следа: status ok, тревоги нет, и так
         # по кругу.
         self._running_path = state_dir / "refresh.running"
+        # Рычаг владельца: следующий лист принять без сверки с прежним
+        # снимком (ChangedAgainstPrevious). Файл, а не настройка: разовый, его
+        # стирает первый принятый лист (руководство по серверу, «Когда что-то
+        # не так»). Прежний обход — убрать snapshot.json — не работал: load()
+        # поднимал snapshot.prev.json, и лист отвергался снова (четвёртый
+        # аудит, В13 прогона 1).
+        self._accept_path = state_dir / "accept-next"
+        self._accepting = False
         try:
             self._crashes = int(self._running_path.read_text("utf-8").strip() or 0)
         except (OSError, ValueError):
@@ -126,6 +134,30 @@ class Refresher:
                 return False
             finally:
                 self._clear_running()
+
+    def _accept_next(self) -> bool:
+        """Поставлен ли рычаг accept-next. Старше ACCEPT_NEXT_TTL — стирается:
+        забытый файл пропустил бы без сверки настоящий сдвиг через неделю."""
+        try:
+            age = dt.datetime.now().timestamp() - self._accept_path.stat().st_mtime
+        except OSError:
+            return False
+        if age > ACCEPT_NEXT_TTL.total_seconds():
+            log.warning("рычаг accept-next старше %s — не беру и стираю", ACCEPT_NEXT_TTL)
+            self._accept_path.unlink(missing_ok=True)
+            return False
+        log.warning("рычаг accept-next: лист сверяется без прежнего снимка")
+        return True
+
+    def _accepted(self) -> None:
+        """Лист принят — разовый рычаг снят."""
+        if self._accepting:
+            self._accepting = False
+            try:
+                self._accept_path.unlink(missing_ok=True)
+            except OSError as exc:
+                log.warning("рычаг accept-next не стёрся: %s", exc)
+            log.warning("лист принят без сверки с прежним снимком (accept-next), рычаг снят")
 
     def _load_seen_titles(self) -> set[str] | None:
         try:
@@ -200,7 +232,19 @@ class Refresher:
                 self._recovered()
                 return False
 
-            parsed = self._parse(texts, today)
+            try:
+                parsed = self._parse(texts, today)
+            except NotYetPublished as exc:
+                if self.store.snapshot is None:
+                    self._fail(f"не нашёл лист на {today}: {exc}", kind="sheet")
+                    return False
+                log.info("окно — только недописанные будущие листы (%s): держу прежний снимок", exc)
+                for title, gid, text, digest in texts:
+                    history.archive(self.state_dir, gid, text, digest, rejected=self._dropped.get(title))
+                self._source_hashes = {title: digest for title, _, _, digest in texts}
+                self.status = "ok"
+                self._recovered()
+                return False
             if parsed is None:
                 self._fail(f"не нашёл лист на {today}: набор листов пуст", kind="sheet")
                 return False
@@ -216,7 +260,18 @@ class Refresher:
             for title, gid, text, digest in texts:
                 reason = str(exc) if failed is None or title == failed else None
                 history.archive(self.state_dir, gid, text, digest, rejected=reason)
-            self._fail(f"формат таблицы изменился: {exc}", kind="format")
+            # Отказ по сверке с прежним залипает, пока колледж не уберёт
+            # правку: владельцу — чем его пропустить, если правка законная.
+            lever = (
+                ". Если по листу видно, что правка законная, — рычаг accept-next "
+                "(руководство по серверу, «Когда что-то не так»)"
+                if isinstance(exc, ChangedAgainstPrevious) or getattr(exc, "against_previous", False)
+                else ""
+            )
+            self._fail(
+                f"формат таблицы изменился: {exc}{lever}", kind="format",
+                public=f"формат таблицы изменился: {exc}",
+            )
             return False
         except sheet_index.SheetNotFound as exc:
             # Лист прочитан, но отвергнут воротами «пропал сегодняшний день»:
@@ -256,6 +311,7 @@ class Refresher:
             )
             self._sheets = None
 
+        self._accepted()
         before = (self.store.snapshot, self.store.teachers) if self.on_update else (None, None)
         try:
             self.store.put(snapshot, dt.datetime.now(dt.timezone.utc), teachers=teachers)
@@ -293,14 +349,20 @@ class Refresher:
         self.status = "ok"
         self._recovered()
         self._announce(before, snapshot, teachers, today)
+        if self._next_rejected:
+            name, exc = self._next_rejected
+            alerts.notify(
+                "next-format",
+                f"Следующий лист {name!r} отвергнут, окно пока без него: {exc}. Текущий "
+                "принят. Когда тот станет нужен сегодня, отказ станет сбоем.",
+            )
         if self._suspicions:
             # Лист принят, но похож на сдвиг, которого признак соседа не увидел.
             # Раз в шесть часов, как всё.
             alerts.notify(
                 "strangers",
                 "Лист принят, но: " + "; ".join(self._suspicions[:2])
-                + ". Присмотреться — не сдвиг ли колонок (руководство по серверу, «Когда что-то "
-                "не так»).",
+                + ". Присмотреться (руководство по серверу, «Когда что-то не так»).",
             )
         log.info(
             "снимок обновлён: лист %r, %d групп, %d пар",
@@ -384,6 +446,13 @@ class Refresher:
         """
         self._dropped = {}
         self._suspicions: list[str] = []
+        # Следующий лист окна, отвергнутый по формату: (имя, отказ).
+        self._next_rejected: tuple[str, SourceFormatChanged] | None = None
+        self._accepting = self._accept_next()
+        # С чем сверять: прежний принятый снимок, а по рычагу — ни с чем.
+        # История групп для сдвига по соседям (shift_seed) берётся из него и
+        # так: это не сверка, а знакомые предметы.
+        previous = None if self._accepting else self.store.snapshot
         try:
             snapshot = None
             for title, gid, text, _ in texts:
@@ -398,12 +467,11 @@ class Refresher:
                     if snapshot is not None:
                         for group, traces in shift_seed(snapshot, current).items():
                             seed.setdefault(group, set()).update(traces)
-                    self._suspicions += check_shift(
-                        current, seed=seed, previous=self.store.snapshot
-                    )
-                    _check_lost_names(self.store.snapshot, current, gid)
+                    self._suspicions += check_shift(current, seed=seed, previous=previous)
+                    _check_lost_names(previous, current, gid)
                 except SheetTooSmall as exc:
-                    if snapshot is None:
+                    future = exc.starts is not None and exc.starts > today
+                    if snapshot is None and not future:
                         raise SheetRejected(title, f"лист {name!r}: {exc}") from exc
                     # Следующий лист колледж только начал: без него окно
                     # короче, и за краем — «ещё не опубликовано». Раньше его
@@ -416,11 +484,36 @@ class Refresher:
                     continue
                 except SourceFormatChanged as exc:
                     # Имя листа — в тексте: в окне их бывает два.
-                    raise SheetRejected(title, f"лист {name!r}: {exc}") from exc
+                    rejected = SheetRejected(
+                        title, f"лист {name!r}: {exc}",
+                        against_previous=isinstance(exc, ChangedAgainstPrevious),
+                    )
+                    if snapshot is None:
+                        raise rejected from exc
+                    # Черновик следующей вкладки с ошибкой формата валил весь
+                    # заход: правки сегодняшнего листа не доходили до людей
+                    # (четвёртый аудит, В10 прогона 1). Теперь он выпадает
+                    # из окна, как недописанный, а владельцу — тревога.
+                    log.warning("следующий лист %r отвергнут (%s) — пока без него", name, exc)
+                    self._dropped[title] = f"следующий лист отвергнут: {exc}"
+                    self._next_rejected = (name, rejected)
+                    continue
                 snapshot = current if snapshot is None else snapshot.merged_with(current)
             if snapshot is None:
+                if self._dropped and len(self._dropped) == len(texts):
+                    # Все листы окна — недописанные будущие: каникулы, колледж
+                    # заводит следующий лист. Это «ещё не выложено» при ok, а
+                    # не сбой (четвёртый аудит, В14 прогона 1).
+                    raise NotYetPublished(", ".join(self._dropped.values()))
                 return None
-            _check_group_drop(self.store.snapshot, snapshot)
+            if self._next_rejected and snapshot.coverage and snapshot.coverage[1] < today:
+                # Без отвергнутого листа окну нечем покрыть сегодня: он не
+                # «следующий», а нужный — отказ, как раньше.
+                raise self._next_rejected[1]
+            dropped = _check_group_drop(previous, snapshot)
+            if dropped:
+                self._suspicions.append(dropped)
+            _check_days_emptied(previous, snapshot, today)
             teachers = build_index(snapshot)
         except ValueError as exc:
             raise SourceFormatChanged(f"разбор споткнулся о значение: {exc}") from exc
@@ -539,17 +632,25 @@ class Refresher:
             log.warning("отметка захода не снялась: %s", exc)
 
 
+class NotYetPublished(Exception):
+    """В окне только листы, которые колледж ещё заводит, и все — в будущем."""
+
+
 class SheetRejected(SourceFormatChanged):
     """Отказ, который знает, какой лист окна его дал."""
 
-    def __init__(self, title: str | None, message: str):
+    def __init__(self, title: str | None, message: str, against_previous: bool = False):
         super().__init__(message)
         self.title = title
+        self.against_previous = against_previous
 
 
 # Сколько раз слежка (раз в полчаса) перепроверяет новый лист «групп», который
 # поиск ещё не принял: шесть часов.
 RETRY_LOOKS = 12
+# Сколько живёт рычаг accept-next: поставил и забыл — не пропускать без сверки
+# лист, который отвергнут через неделю.
+ACCEPT_NEXT_TTL = dt.timedelta(hours=2)
 # Сколько сетевой сбой держим за чих: ни тревоги, ни stale наружу.
 FETCH_GRACE = dt.timedelta(minutes=30)
 # После скольких заходов подряд, умерших посреди разбора, — тревога.
@@ -563,22 +664,65 @@ FAIL_KINDS = ("format", "sheet", "fetch", "error", "closed", "crash")
 # групп проходят порог в сто, и 80 групп молча получают 404. Самая крупная
 # когорта (-926) — 28 % от всех, уход целого курса под отказ не попадает.
 MAX_GROUP_DROP = 0.3
+# Выложенный день, опустевший у доли групп больше этой, — отказ
+# (`_check_days_emptied`); у дней, где пары были меньше чем у стольких групп,
+# не проверяется: суббота у пары десятков групп опустеет и честно.
+DAY_EMPTIED_SHARE = 0.3
+DAY_EMPTIED_MIN_GROUPS = 20
 
 
-def _check_group_drop(previous, current) -> None:
-    """Отказ, если группы пропали толпой при тех же датах."""
-    if previous is None or not previous.groups:
-        return
-    if not (set(previous.dates) & set(current.dates)):
-        # Новый лист, новый состав — сравнивать не с чем.
-        return
+def _check_group_drop(previous, current) -> str | None:
+    """Отказ, если группы пропали толпой при тех же датах или на соседней
+    неделе.
+
+    Новый лист, впервые увиденный сразу первым (колледж выложил его в
+    понедельник утром), с прежним дат не делит: сверка раньше пропускалась, и
+    лист без трети групп принимался молча (четвёртый аудит, В11 прогона 1).
+    Соседний лист — зазор до трёх дней, как у `shift_seed`, — сверяется так
+    же. После каникул состав законно другой: там — подозрение строкой, для
+    тревоги, а не отказ.
+    """
+    if previous is None or not previous.groups or not previous.dates or not current.dates:
+        return None
     kept = {g.id for g in current.groups}
     lost = [g.name for g in previous.groups if g.id not in kept]
-    if len(lost) > MAX_GROUP_DROP * len(previous.groups):
-        raise SourceFormatChanged(
-            f"пропало {len(lost)} групп из {len(previous.groups)}: "
-            + ", ".join(lost[:10]) + ("…" if len(lost) > 10 else "")
-        )
+    if len(lost) <= MAX_GROUP_DROP * len(previous.groups):
+        return None
+    message = (
+        f"пропало {len(lost)} групп из {len(previous.groups)}: "
+        + ", ".join(lost[:10]) + ("…" if len(lost) > 10 else "")
+    )
+    gap = (min(current.dates) - max(previous.dates)).days
+    if set(previous.dates) & set(current.dates) or 0 <= gap <= 3:
+        raise ChangedAgainstPrevious(message)
+    return f"новый лист после перерыва в {gap} дн.: {message}"
+
+
+def _check_days_emptied(previous, current, today: dt.date) -> None:
+    """Отказ, если на уже выложенном дне (сегодня и дальше) пары пропали
+    целиком у многих групп.
+
+    Так выглядит день, вырезанный вместо копирования или очищенный по ошибке:
+    лист с тринадцатью тысячами пар проходил все пороги, и в том же заходе
+    всем подписчикам сайта уходило «убрали N пару», а когда колледж возвращал
+    день — второй вал «добавилась» (четвёртый аудит, В8 прогона 1). Честно за
+    заход пары убирают у 12 групп из 190 (15.09, архив 14–28.09). Если колледж
+    правда отменил день — рычаг accept-next.
+    """
+    if previous is None:
+        return
+    for day in sorted(set(previous.dates) & set(current.dates)):
+        if day < today:
+            continue
+        had = [g.id for g in previous.groups if previous.schedule.get(g.id, {}).get(day)]
+        if len(had) < DAY_EMPTIED_MIN_GROUPS:
+            continue
+        emptied = [gid for gid in had if not current.schedule.get(gid, {}).get(day)]
+        if len(emptied) > DAY_EMPTIED_SHARE * len(had):
+            raise ChangedAgainstPrevious(
+                f"{day} у {len(emptied)} групп из {len(had)} пропали все пары — похоже на "
+                "вырезанный или очищенный день"
+            )
 
 
 def _check_lost_names(previous, current, gid: str | None) -> None:
@@ -598,7 +742,7 @@ def _check_lost_names(previous, current, gid: str | None) -> None:
     for group in previous.groups:
         column = was.get(group.id)
         if group.id not in kept and column in current.unnamed:
-            raise SourceFormatChanged(
+            raise ChangedAgainstPrevious(
                 f"в главном заголовке у колонки {a1_column(column)} пропало имя группы "
                 f"{group.name}, а пары под ним на месте ({current.unnamed[column]})"
             )
