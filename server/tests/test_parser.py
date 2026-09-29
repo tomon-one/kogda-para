@@ -458,3 +458,19 @@ def test_row_inserted_before_the_bell_row_does_not_steal_the_teachers(fixture_cs
     rows.insert(i + 1, note)
     snap = parse_sheet(rows, "фикстура", FIXTURE)
     assert snap.schedule == honest.schedule
+
+
+def test_block_with_erased_head_is_still_a_block():
+    """Ячейку «Дисциплина …» стёрли или испортили («Дисц.»), а «Ауд.» блока на
+    месте — это блок без шапки, а не пустое место: иначе группа молча уходила
+    в 404 при ok (прогон 2 аудита 4)."""
+    from whensclass.parser.groups import header_blocks
+
+    row = ["", "", "Дисциплина Преподаватель А-1", "", "", "Ауд.",
+           "Дисц.", "", "", "Ауд.",
+           "Дисциплина Преподаватель А-3", "", "", "Ауд.",
+           "", "", "", "Ауд."]
+    assert header_blocks([row], min_groups=2) == {2, 6, 10, 14}
+    # Колонка «Ауд.» внутри блока — не блок.
+    assert 3 not in header_blocks([row], min_groups=2)
+

@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from ..config import settings
 from ..domain.models import Lesson, SheetPlace, Snapshot, a1_column
-from ..domain.teachers import TeacherIndex, spelling_twin, teacher_id as person_id
+from ..domain.teachers import TeacherIndex, spelling_twin
 
 API_VERSION = 1
 
@@ -138,19 +138,21 @@ def teacher_published(
     шести — у него «одна пара в понедельник» без признака, что остальное не
     выложено. Поэтому его край — самый ранний из краёв его групп.
 
-    Группы — те, у кого он ведёт пары с понедельника этой недели и дальше.
-    Раньше — все, у кого хоть одна пара в листе: группа, ушедшая на практику
-    (колонка пуста до конца листа), отрезала всем её преподавателям дни после
-    своего края, включая сегодняшние пары в других группах (четвёртый аудит,
-    В15 прогона 1). Нет таких групп — все, как раньше. Сегодня и прожитые дни
-    не отрезаются никогда, как в `published`.
+    Группы — его, чья колонка жива: у группы есть пары (у кого угодно) с
+    понедельника этой недели. Группа, ушедшая на практику (колонка пуста до
+    конца листа), отрезала всем её преподавателям дни после своего края,
+    включая сегодняшние (четвёртый аудит, В15 прогона 1). А считать только
+    группы, где он ведёт пары на этой неделе, мало: у кого на неделе пары лишь
+    в группе, заполненной вперёд, недописанные недели выдавались выложенными —
+    с «Пар нет» (прогон 2). Живых групп нет — все, как раньше. Сегодня и
+    прожитые дни не отрезаются никогда, как в `published`.
     """
     sheet = published(snapshot, today)
     groups = index.groups.get(teacher_id)
     if today is None or not groups or not sheet:
         return sheet
     monday = today - timedelta(days=today.weekday())
-    current = [g for g in sorted(groups) if _teaches_since(snapshot, index, teacher_id, g, monday)]
+    current = [g for g in sorted(groups) if _alive_since(snapshot, g, monday)]
     edges = [_group_edge(snapshot, group, sheet) for group in current or sorted(groups)]
     edge = min(today, sheet[-1])
     if None not in edges:
@@ -158,22 +160,9 @@ def teacher_published(
     return _upto(snapshot, edge)
 
 
-def _teaches_since(
-    snapshot: Snapshot, index: TeacherIndex, teacher: str, group: str, since: date
-) -> bool:
-    """Ведёт ли преподаватель пары у группы в `since` или позже."""
-    for day, lessons in snapshot.schedule.get(group, {}).items():
-        if day < since:
-            continue
-        for lesson in lessons:
-            for name in lesson.teachers:
-                try:
-                    found = person_id(name.strip())
-                except ValueError:
-                    continue
-                if index.aliases.get(found, found) == teacher:
-                    return True
-    return False
+def _alive_since(snapshot: Snapshot, group: str, since: date) -> bool:
+    """Есть ли у группы пары в `since` или позже — колонка не опустела."""
+    return any(lessons for day, lessons in snapshot.schedule.get(group, {}).items() if day >= since)
 
 
 def _cov(dates: list[date]) -> list[str] | None:

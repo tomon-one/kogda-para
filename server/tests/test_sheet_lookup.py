@@ -363,3 +363,28 @@ def test_sheets_api_unreachable_is_a_network_failure(monkeypatch):
     with pytest.raises(httpx.ConnectError):
         si.list_sheets()
     assert si._api_failures == 0
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_google_busy_while_looking_for_the_next_sheet_keeps_the_current(tmp_path, monkeypatch, status):
+    """429 или 5xx от Google при поиске следующего листа — следующий не
+    главнее текущего: отдаём что есть, а не роняем заход (прогон 2 аудита 4)."""
+    import httpx
+
+    from whensclass.sources import gsheets
+
+    index = si.SheetIndex(tmp_path)
+    index.remember("расписание групп 21.-03.10", "111", dt.date(2026, 9, 21), dt.date(2026, 10, 3))
+    monkeypatch.setattr(si, "list_sheets", lambda: [
+        SheetInfo(title="расписание групп 21.-03.10", gid="111", hidden=False),
+        SheetInfo(title="расписание групп 05.10-17.10", gid="222", hidden=False),
+    ])
+    request = httpx.Request("GET", "https://docs.google.com/x")
+    error = httpx.HTTPStatusError(str(status), request=request, response=httpx.Response(status, request=request))
+
+    def fetch(gid=None, title=None):
+        raise error
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", fetch)
+    got = si.resolve_window(dt.date(2026, 9, 28), 12, tmp_path, deep=True)
+    assert [gid for _, gid in got] == ["111"]
+

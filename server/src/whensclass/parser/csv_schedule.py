@@ -671,8 +671,10 @@ def neighbour_runs(snapshot: Snapshot, previous: Snapshot, since: date, min_run:
     разу — рассылка таким группам не шлёт, владельцу тревога.
     """
     first: dict[int, str] = {}
+    members: dict[int, list[str]] = {}
     for group in snapshot.groups:
         first.setdefault(group.column, group.id)
+        members.setdefault(group.column, []).append(group.id)
     order = [first[c] for c in sorted(first)]
     found: set[str] = set()
     for day in sorted(set(snapshot.dates) & set(previous.dates)):
@@ -698,18 +700,30 @@ def neighbour_runs(snapshot: Snapshot, previous: Snapshot, since: date, min_run:
                     run = []
             if len(run) >= min_run:
                 found.update(run)
-    return found
+    # Колонку делят несколько групп («ДП-923 и ДП-1124») — пары соседа у всех
+    # них, а не только у первой (прогон 2 аудита 4).
+    column_of = {gid: c for c, gid in first.items()}
+    return {gid for f in found for gid in members[column_of[f]]}
 
 
-def _check_vertical(snapshot: Snapshot, previous: Snapshot, names: dict[str, str]) -> list[str]:
-    """Пары групп на нескольких днях съехали на номер-два против прежней
-    версии: так выглядит «удалить ячейки, сдвиг вверх» в блоке. Отказ — в
-    двух колонках и больше или у многих групп в один день; в одной колонке
-    (у групп, которые её делят, это одна правка) — подозрение, строкой."""
-    common = sorted(set(snapshot.dates) & set(previous.dates))
+def vertical_groups(snapshot: Snapshot, previous: Snapshot) -> set[str]:
+    """Группы колонки, чьи пары съехали по вертикали, — то, что
+    `_check_vertical` в одной колонке пропускает подозрением. Лист принят, а
+    уведомление с парами не на своих номерах ушло бы в том же заходе, раньше,
+    чем владелец прочтёт тревогу (прогон 2 аудита 4)."""
     column = {g.id: g.column for g in snapshot.groups}
+    shifted = {column.get(gid) for gid in _vertical_shifts(snapshot, previous)[1]}
+    return {g.id for g in snapshot.groups if g.column in shifted}
+
+
+def _vertical_shifts(
+    snapshot: Snapshot, previous: Snapshot
+) -> tuple[dict[tuple[date, int], list[str]], dict[str, tuple[int, list[date]]]]:
+    """(день и шаг → группы, съехавшие в этот день; группа → шаг и дни, если
+    съехала не меньше чем на VERTICAL_DAYS_REJECT днях)."""
+    common = sorted(set(snapshot.dates) & set(previous.dates))
     same_day: dict[tuple[date, int], list[str]] = {}
-    shifted: dict[object, str] = {}
+    shifted: dict[str, tuple[int, list[date]]] = {}
     for gid in snapshot.schedule:
         for step in (-2, -1, 1, 2):
             days = []
@@ -726,14 +740,27 @@ def _check_vertical(snapshot: Snapshot, previous: Snapshot, names: dict[str, str
                     days.append(day)
                     same_day.setdefault((day, step), []).append(gid)
             if len(days) >= VERTICAL_DAYS_REJECT:
-                shifted.setdefault(
-                    column.get(gid, gid),
-                    f"у группы {names.get(gid, gid)} пары съехали на {abs(step)} "
-                    f"{'номер' if abs(step) == 1 else 'номера'} "
-                    f"{'вверх' if step > 0 else 'вниз'} на {len(days)} днях с {days[0]} — "
-                    "похоже на сдвиг ячеек по вертикали"
-                )
+                shifted[gid] = (step, days)
                 break  # одна группа — одна строка, даже если сошлись два шага
+    return same_day, shifted
+
+
+def _check_vertical(snapshot: Snapshot, previous: Snapshot, names: dict[str, str]) -> list[str]:
+    """Пары групп на нескольких днях съехали на номер-два против прежней
+    версии: так выглядит «удалить ячейки, сдвиг вверх» в блоке. Отказ — в
+    двух колонках и больше или у многих групп в один день; в одной колонке
+    (у групп, которые её делят, это одна правка) — подозрение, строкой."""
+    column = {g.id: g.column for g in snapshot.groups}
+    same_day, found = _vertical_shifts(snapshot, previous)
+    shifted: dict[object, str] = {}
+    for gid, (step, days) in found.items():
+        shifted.setdefault(
+            column.get(gid, gid),
+            f"у группы {names.get(gid, gid)} пары съехали на {abs(step)} "
+            f"{'номер' if abs(step) == 1 else 'номера'} "
+            f"{'вверх' if step > 0 else 'вниз'} на {len(days)} днях с {days[0]} — "
+            "похоже на сдвиг ячеек по вертикали"
+        )
     for (day, step), gids in sorted(same_day.items()):
         if len(gids) >= VERTICAL_GROUPS_REJECT:
             raise ChangedAgainstPrevious(

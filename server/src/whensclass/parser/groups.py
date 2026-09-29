@@ -114,10 +114,19 @@ def header_blocks(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> set[in
     """
     for row in rows:
         if len(_row_columns(row)) >= min_groups:
-            return {
-                col for col, cell in enumerate(row)
-                if _block_head((cell or "").replace("\xa0", " ").strip())[0]
-            }
+            cells = [(cell or "").replace("\xa0", " ").strip() for cell in row]
+            heads = {col for col, cell in enumerate(cells) if _block_head(cell)[0]}
+            # Ячейку шапки стёрли или испортили сильнее двух правок («Дисц.»,
+            # другое слово), а колонка аудитории блока на месте: блок есть, без
+            # шапки. Раньше он не становился ни группой, ни безымянным, и группа
+            # молча уходила в 404 при ok (прогон 2 аудита 4). Место — на шаге
+            # блоков, не внутри соседнего.
+            if heads:
+                for col in range(min(heads) % _BLOCK_WIDTH, len(cells) - 3, _BLOCK_WIDTH):
+                    if cells[col + 3].casefold().startswith("ауд") and \
+                            all(abs(col - head) >= _BLOCK_WIDTH for head in heads):
+                        heads.add(col)
+            return heads
     return set()
 
 

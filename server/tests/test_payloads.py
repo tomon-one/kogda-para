@@ -239,7 +239,7 @@ def test_teacher_day_waits_for_all_his_groups():
     for gid in ("g-0", "g-7"):
         for day in snap.schedule[gid]:
             snap.schedule[gid][day] = [
-                Lesson(number=1 if gid == "g-0" else 2, subject="Физика", teachers=("Иванов И. И.",))
+                Lesson(number=1 if gid == "g-0" else 2, subject="Физика", teachers=("Ковач Т.",))
             ]
     index = build_index(snap)
     tid = next(iter(index.names))
@@ -249,7 +249,7 @@ def test_teacher_day_waits_for_all_his_groups():
 
     # Оба дописаны — неделя его.
     for day in NEXT:
-        snap.schedule["g-7"][day] = [Lesson(number=2, subject="Физика", teachers=("Иванов И. И.",))]
+        snap.schedule["g-7"][day] = [Lesson(number=2, subject="Физика", teachers=("Ковач Т.",))]
     index = build_index(snap)
     body = teacher_payload(snap, index, tid, WEEK[0], 13, GENERATED, today=THURSDAY)
     assert body["cov"] == ["2026-09-21", "2026-10-03"]
@@ -268,7 +268,7 @@ def test_group_on_practice_does_not_hide_teacher_days():
     for gid in ("g-0", "g-7"):
         for day in snap.schedule[gid]:
             snap.schedule[gid][day] = [
-                Lesson(number=1 if gid == "g-0" else 2, subject="Физика", teachers=("Иванов И. И.",))
+                Lesson(number=1 if gid == "g-0" else 2, subject="Физика", teachers=("Ковач Т.",))
             ]
     for day in NEXT:
         del snap.schedule["g-7"][day]  # g-7 на практике с 28.09
@@ -279,6 +279,28 @@ def test_group_on_practice_does_not_hide_teacher_days():
     assert body["cov"] == ["2026-09-21", "2026-10-03"]
     today_ = next(d for d in body["days"] if d["d"] == tuesday.isoformat())
     assert [x["n"] for x in today_["l"]] == [1]
+
+
+def test_teacher_week_not_published_while_his_other_groups_are_not():
+    """На этой неделе пары у него только в группе, заполненной вперёд, а его
+    другая группа жива (пары у других преподавателей), но дописана лишь до
+    вторника. Недописанные дни не выдаются выложенными с «Пар нет» (прогон 2
+    аудита 4): край — по живым группам, не только по тем, где он ведёт."""
+    from whensclass.api.payloads import teacher_payload
+    from whensclass.domain.models import Lesson
+    from whensclass.domain.teachers import build_index
+
+    snap = _filling({**{d: 10 for d in WEEK}, **{d: 10 for d in NEXT[:2]}, **{d: 1 for d in NEXT[2:]}})
+    for day in snap.schedule["g-0"]:
+        snap.schedule["g-0"][day] = [Lesson(number=1, subject="Физика", teachers=("Ковач Т.",))]
+    for day in snap.schedule["g-7"]:
+        who = "Ковач Т." if day in WEEK else "Банкрофт Л."
+        snap.schedule["g-7"][day] = [Lesson(number=2, subject="Химия", teachers=(who,))]
+    index = build_index(snap)
+    tid = next(t for t, name in index.names.items() if name.startswith("Ковач"))
+    tuesday = NEXT[1]
+    body = teacher_payload(snap, index, tid, NEXT[0], 6, GENERATED, today=tuesday)
+    assert body["cov"] == ["2026-09-21", tuesday.isoformat()]
 
 
 def test_today_and_past_are_never_cut():

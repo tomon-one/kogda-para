@@ -53,7 +53,7 @@ def test_notify_publishes_json_with_topic_in_body(sent):
     url, body = sent.bodies[0]
     # Тема в теле, не в адресе: адрес попадает в текст исключений httpx.
     assert body["topic"] == "тема-для-теста" and "тема-для-теста" not in url
-    assert body["message"] == "беда" and body["priority"] == 4
+    assert body["message"] == "в нас проблема. беда" and body["priority"] == 4
 
 
 def test_same_kind_is_quiet_for_six_hours(sent):

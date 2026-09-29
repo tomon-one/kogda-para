@@ -46,6 +46,10 @@ class Refresher:
         self.store = store
         self.state_dir = state_dir
         self.status = "empty"          # empty | ok | stale
+        # «Само исправилось» — только если починилось без рук: без рычага и
+        # без перезапуска (выкладки) посреди сбоя.
+        self._started = dt.datetime.now(dt.timezone.utc)
+        self._lever_used = False
         self.checked_at: dt.datetime | None = None
         # С какого момента и почему не обновляемся. Лежит на диске: службу
         # перезапускают при каждой выкладке, а «лежим с четверга» должно
@@ -153,6 +157,7 @@ class Refresher:
         """Лист принят — разовый рычаг снят."""
         if self._accepting:
             self._accepting = False
+            self._lever_used = True
             try:
                 self._accept_path.unlink(missing_ok=True)
             except OSError as exc:
@@ -513,7 +518,7 @@ class Refresher:
             dropped = _check_group_drop(previous, snapshot)
             if dropped:
                 self._suspicions.append(dropped)
-            _check_days_emptied(previous, snapshot, today)
+            _check_days_emptied(previous, snapshot, today, dropped=bool(self._dropped))
             teachers = build_index(snapshot)
         except ValueError as exc:
             raise SourceFormatChanged(f"разбор споткнулся о значение: {exc}") from exc
@@ -574,12 +579,15 @@ class Refresher:
             return
         lying = dt.datetime.now(dt.timezone.utc) - since
         if self._alerted:
+            healed = not self._lever_used and since >= self._started
             alerts.notify(
                 "recovered",
-                f"Расписание снова обновляется. Лежало {_lying(lying)}, "
+                ("Само исправилось. " if healed else "")
+                + f"Расписание снова обновляется. Лежало {_lying(lying)}, "
                 f"с {since.astimezone(_zone()):%d.%m %H:%M}.",
                 force=True, good=True,
             )
+        self._lever_used = False
         for kind in FAIL_KINDS:
             alerts.forget(kind)
         self.failing_since, self.last_error, self._alerted = None, None, False
@@ -664,10 +672,14 @@ FAIL_KINDS = ("format", "sheet", "fetch", "error", "closed", "crash")
 # групп проходят порог в сто, и 80 групп молча получают 404. Самая крупная
 # когорта (-926) — 28 % от всех, уход целого курса под отказ не попадает.
 MAX_GROUP_DROP = 0.3
-# Выложенный день, опустевший у доли групп больше этой, — отказ
-# (`_check_days_emptied`); у дней, где пары были меньше чем у стольких групп,
-# не проверяется: суббота у пары десятков групп опустеет и честно.
-DAY_EMPTIED_SHARE = 0.3
+# Выложенный день, опустевший у стольких групп — не меньше DAY_EMPTIED_COUNT
+# и доли DAY_EMPTIED_SHARE, — отказ (`_check_days_emptied`). Честно за заход
+# день опустевает целиком максимум у 2 групп (архив 14–29.09), а при пороге
+# 30 % четверть очищенного листа проходила валом «убрали» (прогон 2). У дней,
+# где пары были меньше чем у DAY_EMPTIED_MIN_GROUPS групп, не проверяется:
+# суббота у пары десятков групп опустеет и честно.
+DAY_EMPTIED_SHARE = 0.1
+DAY_EMPTIED_COUNT = 12
 DAY_EMPTIED_MIN_GROUPS = 20
 
 
@@ -698,7 +710,7 @@ def _check_group_drop(previous, current) -> str | None:
     return f"новый лист после перерыва в {gap} дн.: {message}"
 
 
-def _check_days_emptied(previous, current, today: dt.date) -> None:
+def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False) -> None:
     """Отказ, если на уже выложенном дне (сегодня и дальше) пары пропали
     целиком у многих групп.
 
@@ -717,8 +729,13 @@ def _check_days_emptied(previous, current, today: dt.date) -> None:
         had = [g.id for g in previous.groups if previous.schedule.get(g.id, {}).get(day)]
         if len(had) < DAY_EMPTIED_MIN_GROUPS:
             continue
+        # Следующий лист выпал из окна, а в текущем на его даты — пустой
+        # каркас: пары этих дней приходили из выпавшего, и «опустели» они
+        # вместе с ним, а не вырезаны. Раньше весь заход отвергался (прогон 2).
+        if dropped and not any(current.schedule.get(g.id, {}).get(day) for g in current.groups):
+            continue
         emptied = [gid for gid in had if not current.schedule.get(gid, {}).get(day)]
-        if len(emptied) > DAY_EMPTIED_SHARE * len(had):
+        if len(emptied) >= max(DAY_EMPTIED_COUNT, DAY_EMPTIED_SHARE * len(had)):
             raise ChangedAgainstPrevious(
                 f"{day} у {len(emptied)} групп из {len(had)} пропали все пары — похоже на "
                 "вырезанный или очищенный день"
