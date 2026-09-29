@@ -80,6 +80,16 @@ fun TeacherScreen(
     // показываем сразу, без похода в сеть. Список остальных — по кнопке.
     // Выбор и поиск переживают поворот экрана.
     var browsing by rememberSaveable { mutableStateOf(false) }
+    // Нажали на свой день виджета или своё уведомление — к своему
+    // расписанию, а не к открытому коллеге (четвёртый аудит, М10 прогона 1).
+    // Только на новое нажатие: поворот экрана выбор не сбрасывает.
+    var handledKey by rememberSaveable { mutableStateOf(startKey) }
+    LaunchedEffect(startKey) {
+        if (startKey != handledKey) {
+            handledKey = startKey
+            if (ownSchedule != null) browsing = false
+        }
+    }
     if (ownSchedule != null && !browsing) {
         Column(modifier = Modifier.fillMaxSize()) {
             ScheduleDays(

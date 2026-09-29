@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -221,7 +222,9 @@ fun SettingsScreen(
                     key(group.id) {
                         GroupRow(
                             name = group.name + if (group.gone) " — нет в таблице" else "",
-                            mark = marks?.getOrNull(index + 1),
+                            // Значок, повторяющий название целиком (не подгруппа
+                            // своей), только сжимал само название в столбик (М16).
+                            mark = marks?.getOrNull(index + 1)?.takeIf { it != group.name },
                             action = "Убрать",
                             onAction = { onRemoveGroup(group.id) },
                         )
@@ -570,7 +573,10 @@ private fun GroupRow(
     ) {
         // Длинное название в значке — многоточием: целиком оно и так рядом,
         // а значок во всю строку сжимал его до столбика (Tomon 28.09).
-        if (mark != null) GroupMark(mark, own = false, modifier = Modifier.widthIn(max = MARK_IN_ROW))
+        // Чтецу значок не нужен: название рядом, а «слэш два» перед ним — шум (М20).
+        if (mark != null) {
+            GroupMark(mark, own = false, modifier = Modifier.widthIn(max = MARK_IN_ROW).clearAndSetSemantics {})
+        }
         Column(modifier = Modifier.weight(1f).padding(start = if (mark != null) 10.dp else 0.dp, end = 8.dp)) {
             Text(name, style = MaterialTheme.typography.bodyLarge)
             if (note != null) {
@@ -586,6 +592,9 @@ private fun GroupRow(
             onClick = onAction,
             modifier = Modifier.widthIn(min = GROUP_BUTTON),
             top = 0.dp,
+            // Несколько одинаковых «Убрать» — какую группу уберёт нажатие,
+            // чтец не говорил (М20).
+            spoken = "$action $name",
         )
     }
 }
@@ -724,7 +733,9 @@ private fun BackgroundWork(phone: ru.whensclass.notify.PhoneState, exactAlarms: 
                         ).show()
                     }
                 }
-                Hint(step.hint)
+                // Имя — как у этого приложения: у tested оно своё, и на экране
+                // марки с двумя приложениями человек включал основное (М64).
+                Hint(step.hint.replace("«Когда пара?»", "«${context.getString(ru.whensclass.R.string.app_name)}»"))
             }
             if (vendor.pinInRecents) {
                 Hint(

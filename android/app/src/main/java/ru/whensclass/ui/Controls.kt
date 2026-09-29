@@ -26,6 +26,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -283,6 +286,8 @@ fun ActionButton(
     top: Dp = 6.dp,
     /** Поля слева и справа: у кнопок в ряд на всю ширину — уже, чтобы влезло слово. */
     side: Dp = 14.dp,
+    /** Что читать чтецу экрана вместо надписи: «Убрать ИСП-924/2», а не «Убрать». */
+    spoken: String? = null,
 ) {
     // По центру: кнопкам одной ширины (раздел «Группа», ряд виджетов)
     // текст у левого края выглядел съехавшим.
@@ -291,12 +296,15 @@ fun ActionButton(
             .padding(top = top)
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(if (spoken != null) Modifier.semantics { contentDescription = spoken } else Modifier)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = side, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
+            // Надпись чтецу — не нужна, когда есть полная (spoken).
+            modifier = if (spoken != null) Modifier.clearAndSetSemantics {} else Modifier,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,

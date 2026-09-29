@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -55,6 +56,10 @@ fun GroupMarks(slots: List<Int>, names: List<String>, byName: Boolean, modifier:
 @Composable
 fun GroupMark(label: String, own: Boolean, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
+    // В светлой теме подпись бледного значка — темнее фирменного красного, как
+    // на сайте (#C20302): у #D60403 на бледно-розовом было 3,9–4,4:1 при
+    // нужных 4,5:1 для мелкого текста (четвёртый аудит, М13 прогона 1).
+    val ink = if (colors.surface.luminance() > 0.5f) MARK_INK_LIGHT else colors.primary
     val shape = RoundedCornerShape(4.dp)
     // Растёт со шрифтом, как колонка времени: подпись в sp, значок в dp.
     val side = MARK * LocalDensity.current.fontScale.coerceAtLeast(1f)
@@ -77,7 +82,7 @@ fun GroupMark(label: String, own: Boolean, modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.SemiBold,
                 lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
             ),
-            color = if (own) colors.onPrimary else colors.primary,
+            color = if (own) colors.onPrimary else ink,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -107,3 +112,4 @@ private val ORDINALS = listOf("Первая", "Вторая", "Третья", "�
 
 private const val MARKS_IN_ROW = 3
 private val MARK = 18.dp
+private val MARK_INK_LIGHT = androidx.compose.ui.graphics.Color(0xFFC20302)

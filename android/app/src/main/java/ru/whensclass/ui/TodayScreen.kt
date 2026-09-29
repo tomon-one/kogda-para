@@ -73,6 +73,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +84,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -732,6 +737,18 @@ private fun DayCard(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
                 )
             } else {
+                // Своих пар нет, а у выбранных групп есть: «пар нет» — над их
+                // серыми строками, как пишет виджет. Без неё беглый взгляд
+                // видел пары в субботу (четвёртый аудит, М9 прогона 1).
+                if (groups.isNotEmpty() && day.lessons.none { 0 in it.slots }) {
+                    Text(
+                        freeDay(day.date),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                    )
+                    HorizontalDivider()
+                }
                 day.lessons.forEachIndexed { index, lesson ->
                     // Линия во всю ширину карточки — расписание, а не плитки.
                     if (index > 0) HorizontalDivider()
@@ -864,7 +881,12 @@ private fun LessonRow(
             .background(
                 when {
                     isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
-                    foreign -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    // В тёмной теме — белый 7 % поверх карточки, как на сайте:
+                    // surfaceVariant отличался от неё на 1,07:1, «серый фон»
+                    // из подсказки был не виден (М14).
+                    foreign -> if (MaterialTheme.colorScheme.surface.luminance() < 0.5f)
+                        Color.White.copy(alpha = 0.07f).compositeOver(MaterialTheme.colorScheme.surface)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                     else -> MaterialTheme.colorScheme.surface
                 }
             )
@@ -914,7 +936,13 @@ private fun LessonRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 lesson.subject,
-                style = MaterialTheme.typography.bodyLarge,
+                // Перенос — по слогам с дефисом и по дефису в слове: без него
+                // «Оперативно-розыскная» рвалась «Оперативно-розыскна / я» без
+                // всякого знака (TECNO, 29.09; четвёртый аудит).
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    hyphens = Hyphens.Auto,
+                    lineBreak = LineBreak.Paragraph,
+                ),
                 fontWeight = FontWeight.Medium,
                 color = main,
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,

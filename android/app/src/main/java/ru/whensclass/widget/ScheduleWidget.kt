@@ -127,7 +127,8 @@ class ScheduleWidget : GlanceAppWidget() {
         val store = AppContainer.get(context).store
         val today = collegeToday().toString()
         if (store.lastWidgetDay() == today) return false
-        store.setLastWidgetDay(today)
+        // Не записалось (память забита) — сутки всё равно сменились (М66).
+        runCatching { store.setLastWidgetDay(today) }
         return true
     }
 

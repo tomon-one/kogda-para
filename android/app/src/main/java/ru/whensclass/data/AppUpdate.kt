@@ -156,6 +156,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         const val MAX_SIZE = 64L * 1024 * 1024
         /** Экран проверяет сборку не чаще раза в полчаса ([checkForScreen]). */
         const val CHECK_EVERY_MILLIS = 30L * 60 * 1000
+        /** Фон спрашивает GitHub не чаще раза в шесть часов ([announceIfNew]). */
+        const val GITHUB_EVERY_MILLIS = 6L * 60 * 60 * 1000
     }
 
     /**
@@ -192,11 +194,11 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         return check().also { lastCheck = now to it }
     }
 
-    suspend fun check(): Check = withContext(Dispatchers.IO) {
+    suspend fun check(github: Boolean = true, askedGithub: () -> Unit = {}): Check = withContext(Dispatchers.IO) {
         // Сервер не ответил — спросить выпуски на GitHub: сборка с починкой
         // или новым адресом сервера должна дойти и тогда, когда сервер лежит.
         val release = runCatching { api.release() }.getOrNull()
-            ?: runCatching { api.githubRelease() }.getOrNull()
+            ?: (if (github) { askedGithub(); runCatching { api.githubRelease() }.getOrNull() } else null)
             ?: return@withContext Check.Failed
         if (release.versionCode > BuildConfig.VERSION_CODE) {
             Check.Available(release)
@@ -214,7 +216,16 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
      */
     suspend fun announceIfNew(store: ScheduleStore) {
         if (!store.notifyUpdatesEnabled()) return
-        val release = (check() as? Check.Available)?.release ?: return
+        // На GitHub из фона — не чаще раза в шесть часов: без ключа там 60
+        // запросов в час на адрес, а за адресом оператора их делят все его
+        // абоненты, и запас срабатывал через раз (четвёртый аудит, М48
+        // прогона 1). Экран и кнопка «Проверить» ходят туда как раньше.
+        val now = System.currentTimeMillis()
+        val github = now - store.githubCheckedAt() !in 0 until GITHUB_EVERY_MILLIS
+        var asked = false
+        val release = (check(github) { asked = true } as? Check.Available)?.release
+        if (asked) runCatching { store.setGithubCheckedAt(now) }
+        if (release == null) return
         if (!shouldAnnounce(release.versionCode, BuildConfig.VERSION_CODE, store.announcedVersion())) return
 
         val shown = Notifications.newVersion(

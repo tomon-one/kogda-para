@@ -14,7 +14,15 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("whensclass")
+// Испорченный файл настроек — начать с пустого, а не падать на каждом старте:
+// без обработчика CorruptionException получали все читатели, и выхода, кроме
+// «Очистить данные», не было (четвёртый аудит, М66 прогона 1).
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    "whensclass",
+    corruptionHandler = androidx.datastore.core.handlers.ReplaceFileCorruptionHandler {
+        androidx.datastore.preferences.core.emptyPreferences()
+    },
+)
 
 /** За сколько минут напоминать о паре, пока человек не выбрал своё время. */
 const val DEFAULT_NOTIFY_BEFORE = 20
@@ -620,6 +628,14 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LISTS_AT] = millis.toString() }
     }
 
+    /** Когда фон последний раз спрашивал GitHub о выпусках ([AppUpdate.announceIfNew]). */
+    suspend fun githubCheckedAt(): Long =
+        context.dataStore.data.first()[KEY_GITHUB_AT]?.toLongOrNull() ?: 0L
+
+    suspend fun setGithubCheckedAt(millis: Long) {
+        context.dataStore.edit { it[KEY_GITHUB_AT] = millis.toString() }
+    }
+
     /** Список преподавателей: полторы сотни имён, качать их каждый раз незачем. */
     val teachersJson: Flow<String?> = context.dataStore.data.map { it[KEY_TEACHERS] }
 
@@ -692,6 +708,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_SERVER_SINCE = stringPreferencesKey("server_since")
         val KEY_STALE_NOTIFIED = stringPreferencesKey("stale_notified")
         val KEY_LISTS_AT = stringPreferencesKey("lists_at")
+        val KEY_GITHUB_AT = stringPreferencesKey("github_at")
         val KEY_PENDING_CHANGES = stringPreferencesKey("pending_changes")
         val KEY_UNREACHABLE_SINCE = stringPreferencesKey("unreachable_since")
         val KEY_GONE_SINCE = stringPreferencesKey("gone_since")
