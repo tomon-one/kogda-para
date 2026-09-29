@@ -23,6 +23,8 @@ ProtectHome=yes
 ProtectKernelTunables=yes
 ReadWritePaths=/var/lib/whensclass
 ReadOnlyPaths=-/var/lib/whensclass/apk
+# Файлы состояния — только владельцу, как у службы (hardening.conf).
+UMask=0077
 
 # Узкий профиль процесса: канарейка разбирает
 # сетевой ввод, и если её всё же захватят, пусть это будет процесс без
