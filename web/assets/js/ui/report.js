@@ -5,6 +5,7 @@ import { h, dialog, closeDialog, copyText, snackbar, standalone } from './dom.js
 import { VERSION, build } from '../version.js';
 import { CHANNEL, persistent } from '../store.js';
 import { browserZone, formatShort, parseIso } from '../time.js';
+import * as store from '../store.js';
 
 export function reportText(app) {
   var lines = [];
@@ -37,9 +38,29 @@ export function reportText(app) {
     lines.push('Дней в браузере: ' + (schedule.days || []).length);
   }
   lines.push('Сервер: ' + (app.server().status || 'ok') + (app.gone() ? ', выбранного нет в таблице' : ''));
+  lines.push(pushLine(app));
   if (!persistent()) lines.push('Хранилище браузера: запрещено, выбор забудется');
   lines.push('Часы: ' + formatShort(Date.now()) + ', ' + browserZone());
   return lines.join('\n');
+}
+
+/**
+ * Уведомления: первая жалоба будет «не пришло», а в сведениях о них не было
+ * ни слова (четвёртый аудит, М56 прогона 1). Хост службы рассылки — не адрес:
+ * путь подписки и есть её секрет.
+ */
+function pushLine(app) {
+  var why = app.pushBlocker();
+  if (why) return 'Уведомления: нельзя (' + why + ')';
+  var c = app.pushChoice();
+  var saved = store.get('push') || {};
+  var host = '—';
+  try { if (saved.endpoint) host = new URL(saved.endpoint).hostname; } catch (e) { host = '—'; }
+  var permission = typeof Notification !== 'undefined' ? Notification.permission : '—';
+  if (!c.changes && !c.remind) return 'Уведомления: выключены, разрешение ' + permission;
+  return 'Уведомления: изменения ' + (c.changes ? 'да' : 'нет') + ', напоминание ' +
+    (c.remind ? c.remind + ' мин' : 'нет') + ', разрешение ' + permission + ', служба ' + host +
+    ', переслано ' + (saved.sent ? formatShort(saved.sent) : 'никогда');
 }
 
 export function showReport(app) {

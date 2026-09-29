@@ -5,7 +5,7 @@
 
 import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, isFirefox, dialog, closeDialog } from './dom.js';
 import { sheetLink, durationShort } from '../format.js';
-import { REMIND_CHOICES } from '../push.js';
+import { REMIND_CHOICES, lastRemind, revoked, service } from '../push.js';
 import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
 import { groupMark } from './days.js';
 import { VERSION, build } from '../version.js';
@@ -61,8 +61,15 @@ function notifications(app, teacherMode) {
   var title = [h('span', null, 'Уведомления'), ' ', h('span', { class: 'badge' }, ios ? 'beta' : 'альфа-тест')];
   var why = app.pushBlocker();
   if (why === 'home') {
+    // У значка своё хранилище: выбор из Safari туда не переезжает (WebKit
+    // 181849) — группу придётся выбрать ещё раз (М53).
     return section(title, h('p', null, 'На айфоне уведомления приходят только сайту со значком на экране ' +
-      '«Домой», на iOS 16.4 и новее. Добавьте значок — раздел выше — откройте сайт им и включите здесь.'));
+      '«Домой», на iOS 16.4 и новее. Добавьте значок — раздел выше — и откройте сайт им: там ' +
+      'выберите группу ещё раз (у значка свои настройки) и включите уведомления.'));
+  }
+  if (why === 'webview') {
+    return section(title, h('p', null, 'Во встроенном браузере приложения уведомлений нет — откройте ' +
+      'сайт в Chrome или Яндекс Браузере. Выбор группы там придётся сделать ещё раз.'));
   }
   if (why === 'unsupported') {
     // Firefox в приватном окне выключает сервис-воркеры, а с ними и
@@ -72,13 +79,20 @@ function notifications(app, teacherMode) {
       : 'Этот браузер не умеет уведомления сайтов или не даёт их в этом окне — например, в приватном.'));
   }
   if (why === 'denied') {
-    return section(title, h('p', null, 'Уведомления для этого сайта запрещены в настройках браузера — ' +
-      'разрешите их там.'));
+    // Куда идти — своё у айфона со значком; в окне инкогнито Chrome
+    // разрешения не дать вовсе (М54).
+    return section(title, h('p', null, ios
+      ? 'Уведомления запрещены: разрешите их в настройках айфона — «Уведомления» → «Когда пара?' +
+        (CHANNEL === 'tested' ? ' tested' : '') + '».'
+      : 'Уведомления для этого сайта запрещены в настройках браузера или это окно инкогнито — ' +
+        'разрешите их в настройках браузера, в обычном окне.'));
   }
 
-  var now = app.pushChoice();
+  // Браузер сам снял разрешение: выключатели — как есть на деле, выключены (М65).
+  var lost = revoked();
+  var now = lost ? { changes: false, remind: 0 } : app.pushChoice();
   function change(next) {
-    if (app.pushEnabled() || (!next.changes && !next.remind)) {
+    if ((app.pushEnabled() && !lost) || (!next.changes && !next.remind)) {
       app.setPush(next);
       return;
     }
@@ -86,11 +100,16 @@ function notifications(app, teacherMode) {
     // Выключатель под окном — обратно, пока не согласились: окно закрывают
     // и мимо кнопок.
     app.render();
+    // Что на сервере — всё, что лежит в записи (push.json), и через кого идёт
+    // доставка (М52, М80).
     dialog('Включить уведомления?', [
-      h('p', null, 'Чтобы их присылать, сервер будет хранить адрес, по которому этот браузер ' +
-        'принимает уведомления, ' + (teacherMode ? 'выбранное имя из таблицы' : 'название вашей группы') +
-        ', что присылать и дату подписки — пока уведомления включены. Больше ничего. ' +
-        'Выключите — запись сотрётся.'),
+      h('p', null, 'Чтобы их присылать, сервер будет хранить адрес и ключи, по которым этот браузер ' +
+        'принимает уведомления, ' + (teacherMode ? 'выбранное имя из таблицы' : 'вашу группу') +
+        ', что присылать, какой сайт и когда вы его открывали последний раз, а если ' +
+        (teacherMode ? 'имени' : 'группы') + ' не станет в таблице — когда об этом сообщили. ' +
+        'Больше ничего. Выключите — запись сотрётся.'),
+      h('p', null, 'Доставляет уведомления служба браузера — Apple, Google, Mozilla или Microsoft: ' +
+        'она видит, когда уведомление пришло, но не его текст.'),
     ], [
       { label: 'Отмена' },
       // Разрешение браузера спрашивается прямо в этом нажатии: айфон
@@ -100,12 +119,15 @@ function notifications(app, teacherMode) {
   }
 
   var body = [
+    lost ? h('p', { class: 'warning small' }, 'Браузер отключил уведомления этого сайта — включите их снова.') : null,
+    // Как в приложении: о других группах уведомлений нет (М8).
+    teacherMode ? null : h('p', { class: 'muted small' }, 'Только о вашей группе, не о других.'),
     switchRow('Сообщать об изменениях', now.changes, function (on) {
       change({ changes: on, remind: now.remind });
     }, 'push-changes'),
     h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра.'),
     switchRow('Напоминать о паре', now.remind > 0, function (on) {
-      change({ changes: now.changes, remind: on ? (now.remind || 20) : 0 });
+      change({ changes: now.changes, remind: on ? (now.remind || lastRemind()) : 0 });
     }, 'push-remind'),
   ];
   if (now.remind > 0) {
@@ -127,9 +149,10 @@ function notifications(app, teacherMode) {
         (isAndroid() ? ' Надёжнее — приложение.' : '')));
   }
   if (!ios) {
-    // Сервер до Google достаёт не всегда; у Firefox служба рассылки — Mozilla.
+    // Служба рассылки — по адресу подписки, до неё — по браузеру: у Safari на
+    // Mac это Apple, у Edge — Microsoft, а не Google (М26).
     body.push(h('p', { class: 'warning small' }, 'Альфа-тест: уведомления идут через серверы ' +
-      (isFirefox() ? 'Mozilla' : 'Google') + ' и могут не дойти.'));
+      service() + ' и могут не дойти.'));
   }
   if (isAndroid() && !isFirefox()) {
     // Chrome на Android сам читает текст уведомлений и может спрятать
@@ -160,10 +183,12 @@ export function settingsScreen(app) {
     // Остальные группы — любые, до шести вместе со своей (Tomon 28.09).
     extras.forEach(function (g, i) {
       group.push(row(
-        h('span', { class: 'group-name' }, marks ? groupMark(marks[i + 1], false) : null,
+        // Значок, повторяющий название целиком, только сжимал его (М16).
+        h('span', { class: 'group-name' }, marks && marks[i + 1] !== g.name ? groupMark(marks[i + 1], false) : null,
           h('span', { class: 'group-name-text' }, g.name + (g.gone ? ' — нет в таблице' : ''))),
         null,
-        actionButton('Убрать', function () { app.removeExtra(g.id); }, 'fixed', 'remove:' + g.id)));
+        // Несколько одинаковых «Убрать» — чтецу с названием (М20).
+        actionButton('Убрать', function () { app.removeExtra(g.id); }, 'fixed', 'remove:' + g.id, 'Убрать ' + g.name)));
     });
     var room = MAX_GROUPS - 1 - extras.length;
     var subgroups = own ? subgroupsOf(own.name, app.state.groups || []).filter(function (g) {
@@ -173,7 +198,7 @@ export function settingsScreen(app) {
     // «Убрать»: две кнопки рядом выходили разной высоты (Tomon 28.09).
     subgroups.forEach(function (g) {
       group.push(row(g.name, 'подгруппа вашей группы',
-        actionButton('Добавить', function () { app.addExtras([g]); }, 'fixed', 'add:' + g.id)));
+        actionButton('Добавить', function () { app.addExtras([g]); }, 'fixed', 'add:' + g.id, 'Добавить ' + g.name)));
     });
     if (room > 0) {
       group.push(h('div', { class: 'setting-actions' },
@@ -208,11 +233,15 @@ export function settingsScreen(app) {
 
       // Только во вкладке браузера: открытому значком он ни к чему. Шаги — для
       // этого телефона; есть кнопка браузера — она вместо шагов (разбор 28.09).
-      standalone() ? null : section('Значок на экране', [
+      // На компьютере без кнопки браузера шаги для телефонов ни к чему (М55).
+      standalone() || (!install && !ios && !android) ? null : section('Значок на экране', [
         h('p', null, 'Сайт можно открыть значком с домашнего экрана, как приложение.'),
         install ? actionButton('Добавить значок', app.install) : null,
-        !install && !android ? h('p', null, 'iPhone и iPad: в Safari «Поделиться» → «На экран „Домой“».') : null,
-        !install && !ios ? h('p', null, 'Android: меню браузера → «Добавить на главный экран».') : null,
+        // На iOS 26 кнопки «Поделиться» на панели по умолчанию нет — она в
+        // меню «•••» у адреса (М70).
+        !install && ios ? h('p', null, 'В Safari: кнопка «Поделиться» — на панели или в меню «•••» у ' +
+          'адреса → «На экран „Домой“»; «Открыть как веб-приложение» не выключайте.') : null,
+        !install && android ? h('p', null, 'Меню браузера → «Добавить на главный экран».') : null,
       ]),
 
       own ? notifications(app, teacherMode) : null,
@@ -250,12 +279,14 @@ export function settingsScreen(app) {
           : 'На сервер уходят только названия вашей группы и других, если вы их выбрали. ' +
             'Больше ничего: ни имени, ') +
           'ни номера телефона, ни местоположения. Учётной записи нет, аналитики и рекламы нет, ' +
-          'выбор хранится только в этом браузере. Когда смотрите чужое расписание, серверу уходит, ' +
-          'чьё именно: иначе его неоткуда взять. Всё для вашего удобства.'),
-        // Уведомления — единственное, что сервер хранит о браузере (Tomon 28.09).
-        h('p', null, 'Пока включены уведомления, сервер хранит адрес, по которому этот браузер их ' +
-          'принимает, ' + (teacherMode ? 'и выбранное имя' : 'и вашу группу') + ', что присылать и дату ' +
-          'подписки. Выключите — запись сотрётся.'),
+          'выбор хранится в этом браузере, а с уведомлениями — ещё и на сервере. Когда смотрите ' +
+          'чужое расписание, серверу уходит, чьё именно: иначе его неоткуда взять. Всё для вашего удобства.'),
+        // Уведомления — единственное, что сервер хранит о браузере (Tomon 28.09);
+        // перечень — как в записи на сервере (М18, М52, М80).
+        h('p', null, 'Пока включены уведомления, сервер хранит адрес и ключи, по которым этот браузер ' +
+          'их принимает, ' + (teacherMode ? 'выбранное имя' : 'вашу группу') + ', что присылать, какой ' +
+          'сайт и когда вы его открывали последний раз. Доставляет их служба браузера — Apple, Google, ' +
+          'Mozilla или Microsoft: текст ей не виден. Выключите — запись сотрётся.'),
         h('p', null, 'Что написано в таблице колледжа, то и покажет сайт: за ошибки, замены и ' +
           'опоздавшие обновления автор не отвечает.'),
         h('p', null, 'Если однажды что-то сломается, автор постарается починить, но сроков не обещает. ' +

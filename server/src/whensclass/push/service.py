@@ -669,8 +669,10 @@ def changes_message(sub: dict, lines: list[list[str]]) -> dict:
     сегодняшнее: строки идут по дням (М33 прогона 1 аудита 4)."""
     kept = [[day, text[:MAX_LINE]] for day, text in lines]
     while True:
+        # who — чьё расписание: сервис-воркер склеивает с висящим только
+        # строки того же (М7 прогона 1 аудита 4).
         out = message(sub, "changes", "Расписание изменилось", "\n".join(t for _, t in kept),
-                      {"days": [d for d, _ in kept]})
+                      {"days": [d for d, _ in kept], "who": f"{sub['kind']}:{sub['id']}"})
         if len(kept) == 1 or len(json.dumps(out, ensure_ascii=False).encode("utf-8")) <= MAX_PAYLOAD:
             return out
         kept = kept[:-1]

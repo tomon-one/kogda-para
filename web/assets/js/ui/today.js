@@ -67,6 +67,10 @@ export function mainScreen(app) {
  */
 export function refreshLabel(app) {
   if (app.state.refreshFailed) return 'Не удалось обновить расписание';
+  if (app.state.partial) {
+    return app.state.partial.length === 1 ? 'Не обновилась группа ' + app.state.partial[0]
+      : 'Не обновились группы ' + app.state.partial.join(', ');
+  }
   if (app.gone()) return app.isTeacher() ? 'Вас нет в таблице' : 'Группы нет в таблице';
   if (app.server().status === STATUS_UNREACHABLE) return 'Сервер расписания не отвечает';
   if (app.serverBroken()) return 'Сервер не смог обновить расписание';
@@ -156,6 +160,19 @@ function plates(app) {
         : 'Группу «' + own.name + '» переименовали, разделили или убрали. ') +
         (app.saved() ? 'На экране — последнее, что было.' : 'Выберите заново.')),
       actionButton('Выбрать заново', function () { app.go(teacherMode ? 'pick/self' : 'pick'); })));
+  }
+  // Другая группа пропала из таблицы: её пары просто исчезали без слова, а
+  // приложение в этот момент присылает уведомление (четвёртый аудит, М17).
+  var goneExtras = teacherMode ? [] : app.extras().filter(function (g) { return g.gone; });
+  if (goneExtras.length) {
+    var names = goneExtras.map(function (g) { return g.name; });
+    var one = names.length === 1;
+    out.push(h('div', { class: 'plate' },
+      h('div', { class: 'plate-title' }, (one ? 'Группы ' : 'Групп ') + names.join(', ') + ' сейчас нет в таблице'),
+      h('div', { class: 'plate-text' }, one
+        ? 'Её пары не показываются и вернутся сами, когда она появится. Если её переименовали — выберите заново в настройках.'
+        : 'Их пары не показываются и вернутся сами, когда они появятся. Если их переименовали — выберите заново в настройках.'),
+      actionButton('Настройки', function () { app.go('settings'); })));
   }
   if (app.serverBroken()) {
     var server = app.server();

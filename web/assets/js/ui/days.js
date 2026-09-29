@@ -47,6 +47,11 @@ function dayCard(day, bells, now, teacher, groups, byName) {
     card.appendChild(h('p', { class: 'day-empty' }, freeDay(day)));
     return card;
   }
+  // Своих пар нет, а у выбранных групп есть: «пар нет» — над их серыми
+  // строками, как пишет виджет приложения (четвёртый аудит, М9 прогона 1).
+  if (groups.length && lessons.every(function (l) { return isForeign(l, groups); })) {
+    card.appendChild(h('p', { class: 'day-empty' }, freeDay(day)));
+  }
   lessons.forEach(function (lesson) {
     // Пара только у других групп — не «идёт сейчас»: человек на ней не сидит.
     var foreign = isForeign(lesson, groups);

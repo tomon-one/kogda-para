@@ -51,8 +51,12 @@ export function icon(name, cls) {
 
 /** Кнопка на подложке — как ActionButton приложения. */
 /** `key` — для фокуса после перестройки экрана (data-key). */
-export function actionButton(label, onClick, cls, key) {
-  return h('button', { type: 'button', class: 'action' + (cls ? ' ' + cls : ''), 'data-key': key || null, onclick: onClick }, label);
+/** `spoken` — подпись для чтеца вместо надписи: «Убрать ИСП-924/2», а не «Убрать». */
+export function actionButton(label, onClick, cls, key, spoken) {
+  return h('button', {
+    type: 'button', class: 'action' + (cls ? ' ' + cls : ''), 'data-key': key || null,
+    'aria-label': spoken || null, onclick: onClick,
+  }, label);
 }
 
 /** Ссылка, которая выглядит как кнопка: переход — настоящей ссылкой, без window.open. */

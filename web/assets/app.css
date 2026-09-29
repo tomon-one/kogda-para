@@ -468,6 +468,9 @@ p a, .point a { text-decoration: underline; }
   .lesson-time { width: auto; }
   .lesson-time .pair, .lesson-time .time, .lesson-time .now-label { display: inline; margin-right: 6px; }
   .lesson-time .marks { display: inline-flex; width: auto; margin-top: 0; vertical-align: middle; }
+  /* Длинное название в значке — в пределах строки, с многоточием: при
+     увеличении 200 % оно уходило за край карточки (М21). */
+  .lesson-time .marks.names { display: flex; flex-wrap: wrap; max-width: 100%; }
   .lesson-time .mark { margin-bottom: 0; }
   .lesson-body { margin: 4px 0 0; padding: 0; border-left: 0; }
 }
@@ -502,7 +505,8 @@ p a, .point a { text-decoration: underline; }
   -webkit-box-orient: vertical;
 }
 
-.place.muted, .past .place { color: var(--muted); }
+/* Место у пары не своей группы — серым, как в приложении (М12). */
+.place.muted, .past .place, .foreign .place { color: var(--muted); }
 .kind { font-size: 13px; color: var(--muted); flex: none; }
 .sub { font-size: 13px; color: var(--muted); }
 
