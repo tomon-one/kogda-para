@@ -63,9 +63,9 @@
   будущей основной версии.
 - Tested-сборка — `./gradlew assembleCandidate` (имена на «test» Gradle не
   разрешает). Её номер — `versionCode × 100 + TESTED_TRY`, имя —
-  `versionName-tTESTED_TRY`: 501 и `pr-Зерно.0.1.4-t1`. Следующая tested —
+  `versionName-tTESTED_TRY`: 601 и `r-Алтай.1.0.0-t1`. Следующая tested —
   `TESTED_TRY` плюс один.
-- Проверено — та же версия выходит основной сборкой (номер 5), а `TESTED_TRY`
+- Проверено — та же версия выходит основной сборкой (номер 6), а `TESTED_TRY`
   снова 1.
 
 ## Номер сборки
