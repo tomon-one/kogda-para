@@ -63,15 +63,64 @@ def _replaces(lesson: dict) -> str | None:
     return note[len(INSTEAD):].strip() or None
 
 
-def known_webinar(url: str) -> bool:
+def _split(url: str) -> urllib.parse.SplitResult | None:
+    """Разбор адреса, как у браузера: «\\» — это «/» (WHATWG URL). Кривой адрес
+    («https://[…», полноширинная «／») — None, а не исключение: оно роняло
+    сводку изменений всем подписчикам (четвёртый аудит, В27 прогона 1)."""
     try:
-        parts = urllib.parse.urlsplit(url.strip())
+        parts = urllib.parse.urlsplit(url.strip().replace("\\", "/"))
+        parts.hostname, parts.port  # noqa: B018 — бросают на кривом хосте и порте
     except ValueError:
+        return None
+    return parts
+
+
+def known_webinar(url: str) -> bool:
+    # «\» браузер читает как «/» и ведёт на хост до неё, а java.net.URI в
+    # приложении такой адрес не разбирает вовсе: и там и тут он чужой
+    # (format.js, аудит сайта W1; четвёртый аудит, М24 прогона 1).
+    if "\\" in url:
         return False
-    if parts.scheme.lower() != "https" or not parts.hostname:
+    parts = _split(url)
+    if parts is None or parts.scheme.lower() != "https" or not parts.hostname:
         return False
     host = parts.hostname.lower().rstrip(".")
     return any(host == d or host.endswith("." + d) for d in WEBINAR_DOMAINS)
+
+
+def url_host(url: str) -> str:
+    """Хост, куда поведёт ссылка, — для текста «чужой адрес: …»."""
+    parts = _split(url)
+    return (parts.hostname if parts else None) or url
+
+
+def _norm(subject: str) -> str:
+    return " ".join("".join(c if c.isalnum() else " " for c in subject.casefold()).split())
+
+
+def _distance(a: str, b: str) -> int:
+    row = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, y in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (x != y))
+    return row[-1]
+
+
+def same_subject(a: str, b: str) -> bool:
+    """Та же пара под чуть другим названием: исправили опечатку, регистр или
+    точку («Обествознание» → «Обществознание»), или у одной записи полное
+    «А / Б», у другой — только «А». Раньше это уходило строками «убрали» и
+    «добавилась» (четвёртый аудит, М35 прогона 1). ScheduleDiff.sameSubject."""
+    if a == b:
+        return True
+    na, nb = _norm(a), _norm(b)
+    if na == nb:
+        return True
+    head_a, head_b = _norm(a.split("/")[0]), _norm(b.split("/")[0])
+    if head_a and head_a == head_b:
+        return True
+    return min(len(na), len(nb)) >= 8 and _distance(na, nb) <= 2
 
 
 def room_label(room: str | None) -> str | None:
@@ -138,6 +187,18 @@ def _compare_number(
     def overlap(a: dict, b: dict) -> bool:
         return bool(groups_of(a) & groups_of(b))
 
+    def listed(lesson: dict, keep: set[str]) -> str:
+        """Только эти группы записи — в её порядке."""
+        value = lesson.get("gr") or ""
+        return ", ".join(p.strip() for p in value.split(",") if p.strip() in keep)
+
+    # Группы на этом номере до и после: у преподавателя записи склеены из
+    # групп, и к паре присоединяется или уходит группа — «добавилась» и
+    # «убрали» только о ней, а не о всей записи (четвёртый аудит, М34
+    # прогона 1).
+    before_groups = set().union(*(groups_of(x) for x in was)) if was else set()
+    after_groups = set().union(*(groups_of(x) for x in now)) if now else set()
+
     unmatched = list(was)
 
     # Замена — одной строкой, сервер помечает её «вместо: X».
@@ -166,6 +227,12 @@ def _compare_number(
         if index < 0:
             index = next((i for i, x in enumerate(unmatched) if x["s"] == lesson["s"]), -1)
         if index < 0:
+            # Та же пара под чуть другим названием — у тех же групп (у
+            # преподавателя — пересекающихся) и с тем же преподавателем.
+            index = next((i for i, x in enumerate(unmatched)
+                          if same_subject(x["s"], lesson["s"]) and overlap(x, lesson)
+                          and x.get("t") == lesson.get("t")), -1)
+        if index < 0:
             source = next((x for x in was if x["s"] == lesson["s"] and overlap(x, lesson)), None) \
                 or next((x for x in was if x["s"] == lesson["s"]), None)
             if source is not None and not _cancelled(source) and _cancelled(lesson):
@@ -182,6 +249,13 @@ def _compare_number(
 
         previous = unmatched.pop(index)
         tag = whose(lesson)
+        if teacher:
+            added = groups_of(lesson) - before_groups
+            if added:
+                say(f"добавилась {number} пара ({listed(lesson, added)}): {lesson['s']}")
+            left = groups_of(previous) - after_groups
+            if left:
+                say(f"убрали {number} пару ({listed(previous, left)}): {previous['s']}")
         teachers = lesson.get("t") or []
         if not _cancelled(previous) and _cancelled(lesson):
             say(f"отменили {number} пару{tag}: {lesson['s']}")
@@ -208,8 +282,7 @@ def _compare_number(
             pass
         elif not known_webinar(url):
             verb = "появилась" if previous.get("u") is None else "сменилась"
-            host = urllib.parse.urlsplit(url).hostname or url
-            say(f"у {number} пары{tag} {verb} ссылка — чужой адрес: {host}")
+            say(f"у {number} пары{tag} {verb} ссылка — чужой адрес: {url_host(url)}")
         elif previous.get("u") is None:
             say(f"у {number} пары{tag} появилась ссылка")
         else:
@@ -217,6 +290,14 @@ def _compare_number(
 
     for gone in unmatched:
         if any(x["s"] == gone["s"] for x in now):
+            continue
+        if teacher and gone.get("gr"):
+            left = groups_of(gone) - after_groups
+            if not left:
+                # Все её группы на номере остались — запись просто
+                # склеилась с другой.
+                continue
+            say(f"убрали {number} пару ({listed(gone, left)}): {gone['s']}")
             continue
         say(f"убрали {number} пару{whose(gone)}: {gone['s']}")
 
@@ -232,7 +313,10 @@ def change_lines(old: dict | None, fresh: dict, today: dt.date) -> list[list[str
     for day, text in compare(old, fresh):
         if day in soon:
             out.append([day, f"{day_label(dt.date.fromisoformat(day))}: {text}"])
-    return out[-MAX_LINES:]
+    # Строки идут по дням, сначала сегодня: обрезка внутри одной правки
+    # режет завтрашний хвост, а не срочное сегодняшнее (четвёртый аудит, М33
+    # прогона 1).
+    return out[:MAX_LINES]
 
 
 def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:

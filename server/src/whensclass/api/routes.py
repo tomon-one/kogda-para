@@ -16,7 +16,6 @@ import zoneinfo
 from fastapi import APIRouter, Query, Request, Response
 
 from ..config import settings
-from ..domain.teachers import spelling_twin
 from ..push.service import BadSubscription, parse_keys, parse_subscription
 from ..service.bells import BELLS
 from ..service.refresher import state_dir
@@ -27,7 +26,7 @@ from .payloads import (
     groups_payload,
     meta_payload,
     schedule_payload,
-    teacher_payload,
+    teacher_answer,
     teachers_payload,
 )
 from .releases import CHANNELS, latest_release
@@ -212,38 +211,10 @@ def teacher(
     if store.snapshot is None or store.teachers is None:
         return _not_loaded()
 
-    def build(tid: str) -> dict | None:
-        return teacher_payload(
-            store.snapshot,
-            store.teachers,
-            tid,
-            start or _today(),
-            days,
-            store.generated,
-            bells=BELLS,
-            today=_today(),
-        )
-
-    body = build(teacher_id)
-    if body is None and (full := store.teachers.aliases.get(teacher_id)):
-        # Краткая запись «Фамилия И. О.», сведённая к полному имени: отвечаем
-        # расписанием полного, в ответе его id.
-        body = build(full)
-    name = store.known_teacher(teacher_id) if body is None else None
-    if name and spelling_twin(store.teachers, name):
-        # Колледж исправил опечатку в имени: тот же человек теперь под другим
-        # id, и пустые дни здесь 60 дней говорили бы «пар нет». 404 — и
-        # приложение предложит выбрать заново, человек найдёт себя под верным
-        # именем.
-        name = None
-    if name:
-        # В этом листе у преподавателя нет пар, но он был в прошлых — отпуск,
-        # неделя без часов. Это «пар нет», а не «вас больше нет в таблице».
-        body = teacher_payload(
-            store.snapshot, store.teachers, teacher_id, start or _today(), days,
-            store.generated, bells=BELLS, known_name=name,
-            today=_today(),
-        )
+    body = teacher_answer(
+        store.snapshot, store.teachers, store.known_teacher, teacher_id, start or _today(),
+        days, store.generated, bells=BELLS, today=_today(),
+    )
     if body is None:
         return Response(status_code=404, content='{"error":"преподаватель не найден"}',
                         media_type=JSON)
@@ -305,7 +276,7 @@ async def _json_body(request: Request) -> object:
         raise BadSubscription("тело — не JSON") from exc
 
 
-@router.get("/v1/push/key")
+@router.api_route("/v1/push/key", methods=["GET", "HEAD"])
 def push_key(request: Request) -> Response:
     """Открытый ключ VAPID: браузер подписывается с ним."""
     push = request.app.state.push
@@ -368,7 +339,10 @@ async def push_move(request: Request) -> Response:
     except BadSubscription as exc:
         _rejected(body, exc)
         return _error(422, str(exc))
-    push.move(body["old"], fresh)
+    if not push.move(body["old"], fresh):
+        # Прежней записи нет (стёрта по 410): сервис-воркер сбросит отметку, и
+        # страница перешлёт подписку с выбором при первом открытии (М75).
+        return _error(404, "прежней подписки нет")
     return Response(status_code=204)
 
 

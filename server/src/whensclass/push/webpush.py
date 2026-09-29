@@ -27,6 +27,24 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 # Размер записи: сообщение уходит одной записью, ему хватает с запасом.
 RECORD_SIZE = 4096
+# Больше открытого текста в одну запись не входит (RFC 8291: 4096 минус
+# заголовок, метка AES-GCM и разделитель; Apple — 3993 байта).
+MAX_PLAINTEXT = 3993
+
+
+class TooLarge(Exception):
+    """Сообщение не влезает в запись — наша ошибка, а не подписки."""
+
+
+def valid_key(raw: bytes) -> bool:
+    """p256dh — точка кривой P-256, а не 65 любых байт с 0x04 впереди: такую
+    подписку служба принимала и не снимала никогда (четвёртый аудит, В16
+    прогона 1)."""
+    try:
+        ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), raw)
+    except ValueError:
+        return False
+    return True
 
 
 def b64decode(text: str) -> bytes:
@@ -150,11 +168,11 @@ def send(
     `urgency` high — для напоминаний: с ним служба рассылки и телефон не
     откладывают доставку до пробуждения, normal — для остального.
     """
-    body = encrypt(
-        json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
-        b64decode(p256dh),
-        b64decode(auth),
-    )
+    plaintext = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(plaintext) > MAX_PLAINTEXT:
+        # Служба рассылки ответила бы 413, и напоминание пропало бы молча.
+        raise TooLarge(f"{len(plaintext)} байт")
+    body = encrypt(plaintext, b64decode(p256dh), b64decode(auth))
     response = client.post(
         endpoint,
         content=body,
@@ -169,9 +187,13 @@ def send(
     reason = None
     if response.status_code >= 300:
         try:
-            body = response.json()
-            reason = str(body.get("reason") or body.get("message") or "")[:80] or None
+            answer = response.json()
         except ValueError:
+            answer = None
+        if isinstance(answer, dict):
+            reason = str(answer.get("reason") or answer.get("message") or "")[:80] or None
+        else:
+            # Не объект JSON (текст FCM, массив) — первые знаки как есть.
             reason = response.text[:80] or None
     retry = response.headers.get("Retry-After", "")
     return Result(response.status_code, reason, int(retry) if retry.isdigit() else None)

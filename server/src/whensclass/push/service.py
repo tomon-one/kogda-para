@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import concurrent.futures
 import datetime as dt
+import hashlib
+import heapq
 import json
 import logging
 import pathlib
@@ -27,6 +29,7 @@ from typing import NamedTuple
 import httpx
 
 from ..config import settings
+from ..service import alerts
 from ..storage.atomic import write_json
 from . import changes, webpush
 
@@ -47,8 +50,11 @@ MAX_ENDPOINT = 1024
 MAX_SUBSCRIPTIONS = 20000
 # Как «За сколько предупредить» в приложении: от 10 минут до 4 часов.
 REMIND_MIN, REMIND_MAX = 10, 240
-# Изменения про сегодня и завтра: через сутки новость уже не нужна.
-CHANGES_TTL = 12 * 3600
+# Изменения живут у службы рассылки до конца последнего дня в сводке, но не
+# меньше минуты (`changes_ttl`). Было — 12 часов при любом дне: «на завтра»,
+# отправленное вечером, истекало ночью, до пары, а «на сегодня» приходило
+# назавтра (четвёртый аудит, контроль №5 и М37 прогона 1).
+CHANGES_TTL_MIN = 60
 # Сообщение целиком — до 4 КБ зашифрованным (Apple, RFC 8291: 3993 байта
 # открытого текста); с запасом.
 MAX_PAYLOAD = 3000
@@ -56,6 +62,39 @@ MAX_LINE = 300
 # Одна повторная попытка на 429 и 5xx: через Retry-After, но не дольше двух минут.
 RETRY_AFTER = 30
 RETRY_MAX = 120
+# Повторы ждут в одной очереди с одним потоком; больше стольких — не встают.
+# Было — поток ОС на каждый повтор: 20 000 неудач за минуту упирались в
+# MemoryMax (четвёртый аудит, В26 прогона 1).
+MAX_PENDING_RETRIES = 2000
+# Соединение со службой рассылки — не дольше трёх секунд: пока Google не
+# отвечает, его подписки держали очередь по 10 с каждая (В6).
+TIMEOUT = httpx.Timeout(10.0, connect=3.0)
+WORKERS_PER_SERVICE = 4
+# Подписку, которая не доставляется столько раз подряд, служба снимает — если
+# та же служба рассылки за это время доставляла другим: сбой всей службы
+# или нашего ключа подписки не стирает (В16).
+DROP_AFTER_FAILS = 5
+# Раз в столько секунд — сводка отказов по службам рассылки (тревога владельцу,
+# М38) и проверка пропавших групп (В21).
+CHECK_EVERY = 600
+ALARM_MIN_FAILS = 5
+# Группа или преподаватель пропали из таблицы: через час (как в приложении) —
+# одно уведомление «выберите заново», через две недели запись стирается.
+GONE_NOTICE_AFTER = 3600
+GONE_DROP_DAYS = 14
+# Напоминания, чья минута пропущена (перезапуск, выкладка), догоняются, пока
+# пара не началась; после перезапуска — за столько минут назад (М25).
+CATCH_UP_MINUTES = 10
+
+
+def family(endpoint: str) -> str:
+    """Служба рассылки: у каждой своя очередь."""
+    host = _host(endpoint)
+    for name, suffix in (("google", "googleapis.com"), ("mozilla", "mozilla.com"),
+                         ("apple", "apple.com"), ("microsoft", "windows.com")):
+        if host == suffix or host.endswith("." + suffix):
+            return name
+    return host
 
 
 class Job(NamedTuple):
@@ -68,6 +107,10 @@ class Job(NamedTuple):
 
 def endpoint_allowed(endpoint: str) -> bool:
     if not isinstance(endpoint, str) or len(endpoint) > MAX_ENDPOINT:
+        return False
+    # Только печатный ASCII без пробелов: urlsplit молча выкидывает \t и \n, а
+    # httpx на таком адресе бросал InvalidURL мимо журнала (М76).
+    if any(not 32 < ord(c) < 127 for c in endpoint):
         return False
     try:
         parts = urllib.parse.urlsplit(endpoint)
@@ -99,6 +142,8 @@ def parse_subscription(body: object) -> dict:
         raise BadSubscription("ключи подписки — не base64url") from exc
     if len(p256dh) != 65 or p256dh[0] != 4 or len(auth) != 16:
         raise BadSubscription("ключи подписки не той длины")
+    if not webpush.valid_key(p256dh):
+        raise BadSubscription("ключ подписки — не точка кривой P-256")
     kind = body.get("kind")
     subject = body.get("id")
     if kind not in ("group", "teacher") or not isinstance(subject, str) or not subject \
@@ -140,18 +185,35 @@ class Push:
 
     def __init__(self, state_dir: pathlib.Path, vapid: webpush.Vapid | None):
         self.path = state_dir / "push.json"
+        self._reminded_path = state_dir / "push-reminded.json"
         self.vapid = vapid
         self._lock = threading.RLock()
         self._subs: dict[str, dict] = self._load()
-        self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="push")
-        self._client = httpx.Client(timeout=10.0, headers={"User-Agent": settings.user_agent})
-        # Какие напоминания уже ушли: (адрес, день, номер пары). Перезапуск
-        # посреди той же минуты мог бы повторить одно — это меньшее зло, чем
-        # писать на диск каждую минуту.
-        self._reminded: set[tuple[str, str, int]] = set()
+        # Своя очередь у каждой службы рассылки: пока Google не отвечает, его
+        # подписки не держат айфоны (четвёртый аудит, В6 прогона 1).
+        self._pools: dict[str, concurrent.futures.ThreadPoolExecutor] = {}
+        self._client = httpx.Client(timeout=TIMEOUT, headers={"User-Agent": settings.user_agent})
+        # Какие напоминания уже ушли: (хеш адреса, номер пары) за день — на
+        # диске, чтобы догонялка после перезапуска не повторила ушедшее.
+        self._reminded: set[tuple[str, int]] = set()
         self._reminded_day: str | None = None
-        # Отложить повтор: в тестах подменяется.
-        self._later = _timer
+        self._last_remind: dt.datetime | None = None
+        self._load_reminded()
+        # Отложить повтор: в тестах подменяется. False — очередь полна.
+        self._delayed = _Delayed(MAX_PENDING_RETRIES)
+        self._later = self._delayed.add
+        # Отказы подряд у подписки: адрес -> (сколько, когда начались).
+        self._fails: dict[str, tuple[int, float]] = {}
+        # Когда служба рассылки последний раз доставила хоть кому-то.
+        self._delivered: dict[str, float] = {}
+        # За окно сводки: служба рассылки -> [доставлено, отказов, последний отказ].
+        self._stats: dict[str, list] = {}
+        self._checked = time.monotonic()
+        # Кого нет в снимке: (kind, id) -> с какого часа (monotonic).
+        self._missing: dict[tuple[str, str], float] = {}
+        # Имя преподавателя из прежних снимков (SnapshotStore.known_teacher):
+        # уведомления считаются тем же путём, что /v1/teacher (М41).
+        self.known_teacher = lambda teacher_id: None
 
     @property
     def enabled(self) -> bool:
@@ -199,12 +261,15 @@ class Push:
 
     def move(self, old: str, fresh: dict) -> bool:
         """Браузер сменил подписку сам (pushsubscriptionchange): прежний выбор —
-        на новый адрес. Знать прежний адрес — и есть право: он секретен."""
+        на новый адрес. Знать прежний адрес — и есть право: он секретен.
+        False — прежней записи нет (её уже стёрли по 410): маршрут отвечает
+        404, и страница перешлёт подписку сама (М75)."""
         with self._lock:
             record = self._subs.pop(old, None)
             if record is None:
                 return False
             self._subs[fresh["endpoint"]] = {**record, **fresh}
+            self._fails.pop(old, None)
             self._save()
         log.info("подписка на уведомления перенесена браузером: %s -> %s",
                  _host(old), _host(fresh["endpoint"]))
@@ -212,6 +277,7 @@ class Push:
 
     def unsubscribe(self, endpoint: str, why: str = "выключили") -> None:
         with self._lock:
+            self._fails.pop(endpoint, None)
             if self._subs.pop(endpoint, None) is not None:
                 self._save()
                 log.info("подписка на уведомления снята (%s): %s, осталось %d",
@@ -227,21 +293,46 @@ class Push:
     # --- рассылка ------------------------------------------------------------
 
     def _send(self, job: Job, attempt: int = 0) -> None:
+        """Одна доставка. Любое исключение — в журнал, а не в Future, которую
+        никто не читает (М76)."""
+        try:
+            self._deliver(job, attempt)
+        except Exception as exc:  # noqa: BLE001 — страховка потока пула
+            log.warning("уведомление не ушло (%s): %s", _host(job.sub["endpoint"]),
+                        type(exc).__name__)
+            self._failed(job.sub, "error", type(exc).__name__)
+
+    def _deliver(self, job: Job, attempt: int) -> None:
         if self.vapid is None:
             return
         sub = job.sub
         kind = job.message["notification"]["data"]["t"]
+        if job.deadline is not None and time.time() >= job.deadline:
+            # Очередь продержала напоминание до начала пары — оно уже не нужно.
+            log.info("напоминание опоздало к началу пары (%s) — не шлю", _host(sub["endpoint"]))
+            return
         try:
             result = webpush.send(
                 self._client, self.vapid, sub["endpoint"], sub["p256dh"], sub["auth"],
                 job.message, job.ttl, urgency="high" if kind == "lesson" else "normal",
             )
-        except (httpx.HTTPError, ValueError) as exc:
+        except webpush.TooLarge as exc:
+            # Наша ошибка, не подписки: не снимаем и не повторяем.
+            log.warning("уведомление не влезло (%s): %s", kind, exc)
+            return
+        except ValueError as exc:
+            # Ключи подписки не расшифровываются (не точка кривой) — до сети:
+            # доставить такую нельзя никогда.
+            self.unsubscribe(sub["endpoint"], why=f"ключи не годятся: {exc}")
+            return
+        except httpx.HTTPError as exc:
             # Адрес — только хост: путь подписки и есть её секрет.
             log.warning("уведомление не ушло (%s): %s", _host(sub["endpoint"]), type(exc).__name__)
-            self._retry(job, attempt, None)
+            if not self._retry(job, attempt, None):
+                self._failed(sub, "net", type(exc).__name__)
             return
         if result.status < 300:
+            self._succeeded(sub)
             return
         said = f"{result.status}" + (f" {result.reason}" if result.reason else "")
         if result.status in webpush.GONE or result.reason == "VapidPkHashMismatch":
@@ -250,39 +341,137 @@ class Push:
             self.unsubscribe(sub["endpoint"], why=f"служба рассылки ответила {said}")
             return
         log.warning("служба рассылки %s ответила %s (%s)", _host(sub["endpoint"]), said, kind)
-        if result.status in webpush.RETRY:
-            self._retry(job, attempt, result.retry_after)
-
-    def _retry(self, job: Job, attempt: int, after: int | None) -> None:
-        """Одна повторная попытка; напоминание — только пока пара не началась."""
-        if attempt > 0:
+        if result.status in webpush.RETRY and self._retry(job, attempt, result.retry_after):
             return
+        self._failed(sub, "status", said)
+
+    def _succeeded(self, sub: dict) -> None:
+        name = family(sub["endpoint"])
+        with self._lock:
+            self._delivered[name] = time.monotonic()
+            self._fails.pop(sub["endpoint"], None)
+            self._stats.setdefault(name, [0, 0, None])[0] += 1
+
+    def _failed(self, sub: dict, how: str, said: str) -> None:
+        """Доставка не удалась окончательно (повторы кончились или не нужны)."""
+        endpoint, name = sub["endpoint"], family(sub["endpoint"])
+        now = time.monotonic()
+        with self._lock:
+            stat = self._stats.setdefault(name, [0, 0, None])
+            stat[1] += 1
+            stat[2] = said
+            count, since = self._fails.get(endpoint, (0, now))
+            count += 1
+            self._fails[endpoint] = (count, since)
+            dead = count >= DROP_AFTER_FAILS and self._delivered.get(name, -1.0) > since
+        if dead:
+            self.unsubscribe(endpoint, why=f"не доставляется {count} раз подряд: {said}")
+
+    def _retry(self, job: Job, attempt: int, after: int | None) -> bool:
+        """Одна повторная попытка; напоминание — только пока пара не началась.
+        True — повтор встал в очередь."""
+        if attempt > 0:
+            return False
         delay = min(max(after or RETRY_AFTER, 1), RETRY_MAX)
         if job.deadline is not None and time.time() + delay >= job.deadline:
-            return
+            return False
         again = job._replace(ttl=max(60, job.ttl - delay))
-        self._later(delay, lambda: self._pool.submit(self._send, again, attempt + 1))
+        if self._later(delay, lambda: self._submit(again, attempt + 1)) is False:
+            log.warning("очередь повторов полна (%d) — повтор не встал", MAX_PENDING_RETRIES)
+            return False
+        return True
+
+    def _submit(self, job: Job, attempt: int = 0) -> None:
+        name = family(job.sub["endpoint"])
+        with self._lock:
+            pool = self._pools.get(name)
+            if pool is None:
+                pool = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=WORKERS_PER_SERVICE, thread_name_prefix=f"push-{name}"[:15]
+                )
+                self._pools[name] = pool
+        pool.submit(self._send, job, attempt)
 
     def _dispatch(self, jobs: list[Job]) -> None:
         for job in jobs:
-            self._pool.submit(self._send, job)
+            self._submit(job)
+
+    def _check(self, snapshot, teachers, today: dt.date, fresh: bool) -> None:
+        """Раз в CHECK_EVERY: тревога о службах рассылки и пропавшие группы."""
+        now = time.monotonic()
+        if now - self._checked < CHECK_EVERY:
+            return
+        self._checked = now
+        with self._lock:
+            stats, self._stats = self._stats, {}
+        for name, (ok, failed, said) in sorted(stats.items()):
+            if failed >= ALARM_MIN_FAILS and ok == 0:
+                # Сплошной отказ (ключ VAPID, 403 FCM, служба лежит) раньше
+                # был виден только строками в журнале (М38).
+                alerts.notify(
+                    f"push-{name}",
+                    f"Уведомления сайта через {name} не доходят: {failed} отказов за "
+                    f"{CHECK_EVERY // 60} минут и ни одной доставки, последний — {said}.",
+                )
+        if fresh and snapshot is not None:
+            self._check_gone(snapshot, teachers, today)
+
+    def _check_gone(self, snapshot, teachers, today: dt.date) -> None:
+        """Группы или преподавателя больше нет в таблице (переименовали): через
+        час — одно уведомление «выберите заново», через GONE_DROP_DAYS — запись
+        стёрта. Было — тишина навсегда и вечная запись (В21, М79)."""
+        now = time.monotonic()
+        subs = self._snapshot_subs()
+        keys = {(s["kind"], s["id"]) for s in subs}
+        gone = {key for key in keys if _payload(snapshot, teachers, key, today, self.known_teacher) is None}
+        self._missing = {key: self._missing.get(key, now) for key in gone}
+        notices, drop, changed = [], [], False
+        with self._lock:
+            for sub in subs:
+                key = (sub["kind"], sub["id"])
+                record = self._subs.get(sub["endpoint"])
+                if record is None:
+                    continue
+                if key not in gone:
+                    if record.pop("gone", None) is not None:
+                        changed = True
+                    continue
+                since = record.get("gone")
+                if since is None and now - self._missing[key] >= GONE_NOTICE_AFTER:
+                    record["gone"] = today.isoformat()
+                    changed = True
+                    notices.append(Job(record, gone_message(record), 7 * 86400))
+                elif since is not None and (today - dt.date.fromisoformat(since)).days >= GONE_DROP_DAYS:
+                    drop.append(sub["endpoint"])
+            if changed:
+                self._save()
+        for endpoint in drop:
+            self.unsubscribe(endpoint, why=f"нет в таблице {GONE_DROP_DAYS} дней")
+        if notices:
+            log.info("группы или преподавателя нет в таблице: %d уведомлений", len(notices))
+            self._dispatch(notices)
 
     # --- изменения -----------------------------------------------------------
 
     def after_refresh(self, before, before_teachers, snapshot, teachers, today: dt.date) -> None:
         """Снимок обновился — сравнить сегодня и завтра у каждого, кто подписан."""
-        if not self.enabled or before is None:
+        if not self.enabled or before is None or settings.freeze:
             return
-        subs = [s for s in self._snapshot_subs() if s.get("changes")]
+        subs = [s for s in self._snapshot_subs() if s.get("changes") and not s.get("gone")]
         if not subs:
             return
         lines_for: dict[tuple[str, str], list[list[str]]] = {}
         for key in {(s["kind"], s["id"]) for s in subs}:
-            old = _payload(before, before_teachers, key, today)
-            new = _payload(snapshot, teachers, key, today)
-            if old is None or new is None:
+            try:
+                old = _payload(before, before_teachers, key, today, self.known_teacher)
+                new = _payload(snapshot, teachers, key, today, self.known_teacher)
+                if old is None or new is None:
+                    continue
+                lines = changes.change_lines(old, new, today)
+            except Exception:  # noqa: BLE001
+                # Сбой одного не глушит остальных (В27).
+                log.exception("изменения для %s не посчитались", key[0])
                 continue
-            lines = changes.change_lines(old, new, today)
             if lines:
                 lines_for[key] = lines
         if not lines_for:
@@ -291,34 +480,62 @@ class Push:
         for sub in subs:
             lines = lines_for.get((sub["kind"], sub["id"]))
             if lines:
-                jobs.append(Job(sub, changes_message(sub, lines), CHANGES_TTL))
+                jobs.append(Job(sub, changes_message(sub, lines), changes_ttl(lines)))
         log.info("изменения в расписании: %d субъектов, %d уведомлений", len(lines_for), len(jobs))
         self._dispatch(jobs)
 
     # --- напоминания ---------------------------------------------------------
 
-    def remind(self, snapshot, teachers, now: dt.datetime | None = None) -> None:
-        """Раз в минуту: кому пора напомнить о паре."""
+    def _load_reminded(self) -> None:
+        try:
+            data = json.loads(self._reminded_path.read_text("utf-8"))
+            self._reminded_day = str(data["day"])
+            self._reminded = {(str(h), int(n)) for h, n in data["marks"]}
+        except (OSError, ValueError, KeyError, TypeError):
+            self._reminded, self._reminded_day = set(), None
+
+    def _save_reminded(self) -> None:
+        try:
+            write_json(self._reminded_path,
+                       {"day": self._reminded_day, "marks": sorted(self._reminded)})
+        except OSError as exc:
+            log.warning("отметки напоминаний не записались: %s", exc)
+
+    def remind(self, snapshot, teachers, now: dt.datetime | None = None, fresh: bool = True) -> None:
+        """Раз в минуту: кому пора напомнить о паре.
+
+        Шлётся всё, чья минута пришлась на время с прошлого запуска (после
+        перезапуска — за CATCH_UP_MINUTES), пока пара не началась: раньше
+        минута сверялась на равенство, и выкладка в минуту напоминания его
+        теряла (М25). При заморозке — молчит: снимок заведомо чужой (М36).
+        """
         if not self.enabled or snapshot is None:
             return
         zone = zoneinfo.ZoneInfo(settings.timezone)
         now = (now or dt.datetime.now(zone)).replace(tzinfo=None, second=0, microsecond=0)
         today = now.date()
+        self._check(snapshot, teachers, today, fresh)
+        if settings.freeze:
+            return
+        since = self._last_remind
+        if since is None or since.date() != today or since >= now:
+            since = now - dt.timedelta(minutes=CATCH_UP_MINUTES)
+        self._last_remind = now
         if self._reminded_day != today.isoformat():
             self._reminded = set()
             self._reminded_day = today.isoformat()
-        subs = [s for s in self._snapshot_subs() if s.get("remind")]
+        subs = [s for s in self._snapshot_subs() if s.get("remind") and not s.get("gone")]
         plans: dict[tuple[str, str, int], list[dict]] = {}
         jobs = []
         for sub in subs:
             key = (sub["kind"], sub["id"], sub["remind"])
             if key not in plans:
-                payload = _payload(snapshot, teachers, key[:2], today)
+                payload = _payload(snapshot, teachers, key[:2], today, self.known_teacher)
                 plans[key] = changes.reminders(payload, key[2], today) if payload else []
             for alarm in plans[key]:
-                if alarm["at"] != now:
+                if not since < alarm["at"] <= now or alarm["start"] <= now:
                     continue
-                mark = (sub["endpoint"], today.isoformat(), alarm["number"])
+                mark = (_mark(sub["endpoint"]), alarm["number"])
                 if mark in self._reminded:
                     continue
                 self._reminded.add(mark)
@@ -326,8 +543,8 @@ class Push:
                 end = alarm["end"].replace(tzinfo=zone).timestamp()
                 jobs.append(Job(
                     sub,
-                    message(sub, "lesson", alarm["title"], alarm["text"], {
-                        "subject": alarm["subject"],
+                    message(sub, "lesson", alarm["title"][:MAX_LINE], alarm["text"][:MAX_LINE], {
+                        "subject": alarm["subject"][:MAX_LINE],
                         "start": int(start * 1000),
                         "end": int(end * 1000),
                     }),
@@ -336,13 +553,64 @@ class Push:
                 ))
         if jobs:
             log.info("напоминания о паре: %d", len(jobs))
+            self._save_reminded()
             self._dispatch(jobs)
 
 
-def _timer(delay: float, action) -> None:
-    timer = threading.Timer(delay, action)
-    timer.daemon = True
-    timer.start()
+class _Delayed:
+    """Отложенные повторы — одна очередь и один поток, а не поток ОС на
+    каждый повтор (четвёртый аудит, В26 прогона 1)."""
+
+    def __init__(self, limit: int):
+        self._heap: list[tuple[float, int, object]] = []
+        self._cond = threading.Condition()
+        self._seq = 0
+        self._limit = limit
+        self._thread: threading.Thread | None = None
+
+    def add(self, delay: float, action) -> bool:
+        with self._cond:
+            if len(self._heap) >= self._limit:
+                return False
+            self._seq += 1
+            heapq.heappush(self._heap, (time.monotonic() + delay, self._seq, action))
+            if self._thread is None:
+                self._thread = threading.Thread(target=self._run, name="push-retry", daemon=True)
+                self._thread.start()
+            self._cond.notify()
+        return True
+
+    def _run(self) -> None:
+        while True:
+            with self._cond:
+                while not self._heap:
+                    self._cond.wait()
+                due, _, action = self._heap[0]
+                wait = due - time.monotonic()
+                if wait > 0:
+                    self._cond.wait(wait)
+                    continue
+                heapq.heappop(self._heap)
+            try:
+                action()
+            except Exception:  # noqa: BLE001
+                log.exception("повтор уведомления упал")
+
+
+def _mark(endpoint: str) -> str:
+    """Отметка напоминания на диске — хеш адреса, а не сам адрес: он секретен."""
+    return hashlib.sha256(endpoint.encode("utf-8")).hexdigest()[:16]
+
+
+def changes_ttl(lines: list[list[str]], now: dt.datetime | None = None) -> int:
+    """Сколько сводке жить у службы рассылки: до конца последнего её дня по
+    времени колледжа. Сводка «на сегодня» не придёт назавтра, «на завтра» —
+    не истечёт ночью."""
+    zone = zoneinfo.ZoneInfo(settings.timezone)
+    now = now or dt.datetime.now(zone)
+    last = max(dt.date.fromisoformat(day) for day, _ in lines)
+    end = dt.datetime.combine(last + dt.timedelta(days=1), dt.time(), tzinfo=zone)
+    return max(CHANGES_TTL_MIN, int((end - now).total_seconds()))
 
 
 def message(sub: dict, kind: str, title: str, body: str, data: dict | None = None) -> dict:
@@ -369,14 +637,25 @@ def message(sub: dict, kind: str, title: str, body: str, data: dict | None = Non
 
 def changes_message(sub: dict, lines: list[list[str]]) -> dict:
     """Изменения: строки — текстом, их дни — рядом, чтобы сервис-воркер склеил
-    с висящим. Не влезает в MAX_PAYLOAD — старые строки прочь, как в шторке."""
+    с висящим. Не влезает в MAX_PAYLOAD — прочь завтрашний хвост, а не
+    сегодняшнее: строки идут по дням (М33 прогона 1 аудита 4)."""
     kept = [[day, text[:MAX_LINE]] for day, text in lines]
     while True:
         out = message(sub, "changes", "Расписание изменилось", "\n".join(t for _, t in kept),
                       {"days": [d for d, _ in kept]})
         if len(kept) == 1 or len(json.dumps(out, ensure_ascii=False).encode("utf-8")) <= MAX_PAYLOAD:
             return out
-        kept = kept[1:]
+        kept = kept[:-1]
+
+
+def gone_message(sub: dict) -> dict:
+    """Группы или преподавателя больше нет в таблице — как в приложении."""
+    if sub.get("kind") == "teacher":
+        title, what = "Вас больше нет в таблице", "себя"
+    else:
+        title, what = "Группы больше нет в таблице", "группу"
+    return message(sub, "gone", title,
+                   f"Откройте сайт и выберите {what} заново: до этого уведомлений не будет.")
 
 
 def site_url(sub: dict) -> str:
@@ -397,9 +676,13 @@ def welcome_text(sub: dict) -> str:
     return "Сюда будут приходить " + " и ".join(what) + "."
 
 
-def _payload(snapshot, teachers, key: tuple[str, str], today: dt.date) -> dict | None:
-    """Сегодня и завтра этого субъекта — как их отдал бы API."""
-    from ..api.payloads import schedule_payload, teacher_payload
+def _payload(
+    snapshot, teachers, key: tuple[str, str], today: dt.date, known_teacher=None
+) -> dict | None:
+    """Сегодня и завтра этого субъекта — как их отдал бы API: у преподавателя
+    тем же путём, что /v1/teacher, с полной записью по краткой и днями без пар
+    для того, кто был в прежних снимках (М41)."""
+    from ..api.payloads import schedule_payload, teacher_answer
     from ..service.bells import BELLS
 
     kind, subject = key
@@ -408,7 +691,10 @@ def _payload(snapshot, teachers, key: tuple[str, str], today: dt.date) -> dict |
         return schedule_payload(snapshot, subject, today, 2, generated, bells=BELLS, today=today)
     if teachers is None:
         return None
-    return teacher_payload(snapshot, teachers, subject, today, 2, generated, bells=BELLS, today=today)
+    return teacher_answer(
+        snapshot, teachers, known_teacher or (lambda _: None), subject, today, 2, generated,
+        bells=BELLS, today=today,
+    )
 
 
 def load_vapid() -> webpush.Vapid | None:
