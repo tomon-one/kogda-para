@@ -426,6 +426,18 @@ fun SettingsScreen(
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
+                if (remember { Vendor.current() } == Vendor.SAMSUNG) {
+                    // С One UI 6.1.1 «Автоблокировка» запрещает установку из
+                    // файлов, и обновление молча не вставало (четвёртый аудит,
+                    // В24 прогона 1).
+                    Text(
+                        "Samsung может не дать поставить: тогда выключите на время " +
+                            "«Настройки» → «Безопасность и конфиденциальность» → «Автоблокировка».",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
                 ActionButton(
                     label = if (installing) "Скачивается…" else "Обновить приложение",
                     onClick = onUpdate,
