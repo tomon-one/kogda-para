@@ -16,5 +16,10 @@ class WhensClassApp : Application() {
         CoroutineScope(Dispatchers.Default).launch { MidnightUpdater.schedule(this@WhensClassApp) }
         Notifications.ensureChannels(this)
         LessonAlarms.reschedule(this)
+        // Здесь, а не на экране: виджеты и напоминания живут и у тех, кто
+        // приложение не открывает, а процесс поднимает и часовое обновление.
+        CoroutineScope(Dispatchers.Default).launch {
+            AppContainer.get(this@WhensClassApp).repository.dropSecondGroup()
+        }
     }
 }
