@@ -217,6 +217,18 @@ export function isIos() {
   return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
 }
 
+/** Айпад: тексты для iOS говорят «айпад», а не «айфон». */
+export function isIpad() {
+  var ua = navigator.userAgent || '';
+  return /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/** Chrome, а не браузер на его движке: пометку «возможный спам» ставит только он. */
+export function isChrome() {
+  var ua = navigator.userAgent || '';
+  return /Chrome\//.test(ua) && !/SamsungBrowser|YaBrowser|OPR\/|EdgA\/|Edg\/|Firefox\//.test(ua);
+}
+
 export function isAndroid() {
   return /Android/.test(navigator.userAgent || '');
 }
