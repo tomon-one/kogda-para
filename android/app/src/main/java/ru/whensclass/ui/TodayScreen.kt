@@ -86,6 +86,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.Hyphens
@@ -120,6 +122,9 @@ import ru.whensclass.widget.shortenName
 
 /** Ширина колонки времени: «09:00–10:30» должно помещаться в одну строку. */
 private val TIME_COLUMN = 92.dp
+
+/** Уже этого (ширина экрана в dp, делённая на шрифт) — время над названием, а не сбоку. */
+private const val STACK_BELOW_DP = 340
 
 /**
  * Расписание на неделю вперёд.
@@ -565,10 +570,10 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit) {
                 tab.title,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
-                softWrap = false,
-                // На разделённом экране «Преподавателям» в свою колонку не
-                // влезает, и без многоточия непонятно, что подпись урезана.
+                // Тесно (крупный шрифт, разделённый экран) — «Преподавателям»
+                // сначала мельчает, а многоточие — только если и так не влезло.
                 overflow = TextOverflow.Ellipsis,
+                autoSize = FIT,
                 // Неготовые разделы видно, но они приглушены.
                 color = if (tab.ready) MaterialTheme.colorScheme.onSurface
                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -935,66 +940,28 @@ private fun LessonRow(
     val main = if (past || foreign) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
     // Колонка растёт со шрифтом: «09:00–10:30» в sp, колонка в dp, и с
     // крупным шрифтом конец пары уходил в многоточие.
-    val timeColumn = TIME_COLUMN * LocalDensity.current.fontScale.coerceAtLeast(1f)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                when {
-                    isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
-                    // В тёмной теме — белый 7 % поверх карточки, как на сайте:
-                    // surfaceVariant отличался от неё на 1,07:1, «серый фон»
-                    // из подсказки был не виден (М14).
-                    foreign -> if (MaterialTheme.colorScheme.surface.luminance() < 0.5f)
-                        Color.White.copy(alpha = 0.07f).compositeOver(MaterialTheme.colorScheme.surface)
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                    else -> MaterialTheme.colorScheme.surface
-                }
-            )
-            .height(IntrinsicSize.Min)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(modifier = Modifier.width(timeColumn)) {
-            Text(
-                "${lesson.number} пара",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-            lessonTime(bells, lesson.number)?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isNow) MaterialTheme.colorScheme.primary else main,
-                    maxLines = 1,
-                    // Колонка времени шириной ровно под «09:00–10:30» при
-                    // обычном шрифте. С крупным системным диапазон перестаёт
-                    // помещаться, и обрыв без многоточия читается как другое
-                    // время.
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (isNow) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    NowDot()
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        "идёт сейчас",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-            if (groups.isNotEmpty()) GroupMarks(lesson.slots, groups, groupsByName, Modifier.padding(top = 6.dp))
-        }
-
-        VerticalDivider(
-            modifier = Modifier.fillMaxHeight().padding(start = 12.dp, end = 12.dp),
+    val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val timeColumn = TIME_COLUMN * scale
+    // Тесно (крупный шрифт или крупный масштаб экрана) — время строкой над
+    // названием: сбоку оно оставляло названию ~170 dp, и «алгоритмизации»
+    // рвалось посреди слова без дефиса (tested 603, шрифт 1,3).
+    val stacked = LocalConfiguration.current.screenWidthDp / scale < STACK_BELOW_DP
+    val background = Modifier
+        .fillMaxWidth()
+        .background(
+            when {
+                isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
+                // В тёмной теме — белый 7 % поверх карточки, как на сайте:
+                // surfaceVariant отличался от неё на 1,07:1, «серый фон»
+                // из подсказки был не виден (М14).
+                foreign -> if (MaterialTheme.colorScheme.surface.luminance() < 0.5f)
+                    Color.White.copy(alpha = 0.07f).compositeOver(MaterialTheme.colorScheme.surface)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                else -> MaterialTheme.colorScheme.surface
+            },
         )
-
-        Column(modifier = Modifier.weight(1f)) {
+    val subject: @Composable () -> Unit = {
+        Column {
             Text(
                 lesson.subject,
                 // Перенос — по слогам с дефисом и по дефису в слове: без него
@@ -1083,6 +1050,93 @@ private fun LessonRow(
                 }
             }
 
+        }
+    }
+    if (stacked) {
+        Column(modifier = background.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "${lesson.number} пара",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+                lessonTime(bells, lesson.number)?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isNow) MaterialTheme.colorScheme.primary else main,
+                        maxLines = 1,
+                    )
+                }
+                if (isNow) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        NowDot()
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            "идёт сейчас",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                if (groups.isNotEmpty()) GroupMarks(lesson.slots, groups, groupsByName)
+            }
+            Spacer(Modifier.height(6.dp))
+            subject()
+        }
+    } else {
+        Row(
+            modifier = background
+                .height(IntrinsicSize.Min)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(modifier = Modifier.width(timeColumn)) {
+                Text(
+                    "${lesson.number} пара",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+                lessonTime(bells, lesson.number)?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isNow) MaterialTheme.colorScheme.primary else main,
+                        maxLines = 1,
+                        // Колонка времени шириной ровно под «09:00–10:30» при
+                        // обычном шрифте. С крупным системным диапазон перестаёт
+                        // помещаться, и обрыв без многоточия читается как другое
+                        // время.
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (isNow) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        NowDot()
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            "идёт сейчас",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                if (groups.isNotEmpty()) GroupMarks(lesson.slots, groups, groupsByName, Modifier.padding(top = 6.dp))
+            }
+
+            VerticalDivider(
+                modifier = Modifier.fillMaxHeight().padding(start = 12.dp, end = 12.dp),
+            )
+
+            Box(modifier = Modifier.weight(1f)) { subject() }
         }
     }
 }
