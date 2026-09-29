@@ -69,6 +69,30 @@ def test_certificate_close_to_expiry_is_an_alarm(canary, monkeypatch):
     assert ("canary-cert", False) in sent
 
 
+def test_wrong_certificate_is_an_alarm_but_network_is_not(canary, monkeypatch):
+    """Чужой или самоподписанный сертификат на домене — только строка в
+    журнале, без тревоги (М43 прогона 1 аудита 4). Таймаут — не беда канарейки."""
+    import ssl
+
+    module, sent = canary
+    monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
+
+    def bad(host):
+        raise ssl.SSLCertVerificationError("self-signed certificate")
+
+    monkeypatch.setattr(module, "cert_days_left", bad)
+    module.main()
+    assert ("canary-cert-bad", False) in sent
+    sent.clear()
+
+    def slow(host):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(module, "cert_days_left", slow)
+    module.main()
+    assert not any(kind.startswith("canary-cert") for kind, _ in sent)
+
+
 def test_closed_table_during_the_search_is_an_alarm_not_a_crash(canary, monkeypatch):
     """Закрытая таблица при поиске листа роняла канарейку трассировкой."""
     module, sent = canary

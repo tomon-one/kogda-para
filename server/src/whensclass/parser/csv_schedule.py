@@ -660,6 +660,47 @@ def _judge_against_previous(
             )
 
 
+def neighbour_runs(snapshot: Snapshot, previous: Snapshot, since: date, min_run: int = 2) -> set[str]:
+    """Группы в сериях подряд (от `min_run`), получивших на выложенном дне (от
+    `since`) пары соседа против прежней версии, — та же мерка, что у отказа
+    (`_judge_against_previous`), но с порогом ниже.
+
+    Сдвиг у двух–пяти соседних групп отказом не ловится, а с 28.09 уходил им
+    уведомлением сайта с парами соседа (четвёртый аудит, М32 прогона 1). На
+    честном архиве 14–28.09 такая серия длиннее одной группы не встретилась ни
+    разу — рассылка таким группам не шлёт, владельцу тревога.
+    """
+    first: dict[int, str] = {}
+    for group in snapshot.groups:
+        first.setdefault(group.column, group.id)
+    order = [first[c] for c in sorted(first)]
+    found: set[str] = set()
+    for day in sorted(set(snapshot.dates) & set(previous.dates)):
+        if day < since:
+            continue
+        new = {gid: _slots(snapshot, gid, day) for gid in order}
+        old = {gid: _slots(previous, gid, day) for gid in order}
+        for k in SHIFT_OFFSETS:
+            run: list[str] = []
+            for i, gid in enumerate(order):
+                j = i + k
+                if not 0 <= j < len(order):
+                    continue
+                mine, theirs = old[gid], old[order[j]]
+                lessons = new[gid].items()
+                t = sum(1 for n, x in lessons if theirs.get(n) == x and mine.get(n) != x)
+                o = sum(1 for n, x in lessons if mine.get(n) == x and theirs.get(n) != x)
+                if t > o:
+                    run.append(gid)
+                elif o > t:  # ничья серию не рвёт, как в `_series`
+                    if len(run) >= min_run:
+                        found.update(run)
+                    run = []
+            if len(run) >= min_run:
+                found.update(run)
+    return found
+
+
 def _check_vertical(snapshot: Snapshot, previous: Snapshot, names: dict[str, str]) -> list[str]:
     """Пары групп на нескольких днях съехали на номер-два против прежней
     версии: так выглядит «удалить ячейки, сдвиг вверх» в блоке. Отказ — в

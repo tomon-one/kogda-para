@@ -37,7 +37,7 @@ from whensclass.domain.models import SourceFormatChanged  # noqa: E402
 from whensclass.parser.csv_schedule import check_shift, parse_export, shift_seed  # noqa: E402
 from whensclass.service import alerts  # noqa: E402
 from whensclass.service.refresher import (  # noqa: E402
-    _check_group_drop, _check_lost_names, _limits, _today,
+    _check_days_emptied, _check_group_drop, _check_lost_names, _limits, _today,
 )
 from whensclass.sources import gsheets, sheet_index  # noqa: E402
 from whensclass.storage.snapshot_store import SnapshotStore  # noqa: E402
@@ -68,9 +68,23 @@ def cert_days_left(host: str) -> int:
 
 
 def check_cert(quiet: bool) -> None:
+    import ssl
+
     host = settings.domain
     try:
         left = cert_days_left(host)
+    except ssl.SSLError as exc:
+        # Чужой, самоподписанный или просроченный сертификат на домене: у
+        # телефонов и сайта «сервер не отвечает», а тревоги не было — только
+        # строка в журнале (четвёртый аудит, М43 прогона 1). Сеть и таймаут —
+        # не сюда: о сети скажет служба.
+        print(f"БЕДА: сертификат {host} не проверился: {type(exc).__name__}: {exc}")
+        alerts.notify(
+            "canary-cert-bad",
+            f"Когда пара?: сертификат {host} не проверился — {type(exc).__name__}: {exc}. "
+            "nginx отдаёт не тот сертификат? руководство по серверу, «Сертификат».",
+        )
+        return
     except Exception as exc:
         print(f"сертификат {host} не проверился: {type(exc).__name__}: {exc}")
         return
@@ -129,6 +143,7 @@ def main() -> int:
         # при парах на месте и пропажа групп толпой.
         _check_lost_names(previous, snapshot, gid)
         _check_group_drop(previous, snapshot)
+        _check_days_emptied(previous, snapshot, today)
     except SourceFormatChanged as exc:
         print(f"БЕДА: формат таблицы изменился — {exc}")
         print("Сверьтесь с docs/source-format.md: там записано, как было.")

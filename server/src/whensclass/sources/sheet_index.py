@@ -397,6 +397,10 @@ def resolve_for(
     # окажется не покрыт, разница принципиальная: «колледж ещё не выложил» —
     # это одно, а «мы не смогли посмотреть» — совсем другое.
     unread: list[str] = []
+    # Кого из них не прочла сеть: если только сеть, это сетевой сбой (льгота
+    # полчаса, тревога «таблица не прочиталась»), а не «лист не нашёлся» —
+    # stale сразу и тревога звала смотреть лист (четвёртый аудит, М39 прогона 1).
+    network: dict[str, Exception] = {}
 
     for sheet in candidates(list_sheets(), day):
         if sheet.gid is None:
@@ -442,6 +446,8 @@ def resolve_for(
             # сбой при чтении календарного графика уводил бы службу в stale.
             if _LOOKS_LIKE_GROUPS.search(sheet.title):
                 unread.append(sheet.title)
+                if _is_network(exc):
+                    network[sheet.title] = exc
             log.warning("лист %r не прочитался: %s", sheet.title, exc)
             continue
 
@@ -461,6 +467,8 @@ def resolve_for(
     # прежний снимок останется под видом свежего, приложение скажет «колледж
     # ещё не выложил» — а проверить это утверждение мы как раз и не смогли.
     # Пусть лучше служба уйдёт в stale и скажет, что беда у нас.
+    if unread and set(unread) <= set(network):
+        raise network[unread[-1]]
     if unread:
         raise SheetNotFound(
             f"лист на {day.isoformat()} не нашёлся, а до "
@@ -470,6 +478,13 @@ def resolve_for(
 
     _remember_miss(state_dir, day)
     return _fallback(index, day)
+
+
+def _is_network(exc: Exception) -> bool:
+    """Сеть или Google на минуту: обрыв, таймаут, ssh до exit, 429 и 5xx."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code == 429 or exc.response.status_code >= 500
+    return isinstance(exc, (httpx.TransportError, OSError))
 
 
 def _fallback(index: SheetIndex, day: dt.date) -> tuple[str, str | None]:

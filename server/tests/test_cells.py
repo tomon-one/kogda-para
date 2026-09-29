@@ -247,7 +247,7 @@ def test_cancellation_at_the_start_keeps_the_subject():
     """
     lesson = parse_lesson(1, "Отмена крепостного права (Лек)", "", "")
     assert lesson is not None
-    assert lesson.subject == "крепостного права"
+    assert lesson.subject == "Крепостного права"
     assert lesson.kind == "Лек"
     assert lesson.cancelled is True
     assert lesson.note is None
@@ -442,3 +442,34 @@ def test_dash_or_no_is_nothing(subject, room):
     assert parse_lesson(1, subject, room, "") is None
     lesson = parse_lesson(1, "Физика", room or "-", "")
     assert lesson.room is None
+
+
+@pytest.mark.parametrize("subject, teacher, why", [
+    ("Иностранный язык, Английский (Пр) Отмена Преподаватель заболел. Куратрский час",
+     "Иванова И. И.", "Преподаватель заболел"),
+    ("Иностранный язык (Пр) Отмена преподаватель заболел Кураторский час",
+     "Иванова И. И.", "преподаватель заболел"),
+    ("История экскурсионной деятельности в России (Лек)",
+     "замена, кураторский часМатвеев Александр Игоревич", None),
+])
+def test_curator_hour_written_off_template_is_a_replacement(subject, teacher, why):
+    """Кураторский час вместо пары, записанный не по шаблону, уходил отменой
+    с часом в причине или показывался прежней лекцией (М29 прогона 1 аудита 4)."""
+    lesson = parse_lesson(4, subject, "", teacher)
+    assert lesson.subject == "Кураторский час" and not lesson.cancelled
+    assert lesson.note.endswith("вместо: " + subject.split(" (")[0].split(" Отмена")[0])
+    assert (why is None) or lesson.note.startswith(why)
+    assert all("час" not in t for t in lesson.teachers)
+
+
+def test_first_letter_is_capital_for_every_lesson():
+    """Заглавную делали только у замен, и «кураторский час» с «Кураторский
+    час» были разными предметами (М30). Адрес вместо названия не трогается."""
+    assert parse_lesson(4, "кураторский час", "", "").subject == "Кураторский час"
+    assert parse_lesson(4, "ОБЖ (Лек)", "", "").subject == "ОБЖ"
+
+
+def test_curator_placeholder_is_not_a_teacher():
+    """«Куратор» — должность, а не человек: в /v1/teachers ему не место (М31)."""
+    assert parse_lesson(4, "Кураторский час (Пр)", "", "Куратор").teachers == ()
+    assert parse_lesson(4, "Физика", "", "Кураторова А. А.").teachers == ("Кураторова А. А.",)

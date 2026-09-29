@@ -211,6 +211,8 @@ def _compare_number(
             continue
         index = next((i for i, x in enumerate(unmatched) if x["s"] == instead), -1)
         if index < 0:
+            index = next((i for i, x in enumerate(unmatched) if same_subject(x["s"], instead)), -1)
+        if index < 0:
             continue
         unmatched.pop(index)
         replaced.append(lesson)
