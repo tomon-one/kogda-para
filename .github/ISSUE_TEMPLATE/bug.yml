@@ -1,5 +1,5 @@
 name: Ошибка
-description: Приложение или виджет работают не так, как написано
+description: Приложение, виджет или сайт работают не так, как написано
 labels: [bug]
 body:
   - type: markdown
@@ -9,16 +9,17 @@ body:
   - type: input
     id: version
     attributes:
-      label: Версия приложения
-      description: «Настройки», строка «Версия …»
-      placeholder: pr-Зерно.0.1.0
+      label: Версия
+      description: "Приложение: «Настройки», строка «Версия …». Сайт: «Настройки» → «О сайте»"
+      placeholder: r-Алтай.1.0.0
     validations:
       required: true
   - type: input
     id: phone
     attributes:
-      label: Телефон и версия Android
-      placeholder: Samsung Galaxy A52, Android 13
+      label: Телефон, система и браузер
+      description: Браузер — если ошибка на сайте
+      placeholder: Samsung Galaxy A52, Android 13 или iPhone 13, iOS 18, Safari
     validations:
       required: true
   - type: textarea
@@ -33,7 +34,8 @@ body:
     attributes:
       label: Сведения для отчёта
       description: >-
-        «Настройки» → «О приложении» → «Сведения для отчёта» → скопировать.
+        «Настройки» → «О приложении» (на сайте — «О сайте») → «Сведения для
+        отчёта» → скопировать.
         В них есть выбранная группа, а у преподавателя — его имя: если не хотите
         показывать их всем, пришлите сведения автору в Telegram.
       render: text
