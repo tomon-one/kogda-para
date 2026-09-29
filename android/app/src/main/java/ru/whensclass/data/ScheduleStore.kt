@@ -494,6 +494,16 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
+    /** Забыть подгруппу, не трогая расписание (у преподавателя оно его). */
+    suspend fun forgetSecondGroup() {
+        context.dataStore.edit {
+            it.remove(KEY_GROUP2_ID)
+            it.remove(KEY_GROUP2_NAME)
+            it.remove(KEY_GROUP2_GONE_SINCE)
+            it.remove(KEY_GROUP2_GONE)
+        }
+    }
+
     /**
      * Забыть сохранённое расписание.
      *

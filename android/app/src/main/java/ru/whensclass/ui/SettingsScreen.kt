@@ -189,53 +189,9 @@ fun SettingsScreen(
                 )
             }
 
-            if (!teacherMode) {
-                // Пометка beta: выбор подгруппы неудобен и будет переделан.
-                // «Соседняя» из подписи убрана — оба по просьбе Tomon 28.09.
-                val subgroup = @Composable {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Подгруппа", style = MaterialTheme.typography.bodyLarge)
-                            BetaMark(modifier = Modifier.padding(start = 8.dp))
-                        }
-                        Text(
-                            secondGroupName ?: "не выбрана",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                if (secondGroupName == null) {
-                    Row(
-                        modifier = Modifier.padding(top = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(modifier = Modifier.weight(1f).padding(end = 8.dp)) { subgroup() }
-                        ActionButton(
-                            label = "Добавить",
-                            onClick = onPickSecondGroup,
-                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
-                            top = 0.dp,
-                        )
-                    }
-                } else {
-                    // Две кнопки рядом с названием не оставляли места самому
-                    // названию — они строкой ниже.
-                    Box(modifier = Modifier.padding(top = 14.dp)) { subgroup() }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ActionButton(
-                            label = "Заменить",
-                            onClick = onPickSecondGroup,
-                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
-                        )
-                        ActionButton(
-                            label = "Убрать",
-                            onClick = onClearSecondGroup,
-                            modifier = Modifier.widthIn(min = GROUP_BUTTON),
-                        )
-                    }
-                }
-            }
+            // Выбор подгруппы убран в 0.1.4: виджеты показывали пары обеих
+            // подгрупп под названием одной (Tomon 29.09). Выбранную раньше
+            // снимает WhensClassApp.
         }
 
         PinWidgets()
@@ -371,8 +327,8 @@ fun SettingsScreen(
                         "серверу уходит, чьё именно: иначе его неоткуда взять. " +
                         "Всё для вашего удобства."
                 } else {
-                    "На сервер уходит только название вашей группы — и подгруппы, " +
-                        "если вы её выбрали. Больше ничего: ни имени, " +
+                    "На сервер уходит только название вашей группы. " +
+                        "Больше ничего: ни имени, " +
                         "ни номера телефона, ни местоположения. Учётной записи нет, " +
                         "аналитики и рекламы нет. Когда смотрите чужое расписание, " +
                         "серверу уходит, чьё именно: иначе его неоткуда взять. " +
