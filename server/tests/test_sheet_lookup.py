@@ -203,6 +203,24 @@ def test_unreadable_candidate_is_not_remembered_as_a_miss(tmp_path, monkeypatch)
             si.resolve_for(DAY, tmp_path)
 
 
+def test_unfilled_group_sheet_is_not_published_rather_than_unreachable(tmp_path, monkeypatch):
+    """Каркас дат без пар (колледж заводит лист на каникулах) — лист
+    прочитан: это «ещё не выложено», а не «добраться не вышло» со stale у всех
+    (В14 прогона 1 аудита 4). Поиск берёт ближайший известный лист."""
+    from whensclass.domain.models import SheetTooSmall
+
+    sheets = visible("расписание групп 01.-05.09", "расписание групп 14.-19.09")
+    setup_lookup(
+        monkeypatch,
+        sheets,
+        {
+            "расписание групп 01.-05.09": ("2026-09-02", "2026-09-12"),
+            "расписание групп 14.-19.09": SheetTooSmall,
+        },
+    )
+    assert si.resolve_for(DAY, tmp_path) == ("расписание групп 01.-05.09", "1")
+
+
 def test_new_sheet_with_two_dates_is_found(tmp_path, monkeypatch, fixture_csv):
     """Новый лист, где заполнены только понедельник и вторник, — наш лист:
     поиск узнаёт его по заголовку групп, а не по объёму."""

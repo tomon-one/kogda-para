@@ -121,6 +121,20 @@ def test_room_zero_or_one_means_not_assigned_yet():
     assert parse_lesson(1, "Информатика", "10", "").room == "10"
 
 
+@pytest.mark.parametrize("room", ["Элжур", "элжур", "Эл. журнал", "Электронный журнал"])
+def test_journal_in_room_column_is_a_cancellation(room):
+    """«Элжур» — задание в электронном журнале вместо пары, «грубо говоря
+    отмена» (Tomon 29.09), а не кабинет: иначе переход с онлайна объявлялся
+    «снова очная» (четвёртый аудит, В7 прогона 1)."""
+    lesson = parse_lesson(2, "Физика (Лек)", room, "Иванов Иван Иванович")
+    assert lesson.cancelled and lesson.room is None and not lesson.online
+    assert lesson.note == "задание в электронном журнале"
+    assert lesson.subject == "Физика" and lesson.teachers == ("Иванов Иван Иванович",)
+    reason = parse_lesson(2, "Физика (Пр) Отмена Преподаватель заболел", room, "Иванов И. И.")
+    assert reason.cancelled and reason.subject == "Физика"
+    assert reason.note == "Преподаватель заболел; задание в электронном журнале"
+
+
 def test_room_that_only_starts_with_online_stays_a_room():
     """Сверяем ячейку целиком: «онлайн-центр» был бы зданием, а не вебинаром."""
     lesson = parse_lesson(1, "Информатика", "онлайн-центр", "")

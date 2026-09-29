@@ -98,15 +98,34 @@ def _vertical(honest, gid, days, step=1):
     return out
 
 
-def test_vertical_shift_on_three_days_is_rejected():
+def test_vertical_shift_on_three_days():
     """«удалить ячейки, сдвиг вверх» в блоке
     группы — её пары съезжают на номер до конца листа. Один-два дня —
-    законная перестановка, три — сдвиг."""
+    законная перестановка, три — сдвиг. У одной группы это подозрение, а не
+    отказ: 25.09 колледж так переставил неделю КП-923 и держал её трое суток
+    (четвёртый аудит, В12 прогона 1). У двух групп — отказ."""
     honest = synthetic_sheet()
-    gid = honest.groups[4].id
-    check_shift(_vertical(honest, gid, honest.dates[5:7]), previous=honest)
+    gid, other = honest.groups[4].id, honest.groups[-2].id
+    assert not any("по вертикали" in x for x in
+                   check_shift(_vertical(honest, gid, honest.dates[5:7]), previous=honest))
+    one = _vertical(honest, gid, honest.dates[5:8])
+    suspicions = check_shift(one, previous=honest)
+    assert [x for x in suspicions if "по вертикали" in x] == [
+        next(x for x in suspicions if honest.groups[4].name in x)
+    ]
     with pytest.raises(SourceFormatChanged, match="по вертикали"):
-        check_shift(_vertical(honest, gid, honest.dates[5:8]), previous=honest)
+        check_shift(_vertical(one, other, honest.dates[5:8]), previous=honest)
+
+
+def test_vertical_shift_of_groups_sharing_a_column_is_one_shift():
+    """КП-923 и КП-1124 делят колонку: съехавшая неделя в ней — у обеих
+    групп, но это одна правка, а не две (25.09 17:32)."""
+    honest = synthetic_sheet()
+    a, b = honest.groups[4], honest.groups[5]
+    honest.groups[5] = dataclasses.replace(b, column=a.column)
+    honest.schedule[b.id] = copy.deepcopy(honest.schedule[a.id])
+    both = _vertical(_vertical(honest, a.id, honest.dates[5:8]), b.id, honest.dates[5:8])
+    assert len([x for x in check_shift(both, previous=honest) if "по вертикали" in x]) == 1
 
 
 def test_teacher_names_in_place_of_subjects_are_a_row_shift():
