@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
@@ -301,6 +302,12 @@ private fun App(
     // присваивался нигде, и при отвалившейся сети загоралась «Расписание
     // обновлено».
     var refreshFailed by remember { mutableStateOf(false) }
+    // Добавить другие группы — и сказать, если их пары не пришли: значок без
+    // пар иначе читался как «у группы пар нет» (прогон 2).
+    suspend fun addGroups(groups: List<GroupDto>) {
+        val result = container.repository.addExtraGroups(groups)
+        if (result is RefreshResult.Partial) refreshError = partialText(result.missed, result.fresh)
+    }
     val download by container.updates.download.collectAsState()
     val installing = download == AppUpdate.Download.Running
     var focusUpdate by rememberSaveable { mutableStateOf(openUpdate) }
@@ -429,10 +436,7 @@ private fun App(
                 is RefreshResult.Failed -> refreshError = refreshFailure(result.error, teacherMode)
                 // Своё обновилось, другие группы — не все: без галочки и с
                 // именами тех, чьи прежние пары на экране (В4).
-                is RefreshResult.Partial -> refreshError =
-                    (if (result.missed.size == 1) "Не обновилась группа ${result.missed[0]}"
-                    else "Не обновились группы ${result.missed.joinToString(", ")}") +
-                        ": на экране их прежние пары"
+                is RefreshResult.Partial -> refreshError = partialText(result.missed, result.fresh)
                 // Сервер здоров, группы нет: сказать об этом, а не молча
                 // погасить ⟳ крестиком «сервер не смог».
                 RefreshResult.Gone -> refreshError =
@@ -445,10 +449,15 @@ private fun App(
     }
 
     // Проверяем обновление при открытии, по возвращении — не чаще раза в
-    // полчаса, по уведомлению о версии — всегда: живой экран иначе показывал
-    // сведения с момента своего создания (В28).
+    // полчаса, по уведомлению о версии — всегда, и при холодном открытии
+    // тоже: живой экран иначе показывал сведения с момента своего создания
+    // (В28), а кэш — прежний ответ (прогон 2). По уведомлению — один раз на
+    // открытие, не на каждое возвращение.
+    var forcedOpen by rememberSaveable { mutableIntStateOf(-1) }
     LaunchedEffect(openSeq, ScreenClock.resumes) {
-        when (val result = container.updates.checkForScreen(force = openUpdate && openSeq > 0)) {
+        val force = openUpdate && forcedOpen != openSeq
+        if (openUpdate) forcedOpen = openSeq
+        when (val result = container.updates.checkForScreen(force = force)) {
             is AppUpdate.Check.Available -> update = result.release
             AppUpdate.Check.UpToDate -> update = null
             // Не дозвонились — известное прежде не забываем.
@@ -541,7 +550,7 @@ private fun App(
                             onPick = { group: GroupDto ->
                                 pickExtra = false
                                 screen = Screen.SETTINGS
-                                scope.launch { container.repository.addExtraGroups(listOf(group)) }
+                                scope.launch { addGroups(listOf(group)) }
                             },
                         )
                     } else if (pickTeacher ?: teacherMode) {
@@ -681,7 +690,7 @@ private fun App(
                             screen = Screen.GROUPS
                         },
                         onAddSubgroup = { group ->
-                            scope.launch { container.repository.addExtraGroups(listOf(group)) }
+                            scope.launch { addGroups(listOf(group)) }
                         },
                         onRemoveGroup = { id ->
                             scope.launch { container.repository.removeExtraGroup(id) }
@@ -752,6 +761,24 @@ private fun App(
  */
 /** Свежие списки групп и преподавателей — не чаще этого, если сохранённые есть. */
 internal const val LISTS_FRESH_MILLIS = 12L * 60 * 60 * 1000
+
+/**
+ * Своё пришло, другие группы — не все. Про прежние пары — только если они
+ * есть: у только что добавленной группы их нет (прогон 2).
+ */
+internal fun partialText(missed: List<String>, fresh: Set<String>): String {
+    val one = missed.size == 1
+    val names = missed.joinToString(", ")
+    return when {
+        missed.all { it in fresh } ->
+            if (one) "Не загрузилась группа $names: её пары придут со следующим обновлением"
+            else "Не загрузились группы $names: их пары придут со следующим обновлением"
+        missed.none { it in fresh } ->
+            if (one) "Не обновилась группа $names: на экране её прежние пары"
+            else "Не обновились группы $names: на экране их прежние пары"
+        else -> "Не обновились группы $names: пары придут со следующим обновлением"
+    }
+}
 
 internal fun refreshFailure(error: Throwable, teacher: Boolean = false): String = when (error) {
     is ru.whensclass.data.HttpFailure -> when (error.code) {

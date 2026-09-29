@@ -88,28 +88,37 @@ class ScheduleStore(private val context: Context) {
 
     /** О каком сбое (по его `since`) телефон уже сказал уведомлением. */
     /**
-     * С какого момента сервер не отвечает вовсе, хотя сеть у телефона есть.
-     * Запоминается первый раз и держится, пока сервер не ответит
-     * ([clearUnreachable] — на любой удачный ответ). Раньше серия рвалась,
-     * если телефон не проверял сервер дольше трёх часов (ночь, Doze): утром
-     * тот же сбой объявлялся заново и «с 07:40» вместо «с вечера» (четвёртый
-     * аудит, М49 прогона 1).
+     * Неудача связи с сервером при живой сети: с какого момента он молчит
+     * ([Unreachable.since] — для текста «Сбой с …», держится до первого
+     * удачного ответа, М49) и с какого — подряд, без перерывов дольше
+     * [UNREACHABLE_STREAK_GAP] ([Unreachable.run] — для решения «не отвечает»).
+     * Вечерняя неудача и утренняя через ночь без проверок — не сбой: без
+     * второго счёта одна утренняя давала красное на виджетах (прогон 2).
      */
-    suspend fun noteUnreachable(now: java.time.Instant): java.time.Instant {
+    suspend fun noteUnreachable(now: java.time.Instant): Unreachable {
         var first = now
+        var run = now
         context.dataStore.edit { prefs ->
-            val known = prefs[KEY_UNREACHABLE_SINCE]
-                ?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            fun instant(key: Preferences.Key<String>) =
+                prefs[key]?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+            val known = instant(KEY_UNREACHABLE_SINCE)
+            val last = instant(KEY_UNREACHABLE_LAST)
+            val started = instant(KEY_UNREACHABLE_RUN)
             if (known != null) first = known else prefs[KEY_UNREACHABLE_SINCE] = now.toString()
+            val streak = last != null && java.time.Duration.between(last, now) < UNREACHABLE_STREAK_GAP
+            if (streak && started != null) run = started else prefs[KEY_UNREACHABLE_RUN] = now.toString()
             prefs[KEY_UNREACHABLE_LAST] = now.toString()
         }
-        return first
+        return Unreachable(first, run)
     }
+
+    data class Unreachable(val since: java.time.Instant, val run: java.time.Instant)
 
     suspend fun clearUnreachable() {
         context.dataStore.edit {
             it.remove(KEY_UNREACHABLE_SINCE)
             it.remove(KEY_UNREACHABLE_LAST)
+            it.remove(KEY_UNREACHABLE_RUN)
         }
     }
 
@@ -723,6 +732,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUP2_GONE_SINCE = stringPreferencesKey("group2_gone_since")
         val KEY_GROUP2_GONE = stringPreferencesKey("group2_gone")
         val KEY_UNREACHABLE_LAST = stringPreferencesKey("unreachable_last")
+        val KEY_UNREACHABLE_RUN = stringPreferencesKey("unreachable_run")
         val KEY_DRAW_COUNTED = stringPreferencesKey("draw_counted")
         /**
          * Неудачи, разделённые таким перерывом, — не одна беда. Три часа, а не
@@ -730,6 +740,7 @@ class ScheduleStore(private val context: Context) {
          * рвалась каждый раз — «сервер не отвечает» без открытия приложения
          * не наступал никогда.
          */
+        val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(3)
         /** Счёт показов виджета — не чаще раза в столько. */
         const val DRAW_COUNT_GAP_MILLIS = 3L * 60 * 60 * 1000
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")

@@ -156,6 +156,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         const val MAX_SIZE = 64L * 1024 * 1024
         /** Экран проверяет сборку не чаще раза в полчаса ([checkForScreen]). */
         const val CHECK_EVERY_MILLIS = 30L * 60 * 1000
+        /** Не дозвонился — экран спросит снова не раньше чем через столько. */
+        const val FAILED_EVERY_MILLIS = 10L * 60 * 1000
         /** Фон спрашивает GitHub не чаще раза в шесть часов ([announceIfNew]). */
         const val GITHUB_EVERY_MILLIS = 6L * 60 * 60 * 1000
     }
@@ -174,8 +176,11 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         data object Failed : Check
     }
 
-    /** Последняя проверка экрана: когда и что ответили. */
+    /** Последняя проверка — экрана, кнопки или фона: когда и что ответили. */
     @Volatile private var lastCheck: Pair<Long, Check>? = null
+
+    /** Когда экран сам спрашивал GitHub — не чаще раза в полчаса. */
+    @Volatile private var screenGithubAt = 0L
 
     /**
      * Проверка для экрана: при открытии, по возвращении в приложение не чаще
@@ -188,10 +193,16 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     suspend fun checkForScreen(force: Boolean): Check {
         val now = System.currentTimeMillis()
         val cached = lastCheck
-        if (!force && cached != null && cached.second != Check.Failed &&
-            now - cached.first in 0 until CHECK_EVERY_MILLIS
-        ) return cached.second
-        return check().also { lastCheck = now to it }
+        // Ответ помнится и от кнопки «Проверить» и от фона: иначе возврат в
+        // приложение затирал найденную ими сборку прежним «последняя версия»
+        // (прогон 2). Неудача — десять минут: при лежащем сервере каждое
+        // возвращение ходило на GitHub, где у адреса оператора 60 запросов в час.
+        if (!force && cached != null) {
+            val fresh = if (cached.second == Check.Failed) FAILED_EVERY_MILLIS else CHECK_EVERY_MILLIS
+            if (now - cached.first in 0 until fresh) return cached.second
+        }
+        val github = force || now - screenGithubAt !in 0 until CHECK_EVERY_MILLIS
+        return check(github) { screenGithubAt = now }
     }
 
     suspend fun check(github: Boolean = true, askedGithub: () -> Unit = {}): Check = withContext(Dispatchers.IO) {
@@ -199,12 +210,11 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         // или новым адресом сервера должна дойти и тогда, когда сервер лежит.
         val release = runCatching { api.release() }.getOrNull()
             ?: (if (github) { askedGithub(); runCatching { api.githubRelease() }.getOrNull() } else null)
-            ?: return@withContext Check.Failed
-        if (release.versionCode > BuildConfig.VERSION_CODE) {
-            Check.Available(release)
-        } else {
-            Check.UpToDate
-        }
+        when {
+            release == null -> Check.Failed
+            release.versionCode > BuildConfig.VERSION_CODE -> Check.Available(release)
+            else -> Check.UpToDate
+        }.also { lastCheck = System.currentTimeMillis() to it }
     }
 
     /**

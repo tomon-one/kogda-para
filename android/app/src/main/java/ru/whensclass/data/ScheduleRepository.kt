@@ -114,7 +114,12 @@ internal fun mergeChanges(
     val freshKept = fresh.filter { it.first >= today.toString() }.distinct()
     if (freshKept.size >= MAX_CHANGE_LINES) return freshKept.take(MAX_CHANGE_LINES)
     val older = kept.filterNot { it in freshKept }
-    return older.takeLast(MAX_CHANGE_LINES - freshKept.size) + freshKept
+    // Из висящих уходят сначала строки о более далёком дне, в одном дне — более
+    // старые: непрочитанное «отменили 1 пару» сегодня важнее завтрашнего
+    // (прогон 2). Порядок оставшихся — прежний.
+    val room = MAX_CHANGE_LINES - freshKept.size
+    val keep = older.indices.sortedWith(compareBy({ older[it].first }, { -it })).take(room).toSet()
+    return older.filterIndexed { index, _ -> index in keep } + freshKept
 }
 
 /** Больше строк шторка всё равно не покажет развёрнутой. */
@@ -126,8 +131,9 @@ sealed interface RefreshResult {
     /**
      * Своё обновилось, а другие группы — не все: на экране их прежние пары.
      * Галочка обещала бы свежесть, которой нет (четвёртый аудит, В4 прогона 1).
+     * [fresh] — те из [missed], чьих пар на телефоне ещё нет (только что добавлены).
      */
-    data class Partial(val missed: List<String>) : RefreshResult
+    data class Partial(val missed: List<String>, val fresh: Set<String> = emptySet()) : RefreshResult
     data object AlreadyFresh : RefreshResult
     data object NoGroup : RefreshResult
     /** Группы (преподавателя) в таблице больше нет — пора выбрать заново. */
@@ -334,17 +340,20 @@ class ScheduleRepository(
             async { group to runCatching { api.schedule(group.id, from = from, days = DAYS) } }
         }.awaitAll()
         val result = Extras()
+        val saved = extraSchedules.first()
         for ((group, answer) in answers) {
             val schedule = answer.getOrElse { error ->
                 if (error is CancellationException) throw error
                 // 404 при здоровом сервере — группы больше нет в таблице. Это не
                 // сеть: её пары молча пропадали бы, а причины никто не узнал бы.
-                if (error is HttpFailure && error.code == 404 && serverOk &&
-                    store.noteExtraNotFound(group.id, System.currentTimeMillis())
-                ) {
+                // Первое 404 — только подозрение (как у своей группы): не
+                // «не обновилась», подтвердится через час — пропажа.
+                val notFound = error is HttpFailure && error.code == 404 && serverOk
+                if (notFound && store.noteExtraNotFound(group.id, System.currentTimeMillis())) {
                     result.gone += group
-                } else if (!group.gone) {
+                } else if (!group.gone && !notFound) {
                     result.missed += group.name
+                    if (saved[group.id] == null) result.fresh += group.name
                 }
                 continue
             }
@@ -417,8 +426,10 @@ class ScheduleRepository(
         val found = mutableSetOf<String>()
         /** Пропажа подтверждена этим заходом. */
         val gone = mutableListOf<ExtraGroup>()
-        /** Не пришли (сеть, 429, 404 до подтверждения) — имена. */
+        /** Не пришли (сеть, 429) — имена. */
         val missed = mutableListOf<String>()
+        /** Из них — те, чьих пар на телефоне ещё не было. */
+        val fresh = mutableSetOf<String>()
     }
 
     /**
@@ -501,18 +512,22 @@ class ScheduleRepository(
      * влезает [MAX_GROUPS]. Их пары придут с обновлением; виджеты и
      * напоминания они не трогают.
      */
-    suspend fun addExtraGroups(groups: List<GroupDto>) {
+    suspend fun addExtraGroups(groups: List<GroupDto>): RefreshResult? {
         val current = store.currentExtraGroups()
         val own = store.currentGroupId()
         val added = groups
             .filter { group -> group.id != own && current.none { it.id == group.id } }
             .distinctBy { it.id }
             .map { ExtraGroup(it.id, it.name) }
-        if (added.isEmpty()) return
+        if (added.isEmpty()) return null
         store.setExtraGroups(current + added)
-        if (refresh(force = true) is RefreshResult.Failed) {
+        // Не пришла и добавленная группа — повторить, как только будет связь,
+        // а не ждать часового захода: её значок без пар читается как «пар нет».
+        val result = refresh(force = true)
+        if (result is RefreshResult.Failed || result is RefreshResult.Partial) {
             ru.whensclass.work.SyncWorker.now(context)
         }
+        return result
     }
 
     /** Убрать группу из остальных — вместе с её парами на экране, сразу и без сети. */
@@ -600,12 +615,15 @@ class ScheduleRepository(
                 announceStale(meta.status, meta.since)
             } else if (!busy && networkUp()) {
                 val now = java.time.Instant.now()
-                val since = store.noteUnreachable(now)
-                if (now.toEpochMilli() - since.toEpochMilli() >= UNREACHABLE_BROKEN_AFTER_MILLIS) {
-                    store.putServerState(STATUS_UNREACHABLE, null, since.toString())
-                    announceStale(STATUS_UNREACHABLE, since.toString())
+                val down = store.noteUnreachable(now)
+                if (now.toEpochMilli() - down.run.toEpochMilli() >= UNREACHABLE_BROKEN_AFTER_MILLIS) {
+                    store.putServerState(STATUS_UNREACHABLE, null, down.since.toString())
+                    announceStale(STATUS_UNREACHABLE, down.since.toString())
                 }
             }
+            // Сервер занят — и своё, и другие группы упрутся в тот же лимит:
+            // не тратить его на заведомо отказанные запросы (прогон 2).
+            if (busy) return@withContext RefreshResult.Failed(metaAnswer.exceptionOrNull()!!)
             if (!force && !outdated && meta != null) {
                 if (meta.generatedAt == store.generatedAt.first()) {
                     // Данные те же, но проверку показать надо: иначе кажется,
@@ -693,7 +711,8 @@ class ScheduleRepository(
                     // что уже убраны, «не обновилась» не говорим.
                     val chosen = store.currentExtraGroups().map { it.name }.toSet()
                     val missed = extras.missed.filter { it in chosen }
-                    if (missed.isEmpty()) RefreshResult.Updated else RefreshResult.Partial(missed)
+                    if (missed.isEmpty()) RefreshResult.Updated
+                    else RefreshResult.Partial(missed, extras.fresh.filter { it in chosen }.toSet())
                 } ?: RefreshResult.AlreadyFresh
             }
         } catch (error: CancellationException) {

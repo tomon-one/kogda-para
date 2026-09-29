@@ -183,12 +183,17 @@ fun SettingsScreen(
             val marks = if (teacherMode || extraGroups.isEmpty()) null
             else if (groupsByName) shortLabels(listOf(groupName.orEmpty()) + extraGroups.map { it.name })
             else (1..extraGroups.size + 1).map { it.toString() }
+            // Значок, повторяющий название целиком, только сжимал его, а чтецу он
+            // не нужен — как у строк других групп (М16, М20, прогон 2).
+            val ownMark = marks?.getOrNull(0)?.takeIf { it != groupName }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (marks != null) GroupMark(marks[0], own = true, modifier = Modifier.widthIn(max = MARK_IN_ROW))
+                if (ownMark != null) {
+                    GroupMark(ownMark, own = true, modifier = Modifier.widthIn(max = MARK_IN_ROW).clearAndSetSemantics {})
+                }
                 Text(
                     groupName ?: "не выбрано",
                     style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f).padding(start = if (marks != null) 10.dp else 0.dp, end = 8.dp),
+                    modifier = Modifier.weight(1f).padding(start = if (ownMark != null) 10.dp else 0.dp, end = 8.dp),
                 )
                 ActionButton(
                     label = if (teacherMode) "Выбрать заново" else "Сменить",
@@ -400,8 +405,10 @@ fun SettingsScreen(
                     // Заранее: иначе системный запрет «установка из этого
                     // источника» для самой «Когда пара?» выглядел подозрительно,
                     // и осторожный человек отказывал.
+                    // Имя — как у этого приложения: у tested оно своё (М64).
+                    val name = LocalContext.current.getString(ru.whensclass.R.string.app_name)
                     Text(
-                        "В первый раз Android попросит разрешить «Когда пара?» установку " +
+                        "В первый раз Android попросит разрешить «$name» установку " +
                             "приложений: так она ставит обновление самой себе. Другие " +
                             "приложения она не ставит.",
                         style = MaterialTheme.typography.bodySmall,
