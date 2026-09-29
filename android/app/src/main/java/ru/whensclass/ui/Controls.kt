@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -76,8 +77,12 @@ val BUTTON_HEIGHT = 44.dp
 /** Ширина кнопки в строке с названием: «Сменить», «Убрать», «Скопировать», минуты. */
 val ROW_BUTTON = 116.dp
 
-/** Надпись, которой тесно, мельчает до 11 sp, а не рвётся на две строки. */
-internal val FIT = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 14.sp, stepSize = 0.5.sp)
+/**
+ * Надпись, которой тесно, мельчает до 10 sp, а не рвётся на две строки. С
+ * `softWrap = false` Compose не видит, что текст не влез, и не мельчает —
+ * только `maxLines = 1` (tested 602: «Ближайшая пар»).
+ */
+internal val FIT = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 0.5.sp)
 
 /**
  * Движение бегунка.
@@ -221,7 +226,7 @@ fun <T> Segmented(
                     fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
                     color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                     autoSize = FIT,
                     modifier = Modifier.padding(horizontal = 6.dp),
                 )
@@ -333,7 +338,7 @@ fun ActionButton(
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1,
-            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
             autoSize = FIT,
             color = if (enabled) {
                 MaterialTheme.colorScheme.primary

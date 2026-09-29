@@ -523,7 +523,7 @@ fun SettingsScreen(
             // ведёт «Сменить» (Tomon 28.09).
             Link("Сайт для айфона и браузера", "https://kogda-para-nsk.ru")
             Link("Нашли ошибку? Напишите автору в Telegram", "https://t.me/toomonn")
-            ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth())
+            ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth(), asLink = true)
             Link("Исходный код", "https://github.com/tomon-one/kogda-para")
             Link("GitHub автора", "https://github.com/tomon-one")
             ShareLink(modifier = Modifier.fillMaxWidth())
@@ -648,13 +648,13 @@ private fun PinWidgets() {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val tile = Modifier.weight(1f)
-            ActionButton(label = "День", onClick = { pin(ScheduleWidgetReceiver::class.java) }, modifier = tile, side = 6.dp)
-            ActionButton(label = "Неделя", onClick = { pin(WeekWidgetReceiver::class.java) }, modifier = tile, side = 6.dp)
+            ActionButton(label = "День", onClick = { pin(ScheduleWidgetReceiver::class.java) }, modifier = tile, side = 4.dp)
+            ActionButton(label = "Неделя", onClick = { pin(WeekWidgetReceiver::class.java) }, modifier = tile, side = 4.dp)
             ActionButton(
                 label = "Ближайшая пара",
                 onClick = { pin(NextLessonWidgetReceiver::class.java) },
                 modifier = tile,
-                side = 6.dp,
+                side = 4.dp,
             )
         }
     }

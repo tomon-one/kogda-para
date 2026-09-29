@@ -43,13 +43,15 @@ private const val REPO = "https://github.com/tomon-one/kogda-para"
 fun ShareLink(modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
     if (open) ShareDialog { open = false }
+    // Как остальные ссылки «О приложении» (Link в SettingsScreen.kt).
     Text(
         "Поделиться",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.primary,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
         modifier = modifier
             .clickable { open = true }
-            .padding(vertical = 8.dp),
+            .padding(top = 10.dp, bottom = 2.dp),
     )
 }
 
