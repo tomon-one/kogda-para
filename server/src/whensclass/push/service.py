@@ -244,10 +244,17 @@ class Push:
             if not sub["changes"] and not sub["remind"]:
                 self.unsubscribe(sub["endpoint"])
                 return True
-            new = sub["endpoint"] not in self._subs
+            old = self._subs.get(sub["endpoint"])
+            new = old is None
             if new and len(self._subs) >= MAX_SUBSCRIPTIONS and not self._evict_undelivered():
                 return False
-            self._subs[sub["endpoint"]] = {**sub, "since": today.isoformat()}
+            record = {**sub, "since": today.isoformat()}
+            # Страница пересылает подписку раз в сутки: отметка «доставлялось»
+            # при этом не стирается, иначе настоящая подписка снова выглядела
+            # мусором и под потолком уходила раньше свежего мусора.
+            if old is not None and old.get("ok"):
+                record["ok"] = old["ok"]
+            self._subs[sub["endpoint"]] = record
             self._save()
         # В журнал — служба рассылки и выбор, без адреса и группы: по ним
         # видно, откуда взялось лишнее «Уведомления включены» (Tomon 28.09).

@@ -897,3 +897,21 @@ def test_full_house_evicts_a_never_delivered_subscription(sending, monkeypatch):
     other = service.parse_subscription(_body(endpoint="https://web.push.apple.com/other"))
     assert push.subscribe(other, dt.date(2026, 9, 29)) is False
 
+
+def test_resent_subscription_keeps_its_delivered_mark(sending, monkeypatch):
+    """Страница пересылает подписку раз в сутки — отметка о доставке остаётся:
+    иначе под потолком настоящая уходила раньше свежего мусора."""
+    push, answers, later = sending
+    monkeypatch.setattr(service, "MAX_SUBSCRIPTIONS", 2)
+    monkeypatch.setattr(push, "_dispatch", lambda jobs: None)
+    real = service.parse_subscription(_body(endpoint="https://web.push.apple.com/real"))
+    junk = service.parse_subscription(_body(endpoint="https://web.push.apple.com/junk"))
+    push._subs[real["endpoint"]] = {**real, "ok": "2026-09-20", "since": "2026-09-20"}
+    assert push.subscribe(real, dt.date(2026, 9, 27)) is True
+    assert push._subs[real["endpoint"]]["ok"] == "2026-09-20"
+    assert push._subs[real["endpoint"]]["since"] == "2026-09-27"
+    push._subs[junk["endpoint"]] = {**junk, "since": "2026-09-29"}
+    new = service.parse_subscription(_body(endpoint="https://web.push.apple.com/new"))
+    assert push.subscribe(new, dt.date(2026, 9, 29)) is True
+    assert set(push._subs) == {real["endpoint"], new["endpoint"]}
+
