@@ -135,29 +135,43 @@ function show(title, body, tag, extra) {
 
 function showChanges(data) {
   var days = data.days || [];
+  var who = data.who || '';
   var fresh = String(data.body || '').split('\n').map(function (text, i) { return [days[i] || '', text]; });
   // Непрочитанное прежнее не затирать: новые строки — к старым, прошедшие
   // дни — прочь (announceChanges в приложении). Прежнее закрыть: на айфоне
   // тот же tag не заменяет уведомление, а ставит второе рядом (WebKit 258922).
+  // Склеиваются строки только того же расписания: после смены группы висящая
+  // отмена прежней читалась как своя (четвёртый аудит, М7 прогона 1).
   return self.registration.getNotifications({ tag: 'changes' }).then(function (open) {
-    var lines = [];
+    var older = [];
     open.forEach(function (n) {
-      ((n.data && n.data.lines) || []).forEach(function (l) { lines.push(l); });
+      var same = ((n.data && n.data.who) || '') === who;
+      if (same) ((n.data && n.data.lines) || []).forEach(function (l) { older.push(l); });
       n.close();
     });
-    fresh.forEach(function (l) { lines.push(l); });
     var today = collegeToday();
-    var seen = {};
-    var kept = lines.filter(function (l) {
-      if (!l || (l[0] && l[0] < today) || seen[l[1]]) return false;
-      seen[l[1]] = true;
-      return true;
-    }).slice(-MAX_LINES);
-    if (!kept.length) kept = fresh.slice(-MAX_LINES);
-    return show(data.title || 'Расписание изменилось', kept.map(function (l) { return l[1]; }).join('\n'),
-      'changes', { lines: kept });
+    function live(l) { return l && !(l[0] && l[0] < today); }
+    // Повтор строки — на её последнем месте, а не на первом: «вернули →
+    // отменили → вернули» читалось последней строкой «отменили» (контроль №1).
+    var all = older.concat(fresh).filter(live);
+    var kept = all.filter(function (l, i) {
+      return !all.slice(i + 1).some(function (m) { return m[1] === l[1]; });
+    });
+    if (kept.length > MAX_LINES) {
+      // Свежая правка важнее висящих строк, а в ней — сначала сегодня: строки
+      // идут по дням (М33).
+      var mine = fresh.filter(live);
+      var newest = kept.filter(function (l) { return mine.some(function (m) { return m[1] === l[1]; }); });
+      kept = newest.length >= MAX_LINES ? newest.slice(0, MAX_LINES)
+        : kept.filter(function (l) { return newest.indexOf(l) < 0; }).slice(-(MAX_LINES - newest.length)).concat(newest);
+    }
+    // Все строки про прошедшие дни (телефон вышел в сеть назавтра) — не
+    // показывать вчерашнее как новость (М37).
+    var body = kept.length ? kept.map(function (l) { return l[1]; }).join('\n')
+      : 'Изменения касались прошедших дней.';
+    return show(data.title || 'Расписание изменилось', body, 'changes', { lines: kept, who: who });
   }, function () {
-    return show(data.title || 'Расписание изменилось', data.body, 'changes', { lines: fresh });
+    return show(data.title || 'Расписание изменилось', data.body, 'changes', { lines: fresh, who: who });
   });
 }
 
@@ -165,7 +179,22 @@ function showLesson(data) {
   // Что пара уже идёт — по часам в момент показа: доставку могли задержать
   // (LessonAlarms.title в приложении).
   var title = data.start && Date.now() > data.start ? 'Пара уже идёт — ' + data.subject : data.title;
-  return show(title || 'Скоро пара', data.body, 'lesson');
+  // Прежние напоминания — прочь: на айфоне они копились день за днём (tag там
+  // не заменяет), в Chrome второе с тем же tag приходило беззвучно, заменяя
+  // висящее первое (четвёртый аудит, В5 и М40 прогона 1). В приложении
+  // напоминание одно и снимается к концу пары.
+  return self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
+    open.forEach(function (n) { n.close(); });
+  }, function () { /* нечего закрывать */ }).then(function () {
+    return show(title || 'Скоро пара', data.body, 'lesson', { end: data.end });
+  });
+}
+
+/** Закрыть напоминания о закончившихся парах — при любом приходе. */
+function closeEnded() {
+  return self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
+    open.forEach(function (n) { if (n.data && n.data.end && Date.now() > n.data.end) n.close(); });
+  }, function () { /* нечего закрывать */ });
 }
 
 self.addEventListener('push', function (event) {
@@ -178,15 +207,29 @@ self.addEventListener('push', function (event) {
   var shown = data.t === 'changes' ? showChanges(data)
     : data.t === 'lesson' ? showLesson(data)
       : show(data.title || 'Когда пара?', data.body, data.t || 'other');
-  event.waitUntil(shown);
+  event.waitUntil(Promise.all([shown, data.t === 'lesson' ? null : closeEnded()]));
 });
+
+// Окно этого сайта: у корня — не окно /tested/, хоть оно и под тем же
+// префиксом (четвёртый аудит, М27 прогона 1).
+function ours(client) {
+  var scope = self.registration.scope;
+  if (client.url.indexOf(scope) !== 0) return false;
+  var testedScope = /\/tested\/$/.test(scope);
+  return testedScope || client.url.indexOf(scope + 'tested/') !== 0;
+}
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var url = (event.notification.data && event.notification.data.url) || self.registration.scope;
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
     for (var i = 0; i < list.length; i++) {
-      if (list[i].url.indexOf(self.registration.scope) === 0 && 'focus' in list[i]) return list[i].focus();
+      if (ours(list[i]) && 'focus' in list[i]) {
+        // Уведомление — о своём расписании: страница уходит к нему, а не
+        // остаётся на открытом чужом (М10).
+        list[i].postMessage({ t: 'own' });
+        return list[i].focus();
+      }
     }
     return self.clients.openWindow ? self.clients.openWindow(url) : null;
   }));
@@ -200,6 +243,8 @@ self.addEventListener('pushsubscriptionchange', function (event) {
   if (!old) return;
   var fresh = event.newSubscription ? Promise.resolve(event.newSubscription)
     : self.registration.pushManager.subscribe(old.options);
+  // Не перенеслось (прежней записи уже нет — 404) — страница заметит новый
+  // адрес при открытии и перешлёт подписку с выбором (push.js, sync; М75).
   event.waitUntil(fresh.then(function (sub) {
     var json = sub.toJSON();
     return fetch('/v1/push/move', {

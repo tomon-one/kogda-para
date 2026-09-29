@@ -328,3 +328,101 @@ test('meta сорвался, а расписание пришло — серве
   assert.equal((await repo.refresh(true)).kind, 'updated');
   assert.equal(repo.serverBroken(), false);
 });
+
+test('другая группа, не пришедшая с новым gen, перезапрашивается; без сегодняшнего дня — нет', async () => {
+  // В2 и М3 прогона 1 аудита 4: свежесть снимка группы — по gen, а не по
+  // сегодняшнему дню.
+  reset();
+  const practice = schedule('isp-2', 'ИСП-2', 'G1', { days: [] });
+  server = healthy('G1', [
+    ['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]],
+    ['/v1/schedule/isp-2?', [200, practice]],
+  ]);
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  repo.addExtras([{ id: 'isp-2', name: 'ИСП-2' }]);
+  assert.equal((await repo.refresh(true)).kind, 'updated');
+  requests = [];
+  clock += HOUR;
+  assert.equal((await repo.refresh(false)).kind, 'fresh', 'группа на практике — не качается заново');
+  assert.deepEqual(requests, ['/v1/meta']);
+
+  // Новый gen, а группа не ответила (429) — «не обновилась», и следующий заход
+  // при том же gen приносит её.
+  server = healthy('G2', [
+    ['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G2')]],
+    ['/v1/schedule/isp-2?', [429, { error: 'занят' }]],
+  ]);
+  const partial = await repo.refresh(false);
+  assert.deepEqual(partial, { kind: 'partial', missed: ['ИСП-2'] });
+  server = healthy('G2', [
+    ['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G2')]],
+    ['/v1/schedule/isp-2?', [200, schedule('isp-2', 'ИСП-2', 'G2')]],
+  ]);
+  requests = [];
+  assert.equal((await repo.refresh(false)).kind, 'updated');
+  assert.ok(requests.some((u) => u.indexOf('/v1/schedule/isp-2?') === 0));
+});
+
+test('«Убрать» посреди обновления не выбрасывает своё; роль посреди 404 не стирает группы', async () => {
+  // М4 и М1 прогона 1 аудита 4.
+  reset();
+  let release;
+  const slow = new Promise((resolve) => { release = resolve; });
+  server = healthy('G1', [
+    ['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]],
+    ['/v1/schedule/isp-2?', [200, schedule('isp-2', 'ИСП-2', 'G1')]],
+  ]);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url) => (url === '/v1/meta' ? realFetch(url) : slow.then(() => realFetch(url)));
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  repo.addExtras([{ id: 'isp-2', name: 'ИСП-2' }, { id: 'isp-3', name: 'ИСП-3' }]);
+  const pending = repo.refresh(true);
+  await new Promise((r) => setTimeout(r, 0));
+  repo.removeExtra('isp-3');
+  release();
+  await pending;
+  globalThis.fetch = realFetch;
+  assert.equal(repo.saved().gn, 'ИСП-1');
+  assert.deepEqual(repo.extras().map((g) => g.id), ['isp-2']);
+
+  // 404 другой группы пришло, когда человек уже «Я преподаватель».
+  let release2;
+  const slow2 = new Promise((resolve) => { release2 = resolve; });
+  server = healthy('G2', [['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G2')]]]);
+  globalThis.fetch = (url) => (url === '/v1/meta' ? realFetch(url) : slow2.then(() => realFetch(url)));
+  const second = repo.refresh(true);
+  await new Promise((r) => setTimeout(r, 0));
+  store.set('role', 'teacher');
+  release2();
+  await second;
+  globalThis.fetch = realFetch;
+  store.set('role', 'student');
+  assert.deepEqual(repo.extras().map((g) => g.id), ['isp-2']);
+});
+
+test('принудительное при идущем принудительном встаёт следом', async () => {
+  // В1: второе «Добавить» сразу после смены группы выбрасывалось сверкой.
+  reset();
+  let release;
+  const slow = new Promise((resolve) => { release = resolve; });
+  server = healthy('G1', [
+    ['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]],
+    ['/v1/schedule/isp-9?', [200, schedule('isp-9', 'ИСП-9', 'G1')]],
+  ]);
+  const realFetch = globalThis.fetch;
+  let first = true;
+  globalThis.fetch = (url) => {
+    if (url !== '/v1/meta' && first) { first = false; return slow.then(() => realFetch(url)); }
+    return realFetch(url);
+  };
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  const a = repo.refresh(true);
+  await new Promise((r) => setTimeout(r, 0));
+  repo.selectGroup({ id: 'isp-9', name: 'ИСП-9' });
+  const b = repo.refresh(true);
+  release();
+  await a;
+  assert.equal((await b).kind, 'updated');
+  globalThis.fetch = realFetch;
+  assert.equal(repo.saved().gn, 'ИСП-9');
+});

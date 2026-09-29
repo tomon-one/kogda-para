@@ -9,7 +9,7 @@ import * as push from './push.js';
 import { h, clear, closeDialog, dialog, snackbar, externalLink } from './ui/dom.js';
 import { HttpError, NetError } from './api.js';
 import { collegeNow, parseIso } from './time.js';
-import { currentLessonNumber, dayIndex, parseTime } from './schedule.js';
+import { MAX_GROUPS, currentLessonNumber, dayIndex, parseTime } from './schedule.js';
 import { mainScreen, refreshLabel } from './ui/today.js';
 import { pickerScreen } from './ui/lists.js';
 import { settingsScreen } from './ui/settings.js';
@@ -162,11 +162,19 @@ var app = {
   addExtras: function (groups) {
     repo.addExtras(groups);
     render();
+    // Фокус — на «Убрать» той же группы: кнопка «Добавить» ушла, и фокус падал
+    // на body (четвёртый аудит, М15 прогона 1).
+    if (groups.length) focusKey('remove:' + groups[0].id);
     refresh(true, false);
   },
   removeExtra: function (id) {
+    var list = repo.extras();
+    var at = list.map(function (g) { return g.id; }).indexOf(id);
+    var next = list[at + 1] || list[at - 1];
     repo.removeExtra(id);
     render();
+    // На соседнюю «Убрать» или на «Добавить другую группу» (М15).
+    focusKey(next ? 'remove:' + next.id : 'add-group');
   },
   tally: function () { return store.get('tally') || { opens: 0, since: 0 }; },
   render: function () { render(); },
@@ -191,8 +199,30 @@ var PUSH_FAILS = {
   network: 'Нет связи с сервером — уведомления не включились',
   timeout: 'Сервер не ответил — уведомления не включились',
   server: 'Сервер не принял подписку',
+  busy: 'Сервер занят, попробуйте через минуту',
   off: 'На сервере уведомления ещё не настроены',
 };
+
+var pushRetry = null;
+var pushTries = 0;
+
+/**
+ * Служба должна знать нынешнюю подписку и группу. Не вышло — повторить через
+ * минуту, до пяти раз: после смены группы неудачная пересылка ждала
+ * перезагрузки страницы, и всё это время приходило о прежней группе
+ * (четвёртый аудит, В3 прогона 1).
+ */
+function syncPush() {
+  clearTimeout(pushRetry);
+  push.sync(pushSubject()).then(function (result) {
+    if (result !== 'failed') {
+      pushTries = 0;
+      return;
+    }
+    if (++pushTries > 5) return;
+    pushRetry = setTimeout(syncPush, 60 * 1000);
+  });
+}
 
 /** Чьё расписание присылать: своя группа или сам преподаватель. */
 function pushSubject() {
@@ -213,7 +243,8 @@ function pick(mode, row) {
     else repo.selectGroup(row);
     state.wanted = collegeNow().date;
     // Уведомления — о новой своей группе, а не о прежней.
-    push.sync(pushSubject());
+    pushTries = 0;
+    syncPush();
     home();
   }
   refresh(true, false);
@@ -247,8 +278,12 @@ function onRoute() {
     route = { screen: 'pick', mode: 'group' };
     history.replaceState({ steps: stepsNow(), pending: pending }, '', location.pathname + location.search + '#pick');
   }
-  if (route.screen === 'pick' && route.mode === 'extra' && repo.isTeacher()) {
+  // Больше шести групп не выбрать: жест «вперёд» открывал «7-я группа», а
+  // нажатие молча ничего не добавляло (М19).
+  if (route.screen === 'pick' && route.mode === 'extra' &&
+      (repo.isTeacher() || repo.extras().length >= MAX_GROUPS - 1)) {
     route = { screen: 'settings' };
+    history.replaceState({ steps: stepsNow() }, '', location.pathname + location.search + '#settings');
   }
   var wasOwn = app.route.screen === 'main' && !app.route.kind;
   var isOwn = route.screen === 'main' && !route.kind;
@@ -372,6 +407,13 @@ function findBySignature(signature) {
     if (sig && !sig.key && sig.cls === signature.cls && sig.label === signature.label) found.push(all[i]);
   }
   return found.length === 1 ? found[0] : null;
+}
+
+/** Фокус — на кнопку с этим data-key, если она есть. */
+function focusKey(key) {
+  var el = findBySignature({ key: key });
+  if (!el) return;
+  try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
 }
 
 function restoreFocus(signature) {
@@ -558,6 +600,7 @@ function loadOther(kind, id) {
 }
 
 function failText(result) {
+  if (result.kind === 'partial') return partialText(result.missed);
   if (result.kind === 'gone') {
     return repo.isTeacher() ? 'Вас больше нет в таблице — выберите себя заново'
       : 'Группы больше нет в таблице — выберите заново';
@@ -576,6 +619,11 @@ function failText(result) {
       : 'Не удалось обновить: нет связи с сервером';
   }
   return 'Не удалось обновить: сервер прислал непонятный ответ';
+}
+
+function partialText(missed) {
+  return (missed.length === 1 ? 'Не обновилась группа ' + missed[0]
+    : 'Не обновились группы ' + missed.join(', ')) + ': на экране их прежние пары';
 }
 
 var flashTimer = null;
@@ -626,7 +674,12 @@ function refresh(force, manual) {
     } else if (result.kind !== 'nogroup') {
       state.refreshFailed = false;
     }
-    if (manual && (result.kind === 'failed' || result.kind === 'gone')) snackbar(failText(result));
+    // Другие группы не все: крестик с их именами и повтор через минуту (В4).
+    state.partial = result.kind === 'partial' ? result.missed : null;
+    if (state.partial) retrySoon();
+    if (manual && (result.kind === 'failed' || result.kind === 'gone' || result.kind === 'partial')) {
+      snackbar(failText(result));
+    }
     state.refreshing = repo.isRefreshing();
     if (state.refreshing) {
       render();
@@ -853,4 +906,14 @@ testNotice();
 if (repo.chosen()) refresh(false, false);
 registerWorker();
 // Служба должна знать нынешнюю подписку: браузер мог сменить её сам.
-push.sync(pushSubject());
+syncPush();
+// Нажатие на уведомление по открытой странице — к своему расписанию, а не к
+// открытому чужому (сервис-воркер, notificationclick; М10).
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', function (event) {
+    if (event.data && event.data.t === 'own' && repo.chosen()) {
+      state.wanted = collegeNow().date;
+      home();
+    }
+  });
+}

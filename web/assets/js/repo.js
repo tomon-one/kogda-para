@@ -10,8 +10,6 @@ import { DAYS, MAX_GROUPS, cleanSchedule, combineGroups, coversDay, ownOnly, win
 
 /** Сколько сервер может молчать при живой сети, прежде чем это сбой, а не чих. */
 var UNREACHABLE_BROKEN_AFTER_MS = 30 * 60 * 1000;
-/** Неудачи дальше друг от друга, чем это, — не одна цепочка. */
-var UNREACHABLE_STREAK_GAP_MS = 3 * 60 * 60 * 1000;
 /** 404 подтверждается повтором не раньше чем через час: опечатку колледж чинит быстрее. */
 var GONE_CONFIRM_MS = 60 * 60 * 1000;
 
@@ -53,10 +51,14 @@ function setExtras(list) {
   else store.remove('extraSchedules');
 }
 
+/**
+ * Чьё своё расписание — роль и выбранный. Другие группы в сверку не входят:
+ * «Убрать» посреди обновления выбрасывало и своё свежее (четвёртый аудит, М4
+ * прогона 1); их пишет writeExtras по нынешнему выбору.
+ */
 function subject() {
   var own = chosen();
-  return (isTeacher() ? 't:' : 's:') + (own ? own.id : '') + '|' +
-    extras().map(function (g) { return g.id; }).join(',');
+  return (isTeacher() ? 't:' : 's:') + (own ? own.id : '');
 }
 
 function dropSchedule() {
@@ -227,7 +229,7 @@ function putServerState(status, srcUrl, since) {
 /** Отметить неудачу связи: начало цепочки неудач подряд и их число. */
 function noteUnreachable(now) {
   var u = store.get('unreachable');
-  var streak = u && now - u.last < UNREACHABLE_STREAK_GAP_MS;
+  var streak = !!u;
   var chain = { since: streak ? u.since : now, last: now, count: streak ? (u.count || 1) + 1 : 1 };
   store.set('unreachable', chain);
   return chain;
@@ -247,10 +249,17 @@ function noteNotFound(key, now) {
   return !!g.confirmed;
 }
 
-/** 404 у одной из остальных групп; true — подтверждено повтором через час. */
+/**
+ * 404 у одной из остальных групп; true — подтверждено повтором через час.
+ * Список — из хранилища, мимо роли: extras() у преподавателя пуст, и 404,
+ * пришедшее после переключения на «Я преподаватель», стирало все группы
+ * (четвёртый аудит, М1 прогона 1). Группы уже нет в списке — не писать.
+ */
 function noteExtraNotFound(id, now) {
   var confirmed = false;
-  store.set('extras', extras().map(function (g) {
+  var list = store.get('extras');
+  if (!Array.isArray(list) || !list.some(function (g) { return g.id === id; })) return false;
+  store.set('extras', list.map(function (g) {
     if (g.id !== id) return g;
     if (g.goneSince == null) return Object.assign({}, g, { goneSince: now });
     if (now - g.goneSince >= GONE_CONFIRM_MS) confirmed = true;
@@ -281,7 +290,7 @@ function collectExtras(requests, serverOk) {
       // 404 при здоровом сервере, повторённое через час, — группы нет в
       // таблице. Выбор не стираем: вернётся она — вернутся и её пары.
       var gone = isNotFound(error) && serverOk && noteExtraNotFound(r.group.id, Date.now());
-      return { group: r.group, gone: gone };
+      return { group: r.group, gone: gone, missed: !gone && !r.group.gone };
     });
   }));
 }
@@ -304,10 +313,16 @@ function writeExtras(answers) {
   setExtras(list);
 }
 
-/** Снимка какой-то из остальных групп нет или он не про сегодня — её пора принести. */
-function extrasMissing(today) {
+/**
+ * Снимок какой-то из остальных групп не с того же разбора таблицы (gen), что
+ * своё, — её пора принести. Раньше смотрели, есть ли в нём сегодняшний день:
+ * не пришедшая в заходе с новым gen группа держала прежние пары до следующей
+ * правки таблицы (В2), а группа на практике качалась на каждом заходе (М3).
+ */
+function extrasMissing() {
   var schedules = store.get('extraSchedules') || {};
-  return extras().some(function (g) { return !g.gone && !coversDay(schedules[g.id], today); });
+  var gen = store.get('gen');
+  return extras().some(function (g) { return !g.gone && (!schedules[g.id] || schedules[g.id].gen !== gen); });
 }
 
 function refreshOnce(force) {
@@ -324,17 +339,23 @@ function refreshOnce(force) {
   var outdated = !coversDay(saved(), today) ||
     store.get('window') !== windowMark(from) ||
     // Группу только что добавили или её снимок не дошёл: gen тот же.
-    extrasMissing(today);
+    extrasMissing();
   var meta = null;
 
-  return api.meta().then(function (m) { meta = m; }, function () { meta = null; })
+  var busy = false;
+  return api.meta().then(function (m) { meta = m; }, function (error) {
+    meta = null;
+    // 429 — сервер ответил, он занят (лимит nginx на адрес оператора): это не
+    // «не отвечает», и плашки сбоя из-за него не будет (М22).
+    busy = error instanceof api.HttpError && error.status === 429;
+  })
     .then(function () {
       var now = Date.now();
       if (meta) {
         store.remove('unreachable');
         store.set('lastOk', now);
         putServerState(meta.status, meta.src_url, meta.since);
-      } else if (online()) {
+      } else if (online() && !busy) {
         // Сайт открывают не каждый час: от цепочки неудач подряд сбой при
         // редких заходах не виден вовсе. Мерило — последний ответ сервера:
         // молчит дольше получаса — не отвечает, и давность — от него
@@ -389,7 +410,13 @@ function refreshOnce(force) {
           store.set('gen', fresh.gen);
           store.set('fetchedAt', Date.now());
           store.set('window', windowMark(from));
-          return { kind: 'updated' };
+          // Своё пришло, другие — не все: без галочки и с их именами (В4).
+          // Уже убранные пока шёл запрос — не в счёт.
+          var chosenIds = extras().map(function (g) { return g.id; });
+          var missed = answers.filter(function (a) {
+            return a.missed && chosenIds.indexOf(a.group.id) >= 0;
+          }).map(function (a) { return a.group.name; });
+          return missed.length ? { kind: 'partial', missed: missed } : { kind: 'updated' };
         });
       });
     })
@@ -399,16 +426,19 @@ function refreshOnce(force) {
 }
 
 var running = null;
-var runningForced = false;
+var queued = null;
 
 /**
  * Обновления — по одному: параллельные затирали бы друг друга. Обычное при
- * идущем — ждёт его; принудительное — встаёт следом.
+ * идущем — ждёт его; принудительное — встаёт следом, и одно на всех, кто
+ * пришёл, пока идёт текущее. Раньше принудительное при идущем принудительном
+ * не вставало вовсе: второе «Добавить» или «Добавить» сразу после смены своей
+ * группы выбрасывались сверкой, и пары не приходили (четвёртый аудит, В1).
  */
 export function refresh(force) {
-  if (running && (!force || runningForced)) return running;
+  if (running && !force) return running;
   var start = function () {
-    runningForced = !!force;
+    queued = null;
     var p = refreshOnce(!!force);
     running = p;
     return p.then(function (result) {
@@ -416,7 +446,9 @@ export function refresh(force) {
       return result;
     });
   };
-  return running ? running.then(start, start) : start();
+  if (!running) return start();
+  if (!queued) queued = running.then(start, start);
+  return queued;
 }
 
 export function isRefreshing() {
