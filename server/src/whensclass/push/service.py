@@ -245,7 +245,7 @@ class Push:
                 self.unsubscribe(sub["endpoint"])
                 return True
             new = sub["endpoint"] not in self._subs
-            if new and len(self._subs) >= MAX_SUBSCRIPTIONS:
+            if new and len(self._subs) >= MAX_SUBSCRIPTIONS and not self._evict_undelivered():
                 return False
             self._subs[sub["endpoint"]] = {**sub, "since": today.isoformat()}
             self._save()
@@ -257,6 +257,20 @@ class Push:
         if new:
             self._dispatch([Job(sub, message(sub, "hello", "Уведомления включены",
                                              welcome_text(sub)), 3600)])
+        return True
+
+    def _evict_undelivered(self) -> bool:
+        """Мест нет — снять самую старую подписку, которой ни разу не
+        доставили (у настоящей «Уведомления включены» доходит сразу). Мусором
+        с выдуманными адресами потолок забивался за часы, и новые люди
+        получали «сервер не принял» (прогон 2 аудита 4). Под замком."""
+        victim = min((s for s in self._subs.values() if not s.get("ok")),
+                     key=lambda s: s.get("since", ""), default=None)
+        if victim is None:
+            return False
+        self._subs.pop(victim["endpoint"], None)
+        self._fails.pop(victim["endpoint"], None)
+        log.info("подписок под потолок — снята не доставленная ни разу: %s", _host(victim["endpoint"]))
         return True
 
     def move(self, old: str, fresh: dict) -> bool:
@@ -329,7 +343,7 @@ class Push:
             # Адрес — только хост: путь подписки и есть её секрет.
             log.warning("уведомление не ушло (%s): %s", _host(sub["endpoint"]), type(exc).__name__)
             if not self._retry(job, attempt, None):
-                self._failed(sub, "net", type(exc).__name__)
+                self._failed(sub, "dns" if _no_such_host(exc) else "net", type(exc).__name__)
             return
         if result.status < 300:
             self._succeeded(sub)
@@ -351,6 +365,12 @@ class Push:
             self._delivered[name] = time.monotonic()
             self._fails.pop(sub["endpoint"], None)
             self._stats.setdefault(name, [0, 0, None])[0] += 1
+            # Доставлялось хоть раз — настоящая подписка: не снимается ни как
+            # мусор под потолком, ни за несуществующий адрес.
+            record = self._subs.get(sub["endpoint"])
+            if record is not None and not record.get("ok"):
+                record["ok"] = dt.date.today().isoformat()
+                self._save()
 
     def _failed(self, sub: dict, how: str, said: str) -> None:
         """Доставка не удалась окончательно (повторы кончились или не нужны)."""
@@ -363,7 +383,13 @@ class Push:
             count, since = self._fails.get(endpoint, (0, now))
             count += 1
             self._fails[endpoint] = (count, since)
-            dead = count >= DROP_AFTER_FAILS and self._delivered.get(name, -1.0) > since
+            # Адреса нет в DNS, и ни разу не доставлялось — выдуманный поддомен
+            # службы рассылки: у Microsoft доставок другим нет вовсе, и такая
+            # подписка не снималась никогда (прогон 2 аудита 4).
+            never = not self._subs.get(endpoint, sub).get("ok")
+            dead = count >= DROP_AFTER_FAILS and (
+                self._delivered.get(name, -1.0) > since or (how == "dns" and never)
+            )
         if dead:
             self.unsubscribe(endpoint, why=f"не доставляется {count} раз подряд: {said}")
 
@@ -493,10 +519,12 @@ class Push:
     def _suspects(self, before, snapshot, today: dt.date) -> dict | None:
         """Группы, чья правка похожа на пары соседа (сдвиг, который отказ не
         поймал): им — без уведомлений, владельцу — тревога (М32)."""
-        from ..parser.csv_schedule import neighbour_runs
+        from ..parser.csv_schedule import neighbour_runs, vertical_groups
 
         try:
-            ids = neighbour_runs(snapshot, before, today)
+            # И пары, съехавшие по вертикали в одной колонке: лист принят с
+            # подозрением, номера пар под вопросом (прогон 2 аудита 4).
+            ids = neighbour_runs(snapshot, before, today) | vertical_groups(snapshot, before)
         except Exception:  # noqa: BLE001
             log.exception("сверка с соседями для уведомлений упала")
             return None
@@ -690,6 +718,19 @@ def gone_message(sub: dict) -> dict:
 
 def site_url(sub: dict) -> str:
     return f"https://{settings.domain}/" + ("tested/" if sub.get("site") == "tested" else "")
+
+
+def _no_such_host(exc: BaseException) -> bool:
+    """Имени нет в DNS (EAI_NONAME), а не сбой сети или своего резолвера."""
+    import socket
+
+    seen = 0
+    while exc is not None and seen < 6:
+        if isinstance(exc, socket.gaierror) and exc.errno == socket.EAI_NONAME:
+            return True
+        exc = exc.__cause__ or exc.__context__
+        seen += 1
+    return False
 
 
 def _host(endpoint: str) -> str:

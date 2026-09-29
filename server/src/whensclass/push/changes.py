@@ -294,10 +294,13 @@ def _compare_number(
         if any(x["s"] == gone["s"] for x in now):
             continue
         if teacher and gone.get("gr"):
-            left = groups_of(gone) - after_groups
+            # Все её группы на номере остались при той же паре — запись просто
+            # склеилась с другой. При другом предмете у тех же групп это
+            # замена, и «убрали» прежний нужен (прогон 2 аудита 4).
+            kept = set().union(*(groups_of(x) for x in now if same_subject(x["s"], gone["s"]))) \
+                if now else set()
+            left = groups_of(gone) - kept
             if not left:
-                # Все её группы на номере остались — запись просто
-                # склеилась с другой.
                 continue
             say(f"убрали {number} пару ({listed(gone, left)}): {gone['s']}")
             continue

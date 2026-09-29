@@ -227,7 +227,8 @@ def list_sheets() -> list[SheetInfo]:
         raise SheetNotFound(f"Sheets API не ответил: {_api_error(exc)}") from exc
     if _api_failures >= API_FAILURES_TO_ALERT:
         alerts.forget("key")
-        alerts.notify("key-ok", "Sheets API снова отвечает: ключ работает.",
+        # Тот же процесс, без перезапуска: ключ не меняли, Google вернулся сам.
+        alerts.notify("key-ok", "Само исправилось. Sheets API снова отвечает: ключ работает.",
                       force=True, good=True)
     _api_failures = 0
     _last_list, _last_list_at = sheets, dt.datetime.now(dt.timezone.utc)
@@ -291,7 +292,9 @@ def resolve_window(
         except SheetNotFound:
             log.info("следующий лист ещё не опубликован, отдаём что есть")
             return sheets
-        except httpx.TransportError as exc:
+        except (httpx.HTTPError, OSError) as exc:
+            # И 429 или 5xx от Google, и ошибка чтения кандидата: следующий
+            # лист не главнее текущего, заход не валится (прогон 2 аудита 4).
             log.info("следующий лист не посмотрелся (%s), отдаём что есть", type(exc).__name__)
             return sheets
     if following:

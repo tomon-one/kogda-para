@@ -108,7 +108,11 @@ JOURNAL_NOTE = "задание в электронном журнале"
 # «Куратор» — должность, а не фамилия: 25.09 он попал в /v1/teachers, и кто
 # его выбрал, назавтра получил «вас нет в таблице» (четвёртый аудит, М31
 # прогона 1). «Кураторова» — фамилия: после слова нужна граница.
-_VACANCY_RE = re.compile(r"^(?:вакансия|куратор|преподаватель)\b", re.IGNORECASE)
+# Заглушка — только служебное слово целиком: «Куратор Иванова Анна Петровна»
+# и «Преподаватель Петров П. П.» — люди, их имена оставляет `_people` (прогон 2).
+_VACANCY_RE = re.compile(r"^(?:вакансия\b.*|куратор|преподаватель)\W*$", re.IGNORECASE)
+# Должность перед именем — не часть имени: «Куратор: Иванова А. П.».
+_ROLE_PREFIX_RE = re.compile(r"^(?:куратор|преподаватель)\W+(?=\w)", re.IGNORECASE)
 
 # Имя без единой буквы — тоже не человек: прочерк, вопрос, точка как заглушка
 # («-», «?», «Иванов И. И., .»). Такое имя давало пустой идентификатор, индекс
@@ -244,6 +248,9 @@ def split_teachers(text: str) -> tuple[str, ...]:
             # Точку не трогаем: она часть инициалов — «Иванов И. И.».
             cleaned = " ".join(name.split()).strip(" ,;")
             if not cleaned or _VACANCY_RE.match(cleaned):
+                continue
+            cleaned = _ROLE_PREFIX_RE.sub("", cleaned)
+            if not cleaned:
                 continue
             if not _HAS_LETTER.search(cleaned):
                 _warn_once(
@@ -417,9 +424,15 @@ def parse_lesson(
             url = found.group(0)
         # Что рядом со ссылкой — место: «269 https://…» — кабинет, «онлайн 12
         # https://…» — комната; раньше номер при ссылке пропадал (четвёртый
-        # аудит, М28 прогона 1).
-        rest = room_text.replace(url, " ") if url else room_text
+        # аудит, М28 прогона 1). Но только кабинет или «онлайн N»: прочее
+        # («Ссылка:», «(пароль 1234)», вторая ссылка) делало онлайн-пару очной
+        # с кабинетом-словом — оно уходит в приписку (прогон 2).
+        rest = _URL_RE.sub(" ", room_text) if url else room_text
         room = " ".join(rest.replace("\n", " ").split()).strip(" ,;") or None
+        if url is not None and room is not None and not _ROOM_RE.match(room) \
+                and _online_room(room) is None and room not in _UNASSIGNED_ROOMS:
+            note = f"{note}; {room}" if note else room
+            room = None
         if room is not None:
             online_room = _online_room(room)
             if online_room is not None:

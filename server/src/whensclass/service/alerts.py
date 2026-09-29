@@ -75,6 +75,8 @@ def notify(
     # Публикация JSON-ом в корень, а не POST в /<тема>: так тема не стоит в
     # адресе и не попадёт в текст исключения httpx, а заголовки не надо
     # кодировать ради кириллицы.
+    if not good and not quiet:
+        text = f"в нас проблема. {text}"
     body = {
         "topic": settings.ntfy_topic,
         "title": "Когда пара?",

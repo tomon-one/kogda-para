@@ -334,7 +334,7 @@ def test_routes_cut_the_unpublished_tail_by_today(monkeypatch):
     nxt = [d + dt.timedelta(days=7) for d in week]
     refs = [GroupRef(name=f"Г-{n}", id=f"g-{n}", column=2 + 4 * n) for n in range(4)]
     snap = Snapshot(sheet_title="лист", groups=refs, dates=week + nxt)
-    lesson = Lesson(number=1, subject="Физика", teachers=("Иванов И. И.",))
+    lesson = Lesson(number=1, subject="Физика", teachers=("Ковач Т.",))
     for n, ref in enumerate(refs):
         snap.schedule[ref.id] = {d: [lesson] for d in week + (nxt if n == 0 else [])}
     monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 24))
@@ -345,7 +345,7 @@ def test_routes_cut_the_unpublished_tail_by_today(monkeypatch):
     client = TestClient(app)
     body = client.get("/v1/schedule/g-2?from=2026-09-21&days=13").json()
     assert body["cov"] == ["2026-09-21", "2026-09-26"]
-    teacher = client.get("/v1/teacher/ivanov-i-i?from=2026-09-21&days=13").json()
+    teacher = client.get("/v1/teacher/kovach-t?from=2026-09-21&days=13").json()
     assert teacher["cov"] == ["2026-09-21", "2026-09-26"]
 
 

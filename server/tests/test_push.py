@@ -221,19 +221,19 @@ def test_cancel_room_and_replacement():
 
 def test_added_removed_online_teacher_and_links():
     old = _group({TUE: [
-        _l(1, "Физика", t=["Иванов И. И."]),
+        _l(1, "Физика", t=["Сильверхенд Д."]),
         _l(2, "История", r="301"),
         _l(4, "Химия"),
         _l(5, "Право", o=1, u="https://my.mts-link.ru/a"),
     ]})
     new = _group({TUE: [
-        _l(1, "Физика", t=["Петров П. П."]),
+        _l(1, "Физика", t=["Кушинада Л."]),
         _l(2, "История", o=1, r="12"),
         _l(3, "Биология"),
         _l(5, "Право", o=1, u="https://evil.example/a"),
     ]})
     assert changes.compare(old, new) == [
-        (TUE, "у 1 пары другой преподаватель: Петров П. П."),
+        (TUE, "у 1 пары другой преподаватель: Кушинада Л."),
         (TUE, "2 пара стала онлайн"),
         (TUE, "у 2 пары онлайн-комната 12"),
         (TUE, "добавилась 3 пара: Биология"),
@@ -243,9 +243,9 @@ def test_added_removed_online_teacher_and_links():
 
 
 def test_teacher_lessons_are_tagged_with_groups():
-    old = {"g": "t1", "gn": "Иванов И. И.", "kind": "teacher",
+    old = {"g": "t1", "gn": "Сильверхенд Д.", "kind": "teacher",
            "days": [{"d": TUE, "l": [_l(2, "Физика", gr="ИСП-924/1, ИСП-924/2")]}]}
-    new = {"g": "t1", "gn": "Иванов И. И.", "kind": "teacher", "days": [{"d": TUE, "l": [
+    new = {"g": "t1", "gn": "Сильверхенд Д.", "kind": "teacher", "days": [{"d": TUE, "l": [
         _l(2, "Физика", gr="ИСП-924/1"), _l(2, "Физика", gr="ИСП-924/2", x=1),
     ]}]}
     assert changes.compare(old, new) == [(TUE, "отменили 2 пару (ИСП-924/2): Физика")]
@@ -275,6 +275,21 @@ def test_teacher_sees_only_the_group_that_joined_or_left():
     assert left == [(TUE, "убрали 5 пару (ПД-925/1, ПД-925/2, ПД-925/3): Физическая культура.")]
 
 
+def test_teacher_gets_both_lines_when_the_subject_of_the_same_group_changes():
+    """На номере те же группы, но другой предмет — замена: и «убрали»
+    прежний, и «добавилась» новый, как у группы (прогон 2 аудита 4)."""
+    def teacher(lessons):
+        return {"g": "t1", "gn": "Иванчиков И. И.", "kind": "teacher",
+                "days": [{"d": TUE, "l": lessons}]}
+
+    swapped = changes.compare(teacher([_l(3, "Физика", gr="ИСП-924/1")]),
+                              teacher([_l(3, "Астрономия", gr="ИСП-924/1")]))
+    assert sorted(text for _, text in swapped) == [
+        "добавилась 3 пара (ИСП-924/1): Астрономия",
+        "убрали 3 пару (ИСП-924/1): Физика",
+    ]
+
+
 @pytest.mark.parametrize("old, new", [
     ("Обествознание", "Обществознание"),
     ("кураторский час", "Кураторский час"),
@@ -282,10 +297,10 @@ def test_teacher_sees_only_the_group_that_joined_or_left():
 ])
 def test_spelling_fix_is_not_a_change(old, new):
     """Исправили написание — пара та же: без «убрали» и «добавилась» (М35)."""
-    was = _group({TUE: [_l(2, old, t=["Иванов И. И."], r="301")]})
-    assert changes.compare(was, _group({TUE: [_l(2, new, t=["Иванов И. И."], r="301")]})) == []
+    was = _group({TUE: [_l(2, old, t=["Сильверхенд Д."], r="301")]})
+    assert changes.compare(was, _group({TUE: [_l(2, new, t=["Сильверхенд Д."], r="301")]})) == []
     # Другой преподаватель — уже другая пара.
-    assert len(changes.compare(was, _group({TUE: [_l(2, new, t=["Петров П. П."], r="301")]}))) == 2
+    assert len(changes.compare(was, _group({TUE: [_l(2, new, t=["Кушинада Л."], r="301")]}))) == 2
 
 
 @pytest.mark.parametrize("url, host", [
@@ -333,7 +348,7 @@ def test_new_day_and_other_subject_are_not_changes():
 def test_reminders_first_of_day_and_after_a_window():
     day = dt.date(2026, 9, 29)
     payload = _group({TUE: [
-        _l(1, "Физика", r="275", k="Лек", t=["Иванов И. И."]),
+        _l(1, "Физика", r="275", k="Лек", t=["Сильверхенд Д."]),
         _l(2, "История", r="актовый зал"),
         _l(3, "Химия", x=1),
         _l(4, "Право", o=1, r="12"),
@@ -343,7 +358,7 @@ def test_reminders_first_of_day_and_after_a_window():
     # — нет; 3-я отменена; 4-я — после окна: 14:00 — не посреди пары.
     assert [(a["number"], a["at"].strftime("%H:%M")) for a in plan] == [(1, "08:40"), (4, "14:00")]
     assert plan[0]["title"] == "09:00 — Физика"
-    assert plan[0]["text"] == "Каб. 275. 1 пара, лекция. Иванов И. И."
+    assert plan[0]["text"] == "Каб. 275. 1 пара, лекция. Сильверхенд Д."
     assert plan[1]["text"] == "Онлайн, комната 12. 4 пара"
     # За 10 минут до 2-й — ровно на перемене (10:30): звонок — ещё не перемена.
     assert [a["number"] for a in changes.reminders(payload, 10, day)] == [1, 4]
@@ -830,3 +845,55 @@ def test_shift_of_two_neighbours_is_not_sent_to_them(tmp_path, snapshots, monkey
 
     push.after_refresh(before, bt, shifted, build_index(shifted), day)
     assert push.sent == [] and said == ["push-shift"]
+
+
+def test_made_up_host_never_delivered_is_dropped(sending, monkeypatch):
+    """Выдуманный поддомен *.notify.windows.com: имени нет в DNS, доставок
+    Microsoft нет вовсе — раньше подписка не снималась никогда (прогон 2
+    аудита 4). Доставленная хоть раз — не снимается за DNS."""
+    import socket
+
+    import httpx
+
+    push, answers, later = sending
+    fake = service.parse_subscription(_body(endpoint="https://x1.notify.windows.com/w/?token=1"))
+    push._subs[fake["endpoint"]] = fake
+
+    def no_host(*a, **k):
+        try:
+            raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+        except socket.gaierror as exc:
+            raise httpx.ConnectError("dns") from exc
+
+    monkeypatch.setattr(webpush, "send", no_host)
+    for _ in range(service.DROP_AFTER_FAILS):
+        push._send(service.Job(fake, service.message(fake, "hello", "т", "б"), 60), attempt=1)
+    assert push.count() == 0
+
+    real = service.parse_subscription(_body(endpoint="https://x2.notify.windows.com/w/?token=2"))
+    push._subs[real["endpoint"]] = real
+    monkeypatch.setattr(webpush, "send", lambda *a, **k: webpush.Result(201))
+    push._send(service.Job(real, service.message(real, "hello", "т", "б"), 60))
+    monkeypatch.setattr(webpush, "send", no_host)
+    for _ in range(service.DROP_AFTER_FAILS + 1):
+        push._send(service.Job(real, service.message(real, "hello", "т", "б"), 60), attempt=1)
+    assert push.count() == 1
+
+
+def test_full_house_evicts_a_never_delivered_subscription(sending, monkeypatch):
+    """Потолок подписок забит мусором — новая подписка встаёт на место самой
+    старой, которой ни разу не доставили; доставленные не трогаются."""
+    push, answers, later = sending
+    monkeypatch.setattr(service, "MAX_SUBSCRIPTIONS", 2)
+    monkeypatch.setattr(push, "_dispatch", lambda jobs: None)
+    delivered = service.parse_subscription(_body(endpoint="https://web.push.apple.com/ok"))
+    junk = service.parse_subscription(_body(endpoint="https://web.push.apple.com/junk"))
+    push._subs[delivered["endpoint"]] = {**delivered, "ok": "2026-09-29", "since": "2026-09-01"}
+    push._subs[junk["endpoint"]] = {**junk, "since": "2026-09-28"}
+    new = service.parse_subscription(_body(endpoint="https://web.push.apple.com/new"))
+    assert push.subscribe(new, dt.date(2026, 9, 29)) is True
+    assert set(push._subs) == {delivered["endpoint"], new["endpoint"]}
+    push._subs[new["endpoint"]]["ok"] = "2026-09-29"
+    other = service.parse_subscription(_body(endpoint="https://web.push.apple.com/other"))
+    assert push.subscribe(other, dt.date(2026, 9, 29)) is False
+

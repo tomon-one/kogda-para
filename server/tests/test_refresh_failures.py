@@ -745,10 +745,29 @@ def test_published_day_emptied_for_many_groups_is_rejected():
         })
 
     before = sheet(0)
-    refresher_mod._check_days_emptied(before, sheet(9), day)
+    refresher_mod._check_days_emptied(before, sheet(11), day)
     refresher_mod._check_days_emptied(before, sheet(0, empty_past=30), day)
-    with pytest.raises(ChangedAgainstPrevious, match="у 10 групп из 30 пропали все пары"):
-        refresher_mod._check_days_emptied(before, sheet(10), day)
+    with pytest.raises(ChangedAgainstPrevious, match="у 12 групп из 30 пропали все пары"):
+        refresher_mod._check_days_emptied(before, sheet(12), day)
+
+
+def test_dropped_next_sheet_over_an_empty_date_frame_is_not_a_cut_day():
+    """Текущий лист несёт пустой каркас дат следующего, пары этих дней — из
+    следующего. Следующий выпал из окна (недописан или с ошибкой) — его дни
+    не «вырезаны», и заход не отвергается (прогон 2 аудита 4)."""
+    from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Lesson, Snapshot
+
+    today, later = dt.date(2026, 10, 2), dt.date(2026, 10, 5)
+    groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(30)]
+    pair = [Lesson(number=1, subject="Физика")]
+    current = Snapshot("текущий", groups=groups, dates=[today, later],
+                       schedule={g.id: {today: pair} for g in groups})
+    following = Snapshot("следующий", groups=groups, dates=[later],
+                         schedule={g.id: {later: pair} for g in groups})
+    before = current.merged_with(following)
+    refresher_mod._check_days_emptied(before, current, today, dropped=True)
+    with pytest.raises(ChangedAgainstPrevious):
+        refresher_mod._check_days_emptied(before, current, today)
 
 
 def test_forgotten_accept_next_lever_is_not_taken(tmp_path, sheet, sent, fixture_csv):

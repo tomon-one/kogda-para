@@ -473,3 +473,28 @@ def test_curator_placeholder_is_not_a_teacher():
     """«Куратор» — должность, а не человек: в /v1/teachers ему не место (М31)."""
     assert parse_lesson(4, "Кураторский час (Пр)", "", "Куратор").teachers == ()
     assert parse_lesson(4, "Физика", "", "Кураторова А. А.").teachers == ("Кураторова А. А.",)
+
+
+@pytest.mark.parametrize("room, note", [
+    ("Ссылка: https://my.mts-link.ru/j/1", "Ссылка:"),
+    ("https://my.mts-link.ru/j/1 (пароль 1234)", "(пароль 1234)"),
+    ("https://a.ru/1\nhttps://b.ru/2", None),
+])
+def test_text_next_to_a_link_is_not_a_room(room, note):
+    """Рядом со ссылкой место — только кабинет или «онлайн N»: «Ссылка:» и
+    вторая ссылка делали онлайн-пару очной с кабинетом-словом (прогон 2 аудита 4)."""
+    lesson = parse_lesson(number=1, subject_raw="Физика (Лек)", room_raw=room, teacher_raw="")
+    assert (lesson.room, lesson.online, lesson.note) == (None, True, note)
+
+
+def test_role_before_a_name_is_dropped_not_the_name():
+    """«Куратор Иванова Анна Петровна» — человек, а «Куратор» целиком —
+    заглушка (М31; прогон 2 аудита 4)."""
+    from whensclass.parser.cells import split_teachers
+
+    assert split_teachers("Куратор") == ()
+    assert split_teachers("Вакансия (ждём)") == ()
+    assert split_teachers("Куратор Иванова Анна Петровна") == ("Иванова Анна Петровна",)
+    assert split_teachers("куратор: Иванова А. П.") == ("Иванова А. П.",)
+    assert split_teachers("Кураторова Анна Петровна") == ("Кураторова Анна Петровна",)
+
