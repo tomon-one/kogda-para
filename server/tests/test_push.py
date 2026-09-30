@@ -257,7 +257,7 @@ def test_teacher_sees_only_the_group_that_joined_or_left():
     (Л-926/4)» про группу, у которой ничего не менялось (М34 прогона 1
     аудита 4). ScheduleDiff.kt — так же."""
     def teacher(lessons):
-        return {"g": "t1", "gn": "Иванчиков И. И.", "kind": "teacher",
+        return {"g": "t1", "gn": "Такемура Г. А.", "kind": "teacher",
                 "days": [{"d": TUE, "l": lessons}]}
 
     joined = changes.compare(
@@ -279,7 +279,7 @@ def test_teacher_gets_both_lines_when_the_subject_of_the_same_group_changes():
     """На номере те же группы, но другой предмет — замена: и «убрали»
     прежний, и «добавилась» новый, как у группы (прогон 2 аудита 4)."""
     def teacher(lessons):
-        return {"g": "t1", "gn": "Иванчиков И. И.", "kind": "teacher",
+        return {"g": "t1", "gn": "Такемура Г. А.", "kind": "teacher",
                 "days": [{"d": TUE, "l": lessons}]}
 
     swapped = changes.compare(teacher([_l(3, "Физика", gr="ИСП-924/1")]),

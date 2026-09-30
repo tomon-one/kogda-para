@@ -71,8 +71,8 @@ def test_empty_cell_is_not_a_lesson():
 
 
 def test_two_teachers_in_one_cell():
-    lesson = parse_lesson(1, "Физкультура (Пр)", "", "Иванов И. И.\nПетров П. П.")
-    assert lesson.teachers == ("Иванов И. И.", "Петров П. П.")
+    lesson = parse_lesson(1, "Физкультура (Пр)", "", "Ковач Т. Л.\nОртега К. А.")
+    assert lesson.teachers == ("Ковач Т. Л.", "Ортега К. А.")
 
 
 def test_unknown_kind_survives():
@@ -115,7 +115,7 @@ def test_room_zero_or_one_means_not_assigned_yet():
     """«0» и «1» у очной пары — кабинет ещё не назначен: не «каб. 0», а место
     не указано. Онлайн-комната с таким номером — другое, она остаётся."""
     for cell in ("0", "1", " 0 "):
-        lesson = parse_lesson(1, "Дизайн-проектирование (Лек)", cell, "Иванова А. С.")
+        lesson = parse_lesson(1, "Дизайн-проектирование (Лек)", cell, "Альварес Д. Д.")
         assert lesson.room is None and lesson.online is False, cell
     assert parse_lesson(1, "Информатика", "онлайн 0", "").room == "0"
     assert parse_lesson(1, "Информатика", "10", "").room == "10"
@@ -126,11 +126,11 @@ def test_journal_in_room_column_is_a_cancellation(room):
     """«Элжур» — задание в электронном журнале вместо пары, «грубо говоря
     отмена» (Tomon 29.09), а не кабинет: иначе переход с онлайна объявлялся
     «снова очная» (четвёртый аудит, В7 прогона 1)."""
-    lesson = parse_lesson(2, "Физика (Лек)", room, "Иванов Иван Иванович")
+    lesson = parse_lesson(2, "Физика (Лек)", room, "Сеченов Дмитрий Сергеевич")
     assert lesson.cancelled and lesson.room is None and not lesson.online
     assert lesson.note == "задание в электронном журнале"
-    assert lesson.subject == "Физика" and lesson.teachers == ("Иванов Иван Иванович",)
-    reason = parse_lesson(2, "Физика (Пр) Отмена Преподаватель заболел", room, "Иванов И. И.")
+    assert lesson.subject == "Физика" and lesson.teachers == ("Сеченов Дмитрий Сергеевич",)
+    reason = parse_lesson(2, "Физика (Пр) Отмена Преподаватель заболел", room, "Сеченов Д. С.")
     assert reason.cancelled and reason.subject == "Физика"
     assert reason.note == "Преподаватель заболел; задание в электронном журнале"
 
@@ -301,7 +301,7 @@ def test_online_centre_is_still_a_building():
     ("Мисюрова Е.С. Антонов Артем Юрьевич", ("Мисюрова Е.С.", "Антонов Артем Юрьевич")),
     ("кураторский часМатвеев Александр Игоревич", ("Матвеев Александр Игоревич",)),
     ("замена", ()),
-    ("Иванов Иван Иванович", ("Иванов Иван Иванович",)),
+    ("Сеченов Дмитрий Сергеевич", ("Сеченов Дмитрий Сергеевич",)),
     ("Ли", ("Ли",)),
 ])
 def test_glued_and_service_texts_in_teacher_row(cell, people):
@@ -446,9 +446,9 @@ def test_dash_or_no_is_nothing(subject, room):
 
 @pytest.mark.parametrize("subject, teacher, why", [
     ("Иностранный язык, Английский (Пр) Отмена Преподаватель заболел. Куратрский час",
-     "Иванова И. И.", "Преподаватель заболел"),
+     "Джейден Н. Н.", "Преподаватель заболел"),
     ("Иностранный язык (Пр) Отмена преподаватель заболел Кураторский час",
-     "Иванова И. И.", "преподаватель заболел"),
+     "Джейден Н. Н.", "преподаватель заболел"),
     ("История экскурсионной деятельности в России (Лек)",
      "замена, кураторский часМатвеев Александр Игоревич", None),
 ])
@@ -488,13 +488,13 @@ def test_text_next_to_a_link_is_not_a_room(room, note):
 
 
 def test_role_before_a_name_is_dropped_not_the_name():
-    """«Куратор Иванова Анна Петровна» — человек, а «Куратор» целиком —
+    """«Куратор Фальконер Квеллкрист Андреевна» — человек, а «Куратор» целиком —
     заглушка (М31; прогон 2 аудита 4)."""
     from whensclass.parser.cells import split_teachers
 
     assert split_teachers("Куратор") == ()
     assert split_teachers("Вакансия (ждём)") == ()
-    assert split_teachers("Куратор Иванова Анна Петровна") == ("Иванова Анна Петровна",)
-    assert split_teachers("куратор: Иванова А. П.") == ("Иванова А. П.",)
+    assert split_teachers("Куратор Фальконер Квеллкрист Андреевна") == ("Фальконер Квеллкрист Андреевна",)
+    assert split_teachers("куратор: Фальконер К. А.") == ("Фальконер К. А.",)
     assert split_teachers("Кураторова Анна Петровна") == ("Кураторова Анна Петровна",)
 

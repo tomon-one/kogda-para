@@ -91,7 +91,7 @@ def a_teacher(fixture_csv) -> str:
 @pytest.mark.parametrize("junk", ["-", "—", "?", ".", "..."])
 def test_punctuation_is_not_a_teacher(junk):
     assert cells.split_teachers(junk) == ()
-    assert cells.split_teachers(f"Иванов И. И., {junk}") == ("Иванов И. И.",)
+    assert cells.split_teachers(f"Миллер Д. Т., {junk}") == ("Миллер Д. Т.",)
 
 
 def test_dash_under_empty_subject_is_no_lesson():
@@ -440,9 +440,9 @@ def test_half_built_next_sheet_is_left_out_not_fatal(tmp_path, sent, fixture_csv
 
     # Правка сегодняшнего листа доходит, пока следующий недописан.
     name = a_teacher(fixture_csv)
-    texts["лист"] = cell_replace(fixture_csv, name, "Новиков Н. Н.")
+    texts["лист"] = cell_replace(fixture_csv, name, "Смит А. А.")
     assert r.refresh(today=TODAY) is True
-    assert "Новиков Н. Н." in store.teachers.names.values()
+    assert "Смит А. А." in store.teachers.names.values()
 
 
 def test_next_sheet_with_a_format_error_is_left_out_with_an_alarm(
@@ -801,7 +801,7 @@ def test_recovery_with_a_failing_disk_still_closes_the_failure(
         raise OSError("места нет")
 
     monkeypatch.setattr(store, "put", full)
-    sheet["text"] = cell_replace(fixture_csv, a_teacher(fixture_csv), "Новиков Н. Н.")
+    sheet["text"] = cell_replace(fixture_csv, a_teacher(fixture_csv), "Смит А. А.")
     assert r.refresh(today=TODAY, force=True) is True
     assert r.status == "ok" and r.failing_since is None
     assert any("снова обновляется" in m["message"] for m in sent)
@@ -1015,7 +1015,7 @@ def test_one_changed_sheet_of_two_rebuilds_the_whole_window(
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
     assert r.refresh(today=TODAY) is True
-    texts["лист"] = cell_replace(fixture_csv, a_teacher(fixture_csv), "Новиков Н. Н.")
+    texts["лист"] = cell_replace(fixture_csv, a_teacher(fixture_csv), "Смит А. А.")
     assert r.refresh(today=TODAY) is True
     days = set(store.snapshot.dates)
     assert dt.date(2026, 9, 2) in days and dt.date(2026, 9, 24) in days

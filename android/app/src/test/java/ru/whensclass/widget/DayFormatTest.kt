@@ -36,7 +36,7 @@ class DayFormatTest {
 
     @Test
     fun `одно слово не трогаем`() {
-        assertEquals("Иванов", shortenName("Иванов"))
+        assertEquals("Фишер", shortenName("Фишер"))
     }
 
     @Test
