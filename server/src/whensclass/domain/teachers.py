@@ -92,7 +92,7 @@ def spelling_twin(index: TeacherIndex | None, name: str) -> str | None:
 
 
 def _short(name: str) -> bool:
-    """«Мисюрова Е.С.», «Иванов И. И.» — фамилия и одни инициалы."""
+    """«Мисюрова Е.С.», «Сеченов Д. С.» — фамилия и одни инициалы."""
     words = [w for w in re.split(r"[\s.]+", name) if w]
     return len(words) >= 2 and all(len(w) == 1 for w in words[1:])
 
