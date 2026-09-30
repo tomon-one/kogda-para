@@ -222,7 +222,7 @@ test('другие группы: склейка, значки, подгрупп�
   const own = ownOnly(old);
   assert.deepEqual(own.days[0].l, mine.days[0].l);
   // У преподавателя подпись группы — не «чужая пара».
-  const teacher = { kind: 'teacher', gn: 'Иванова', days: [{ d: 'x', l: [{ n: 1, s: 'А', gr: 'ИСП-1' }] }] };
+  const teacher = { kind: 'teacher', gn: 'Банкрофт', days: [{ d: 'x', l: [{ n: 1, s: 'А', gr: 'ИСП-1' }] }] };
   assert.equal(ownOnly(teacher).days[0].l.length, 1);
 });
 
