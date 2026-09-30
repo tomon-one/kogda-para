@@ -26,6 +26,7 @@ keystore.properties
 
 # Локальные секреты и состояние
 .env
+.env.*
 server/var/
 
 # Мусор ОС и редакторов
