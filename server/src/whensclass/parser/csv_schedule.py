@@ -25,7 +25,7 @@ from ..domain.models import (
     SourceFormatChanged,
     a1_column,
 )
-from .cells import parse_lesson, replaced_of
+from .cells import _HAS_LETTER, _ROOM_RE, parse_lesson, replaced_of
 from .dates import _parse_date
 from .groups import (
     _warn_once,
@@ -196,14 +196,18 @@ def parse_sheet(
         teacher_row = _teacher_row(rows, i, skip, where)
 
         for group in groups:
-            lesson = parse_lesson(
-                number=number,
-                subject_raw=_cell(row, group.column),
-                room_raw=_cell(row, group.column + 3),
-                teacher_raw=_cell(teacher_row, group.column) if teacher_row else "",
-            )
-            if lesson is not None:
-                snapshot.schedule[group.id].setdefault(current, []).append(lesson)
+            col = group.column
+            # Половинки — две пары с одним номером: каждая со своей аудиторией.
+            parts = [(col, col + 1), (col + 2, col + 3)] if _halves(row, col) else [(col, col + 3)]
+            for subject_col, room_col in parts:
+                lesson = parse_lesson(
+                    number=number,
+                    subject_raw=_cell(row, subject_col),
+                    room_raw=_cell(row, room_col),
+                    teacher_raw=_cell(teacher_row, subject_col) if teacher_row else "",
+                )
+                if lesson is not None:
+                    snapshot.schedule[group.id].setdefault(current, []).append(lesson)
         for col in unnamed:
             if _cell(row, col).strip():
                 unnamed[col] += 1
@@ -220,20 +224,54 @@ def parse_sheet(
     return snapshot
 
 
+def _halves(row: list[str], col: int) -> bool:
+    """Блок поделён пополам: две пары рядом, у каждой название и аудитория.
+
+    Так колледж пишет подгруппы с разными языками: «немецкий» и «55/1» слева,
+    «английский» и «467» справа, преподаватели — под каждым названием. От
+    вставки ячеек отличает то, что в +2 название, а не номер аудитории соседа,
+    и в +3 есть аудитория: вставка на две ячейки оставляет там пусто.
+    """
+    right = _cell(row, col + 2).strip()
+    return bool(
+        right
+        and _cell(row, col + 3).strip()
+        and _HAS_LETTER.search(right)
+        and not _ROOM_RE.match(right)
+        and not _ROOM_RE.match(_cell(row, col).strip())
+    )
+
+
 def _check_spill(rows: list[list[str]], groups: list[GroupRef], skip: set[int], where) -> None:
     """Отказ, если в пустых колонках блоков (+1, +2) появился текст.
 
     Так выглядит «вставить ячейки» не на ширину блока: предмет уезжает в +1
     или +2, а аудитория соседа — в колонку предмета. Без проверки это прошло
     бы при ok: на две ячейки — «пар нет» у всех групп, на одну — номера
-    аудиторий вместо предметов.
+    аудиторий вместо предметов. Блоки, поделённые пополам ([_halves]), и их
+    строки преподавателей не в счёт.
     """
     columns = sorted({g.column for g in groups})
+    halved: set[tuple[int, int]] = set()
+    for i, row in enumerate(rows):
+        if i in skip or not _LESSON_NO_RE.match(_cell(row, 1).strip()):
+            continue
+        cols = [col for col in columns if _halves(row, col)]
+        if not cols:
+            continue
+        teacher_row = _teacher_row(rows, i, skip, where)
+        teacher_i = next((j for j in range(i + 1, len(rows)) if rows[j] is teacher_row), None)
+        for col in cols:
+            halved.add((i, col))
+            if teacher_i is not None:
+                halved.add((teacher_i, col))
     found: list[tuple[int, int]] = []
     for i, row in enumerate(rows):
         if i in skip:
             continue
         for col in columns:
+            if (i, col) in halved:
+                continue
             for extra in (1, 2):
                 if _cell(row, col + extra).strip():
                     found.append((i, col + extra))

@@ -22,7 +22,7 @@
 Архив: `<архив>/<gid>/<дата>-<время>-<хеш>[-rejected].csv.gz`, время —
 Новосибирск. Отвергнутые лежат с `.txt` причины рядом. Каталог только для
 чтения. Где он: `WHENSCLASS_ARCHIVE`, иначе копия состояния сервера
-`~/WhensClass-state/history`, иначе локальный архив автора.
+`~/WhensClass-state/history`.
 """
 
 from __future__ import annotations
