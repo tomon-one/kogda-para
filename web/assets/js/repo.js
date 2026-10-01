@@ -8,6 +8,9 @@ import * as store from './store.js';
 import { collegeNow, weekStart } from './time.js';
 import { DAYS, MAX_GROUPS, cleanSchedule, combineGroups, coversDay, ownOnly, windowMark } from './schedule.js';
 
+// Списки и закреплённые — в catalog.js; экраны и тесты берут их отсюда.
+export { cachedGroups, cachedTeachers, freshGroups, freshTeachers, followRenamedPins, pinned, togglePin } from './catalog.js';
+
 /** Сколько сервер может молчать при живой сети, прежде чем это сбой, а не чих. */
 var UNREACHABLE_BROKEN_AFTER_MS = 30 * 60 * 1000;
 /** Неудачи с таким перерывом — не одна цепочка (UNREACHABLE_STREAK_GAP приложения). */
@@ -55,8 +58,8 @@ function setExtras(list) {
 
 /**
  * Чьё своё расписание — роль и выбранный. Другие группы в сверку не входят:
- * «Убрать» посреди обновления выбрасывало и своё свежее (четвёртый аудит, М4
- * прогона 1); их пишет writeExtras по нынешнему выбору.
+ * «Убрать» посреди обновления выбрасывало и своё свежее; их пишет
+ * writeExtras по нынешнему выбору.
  */
 function subject() {
   var own = chosen();
@@ -131,7 +134,7 @@ export function migrateGroups() {
   var sub = store.get('second');
   if (!sub && store.get('partial') == null) return;
   // Прежняя версия давала выбрать соседкой свою же группу — такую не
-  // переносим: она встала бы в список второй раз (Tomon 28.09).
+  // переносим: она встала бы в список второй раз.
   var group = store.get('group');
   if (sub && !store.get('extras') && !(group && group.id === sub.id)) {
     var g = store.get('secondGone');
@@ -231,7 +234,7 @@ function putServerState(status, srcUrl, since) {
 /** Отметить неудачу связи: начало цепочки неудач подряд и их число. */
 function noteUnreachable(now) {
   var u = store.get('unreachable');
-  // Вечерняя неудача и утренняя — не две подряд (прогон 2).
+  // Вечерняя неудача и утренняя — не две подряд.
   var streak = !!u && now - (u.last || 0) < UNREACHABLE_STREAK_GAP_MS;
   var chain = { since: streak ? u.since : now, last: now, count: streak ? (u.count || 1) + 1 : 1 };
   store.set('unreachable', chain);
@@ -255,8 +258,8 @@ function noteNotFound(key, now) {
 /**
  * 404 у одной из остальных групп; true — подтверждено повтором через час.
  * Список — из хранилища, мимо роли: extras() у преподавателя пуст, и 404,
- * пришедшее после переключения на «Я преподаватель», стирало все группы
- * (четвёртый аудит, М1 прогона 1). Группы уже нет в списке — не писать.
+ * пришедшее после переключения на «Я преподаватель», стирало все группы.
+ * Группы уже нет в списке — не писать.
  */
 function noteExtraNotFound(id, now) {
   var confirmed = false;
@@ -292,8 +295,8 @@ function collectExtras(requests, serverOk) {
     }, function (error) {
       // 404 при здоровом сервере, повторённое через час, — группы нет в
       // таблице. Выбор не стираем: вернётся она — вернутся и её пары. Первое
-      // 404 — только подозрение: не «не обновилась» с повтором каждую минуту
-      // (прогон 2), как и у своей группы.
+      // 404 — только подозрение: не «не обновилась» с повтором каждую минуту,
+      // как и у своей группы.
       var notFound = isNotFound(error) && serverOk;
       var gone = notFound && noteExtraNotFound(r.group.id, Date.now());
       var saved = store.get('extraSchedules') || {};
@@ -324,7 +327,7 @@ function writeExtras(answers) {
  * Снимок какой-то из остальных групп не с того же разбора таблицы (gen), что
  * своё, — её пора принести. Раньше смотрели, есть ли в нём сегодняшний день:
  * не пришедшая в заходе с новым gen группа держала прежние пары до следующей
- * правки таблицы (В2), а группа на практике качалась на каждом заходе (М3).
+ * правки таблицы, а группа на практике качалась на каждом заходе.
  */
 function extrasMissing() {
   var schedules = store.get('extraSchedules') || {};
@@ -353,7 +356,7 @@ function refreshOnce(force) {
   return api.meta().then(function (m) { meta = m; }, function (error) {
     meta = null;
     // 429 — сервер ответил, он занят (лимит nginx на адрес оператора): это не
-    // «не отвечает», и плашки сбоя из-за него не будет (М22).
+    // «не отвечает», и плашки сбоя из-за него не будет.
     busy = error instanceof api.HttpError && error.status === 429 ? error : null;
   })
     .then(function () {
@@ -365,11 +368,11 @@ function refreshOnce(force) {
       } else if (online() && !busy) {
         // Сайт открывают не каждый час: от цепочки неудач подряд сбой при
         // редких заходах не виден вовсе. Мерило — последний ответ сервера:
-        // молчит дольше получаса — не отвечает, и давность — от него
-        // (аудит сайта, прогон 2). Ответа не было никогда — цепочка неудач.
+        // молчит дольше получаса — не отвечает, и давность — от него.
+        // Ответа не было никогда — цепочка неудач.
         // Одна неудача — ещё не сбой: у человека могла пропасть своя сеть
         // (Wi-Fi без интернета navigator.onLine не видит). Нужны две подряд —
-        // страница повторяет неудачное через минуту (аудит, прогон 3).
+        // страница повторяет неудачное через минуту.
         var lastOk = store.get('lastOk');
         var chain = noteUnreachable(now);
         var since = lastOk || chain.since;
@@ -377,7 +380,7 @@ function refreshOnce(force) {
           putServerState(STATUS_UNREACHABLE, null, new Date(since).toISOString());
         }
       }
-      // Занят — своё и другие группы упрутся в тот же лимит: не тратить его (прогон 2).
+      // Занят — своё и другие группы упрутся в тот же лимит: не тратить его.
       if (busy) return { kind: 'failed', error: busy };
       if (!force && !outdated && meta && meta.gen === store.get('gen')) {
         // Данные те же, но проверку показать надо: иначе кажется, что кнопка
@@ -385,7 +388,7 @@ function refreshOnce(force) {
         store.set('fetchedAt', now);
         return { kind: 'fresh' };
       }
-      // Своё и остальные — разом, а не по очереди (аудит сайта, W2). На экран
+      // Своё и остальные — разом, а не по очереди. На экран
       // своё попадает вместе с ними: их молчание ограничено тайм-аутом
       // запроса, 30 секунд.
       var request = (teacherMode ? api.teacher(own.id, from, DAYS) : api.schedule(own.id, from, DAYS))
@@ -419,7 +422,7 @@ function refreshOnce(force) {
           store.set('gen', fresh.gen);
           store.set('fetchedAt', Date.now());
           store.set('window', windowMark(from));
-          // Своё пришло, другие — не все: без галочки и с их именами (В4).
+          // Своё пришло, другие — не все: без галочки и с их именами.
           // Уже убранные пока шёл запрос — не в счёт.
           var chosenIds = extras().map(function (g) { return g.id; });
           var missedAnswers = answers.filter(function (a) {
@@ -444,7 +447,7 @@ var queued = null;
  * идущем — ждёт его; принудительное — встаёт следом, и одно на всех, кто
  * пришёл, пока идёт текущее. Раньше принудительное при идущем принудительном
  * не вставало вовсе: второе «Добавить» или «Добавить» сразу после смены своей
- * группы выбрасывались сверкой, и пары не приходили (четвёртый аудит, В1).
+ * группы выбрасывались сверкой, и пары не приходили.
  */
 export function refresh(force) {
   if (running && !force) return running;
@@ -466,72 +469,7 @@ export function isRefreshing() {
   return running !== null;
 }
 
-// ——— списки ———
-
-export function cachedGroups() {
-  return store.get('groups') || [];
-}
-
-export function cachedTeachers() {
-  return store.get('teachers') || [];
-}
-
-/** Свежий список: {list} или {busy} — сервер занят (429), или {} — не ответил. */
-function freshList(key, request) {
-  return request().then(function (list) {
-    var clean = (Array.isArray(list) ? list : []).filter(function (x) {
-      return x && typeof x.id === 'string' && typeof x.name === 'string';
-    });
-    store.set(key, clean);
-    return { list: clean };
-  }, function (error) {
-    return error instanceof api.HttpError && error.status === 429 ? { busy: true } : {};
-  });
-}
-
-export function freshGroups() {
-  return freshList('groups', api.groups);
-}
-
-export function freshTeachers() {
-  return freshList('teachers', api.teachers);
-}
-
-/**
- * Закреплённые — за переименованием: id, которого нет в свежем списке,
- * спрашиваем у сервера, и он по памяти о старом имени отвечает под новым.
- */
-export function followRenamedPins(groups, teachers) {
-  function follow(key, list, ask) {
-    var ids = {};
-    list.forEach(function (x) { ids[x.id] = true; });
-    var pins = store.get(key) || [];
-    return pins.filter(function (id) { return !ids[id]; }).reduce(function (chain, old) {
-      return chain.then(function () {
-        return ask(old).then(function (body) {
-          if (body.g !== old && ids[body.g]) {
-            // Новый id мог быть закреплён и сам — без повтора, иначе звезда
-            // гасла только со второго нажатия (аудит сайта, W6).
-            var now = (store.get(key) || []).map(function (id) { return id === old ? body.g : id; });
-            store.set(key, now.filter(function (id, i) { return now.indexOf(id) === i; }));
-          }
-        }, function () { /* не ответил — в другой раз */ });
-      });
-    }, Promise.resolve());
-  }
-  return follow('pinnedGroups', groups, api.scheduleOne)
-    .then(function () { return follow('pinnedTeachers', teachers, api.teacherOne); });
-}
-
-export function pinned(kind) {
-  return store.get(kind === 'teachers' ? 'pinnedTeachers' : 'pinnedGroups') || [];
-}
-
-export function togglePin(kind, id) {
-  var key = kind === 'teachers' ? 'pinnedTeachers' : 'pinnedGroups';
-  var list = store.get(key) || [];
-  store.set(key, list.indexOf(id) >= 0 ? list.filter(function (x) { return x !== id; }) : list.concat([id]));
-}
+// ——— чужое расписание ———
 
 /**
  * Чужое расписание — по запросу, не хранится: {schedule} или {notFound} —

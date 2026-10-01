@@ -49,7 +49,7 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
     return card;
   }
   // Своих пар нет, а у выбранных групп есть: «пар нет» — над их серыми
-  // строками, как пишет виджет приложения (четвёртый аудит, М9 прогона 1).
+  // строками, как пишет виджет приложения.
   if (groups.length && lessons.every(function (l) { return isForeign(l, groups); })) {
     card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
   }
@@ -74,7 +74,7 @@ function isForeign(lesson, groups) {
 
 function lessonRow(lesson, bells, isNow, key, groups, byName) {
   // Пара только у других выбранных групп: её видно сразу, а не только по
-  // значкам — серый фон, приглушённый текст и подпись (Tomon 28.09).
+  // значкам — серый фон, приглушённый текст и подпись.
   var foreign = isForeign(lesson, groups);
   var time = lessonTime(bells, lesson.n);
   var place;
@@ -108,8 +108,8 @@ function lessonRow(lesson, bells, isNow, key, groups, byName) {
 
 /**
  * Значки групп под временем (GroupMarks в GroupMarks.kt) — только тех, у кого
- * пара есть: своя — закрашенным, другие — бледным; пустые рамки путали (Tomon
- * 28.09). Подпись — название (shortLabels) или номер: место в настройках, 1 —
+ * пара есть: своя — закрашенным, другие — бледным; пустые рамки путали.
+ * Подпись — название (shortLabels) или номер: место в настройках, 1 —
  * своя. Номера — по три в ряд, названия — сколько влезет.
  */
 function groupMarks(slots, groups, byName) {
@@ -133,7 +133,7 @@ export function groupMark(label, own, name) {
 // Точка у «идёт сейчас» дышит по часам страницы, а не с момента, когда строка
 // нарисована: экран перестраивается (пришло расписание, звонок, звезда), и
 // новая точка продолжает с той же фазы, а не вспыхивает заново. Период — как
-// у анимации pulse в app.css.
+// у анимации pulse в motion.css.
 var PULSE_MS = 2400;
 
 function nowLabel() {

@@ -46,7 +46,7 @@ function webView() {
 export function blocker() {
   if (isIos() && !standalone()) return 'home';
   // Сайт раздаётся ссылкой из Telegram: во встроенном просмотрщике «браузер
-  // не умеет» уводило от уведомлений совсем (четвёртый аудит, М57 прогона 1).
+  // не умеет» уводило от уведомлений совсем.
   if (!supported() && webView()) return 'webview';
   if (!supported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
@@ -66,7 +66,7 @@ export function enabled() {
 
 /**
  * За сколько напоминать при включении: прежний выбор, а не всегда 20 —
- * выключение стирало минуты (найдено живьём 29.09).
+ * выключение стирало минуты.
  */
 export function lastRemind() {
   var saved = store.get(KEY);
@@ -76,7 +76,7 @@ export function lastRemind() {
 /**
  * Включены, но браузер сам снял разрешение (Chrome отзывает его у сайтов, на
  * уведомления которых не нажимают) или его сбросили: подписки больше нет,
- * а выключатели показывали «включено» (М65).
+ * а выключатели показывали «включено».
  */
 export function revoked() {
   return enabled() && supported() && Notification.permission !== 'granted';
@@ -85,7 +85,7 @@ export function revoked() {
 /**
  * Служба рассылки этой подписки словами — для «идут через серверы …»: по
  * адресу подписки, а до неё — по браузеру. Раньше выбор был только между
- * Google и Mozilla (М26).
+ * Google и Mozilla.
  */
 export function service() {
   var saved = store.get(KEY);
@@ -121,7 +121,7 @@ function request(path, body) {
   }
   return withTimeout(fetch(path, init).then(function (response) {
     // 429 — лимит nginx на адрес, который делит вся группа: «подождите», а не
-    // «сервер не принял» (М44).
+    // «сервер не принял».
     if (response.status === 429) throw new PushError('busy');
     if (!response.ok) throw new PushError(response.status === 404 && !body ? 'off' : 'server');
     return response.status === 204 ? null : response.json();
@@ -177,7 +177,7 @@ function subscription(registration) {
 }
 
 // Смены — по одной: быстрые нажатия шли параллельно, и у службы оказывались
-// две подписки вместо одной (найдено живьём 29.09).
+// две подписки вместо одной.
 var queue = Promise.resolve();
 function serial(work) {
   var run = queue.then(work, work);
@@ -237,7 +237,7 @@ export function disable() {
       var endpoint = sub.endpoint;
       // Сначала служба, потом браузер: отписанный браузер служба и так узнает
       // по ответу 410, но не сразу. Не дошло (нет сети, 429) — повторить при
-      // следующем открытии: обещано «выключите — запись сотрётся» (М79).
+      // следующем открытии: обещано «выключите — запись сотрётся».
       return request('/v1/push/remove', { endpoint: endpoint }).then(function () {
         store.remove(REMOVE_KEY);
       }, function () {
@@ -276,11 +276,11 @@ export function sync(who) {
   if (!saved || !enabled() || !who) return Promise.resolve(false);
   if (blocker()) return Promise.resolve(false);
   if (Notification.permission !== 'granted') return Promise.resolve(false);
-  // Подписки до 29.09 не знали сайта — переслать сразу, а не через сутки.
+  // Прежние подписки не знали сайта — переслать сразу, а не через сутки.
   var moved = saved.kind !== who.kind || saved.id !== who.id || saved.site !== SITE;
   var due = moved || Date.now() - (saved.sent || 0) >= RESYNC_MS;
   // Браузер сменил подписку сам, а перенос у службы не вышел (прежней записи
-  // уже не было) — адрес не тот, что записан: переслать сразу (М75).
+  // уже не было) — адрес не тот, что записан: переслать сразу.
   var changed = navigator.serviceWorker.getRegistration().then(function (registration) {
     return registration ? registration.pushManager.getSubscription() : null;
   }).then(function (sub) {

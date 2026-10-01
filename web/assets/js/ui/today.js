@@ -32,7 +32,7 @@ export function mainScreen(app) {
     head, secondTabs(), content);
 
   // Сбой и пропажа — на любой вкладке, как в приложении: чужое расписание во
-  // время сбоя иначе выглядело свежим (аудит сайта, W6). На своём — у
+  // время сбоя иначе выглядело свежим. На своём — у
   // сегодняшнего дня, куда страница прокручивается.
   if (route.kind) {
     var top = plates(app);
@@ -63,7 +63,7 @@ export function mainScreen(app) {
 
 /**
  * Почему у ⟳ крестик, а не галочка; null — всё хорошо. Та же строка уходит
- * чтецу экрана, чтобы он не сказал «обновлено» при крестике (аудит, прогон 2).
+ * чтецу экрана, чтобы он не сказал «обновлено» при крестике.
  */
 export function refreshLabel(app) {
   if (app.state.refreshFailed) return 'Не удалось обновить расписание';
@@ -103,7 +103,7 @@ function topbar(app, own) {
     label = 'Обновить расписание';
   }
   // Пока крутится — не disabled, а aria-disabled и пропуск нажатий:
-  // выключенная кнопка теряет фокус клавиатуры (аудит, прогон 2).
+  // выключенная кнопка теряет фокус клавиатуры.
   var refresh = h('button', {
     type: 'button', class: 'icon-button', 'aria-label': label, title: label, 'data-key': 'refresh',
     'aria-disabled': spinning ? 'true' : null,
@@ -162,7 +162,7 @@ function plates(app) {
       actionButton('Выбрать заново', function () { app.go(teacherMode ? 'pick/self' : 'pick'); })));
   }
   // Другая группа пропала из таблицы: её пары просто исчезали без слова, а
-  // приложение в этот момент присылает уведомление (четвёртый аудит, М17).
+  // приложение в этот момент присылает уведомление.
   var goneExtras = teacherMode ? [] : app.extras().filter(function (g) { return g.gone; });
   if (goneExtras.length) {
     var names = goneExtras.map(function (g) { return g.name; });
@@ -197,7 +197,7 @@ function plates(app) {
  */
 function explainMissing(app, schedule, loading, fallback) {
   // Своё — 404 от здорового сервера, а сохранённого нет: сказать сразу, а не
-  // «проверьте интернет» (аудит, прогон 2). Час подтверждения нужен только,
+  // «проверьте интернет». Час подтверждения нужен только,
   // чтобы не прятать сохранённое.
   if (!schedule && !loading && fallback !== null && app.goneSuspected() && !app.gone()) {
     var teacherMode = app.isTeacher();

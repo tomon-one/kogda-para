@@ -3,8 +3,8 @@
 (function () {
   var tested = /^\/tested(\/|$)/.test(location.pathname);
   var prefix = tested ? 'wct:' : 'wc:';
-  // У tested на домашнем экране своё имя — иначе два одинаковых значка
-  // (аудит сайта, W8). Теги стоят в <head> выше этого скрипта.
+  // У tested на домашнем экране своё имя — иначе два одинаковых значка.
+  // Теги стоят в <head> выше этого скрипта.
   if (tested) {
     var manifest = document.querySelector('link[rel="manifest"]');
     if (manifest) manifest.setAttribute('href', 'manifest-tested.json');
