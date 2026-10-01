@@ -1,10 +1,9 @@
 """Поиск листа: чем «колледж не выложил» отличается от «мы не посмотрели».
 
 Снаружи эти два случая выглядят одинаково — расписания на сегодня нет, — но
-говорить о них приложение должно по-разному. Раньше поиск в обоих случаях
-молча брал ближайший известный лист, служба оставалась в `ok`, и человек читал
-«расписание ещё не опубликовано» — утверждение о колледже, которого мы в тот
-момент проверить не могли.
+говорить о них приложение должно по-разному. Взять в обоих случаях ближайший
+известный лист при `ok` значит сказать «расписание ещё не опубликовано» —
+утверждение о колледже, которое мы в тот момент проверить не могли.
 
 Разница решается одним признаком: добрались ли мы до содержимого кандидатов.
 """
@@ -195,9 +194,9 @@ def test_covering_sheet_wins_over_earlier_trouble(tmp_path, monkeypatch):
 
 
 def test_miss_is_remembered_and_not_rescanned_every_refresh(tmp_path, monkeypatch):
-    """За краем покрытия служба каждые 20 минут заново качала и разбирала всех
-    кандидатов: теперь «листа нет» помнится два часа, а
-    глубокий поиск (ночью и при новом имени в книге) идёт мимо этой памяти."""
+    """За краем покрытия «листа нет» помнится два часа, а не проверяется каждые
+    20 минут заново по всем кандидатам; глубокий поиск (ночью и при новом
+    имени в книге) идёт мимо этой памяти."""
     setup_lookup(monkeypatch, visible("расписание групп 01.-05.09"),
                  {"расписание групп 01.-05.09": ("2026-09-01", "2026-09-05")})
     fetched = []
@@ -259,10 +258,8 @@ def test_new_sheet_with_two_dates_is_found(tmp_path, monkeypatch, fixture_csv):
 
 
 def test_empty_date_skeleton_does_not_count_as_covered(tmp_path, monkeypatch):
-    """Колледж вписал даты на месяц вперёд без
-    пар. Память поиска считала лист покрывающим весь месяц и новую вкладку
-    не читала бы вовсе. Покрытие листа для поиска — до последнего дописанного
-    дня."""
+    """Колледж вписал даты на месяц вперёд без пар. Покрытие листа для поиска
+    — до последнего дописанного дня, иначе новую вкладку он не прочтёт вовсе."""
     sheets = visible("расписание групп 01.-19.09")
     setup_lookup(
         monkeypatch, sheets, {"расписание групп 01.-19.09": ("2026-09-02", "2026-11-02")}
@@ -280,8 +277,7 @@ def test_empty_date_skeleton_does_not_count_as_covered(tmp_path, monkeypatch):
 
 
 def test_closed_table_during_search_is_closed_not_unreachable(tmp_path, monkeypatch):
-    """Закрытая таблица при поиске листа
-    выглядела «добраться не вышло»."""
+    """Закрытая таблица при поиске листа — закрытая, а не «добраться не вышло»."""
     sheets = visible("расписание групп 28.09-03.10")
     setup_lookup(monkeypatch, sheets, {"расписание групп 28.09-03.10": si.gsheets.SheetClosed})
     with pytest.raises(si.gsheets.SheetClosed):
@@ -289,8 +285,8 @@ def test_closed_table_during_search_is_closed_not_unreachable(tmp_path, monkeypa
 
 
 def test_next_sheet_is_searched_deep_when_the_refresh_is_deep(tmp_path, monkeypatch):
-    """Поиск следующего листа шёл без deep, и
-    свежий промах прятал только что появившийся лист до ночи."""
+    """Поиск следующего листа — глубокий, как и заход: иначе свежий промах
+    спрячет только что появившийся лист до ночи."""
     index = sheet_memory.SheetIndex(tmp_path)
     index.remember("лист A", "1", dt.date(2026, 9, 21), dt.date(2026, 9, 26))
     asked = []
@@ -309,9 +305,8 @@ def test_next_sheet_is_searched_deep_when_the_refresh_is_deep(tmp_path, monkeypa
 
 @pytest.mark.parametrize("trouble", [ConnectionError, None])
 def test_calendar_that_did_not_come_is_not_alarming_either(tmp_path, monkeypatch, trouble):
-    """«тревожимся только за листы групп» держал
-    тест лишь в ветке отказа разбора; ветки «не прочитался» и «пустой ответ»
-    можно было откатить молча."""
+    """«Тревожимся только за листы групп» — и в ветках «не прочитался» и
+    «пустой ответ», а не только в отказе разбора."""
     sheets = visible("Календарный график 2026-2027г.", "расписание групп 01.-05.09")
     setup_lookup(
         monkeypatch, sheets,
@@ -325,8 +320,8 @@ def test_calendar_that_did_not_come_is_not_alarming_either(tmp_path, monkeypatch
 
 
 def test_sheet_renamed_in_place_is_read_once(tmp_path, monkeypatch):
-    """Колледж переименовал лист, gid тот же: в окне он был дважды — под
-    старым и новым именем, и качался на каждом заходе два раза."""
+    """Колледж переименовал лист, gid тот же: в окне он один, а не дважды —
+    под старым и новым именем."""
     def resolve_for(day, state_dir, deep=False):
         return ("старое имя", "1") if day == dt.date(2026, 9, 25) else ("новое имя", "1")
 

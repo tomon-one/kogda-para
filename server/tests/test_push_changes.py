@@ -73,9 +73,9 @@ def test_teacher_lessons_are_tagged_with_groups():
 
 def test_teacher_sees_only_the_group_that_joined_or_left():
     """Склеенная запись берёт самое длинное название, и оно меняется, когда к
-    паре присоединяется или уходит группа: приходило «убрали 2 пару
-    (Л-926/4)» про группу, у которой ничего не менялось. ScheduleDiff.kt —
-    так же."""
+    паре присоединяется или уходит группа: «убрали 2 пару (Л-926/4)» не
+    должно приходить про группу, у которой ничего не менялось.
+    ScheduleDiff.kt — так же."""
     def teacher(lessons):
         return {"g": "t1", "gn": "Такемура Г. А.", "kind": "teacher",
                 "days": [{"d": TUE, "l": lessons}]}
@@ -129,7 +129,7 @@ def test_spelling_fix_is_not_a_change(old, new):
     ("https://evil.com\\my.mts-link.ru/j/1", "evil.com"),
 ])
 def test_crooked_or_backslash_link_is_foreign_and_does_not_break(url, host):
-    """Кривая ссылка роняла сводку всем подписчикам, а «\\» выдавал
+    """Кривая ссылка не роняет сводку всем подписчикам, а «\\» не выдаёт
     чужой адрес за площадку колледжа."""
     old = _group({TUE: [_l(1, "Право", o=1)]})
     new = _group({TUE: [_l(1, "Право", o=1, u=url)]})

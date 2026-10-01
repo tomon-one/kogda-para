@@ -11,9 +11,8 @@ import urllib.parse
 from . import webpush
 
 
-# Службы рассылки браузеров. Адрес подписки приходит от браузера, то есть от
-# кого угодно: без списка служба слала бы POST на любой адрес, который ей
-# назовут, — в том числе во внутреннюю сеть машины.
+# Службы рассылки браузеров: без списка служба слала бы POST на любой адрес,
+# который ей назовут, — в том числе во внутреннюю сеть машины.
 PUSH_HOSTS = (
     "fcm.googleapis.com",                   # Chrome, Яндекс Браузер, Samsung
     "updates.push.services.mozilla.com",    # Firefox
@@ -30,7 +29,7 @@ def endpoint_allowed(endpoint: str) -> bool:
     if not isinstance(endpoint, str) or len(endpoint) > MAX_ENDPOINT:
         return False
     # Только печатный ASCII без пробелов: urlsplit молча выкидывает \t и \n, а
-    # httpx на таком адресе бросал InvalidURL мимо журнала.
+    # httpx на таком адресе бросает InvalidURL мимо журнала.
     if any(not 32 < ord(c) < 127 for c in endpoint):
         return False
     try:

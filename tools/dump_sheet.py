@@ -9,9 +9,8 @@
 
 Тем же путём, что и служба: сырой экспорт `export?format=csv&gid=`. По имени
 листа не скачать — экспорт знает только gid; имя ↔ gid даёт Sheets API
-(`sources/gsheets.py`) или адресная строка таблицы (`#gid=`). До 14 сентября
-2026 здесь был gviz — он терял текст в «числовых» колонках, к нему не
-возвращаться (`docs/source-format.md`).
+(`sources/gsheets.py`) или адресная строка таблицы (`#gid=`). Не gviz: он
+теряет текст в «числовых» колонках (`docs/source-format.md`).
 """
 
 from __future__ import annotations

@@ -76,9 +76,8 @@ def test_bad_token_keeps_the_subscription(sending):
 
 
 def test_key_off_the_curve_and_control_chars_are_refused():
-    """65 байт с 0x04 впереди — ещё не ключ: такую подписку служба принимала и
-    не снимала никогда. Адрес с \\t проходил urlsplit и ронял httpx мимо
-    журнала."""
+    """65 байт с 0x04 впереди — ещё не ключ. Адрес с \\t проходит urlsplit и
+    роняет httpx мимо журнала."""
     bad_key = {"p256dh": b64encode(b"\x04" + b"\x01" * 64), "auth": b64encode(b"0123456789abcdef")}
     with pytest.raises(subscription.BadSubscription, match="кривой"):
         subscription.parse_subscription(_body(keys=bad_key))
@@ -170,7 +169,7 @@ def test_retry_queue_is_bounded():
 
 
 def test_whole_service_failing_alarms_the_owner(sending, monkeypatch):
-    """Сплошной отказ службы рассылки был виден только в журнале."""
+    """Сплошной отказ службы рассылки — тревога владельцу, а не только журнал."""
     push, answers, later = sending
     said = []
     monkeypatch.setattr(service.alerts, "notify", lambda kind, text, **k: said.append((kind, text)))
@@ -185,7 +184,7 @@ def test_whole_service_failing_alarms_the_owner(sending, monkeypatch):
 
 
 def test_changes_live_until_the_end_of_their_last_day():
-    """Было — 12 часов при любом дне."""
+    """Сводка живёт до конца своего последнего дня, а не фиксированный срок."""
     import zoneinfo
 
     zone = zoneinfo.ZoneInfo("Asia/Novosibirsk")
@@ -199,8 +198,8 @@ def test_changes_live_until_the_end_of_their_last_day():
 
 def test_made_up_host_never_delivered_is_dropped(sending, monkeypatch):
     """Выдуманный поддомен *.notify.windows.com: имени нет в DNS, доставок
-    Microsoft нет вовсе — раньше подписка не снималась никогда. Доставленная
-    хоть раз — не снимается за DNS."""
+    Microsoft нет вовсе — подписка снимается. Доставленная хоть раз — не
+    снимается за DNS."""
     import socket
 
     import httpx
@@ -252,7 +251,7 @@ def test_full_house_evicts_a_never_delivered_subscription(sending, monkeypatch):
 
 def test_resent_subscription_keeps_its_delivered_mark(sending, monkeypatch):
     """Страница пересылает подписку раз в сутки — отметка о доставке остаётся:
-    иначе под потолком настоящая уходила раньше свежего мусора."""
+    иначе под потолком настоящая уйдёт раньше свежего мусора."""
     push, answers, later = sending
     monkeypatch.setattr(service, "MAX_SUBSCRIPTIONS", 2)
     monkeypatch.setattr(push, "_dispatch", lambda jobs: None)

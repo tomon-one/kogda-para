@@ -1,10 +1,9 @@
 """Заход обновления падает громко: stale, тревога, архив — но не молча.
 
-Раньше было несколько путей, где обновление останавливалось
-без единого сигнала или сигналило не тем: тревога о диске шла на каждом
-заходе, перезапуск посреди сбоя повторял тревогу, чих Google сразу показывал
-телефонам «сбой», страница входа выдавалась за «формат», смерть посреди
-разбора не оставляла следов.
+Здесь пути, где обновление легко остановить без сигнала или сигналить не тем:
+тревога о диске на каждом заходе, повтор тревоги после перезапуска посреди
+сбоя, «сбой» на телефонах от чиха Google, страница входа под видом «формата»,
+смерть посреди разбора без следов.
 
 Общие для тестов захода `sent` и `sheet` — в conftest.py.
 """
@@ -215,10 +214,10 @@ def test_single_interrupted_refresh_is_quiet(tmp_path, sheet, sent):
 
 
 def test_network_blip_during_format_failure_is_not_a_new_alarm(tmp_path, sent, fixture_csv):
-    """Лист отвергнут по формату, через час один
-    таймаут Google. Раньше льгота сети считалась от начала всего сбоя — и
-    сразу уходила тревога «таблица не прочиталась», а err подменялся сетевым.
-    И окно тишины после перезапуска помнилось только для последнего вида."""
+    """Лист отвергнут по формату, через час один таймаут Google. Льгота сети —
+    от первого сетевого отказа, а не от начала сбоя: тревоги «таблица не
+    прочиталась» нет, и err не подменяется сетевым. Окно тишины после
+    перезапуска помнится для каждого вида."""
     store = SnapshotStore(tmp_path)
     store.put(
         parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
@@ -245,10 +244,8 @@ def test_network_blip_during_format_failure_is_not_a_new_alarm(tmp_path, sent, f
 def test_freeze_is_stale_at_once_without_touching_the_sheet(
     tmp_path, sheet, sent, monkeypatch
 ):
-    """Рычаг заморозки из runbook
-    (SPREADSHEET_ID=stop) полчаса держал ok, стирал память о листе и вёл
-    ссылку на таблицу в никуда. WHENSCLASS_FREEZE — сразу stale на прежнем
-    снимке, в сеть не ходим, тревог нет."""
+    """WHENSCLASS_FREEZE — сразу stale на прежнем снимке, в сеть не ходим,
+    тревог нет."""
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
     assert r.refresh(today=TODAY) is True
@@ -269,9 +266,8 @@ def test_freeze_is_stale_at_once_without_touching_the_sheet(
 def test_recovery_with_a_failing_disk_still_closes_the_failure(
     tmp_path, sheet, sent, monkeypatch, fixture_csv
 ):
-    """Лист починили, а снимок не лёг на диск —
-    сбой не закрывался, «починилось» не уходило, и первый чих сети сразу давал
-    stale."""
+    """Лист починили, а снимок не лёг на диск — сбой всё равно закрыт:
+    «починилось» уходит, и первый чих сети не даёт stale."""
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
     assert r.refresh(today=TODAY) is True
@@ -291,9 +287,8 @@ def test_recovery_with_a_failing_disk_still_closes_the_failure(
 def test_disk_alert_window_survives_restart_and_recovery_is_told(
     tmp_path, sheet, sent, monkeypatch
 ):
-    """Тревога о диске жила в памяти — после
-    перезапуска посреди той же беды уходила снова, а «починилось» не
-    приходило вовсе."""
+    """Окно тишины тревоги о диске переживает перезапуск посреди той же беды,
+    а «починилось» приходит."""
     store = SnapshotStore(tmp_path)
 
     def full(*args, **kwargs):
@@ -314,8 +309,8 @@ def test_disk_alert_window_survives_restart_and_recovery_is_told(
 
 
 def test_network_grace_is_half_an_hour_by_the_clock(tmp_path, sent, fixture_csv):
-    """Льгота держалась только относительно себя —
-    при FETCH_GRACE в секунду тесты были зелёными. Тут — минутами."""
+    """Льгота — минутами по часам, а не относительно самой константы: иначе
+    прошёл бы и FETCH_GRACE в секунду."""
     store = SnapshotStore(tmp_path)
     store.put(
         parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
@@ -333,8 +328,8 @@ def test_network_grace_is_half_an_hour_by_the_clock(tmp_path, sent, fixture_csv)
 
 
 def test_snapshot_survives_the_disk_whole(tmp_path, fixture_csv):
-    """Снимок на диске проверялся только по places —
-    забудь дописать новое поле пары, и тесты зелёные. Тут — целиком."""
+    """Снимок на диске сверяется целиком, а не по одному полю: иначе забытое
+    новое поле пары не заметить."""
     from whensclass.parser.export import parse_export
 
     snapshot = parse_export(fixture_csv, "лист", "656498718", limits=FIXTURE)

@@ -52,16 +52,16 @@ def test_school_day_past_the_sheet_is_still_an_alarm(canary, monkeypatch):
 
 
 def test_limits_come_from_the_service_settings(canary, monkeypatch):
-    """Пороги — те же, что у службы; раньше зашитые FULL_SHEET давали на
-    фикстуре «формат изменился», сколько бы порог ни опускали."""
+    """Пороги — те же, что у службы, а не зашитые FULL_SHEET: рычаги настроек
+    должны доходить и до канарейки."""
     module, sent = canary
     monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
     assert module.main() == 0 and sent == []
 
 
 def test_certificate_close_to_expiry_is_an_alarm(canary, monkeypatch):
-    """Хук перезагрузки nginx после продления ни разу не срабатывал;
-    канарейка сверяет срок сертификата, который nginx отдаёт на деле."""
+    """Канарейка сверяет срок сертификата, который nginx отдаёт на деле, а не
+    файла: хук перезагрузки после продления может и не сработать."""
     module, sent = canary
     monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
     monkeypatch.setattr(module, "cert_days_left", lambda host: 10)
@@ -70,8 +70,8 @@ def test_certificate_close_to_expiry_is_an_alarm(canary, monkeypatch):
 
 
 def test_wrong_certificate_is_an_alarm_but_network_is_not(canary, monkeypatch):
-    """Чужой или самоподписанный сертификат на домене — только строка в
-    журнале, без тревоги. Таймаут — не беда канарейки."""
+    """Чужой или самоподписанный сертификат на домене — тревога, а не только
+    строка в журнале. Таймаут — не беда канарейки."""
     import ssl
 
     module, sent = canary
@@ -94,7 +94,7 @@ def test_wrong_certificate_is_an_alarm_but_network_is_not(canary, monkeypatch):
 
 
 def test_closed_table_during_the_search_is_an_alarm_not_a_crash(canary, monkeypatch):
-    """Закрытая таблица при поиске листа роняла канарейку трассировкой."""
+    """Закрытая таблица при поиске листа — тревога, а не трассировка."""
     module, sent = canary
 
     def closed(*args, **kwargs):

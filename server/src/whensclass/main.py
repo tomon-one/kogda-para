@@ -141,7 +141,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
     # Автодокументация наружу не нужна: контракт — docs/api.md, а /docs и
-    # /openapi.json отвечали всем и расписывали поверхность службы.
+    # /openapi.json расписали бы всем поверхность службы.
     docs_url=None,
     redoc_url=None,
     openapi_url=None,

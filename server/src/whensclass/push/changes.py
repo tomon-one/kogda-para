@@ -65,7 +65,7 @@ def _replaces(lesson: dict) -> str | None:
 
 def _split(url: str) -> urllib.parse.SplitResult | None:
     """Разбор адреса, как у браузера: «\\» — это «/» (WHATWG URL). Кривой адрес
-    («https://[…», полноширинная «／») — None, а не исключение: оно роняло
+    («https://[…», полноширинная «／») — None, а не исключение: оно уронило бы
     сводку изменений всем подписчикам."""
     try:
         parts = urllib.parse.urlsplit(url.strip().replace("\\", "/"))
@@ -110,8 +110,8 @@ def _distance(a: str, b: str) -> int:
 def same_subject(a: str, b: str) -> bool:
     """Та же пара под чуть другим названием: исправили опечатку, регистр или
     точку («Обествознание» → «Обществознание»), или у одной записи полное
-    «А / Б», у другой — только «А». Раньше это уходило строками «убрали» и
-    «добавилась». ScheduleDiff.sameSubject."""
+    «А / Б», у другой — только «А»: это не «убрали» и «добавилась».
+    ScheduleDiff.sameSubject."""
     if a == b:
         return True
     na, nb = _norm(a), _norm(b)
