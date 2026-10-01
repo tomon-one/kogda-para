@@ -91,11 +91,11 @@ def test_same_slot_in_different_states_stays_apart():
     раздаёт обеим состояние одной."""
     from whensclass.domain.models import Lesson
 
-    kept = Lesson(number=2, subject="Физкультура", teachers=("Уэллс Д. Д.",), room="Спортзал")
-    cancelled = Lesson(number=2, subject="Физкультура", teachers=("Уэллс Д. Д.",),
+    kept = Lesson(number=2, subject="Физкультура", teachers=("Уэллс Д. Р.",), room="Спортзал")
+    cancelled = Lesson(number=2, subject="Физкультура", teachers=("Уэллс Д. Р.",),
                        room="Спортзал", cancelled=True)
     snapshot, day = _two_groups(kept, cancelled)
-    entries = build_index(snapshot).days(teacher_id("Уэллс Д. Д."))[day]
+    entries = build_index(snapshot).days(teacher_id("Уэллс Д. Р."))[day]
     assert sorted((e.group_name, e.lesson.cancelled) for e in entries) == [("А-1", False), ("А-2", True)]
     assert {e.column for e in entries} == {2, 6}
 
@@ -103,11 +103,11 @@ def test_same_slot_in_different_states_stays_apart():
 def test_same_lesson_for_two_groups_is_still_one_entry():
     from whensclass.domain.models import Lesson
 
-    one = Lesson(number=2, subject="Физкультура", teachers=("Уэллс Д. Д.",), room="Спортзал")
+    one = Lesson(number=2, subject="Физкультура", teachers=("Уэллс Д. Р.",), room="Спортзал")
     longer = Lesson(number=2, subject="Физкультура / Адаптивная физкультура",
-                    teachers=("Уэллс Д. Д.",), room="Спортзал")
+                    teachers=("Уэллс Д. Р.",), room="Спортзал")
     snapshot, day = _two_groups(one, longer)
-    [entry] = build_index(snapshot).days(teacher_id("Уэллс Д. Д."))[day]
+    [entry] = build_index(snapshot).days(teacher_id("Уэллс Д. Р."))[day]
     assert entry.group_name == "А-1, А-2" and entry.lesson.subject.startswith("Физкультура / ")
 
 

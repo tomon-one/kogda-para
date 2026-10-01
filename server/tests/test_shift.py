@@ -128,7 +128,7 @@ def test_teacher_names_in_place_of_subjects_are_a_row_shift():
     for g in honest.groups[:2]:
         first, *rest = two.schedule[g.id][day]
         two.schedule[g.id][day] = [
-            dataclasses.replace(first, subject="Шелби Скотт Джонович"), *rest
+            dataclasses.replace(first, subject="Шелби Скотт Шеппардович"), *rest
         ]
     check_shift(two)
     three = copy.deepcopy(two)

@@ -34,7 +34,7 @@ def _csv(rows) -> str:
 @pytest.mark.parametrize("junk", ["-", "—", "?", ".", "..."])
 def test_punctuation_is_not_a_teacher(junk):
     assert cells.split_teachers(junk) == ()
-    assert cells.split_teachers(f"Миллер Д. Т., {junk}") == ("Миллер Д. Т.",)
+    assert cells.split_teachers(f"Миллер Д. Х., {junk}") == ("Миллер Д. Х.",)
 
 
 def test_dash_under_empty_subject_is_no_lesson():
