@@ -289,6 +289,12 @@ fun formatSinceMoment(iso: String): String {
         .format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale("ru")))
 }
 
+/**
+ * Сколько пар — по номерам, не по записям: блок пополам даёт две записи одного
+ * номера, а идти на одну.
+ */
+fun numbers(lessons: List<LessonDto>): Int = lessons.map { it.number }.distinct().size
+
 /** «6 пар», «2 пары», «1 пара» — счёт занятий по-русски. */
 fun pairsCount(count: Int): String = plural(count, "пара", "пары", "пар")
 
