@@ -57,7 +57,7 @@ internal suspend fun collectDiagnostics(
             "[${store.groupId.first() ?: "—"}]"
     }
     // Только у студента, как на сайте: у преподавателя других групп нет, а
-    // оставшийся от старого выбора список экран прячет (М6).
+    // оставшийся от старого выбора список экран прячет.
     if (!teacher) store.currentExtraGroups().takeIf { it.isNotEmpty() }?.let { extras ->
         lines += "Ещё группы: " + extras.joinToString(", ") {
             "${it.name} [${it.id}]" + if (it.gone) " — нет в таблице" else ""
@@ -73,7 +73,7 @@ internal suspend fun collectDiagnostics(
         // «получено» здесь и там стояло у разных дат.
         lines += "Расписание: телефон проверял ${stamp(store.fetchedAt.first(), zone)}, " +
             // gen — не обязательно правка: сервер пишет новый и после
-            // перезапуска и ночного поиска листа (разбор текстов 27.09).
+            // перезапуска и ночного поиска листа.
             "снимок сервера от ${stamp(schedule.generatedAt, zone)}"
         schedule.sheet?.let { lines += "Лист: $it" }
         if (schedule.coverage.size == 2) {
@@ -86,7 +86,7 @@ internal suspend fun collectDiagnostics(
     lines += widgets(context)
     lines += reminders(context, store)
     // Выключатели сообщений: на жалобу «не приходят сообщения об отменах»
-    // первая причина — выключатель, а в отчёте его не было (М51).
+    // первая причина — выключатель, а в отчёте его не было.
     fun yes(on: Boolean) = if (on) "да" else "нет"
     lines += "Сообщать: изменения ${yes(store.notifyChangesEnabled())}, " +
         "сбои ${yes(store.notifyServerEnabled())}, версии ${yes(store.notifyUpdatesEnabled())}, " +

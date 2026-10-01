@@ -28,8 +28,7 @@ internal fun GlanceAppWidgetReceiver.ownIds(
  * только в onUpdate. Чужое приложение слало DEBUG_UPDATE (Glance подставлял
  * все настоящие id, и каждая рассылка дёргала сеть), APPWIDGET_UPDATE_OPTIONS
  * с id чужого виджета (на месте недели рисовалась «Ближайшая пара») и
- * APPWIDGET_DELETED (стиралось состояние виджета) — четвёртый аудит, М77
- * прогона 1.
+ * APPWIDGET_DELETED (стиралось состояние виджета).
  */
 abstract class OwnWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

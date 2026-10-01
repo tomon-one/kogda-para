@@ -124,7 +124,7 @@ internal fun updateFailure(error: Throwable): String {
         // бросает голым InterruptedIOException("timeout").
         error is java.io.InterruptedIOException -> "сервер не ответил вовремя"
         chain.any { it is javax.net.ssl.SSLException || it is java.security.cert.CertificateException } ->
-            // «Сертификат» новичку ничего не говорит (разбор текстов 27.09).
+            // «Сертификат» новичку ничего не говорит.
             "эта сеть не пускает к серверу — возможно, Wi-Fi ждёт входа на своей странице. " +
                 "Попробуйте через мобильную сеть"
         error is java.io.IOException -> "связь оборвалась, попробуйте ещё раз"
@@ -187,15 +187,15 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
      * [CHECK_EVERY_MILLIS], по уведомлению о версии — всегда. Раньше экран
      * проверял один раз при создании: нажатие на «Вышла версия» по живому
      * экрану открывало настройки с прежними сведениями — без «Обновить» или
-     * с прежней сборкой (четвёртый аудит, В28 прогона 1), а поворот экрана
-     * спрашивал /v1/app заново (М23). Не пора — прежний ответ.
+     * с прежней сборкой, а поворот экрана
+     * спрашивал /v1/app заново. Не пора — прежний ответ.
      */
     suspend fun checkForScreen(force: Boolean): Check {
         val now = System.currentTimeMillis()
         val cached = lastCheck
         // Ответ помнится и от кнопки «Проверить» и от фона: иначе возврат в
-        // приложение затирал найденную ими сборку прежним «последняя версия»
-        // (прогон 2). Неудача — десять минут: при лежащем сервере каждое
+        // приложение затирал найденную ими сборку прежним «последняя версия».
+        // Неудача — десять минут: при лежащем сервере каждое
         // возвращение ходило на GitHub, где у адреса оператора 60 запросов в час.
         if (!force && cached != null) {
             val fresh = if (cached.second == Check.Failed) FAILED_EVERY_MILLIS else CHECK_EVERY_MILLIS
@@ -228,8 +228,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         if (!store.notifyUpdatesEnabled()) return
         // На GitHub из фона — не чаще раза в шесть часов: без ключа там 60
         // запросов в час на адрес, а за адресом оператора их делят все его
-        // абоненты, и запас срабатывал через раз (четвёртый аудит, М48
-        // прогона 1). Экран и кнопка «Проверить» ходят туда как раньше.
+        // абоненты, и запас срабатывал через раз. Экран и кнопка «Проверить»
+        // ходят туда как раньше.
         val now = System.currentTimeMillis()
         val github = now - store.githubCheckedAt() !in 0 until GITHUB_EVERY_MILLIS
         var asked = false

@@ -81,7 +81,7 @@ object ScheduleDiff {
      * Та же пара под чуть другим названием: исправили опечатку, регистр или
      * точку («Обествознание» → «Обществознание»), или у одной записи полное
      * «А / Б», у другой — только «А». Раньше это уходило строками «убрали» и
-     * «добавилась» (четвёртый аудит, М35 прогона 1). Как same_subject в
+     * «добавилась». Как same_subject в
      * server/src/whensclass/push/changes.py — правила одни.
      */
     internal fun sameSubject(a: String, b: String): Boolean {
@@ -96,7 +96,7 @@ object ScheduleDiff {
 
     /**
      * Хост, куда поведёт ссылка, — для «чужой адрес: …». «\» браузер читает
-     * как «/» и ведёт на хост до неё (М24); кривой адрес — сам адрес.
+     * как «/» и ведёт на хост до неё; кривой адрес — сам адрес.
      */
     internal fun urlHost(url: String): String =
         runCatching { java.net.URI(url.trim().replace('\\', '/')).host }.getOrNull() ?: url
@@ -125,7 +125,7 @@ object ScheduleDiff {
             lesson.groups.orEmpty().split(",").map { it.trim() }.filter { it in keep }.joinToString(", ")
         // Группы на этом номере до и после: у преподавателя записи склеены из
         // групп, и к паре присоединяется или уходит группа — «добавилась» и
-        // «убрали» только о ней, а не о всей записи (М34).
+        // «убрали» только о ней, а не о всей записи.
         val beforeGroups = was.flatMap { groups(it) }.toSet()
         val afterGroups = now.flatMap { groups(it) }.toSet()
 
@@ -253,7 +253,7 @@ object ScheduleDiff {
             if (fresh.isTeacher && gone.groups != null) {
                 // Все её группы на номере остались при той же паре — запись
                 // просто склеилась с другой. При другом предмете у тех же групп
-                // это замена, и «убрали» прежний нужен (прогон 2 аудита 4).
+                // это замена, и «убрали» прежний нужен.
                 val kept = now.filter { sameSubject(it.subject, gone.subject) }.flatMap { groups(it) }.toSet()
                 val left = groups(gone) - kept
                 if (left.isNotEmpty()) say("убрали $number пару (${listed(gone, left)}): ${gone.subject}")

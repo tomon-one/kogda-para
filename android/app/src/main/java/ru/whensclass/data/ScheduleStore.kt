@@ -16,7 +16,7 @@ import kotlinx.serialization.json.JsonObject
 
 // Испорченный файл настроек — начать с пустого, а не падать на каждом старте:
 // без обработчика CorruptionException получали все читатели, и выхода, кроме
-// «Очистить данные», не было (четвёртый аудит, М66 прогона 1).
+// «Очистить данные», не было.
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     "whensclass",
     corruptionHandler = androidx.datastore.core.handlers.ReplaceFileCorruptionHandler {
@@ -90,10 +90,10 @@ class ScheduleStore(private val context: Context) {
     /**
      * Неудача связи с сервером при живой сети: с какого момента он молчит
      * ([Unreachable.since] — для текста «Сбой с …», держится до первого
-     * удачного ответа, М49) и с какого — подряд, без перерывов дольше
+     * удачного ответа) и с какого — подряд, без перерывов дольше
      * [UNREACHABLE_STREAK_GAP] ([Unreachable.run] — для решения «не отвечает»).
      * Вечерняя неудача и утренняя через ночь без проверок — не сбой: без
-     * второго счёта одна утренняя давала красное на виджетах (прогон 2).
+     * второго счёта одна утренняя давала красное на виджетах.
      */
     suspend fun noteUnreachable(now: java.time.Instant): Unreachable {
         var first = now
@@ -252,8 +252,7 @@ class ScheduleStore(private val context: Context) {
     }
 
     /**
-     * Сообщать ли о сбое сервера — своим выключателем, а не «изменениями»
-     * (просьба Tomon 27.09: у каждого вида уведомлений свой).
+     * Сообщать ли о сбое сервера — своим выключателем, а не «изменениями».
      */
     val notifyServer: Flow<Boolean> = context.dataStore.data.map {
         notifyFlag(it[KEY_NOTIFY_SERVER], it[KEY_NOTIFY_CHANGES])
@@ -553,7 +552,7 @@ class ScheduleStore(private val context: Context) {
             val name = prefs[KEY_GROUP2_NAME]
             if (id == null && prefs[KEY_PARTIAL] == null) return@edit
             // Старая версия давала выбрать соседкой свою же группу — такую не
-            // переносим: она встала бы в список второй раз (Tomon 28.09).
+            // переносим: она встала бы в список второй раз.
             if (id != null && name != null && prefs[KEY_EXTRA_GROUPS] == null && id != prefs[KEY_GROUP_ID]) {
                 val gone = prefs[KEY_GROUP2_GONE] == "1"
                 val since = prefs[KEY_GROUP2_GONE_SINCE]?.toLongOrNull()
@@ -627,8 +626,7 @@ class ScheduleStore(private val context: Context) {
 
     /**
      * Когда списки групп и преподавателей пришли свежими целиком. Раньше они
-     * качались на каждый новый экран и каждое ⟳; сайт берёт их раз в 12 часов
-     * (четвёртый аудит, М23 прогона 1).
+     * качались на каждый новый экран и каждое ⟳; сайт берёт их раз в 12 часов.
      */
     suspend fun listsFetchedAt(): Long =
         context.dataStore.data.first()[KEY_LISTS_AT]?.toLongOrNull() ?: 0L
