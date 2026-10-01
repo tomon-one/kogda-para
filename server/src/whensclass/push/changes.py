@@ -335,10 +335,16 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
     own = None if teacher else payload.get("gn")
     out: list[dict] = []
     busy_until: dt.datetime | None = None
-    for lesson in sorted(today["l"], key=lambda x: x["n"]):
-        if _cancelled(lesson):
-            continue
-        bells = BELLS.get(str(lesson["n"]))
+    # Блок пополам — две пары одного номера в разных кабинетах: какая из них
+    # своя, неизвестно, и напоминание называет обе.
+    by_number: dict[int, list[dict]] = {}
+    for lesson in today["l"]:
+        if not _cancelled(lesson):
+            by_number.setdefault(lesson["n"], []).append(lesson)
+    for number in sorted(by_number):
+        same = by_number[number]
+        lesson = same[0]
+        bells = BELLS.get(str(number))
         if not bells:
             continue
         start = dt.datetime.combine(day, dt.time.fromisoformat(bells[0]))
@@ -347,35 +353,52 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
         busy_until = dt.datetime.combine(day, dt.time.fromisoformat(bells[1]))
         if during_previous:
             continue
+        subject = " / ".join(x["s"] for x in same)
         out.append({
             "at": fire,
             "start": start,
             "end": busy_until,
-            "number": lesson["n"],
-            "title": f"{start:%H:%M} — {lesson['s']}",
-            "subject": lesson["s"],
-            "text": reminder_text(lesson, own),
+            "number": number,
+            "title": f"{start:%H:%M} — {subject}",
+            "subject": subject,
+            "text": reminder_text(lesson, own) if len(same) == 1
+            else "\n".join(_pair_line(x, own) for x in same),
         })
     return out
 
 
-def reminder_text(lesson: dict, own_group: str | None) -> str:
-    """Место первым: напоминание читают по пути (LessonAlarms.text)."""
+def _place(lesson: dict) -> str | None:
     if _online(lesson):
         room = (lesson.get("r") or "").strip()
-        place = "Онлайн" + (f", комната {room}" if room else "")
-    else:
-        label = room_label(lesson.get("r"))
-        place = label[0].upper() + label[1:] if label else None
-    kind = kind_name(lesson.get("k"))
+        return "Онлайн" + (f", комната {room}" if room else "")
+    label = room_label(lesson.get("r"))
+    return label[0].upper() + label[1:] if label else None
+
+
+def _groups(lesson: dict, own_group: str | None) -> str | None:
     groups = (lesson.get("gr") or "").strip()
-    parts = [
-        place,
-        f"{lesson['n']} пара" + (f", {kind.lower()}" if kind else ""),
-        (lesson.get("t") or [None])[0],
-        groups if groups and groups != own_group else None,
-    ]
+    return groups if groups and groups != own_group else None
+
+
+def _sentences(parts: list[str | None]) -> str:
     text = ""
     for part in (p for p in parts if p):
         text = part if not text else text + (" " if text.endswith(".") else ". ") + part
     return text
+
+
+def reminder_text(lesson: dict, own_group: str | None) -> str:
+    """Место первым: напоминание читают по пути (LessonAlarms.text)."""
+    kind = kind_name(lesson.get("k"))
+    return _sentences([
+        _place(lesson),
+        f"{lesson['n']} пара" + (f", {kind.lower()}" if kind else ""),
+        (lesson.get("t") or [None])[0],
+        _groups(lesson, own_group),
+    ])
+
+
+def _pair_line(lesson: dict, own_group: str | None) -> str:
+    """Строка одной из пар номера: место и предмет; номер и время — в заголовке."""
+    head = " — ".join(p for p in (_place(lesson), lesson["s"]) if p)
+    return _sentences([head, (lesson.get("t") or [None])[0], _groups(lesson, own_group)])
