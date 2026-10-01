@@ -87,8 +87,8 @@ def _two_groups(first, second):
 
 
 def test_same_slot_in_different_states_stays_apart():
-    """Отменили пару у одной группы — у другой она идёт. Раньше склейка по
-    времени раздавала обеим состояние одной."""
+    """Отменили пару у одной группы — у другой она идёт: склейка по времени не
+    раздаёт обеим состояние одной."""
     from whensclass.domain.models import Lesson
 
     kept = Lesson(number=2, subject="Физкультура", teachers=("Уэллс Д. Д.",), room="Спортзал")
@@ -157,9 +157,8 @@ def test_spelling_twin_is_the_same_surname_and_initials():
 
 def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_days():
     """Группы нет в следующем листе (переименовали
-    или убрали). Её дни там были «пар нет», а колонка — из чужого листа, где
-    на этом месте другая группа. Теперь дни второго листа за краем её `cov`,
-    а колонки у ссылки на второй лист нет."""
+    или убрали): дни второго листа — за краем её `cov`, а не «пар нет», и
+    колонки у ссылки на второй лист нет — там на этом месте другая группа."""
     from whensclass.api.payloads import schedule_payload
     from whensclass.domain.models import GroupRef, Lesson, SheetPlace, Snapshot
 
@@ -185,7 +184,7 @@ def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_da
 
 
 def test_names_without_surname_do_not_become_teachers():
-    """«Елена Сергеевна» и «СПТ» были в /v1/teachers."""
+    """«Елена Сергеевна» и «СПТ» в /v1/teachers не попадают."""
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
 
     day = dt.date(2026, 9, 17)
@@ -200,8 +199,8 @@ def test_names_without_surname_do_not_become_teachers():
 
 def test_initials_are_merged_into_the_single_full_name():
     """«Мисюрова Е.С.» и «Мисюрова Евгения
-    Сергеевна» — один человек, пары делились между двумя id. Краткая запись
-    сводится к полной, а её id отвечает полной (новый g перепишет выбор)."""
+    Сергеевна» — один человек, а не пары, поделённые между двумя id. Краткая
+    запись сводится к полной, а её id отвечает полной (новый g перепишет выбор)."""
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
 
     d1, d2 = dt.date(2026, 9, 7), dt.date(2026, 9, 14)

@@ -35,9 +35,8 @@ def _first_day_only(fixture_csv: str, new_date: str) -> str:
 
 
 def test_half_built_next_sheet_is_left_out_not_fatal(tmp_path, sent, fixture_csv, monkeypatch):
-    """Колледж завёл следующий лист и вписал в него один день. Раньше его
-    отказ по объёму валил весь набор: stale у всех, правки сегодняшнего листа
-    не доходили, а err не называл лист. Теперь он пропускается до поры."""
+    """Колледж завёл следующий лист и вписал в него один день: лист
+    пропускается до поры, а не валит весь набор со stale у всех."""
     texts = {
         "лист": fixture_csv,
         "следующий": _first_day_only(fixture_csv, "14.09.2026 понедельник"),
@@ -67,9 +66,8 @@ def test_next_sheet_with_a_format_error_is_left_out_with_an_alarm(
     tmp_path, sent, fixture_csv, monkeypatch
 ):
     """Черновик следующей вкладки с ошибкой формата (день недели не тот)
-    валил весь заход: правки сегодняшнего листа не доходили. Теперь он
-    выпадает из окна, а владельцу — тревога. Если
-    без него окну нечем покрыть сегодня — это по-прежнему отказ."""
+    выпадает из окна, а владельцу — тревога. Если без него окну нечем покрыть
+    сегодня — это отказ."""
     texts = {
         "лист": fixture_csv,
         "следующий": cell_replace(fixture_csv, "03.09.2026 четверг", "03.09.2026 пятница"),
@@ -108,9 +106,8 @@ def _weeks_later(fixture_csv: str, weeks: int) -> str:
 
 def test_unfilled_sheet_after_a_break_is_not_a_failure(tmp_path, sent, fixture_csv, monkeypatch):
     """Каникулы: старый лист кончился, колледж заводит следующий и дописывает
-    группу за группой. Недописанный лист, который начнётся позже сегодня, был
-    единственным в окне — и служба уходила в stale с красным у всех. Теперь —
-    прежний снимок при ok."""
+    группу за группой. Недописанный лист, который начнётся позже сегодня, —
+    единственный в окне: это прежний снимок при ok, а не stale у всех."""
     from whensclass.parser.csv_schedule import Limits
 
     texts = {"старый": fixture_csv, "новый": _weeks_later(fixture_csv, 3)}
@@ -136,7 +133,7 @@ def test_unfilled_sheet_after_a_break_is_not_a_failure(tmp_path, sent, fixture_c
     assert r.refresh(today=monday, force=True) is True
     assert min(store.snapshot.dates) == dt.date(2026, 9, 23)
 
-    # Недописан лист, который уже идёт, — по-прежнему отказ.
+    # Недописан лист, который уже идёт, — отказ.
     limits[0] = Limits(FIXTURE.min_groups, FIXTURE.min_dates, 10**6)
     assert r.refresh(today=dt.date(2026, 9, 24), force=True) is False
     assert r.status == "stale"
@@ -145,7 +142,7 @@ def test_unfilled_sheet_after_a_break_is_not_a_failure(tmp_path, sent, fixture_c
 def test_too_small_current_sheet_still_fails_and_names_itself(
     tmp_path, sheet, sent, fixture_csv
 ):
-    """Мал сам сегодняшний лист — это по-прежнему отказ, и err называет лист."""
+    """Мал сам сегодняшний лист — это отказ, и err называет лист."""
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
     sheet["text"] = _first_day_only(fixture_csv, "08.09.2026 вторник")
@@ -154,9 +151,8 @@ def test_too_small_current_sheet_still_fails_and_names_itself(
 
 
 def test_window_of_sheets_starts_on_monday_like_the_app(tmp_path, sheet, sent, monkeypatch):
-    """В воскресенье на стыке листов набор
-    считался от сегодня — в снимке оставался только будущий лист, и прожитая
-    неделя пропадала с экрана. Приложение просит окно с понедельника."""
+    """Набор листов — с понедельника, как окно приложения: иначе в воскресенье
+    на стыке листов в снимке останется только будущий лист."""
     asked = []
 
     def window(start, days, state_dir, deep=False):
@@ -172,9 +168,8 @@ def test_window_of_sheets_starts_on_monday_like_the_app(tmp_path, sheet, sent, m
 def test_only_the_failing_sheet_is_archived_as_rejected(
     tmp_path, sent, fixture_csv, monkeypatch
 ):
-    """Отказ одного листа окна клал «отвергнутыми»
-    все листы с одной причиной — исправный текущий получал чужое «нашёл всего».
-    Отвергнутый следующий теперь выпадает из окна,
+    """Отвергнутым в архив ложится только упавший лист: исправный текущий не
+    получает чужое «нашёл всего». Отвергнутый следующий выпадает из окна,
     отвергнутый текущий — отказ всего захода."""
     broken = fixture_csv.replace("Дисциплина", "Предмет")
     texts = {"лист": fixture_csv, "следующий": broken}

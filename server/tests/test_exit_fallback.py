@@ -101,8 +101,7 @@ def test_api_key_goes_to_exit_on_stdin_not_in_arguments(monkeypatch, exit_on):
 
 
 def test_google_error_through_exit_keeps_its_code(monkeypatch, exit_on):
-    """curl -f на exit: Google ответил 400 — это мёртвый gid, а не сеть.
-    Раньше через exit любой отказ Google выглядел обрывом связи."""
+    """curl -f на exit: Google ответил 400 — это мёртвый gid, а не сеть."""
     exit_on.returncode, exit_on.stderr = 22, b"curl: (22) The requested URL returned error: 400"
     monkeypatch.setattr(gsheets, "_client", _google(_unreachable))
     with pytest.raises(httpx.HTTPStatusError) as caught:

@@ -66,8 +66,7 @@ def test_meta_points_at_the_sheet_of_today(client, monkeypatch):
     from whensclass.api import routes
 
     # Воскресенье 13.09 в фикстуру не попадает — берётся ближайший день, с того
-    # же листа. Раньше «сегодня» было 08.09, внутри фикстуры, и запасной поиск
-    # ближайшего не проверялся.
+    # же листа: так проверяется запасной поиск ближайшего.
     monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 13))
     body = client.get("/v1/meta").json()
     assert body["src_url"].endswith("#gid=656498718")
@@ -117,11 +116,7 @@ def test_meta_and_health(client):
 
 
 def test_health_is_503_when_stale_or_today_is_uncovered(fixture_csv, monkeypatch):
-    """/healthz отвечает по существу: stale и непокрытый учебный день — 503.
-
-    Раньше 200 отвечался при любом снимке, и двое суток stale снаружи
-    выглядели здоровьем.
-    """
+    """/healthz отвечает по существу: stale и непокрытый учебный день — 503."""
     from whensclass.api import routes
 
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
@@ -171,7 +166,7 @@ def test_empty_store_answers_503(fixture_csv):
 
 
 def test_user_agent_is_ascii():
-    """Заголовки HTTP кириллицу не переносят — на живом запросе это падало."""
+    """Заголовки HTTP кириллицу не переносят — живой запрос с ней падает."""
     from whensclass.config import settings
 
     settings.user_agent.encode("latin-1")
@@ -181,8 +176,7 @@ def test_release_url_is_https(client, monkeypatch):
     """Ссылка на сборку уходит наружу и живёт в чатах: только https.
 
     Служба не верит заголовкам от nginx (иначе в журнал попадал бы адрес
-    телефона), поэтому сама она видит http. Раньше этот адрес и попадал
-    в /v1/app, и приложение шло качать обновление по незащищённому каналу.
+    телефона), поэтому сама она видит http.
     """
     from whensclass.api import routes
 
@@ -247,14 +241,15 @@ def test_teacher_without_lessons_this_sheet_is_not_gone(tmp_path, fixture_csv):
 
 
 def test_schedule_is_revalidated_every_time(client):
-    """max-age=300 давал телефону пять минут отдавать кэш как свежий: хранить можно, отдавать без сверки ETag — нет."""
+    """Хранить можно, отдавать без сверки ETag — нет: с max-age телефон отдаёт
+    кэш как свежий."""
     response = client.get("/v1/schedule/isp-924-2?from=2026-09-07&days=3")
     assert "no-cache" in response.headers["cache-control"]
     assert "max-age" not in response.headers["cache-control"]
 
 
 def test_autodocs_are_not_served():
-    """/docs и /openapi.json отвечали всем — службе они ни к чему."""
+    """/docs и /openapi.json наружу не отдаются — службе они ни к чему."""
     from whensclass.main import app as real_app
 
     client = TestClient(real_app)  # без with: служба не стартует, нужны только маршруты
@@ -263,16 +258,16 @@ def test_autodocs_are_not_served():
 
 
 def test_watchdogs_may_use_head(client):
-    """nginx пропускает HEAD, а служба на @router.get отвечала на него 405."""
+    """nginx пропускает HEAD — служба отвечает на него, а не 405."""
     assert client.head("/v1/meta").status_code == 200
     assert client.head("/v1/schedule/isp-924-2?from=2026-09-07&days=3").status_code == 200
 
 
 def test_known_teacher_without_lessons_gets_free_days_but_fixed_typo_gets_404(fixture_csv):
     """Знакомый преподаватель без пар в листе (отпуск) — «пар нет», не 404.
-Но если колледж исправил опечатку в его имени и тот
-    же человек с парами стоит под другим id, пустые дни 60 дней говорили бы
-    «пар нет»: тогда 404, и приложение предложит выбрать заново."""
+    Но если колледж исправил опечатку в его имени и тот же человек с парами
+    стоит под другим id, пустые дни 60 дней говорили бы «пар нет»: тогда 404,
+    и приложение предложит выбрать заново."""
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
     app = FastAPI()
     app.include_router(router)
@@ -310,8 +305,8 @@ def test_health_is_503_when_today_is_only_a_skeleton(fixture_csv):
 
 
 def test_cancelled_lesson_carries_x_and_c(client, fixture_csv):
-    """Признаки отмены и причины в JSON не проверял ни один тест —
-    выброси их, и отменённые пары у всех пришли бы как обычные."""
+    """Признаки отмены и причины в JSON: без них отменённые пары у всех придут
+    как обычные."""
     snapshot = parse_csv(fixture_csv, "расписание групп 01.-05.09", FIXTURE)
     gid, day, lesson = next(
         (gid, day, x)
@@ -326,8 +321,8 @@ def test_cancelled_lesson_carries_x_and_c(client, fixture_csv):
 
 
 def test_routes_cut_the_unpublished_tail_by_today(monkeypatch):
-    """Убери today=_today() из маршрутов — и починка 24.09
-    (недописанная неделя — «ещё не опубликовано») пропадала молча."""
+    """Маршруты передают today: без него недописанная неделя снова выйдет «пар
+    нет», а не «ещё не опубликовано»."""
     from whensclass.api import routes
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
 
@@ -351,8 +346,7 @@ def test_routes_cut_the_unpublished_tail_by_today(monkeypatch):
 
 
 def test_broken_snapshot_on_disk_falls_back_to_the_previous(tmp_path, fixture_csv):
-    """Snapshot.prev.json писался на каждом
-    обновлении и не читался ни разу. Испорчен основной — поднимается прежний."""
+    """Испорчен основной снимок — поднимается прежний, snapshot.prev.json."""
     from whensclass.storage.snapshot_store import SnapshotStore
 
     store = SnapshotStore(tmp_path)

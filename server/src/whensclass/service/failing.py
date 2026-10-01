@@ -56,9 +56,8 @@ class Failing:
             self._fetch_only = True
         self._fetch_only = self._fetch_only and kind == "fetch"
         # Сеть отсчитывается от первого сетевого отказа подряд, а не от начала
-        # всего сбоя: один таймаут посреди отказа по формату сразу уходил
-        # тревогой «таблица не прочиталась» и подменял err — а по runbook это
-        # «чинится само».
+        # всего сбоя: иначе один таймаут посреди отказа по формату сразу уйдёт
+        # тревогой «таблица не прочиталась» и подменит err.
         self._fetch_since = (self._fetch_since or now) if kind == "fetch" else None
         if kind != "fetch" or self._fetch_only:
             self.last_error = public or message
@@ -160,8 +159,7 @@ FAIL_KINDS = ("format", "sheet", "fetch", "error", "closed", "crash")
 
 
 def _lying(delta: dt.timedelta) -> str:
-    """Сколько лежали, по-человечески: учебная тревога 14 сентября 2026
-    длилась две минуты и отчиталась «лежало 0.0 ч»."""
+    """Сколько лежали, по-человечески: короткий сбой — минутами, а не «0.0 ч»."""
     minutes = int(delta.total_seconds() // 60)
     if minutes < 60:
         return f"{minutes} мин"

@@ -183,7 +183,7 @@ def test_without_key_nothing_is_sent(tmp_path, snapshots):
 
 
 def test_missed_reminder_minute_is_caught_up_once(tmp_path, snapshots):
-    """Выкладка в минуту напоминания его теряла; догонялка после
+    """Выкладка в минуту напоминания его не теряет; догонялка после
     перезапуска не повторяет ушедшее — отметки на диске."""
     _, _, after, at, day, _ = snapshots
     push = Recorder(tmp_path, _vapid())
@@ -216,7 +216,7 @@ def test_freeze_stops_reminders_and_changes(tmp_path, snapshots, monkeypatch):
 
 
 def test_one_failing_subject_does_not_silence_the_rest(tmp_path, snapshots, monkeypatch):
-    """Сбой подсчёта у одной группы ронял сводку всем."""
+    """Сбой подсчёта у одной группы не роняет сводку остальным."""
     before, bt, after, at, day, first = snapshots
     push = Recorder(tmp_path, _vapid())
     push.subscribe(subscription.parse_subscription(_body(id="isp-924-2")), day)
@@ -236,9 +236,8 @@ def test_one_failing_subject_does_not_silence_the_rest(tmp_path, snapshots, monk
 
 
 def test_gone_group_gets_one_notice_then_is_dropped(tmp_path, snapshots, monkeypatch):
-    """Группу переименовали — подписчик сайта молчал навсегда, запись вечна.
-    Через час — «выберите заново», через две недели — стёрта; вернулась
-    группа — всё как было."""
+    """Группу переименовали: через час — «выберите заново», через две недели —
+    запись стёрта; вернулась группа — всё как было."""
     _, _, after, at, day, _ = snapshots
     push = Recorder(tmp_path, _vapid())
     push.subscribe(subscription.parse_subscription(_body(id="isp-924-9", remind=20)), day)
@@ -261,7 +260,7 @@ def test_gone_group_gets_one_notice_then_is_dropped(tmp_path, snapshots, monkeyp
 
 def test_teacher_without_lessons_now_still_gets_changes(tmp_path, snapshots):
     """У почасовика пару отдали замене — в новом снимке его нет, но он был в
-    прежних: приложение говорит «убрали», сайт молчал."""
+    прежних: и приложение, и сайт говорят «убрали»."""
     before, bt, after, at, day, _ = snapshots
     tid = next(iter(bt.names))
     known = {tid: bt.names[tid]}
@@ -279,9 +278,9 @@ def test_teacher_without_lessons_now_still_gets_changes(tmp_path, snapshots):
 
 
 def test_shift_of_two_neighbours_is_not_sent_to_them(tmp_path, snapshots, monkeypatch):
-    """Сдвиг у двух соседних групп отказом не ловится (порог — три), а
-    уходил им уведомлением с парами соседа. Теперь им — ничего,
-    владельцу — тревога; остальным — как обычно."""
+    """Сдвиг у двух соседних групп отказом не ловится (порог — три): им —
+    ничего, а не уведомление с парами соседа, владельцу — тревога; остальным
+    — как обычно."""
     before, bt, after, at, day, first = snapshots
     import copy
 

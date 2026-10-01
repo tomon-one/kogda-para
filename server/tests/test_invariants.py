@@ -1,8 +1,8 @@
 """Построчные инварианты: что колледж может набрать иначе, а мы примем молча.
 
-Каждая мутация здесь до 14 сентября 2026 разбиралась без единой жалобы — и
-давала день под чужой датой, пару у всех групп не на месте или «отмену»
-в названии аудитории. Теперь — отказ с точной ячейкой в тексте, а канал
+Без проверок каждая мутация здесь разобралась бы без единой жалобы — и дала
+бы день под чужой датой, пару у всех групп не на месте или «отмену» в
+названии аудитории. Вместо этого — отказ с точной ячейкой в тексте, а канал
 тревоги (service/alerts.py) доносит его до человека.
 """
 
@@ -38,8 +38,8 @@ def test_duplicated_date_block_is_rejected(fixture_csv):
 
 
 def test_date_copied_further_down_names_both_rows(fixture_csv):
-    """Блок скопирован ниже вместе с датой и
-    номерами — отказ называл номера пар настоящего дня и без строки."""
+    """Блок скопирован ниже вместе с датой и номерами — отказ называет обе
+    строки, а не номера пар настоящего дня."""
     rows = rows_of(fixture_csv)
     starts = date_rows(rows)
     rows[starts[3]][0] = rows[starts[1]][0]
@@ -80,7 +80,7 @@ def test_lesson_number_written_differently_is_rejected(fixture_csv):
 
 
 def test_missing_lesson_number_is_rejected(fixture_csv):
-    """Пропущенная строка номера — пара исчезала у всех групп без жалоб."""
+    """Пропущенная строка номера — отказ, а не пара, молча пропавшая у всех групп."""
     rows = rows_of(fixture_csv)
     row = next(i for i, r in enumerate(rows) if len(r) > 1 and r[1].strip() == "3")
     rows[row][1] = ""
@@ -325,8 +325,8 @@ def test_today_dropping_out_of_the_snapshot_is_not_an_update():
 def test_shift_of_a_window_of_groups_is_caught_by_neighbours():
     """Сдвиг хвоста листа на часть групп — не на всю ширину.
 
-    Прежняя доля «незнакомых» его не видела: соседи — часто подгруппы с общими
-    лекциями, и 40–65 сдвинутых групп из 189 проходили.
+    Доля «незнакомых» его не видит: соседи — часто подгруппы с общими
+    лекциями, и 40–65 сдвинутых групп из 189 проходят.
     """
     import copy
 
@@ -345,8 +345,7 @@ def test_shift_of_a_window_of_groups_is_caught_by_neighbours():
 
 
 def test_honest_edits_are_not_a_shift():
-    """Законные правки колледжа — не сдвиг: прежний детектор
-    отвергал их как «сдвиг колонок», и весь лист уходил в stale."""
+    """Законные правки колледжа — не сдвиг: из-за них лист не уходит в stale."""
     import copy
 
     from whensclass.parser.shift import check_shift
@@ -393,8 +392,8 @@ def test_subgroups_sharing_lessons_are_not_a_shift():
 
 
 def test_new_day_without_a_date_is_named_as_such(fixture_csv):
-    """Запятая вместо даты: день молча прилипал к предыдущему, а отказ говорил
-    про номера пар соседнего дня (20 сентября 2026)."""
+    """Запятая вместо даты (20 сентября 2026): отказ называет новый день без
+    даты, а не номера пар соседнего дня."""
     rows = rows_of(fixture_csv)
     rows[date_rows(rows)[1]][0] = ","
     with pytest.raises(SourceFormatChanged, match="начинается новый день"):
@@ -415,8 +414,7 @@ def test_messages_point_to_the_sheet_row(fixture_csv):
 
 
 def test_winter_holidays_inside_a_sheet_are_not_a_typo(fixture_csv):
-    """26.12 → 11.01 — шестнадцать дней: прежний порог в две недели отвергал
-    такой лист целиком. Месяц — по-прежнему опечатка.
+    """26.12 → 11.01 — шестнадцать дней, и это не опечатка; месяц — опечатка.
     Здесь — сдвиг на две недели: разрыв 15–16 дней, дни недели те же."""
     rows = rows_of(fixture_csv)
     later = date_rows(rows)[5:]
@@ -434,7 +432,7 @@ def _parse_cell_date(cell):
 
 def test_dates_out_of_order_name_the_row(fixture_csv):
     """Отказ по порядку дат называет дату и строку листа, а не весь столбец
-    дат списком datetime.date(…) — так он выглядел 24 сентября 2026."""
+    дат списком datetime.date(…)."""
     import csv
     import io
 
@@ -466,9 +464,9 @@ def test_dates_out_of_order_name_the_row(fixture_csv):
     ],
 )
 def test_date_that_contradicts_its_weekday_is_rejected(fixture_csv, cell, match):
-    """Одна цифра в дате — и понедельник уезжал в
-    воскресенье («Выходной» у всех), а неделя без пропуска воскресенья
-    раздавала пары следующего дня. Раньше — «верю числу» в журнал."""
+    """Одна цифра в дате — и понедельник уедет в воскресенье («Выходной» у
+    всех), а неделя без пропуска воскресенья раздаст пары следующего дня.
+    Поэтому расхождение со словом — отказ, а не «верю числу»."""
     rows = rows_of(fixture_csv)
     rows[date_rows(rows)[-1]][0] = cell
     with pytest.raises(SourceFormatChanged, match=match):

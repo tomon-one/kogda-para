@@ -99,8 +99,7 @@ def test_failure_state_survives_restart_and_recovery_reports_duration(tmp_path, 
     assert not (tmp_path / "failing.json").exists()
     url, body = sent.bodies[-1]
     assert "снова обновляется" in body["message"] and body["priority"] == 3
-    # Лежали минуты — говорим в минутах: «лежало 0.0 ч» было в учебной
-    # тревоге 14 сентября 2026.
+    # Лежали минуты — говорим в минутах, а не «лежало 0.0 ч».
     assert " мин, с " in body["message"]
 
 

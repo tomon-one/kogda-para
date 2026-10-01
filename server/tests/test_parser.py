@@ -154,11 +154,8 @@ def test_merge_prefers_the_current_sheet(fixture_csv):
 
 
 def test_broken_date_stops_the_parse(fixture_csv):
-    """Сломанная дата раньше приклеивала новый день к предыдущему.
-
-    Ячейка не узнавалась, текущий день не менялся, и пары нового дня уезжали
-    во вчера — с повторяющимися номерами и без единой жалобы.
-    """
+    """Сломанная дата — отказ: иначе пары нового дня уедут во вчера, с
+    повторяющимися номерами и без единой жалобы."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     for row in rows:
         if row and row[0].strip().startswith("03.09.2026"):
@@ -197,8 +194,8 @@ def _columnar_header(rows):
 def test_repeated_header_with_shifted_columns_stops_the_parse(fixture_csv):
     """Сдвиг колонок после повторного заголовка — худшее, что может случиться.
 
-    Раньше три строки такого заголовка пропускались вслепую, и группа молча
-    получала расписание соседа: ошибки нет, статус «ok», заметить нельзя.
+    Без сверки каждая группа молча получила бы расписание соседа: ошибки нет,
+    статус «ok», заметить нельзя.
     """
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
@@ -265,8 +262,8 @@ def test_repeated_header_with_renamed_group_is_tolerated(fixture_csv, caplog):
 def test_repeated_header_with_unknown_column_is_a_broken_main_header(fixture_csv, caplog):
     """Колонка, которой нет в главном заголовке, с именем, которого там нет нигде, —
     опечатка в главном заголовке («Преподаватели», стёртое имя): блок пропущен
-    как безымянный, а весь лист из-за одной ячейки не отвергается. Имя, которое главный заголовок знает в другой колонке, — дело
-    другое: см. сдвиг выше."""
+    как безымянный, а весь лист из-за одной ячейки не отвергается. Имя, которое
+    главный заголовок знает в другой колонке, — дело другое: см. сдвиг выше."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
     known = {g.column for g in groups}
@@ -294,7 +291,7 @@ def test_export_header_is_collapsed_like_gviz_did(fixture_csv):
 
     Разбор построен на форме gviz — «Дисциплина Преподаватель БП-1126» одной
     строкой. Адаптер собирает её сам и выбрасывает пустые строки; повторные
-    заголовки внутри листа не трогает — они и раньше шли столбиком.
+    заголовки внутри листа не трогает: разбор читает их столбиком.
     """
     raw = read_csv(fixture_csv)
     assert raw[2][2] == "Дисциплина" and raw[3][2] == "Преподаватель"
@@ -315,7 +312,7 @@ def test_already_collapsed_sheet_is_left_alone(fixture_csv):
 
 
 def test_export_keeps_the_text_gviz_dropped(fixture_csv):
-    """Ради этого и переход: ссылки и «55/2» в «числовой» колонке gviz выбрасывал."""
+    """Ссылки и «55/2» в «числовой» колонке gviz выбрасывает, сырой экспорт — нет."""
     snapshot = parse_csv(fixture_csv, "фикстура", FIXTURE)
     group = next(g for g in snapshot.groups if g.name == "БП-926/1")
     rooms = {x.room for lessons in snapshot.schedule[group.id].values() for x in lessons}
@@ -341,8 +338,7 @@ def test_export_remembers_sheet_rows_of_days(fixture_csv):
         "Дисциплина Преподаватели ГД-1125",
         "Дисциплина Преподаватель",
         "Дисциплина Преподаватель —",
-        # Опечатка в первом слове — блок не становился ни группой, ни
-        # безымянным, и группа молча уходила в 404.
+        # Опечатка в первом слове — та же шапка.
         "Дисциплна Преподаватель ГД-1125",
         "Дисциплинa Преподаватель ГД-1125",  # латинская «a»
         "дисциплина Преподаватель ГД-1125",
@@ -351,9 +347,9 @@ def test_export_remembers_sheet_rows_of_days(fixture_csv):
     ],
 )
 def test_broken_name_in_main_header_keeps_the_group(fixture_csv, broken):
-    """Опечатка, прочерк или стёртое имя в одной
-    ячейке главного заголовка молча убирали группу из снимка при ok. Опечатка
-    во втором слове — та же шапка, а имя берётся из повторного заголовка."""
+    """Опечатка, прочерк или стёртое имя в одной ячейке главного заголовка не
+    убирают группу из снимка молча. Опечатка в слове шапки — та же шапка, а
+    имя берётся из повторного заголовка."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     rows[0][10] = broken
     snap = parse_sheet(rows, "фикстура", FIXTURE)
@@ -391,8 +387,8 @@ def test_nameless_block_with_lessons_is_reported(fixture_csv):
 
 
 def test_two_neighbour_names_in_repeated_header_are_a_shift(fixture_csv):
-    """Граница — числом: одно чужое имя — опечатка, два — сдвиг. Прежний тест
-    переставлял имена во всех пяти колонках и держал порог только до пяти."""
+    """Граница — числом: одно чужое имя — опечатка, два — сдвиг. Переставлены
+    ровно две колонки: перестановка во всех пяти держала бы порог только до пяти."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
     by_column = {g.column: g.name for g in groups}
@@ -405,9 +401,8 @@ def test_two_neighbour_names_in_repeated_header_are_a_shift(fixture_csv):
 
 
 def test_neighbour_name_in_the_main_header_is_resolved_by_the_repeated_one(fixture_csv):
-    """«ИСП-924/1» над ИСП-924/2 в главном
-    заголовке давало «объявлена дважды» и отказ у всех. Теперь обе колонки
-    безымянны в главном, а имена им даёт повторный заголовок."""
+    """«ИСП-924/1» над ИСП-924/2 в главном заголовке — не отказ у всех: обе
+    колонки безымянны в главном, а имена им даёт повторный заголовок."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
     rows[0][6] = "Дисциплина Преподаватель БП-1126"
@@ -418,9 +413,9 @@ def test_neighbour_name_in_the_main_header_is_resolved_by_the_repeated_one(fixtu
 
 
 def test_template_placeholder_in_one_cell_is_an_empty_slot(fixture_csv):
-    """«Дисциплина» / «Преподаватель» в клетке
-    одной группы посреди дня выкидывали три строки у всех групп, и лист
-    отвергался. Это заготовка незаполненной клетки — пары там нет."""
+    """«Дисциплина» / «Преподаватель» в клетке одной группы посреди дня —
+    заготовка незаполненной клетки: пары там нет, а строки остальных групп
+    не выкидываются."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
     group = next(g for g in honest.groups if g.name == "ИСП-924/2")
@@ -436,9 +431,8 @@ def test_template_placeholder_in_one_cell_is_an_empty_slot(fixture_csv):
 
 
 def test_row_inserted_before_the_bell_row_does_not_steal_the_teachers(fixture_csv):
-    """Строка с припиской между строкой пары и
-    строкой времени становилась строкой преподавателей, и у всей строки пары
-    они пропадали — а у преподавателей пропадала пара."""
+    """Строка с припиской между строкой пары и строкой времени — не строка
+    преподавателей: иначе они пропадут у всей строки пары."""
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
     group = next(g for g in honest.groups if g.name == "ИСП-924/2")
@@ -457,7 +451,7 @@ def test_row_inserted_before_the_bell_row_does_not_steal_the_teachers(fixture_cs
 
 def test_block_with_erased_head_is_still_a_block():
     """Ячейку «Дисциплина …» стёрли или испортили («Дисц.»), а «Ауд.» блока на
-    месте — это блок без шапки, а не пустое место: иначе группа молча уходила
+    месте — это блок без шапки, а не пустое место: иначе группа молча уйдёт
     в 404 при ok."""
     from whensclass.parser.groups import header_blocks
 

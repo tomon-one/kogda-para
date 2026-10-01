@@ -44,9 +44,9 @@ def _google_says(code: int, url: str = "https://sheets.googleapis.com/v4/spreads
 
 
 def test_network_trouble_is_not_blamed_on_the_key(monkeypatch, sent):
-    """Полчаса без связи с Google давали тревогу
-    «Проверить ключ». Отказ ключа — только ответ Google о ключе или квоте; и
-    когда ключ снова работает, об этом говорится."""
+    """Полчаса без связи с Google — не тревога «Проверить ключ»: отказ ключа —
+    только ответ Google о ключе или квоте. Когда ключ снова работает, об этом
+    говорится."""
     import httpx
 
     monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
@@ -79,8 +79,8 @@ SECRET = "AIzaSyD-секретный-ключ"
 
 
 def test_key_never_reaches_alert_or_log(monkeypatch, sent, caplog):
-    """Исключение httpx несёт полный адрес вместе с ?key=…;
-    прежний тест подсовывал исключение без ключа и проверял пустоту."""
+    """Исключение httpx несёт полный адрес вместе с ?key=…: подсовываем
+    исключение именно с ключом."""
     monkeypatch.setattr(sheet_index.settings, "sheets_api_key", SECRET)
     monkeypatch.setattr(sheet_index, "_api_failures", 0)
 
@@ -129,9 +129,8 @@ def _list():
 
 
 def test_failed_api_keeps_the_last_list_and_there_is_no_xlsx(monkeypatch, sent):
-    """При сбое API служба качала книгу в xlsx —
-    22 МБ под замком, — а читаемых листов там нет: gid xlsx не даёт. Теперь —
-    прежний список от API, если он свежий, иначе «не найден»."""
+    """При сбое API — прежний список от API, если он свежий, иначе «не найден»;
+    книгу в xlsx не качаем: gid она не даёт."""
     from whensclass.sources.gsheets import SheetInfo
 
     monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
@@ -156,8 +155,8 @@ def test_failed_api_keeps_the_last_list_and_there_is_no_xlsx(monkeypatch, sent):
 
 
 def test_new_group_sheet_rejected_by_search_is_looked_at_again(tmp_path, monkeypatch):
-    """Лист «групп», заведённый пустым, поиск
-    отвергал, и заполненный позже служба узнавала только ночью."""
+    """Лист «групп», заведённый пустым, поиск отвергает, а заполненный позже
+    слежка перепроверяет, а не ждёт ночи."""
     from whensclass.sources.gsheets import SheetInfo
 
     monkeypatch.setattr(settings, "sheets_api_key", "ключ")
@@ -182,9 +181,8 @@ def test_new_group_sheet_rejected_by_search_is_looked_at_again(tmp_path, monkeyp
 
 
 def test_watch_baseline_survives_restart(tmp_path, monkeypatch):
-    """Лист, заведённый, пока служба
-    перезапускалась, первый взгляд после запуска клал в базовую линию и не
-    искал — до ночи."""
+    """Лист, заведённый, пока служба перезапускалась, — новый для первого
+    взгляда после запуска: базовая линия на диске."""
     from whensclass.sources.gsheets import SheetInfo
 
     monkeypatch.setattr(settings, "sheets_api_key", "ключ")

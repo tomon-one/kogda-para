@@ -1,9 +1,9 @@
 """Ворота обновления: лист, похожий на поломку, не выходит наружу.
 
-Прочерк вместо имени преподавателя замораживал снимок при status ok, прочерк
-вместо имени группы выглядел сетевым сбоем. Сверка с прежним снимком —
-сдвиг, пропавшие группы, опустевший день — держит прежний снимок; рычаг
-accept-next пропускает законную правку один раз.
+Прочерк вместо имени преподавателя не должен замораживать снимок при status
+ok, а прочерк вместо имени группы — выглядеть сетевым сбоем. Сверка с прежним
+снимком — сдвиг, пропавшие группы, опустевший день — держит прежний снимок;
+рычаг accept-next пропускает законную правку один раз.
 """
 
 import datetime as dt
@@ -47,7 +47,7 @@ def test_punctuation_teacher_does_not_freeze_snapshot(tmp_path, sheet, sent, fix
     r = Refresher(store, tmp_path)
     assert r.refresh(today=TODAY) is True
     name = a_teacher(fixture_csv)
-    # Через csv.writer, с кавычками: без них запятая резала ячейку, и «.» уезжала
+    # Через csv.writer, с кавычками: без них запятая режет ячейку, и «.» уезжает
     # в соседнюю колонку, которую разбор не читает.
     rows = read_csv(fixture_csv)
     i, j = next(
@@ -70,7 +70,7 @@ def test_dash_instead_of_group_name_is_format_not_network(tmp_path, sheet, sent,
     rows = read_csv(fixture_csv)
     names = next(i for i, r in enumerate(rows) if sum(c.strip() == "Преподаватель" for c in r) >= 3) + 1
     # Колонка имени — та, где выше стоит «Преподаватель», а не первая непустая:
-    # прежний тест попадал в «№» и проходил и на коде до починки.
+    # первая непустая — «№», и тест прошёл бы впустую.
     col = next(c for c, v in enumerate(rows[names - 1]) if v.strip() == "Преподаватель")
     known = {g.name for g in parse_csv(fixture_csv, "ф", FIXTURE).groups}
     assert rows[names][col].strip() in known, "портим именно имя группы"
@@ -139,8 +139,7 @@ def _shift_one_day(text: str, column: int) -> str:
 def test_refresher_gates_keep_the_previous_snapshot(
     tmp_path, sheet, sent, fixture_csv, monkeypatch, gate
 ):
-    """Ворота проверялись как отдельные функции — убери их из
-    Refresher, и тесты зелёные. Здесь — через заход: отказ, stale, тревога и
+    """Ворота — через заход, а не отдельными функциями: отказ, stale, тревога и
     прежний снимок на месте."""
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
@@ -183,10 +182,9 @@ def test_accept_next_lever_passes_a_sheet_rejected_against_previous(
     tmp_path, sheet, sent, fixture_csv
 ):
     """Отказ по сверке с прежним снимком залипает, пока колледж держит правку.
-    Прежний обход — убрать snapshot.json — не работал: поднимался
-    snapshot.prev.json. Рычаг accept-next
-    пропускает один лист без сверки и снимается; в тревоге сказано о нём, в
-    открытом err — нет."""
+    Убрать snapshot.json не поможет: поднимется snapshot.prev.json. Рычаг
+    accept-next пропускает один лист без сверки и снимается; в тревоге сказано
+    о нём, в открытом err — нет."""
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
     assert r.refresh(today=TODAY) is True
@@ -203,9 +201,9 @@ def test_accept_next_lever_passes_a_sheet_rejected_against_previous(
 
 
 def test_group_drop_is_checked_on_the_next_week_sheet_too():
-    """Новый лист, впервые увиденный сразу первым, с прежним дат не делит — и
-    лист без трети групп принимался молча. Соседняя
-    неделя — отказ; после каникул — подозрение для тревоги."""
+    """Новый лист, впервые увиденный сразу первым, с прежним дат не делит, но
+    сверяется: соседняя неделя без трети групп — отказ; после каникул —
+    подозрение для тревоги."""
     from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Snapshot
 
     groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(9)]
@@ -220,8 +218,8 @@ def test_group_drop_is_checked_on_the_next_week_sheet_too():
 
 
 def test_published_day_emptied_for_many_groups_is_rejected():
-    """Вырезанный или очищенный день проходил все пороги, и всем подписчикам
-    уходило «убрали N пару». Прошедшие дни не в счёт."""
+    """Вырезанный или очищенный день проходит все пороги объёма — отказ, а не
+    «убрали N пару» всем подписчикам. Прошедшие дни не в счёт."""
     from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Lesson, Snapshot
 
     day, past = dt.date(2026, 9, 29), dt.date(2026, 9, 28)
