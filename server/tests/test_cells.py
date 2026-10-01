@@ -71,8 +71,8 @@ def test_empty_cell_is_not_a_lesson():
 
 
 def test_two_teachers_in_one_cell():
-    lesson = parse_lesson(1, "Физкультура (Пр)", "", "Ковач Т. Л.\nОртега К. А.")
-    assert lesson.teachers == ("Ковач Т. Л.", "Ортега К. А.")
+    lesson = parse_lesson(1, "Физкультура (Пр)", "", "Ковач Т. Л.\nОртега К. Ф.")
+    assert lesson.teachers == ("Ковач Т. Л.", "Ортега К. Ф.")
 
 
 def test_unknown_kind_survives():
@@ -484,13 +484,13 @@ def test_text_next_to_a_link_is_not_a_room(room, note):
 
 
 def test_role_before_a_name_is_dropped_not_the_name():
-    """«Куратор Фальконер Квеллкрист Андреевна» — человек, а «Куратор» целиком —
+    """«Куратор Фальконер Квеллкрист Харлановна» — человек, а «Куратор» целиком —
     заглушка."""
     from whensclass.parser.cells import split_teachers
 
     assert split_teachers("Куратор") == ()
     assert split_teachers("Вакансия (ждём)") == ()
-    assert split_teachers("Куратор Фальконер Квеллкрист Андреевна") == ("Фальконер Квеллкрист Андреевна",)
-    assert split_teachers("куратор: Фальконер К. А.") == ("Фальконер К. А.",)
+    assert split_teachers("Куратор Фальконер Квеллкрист Харлановна") == ("Фальконер Квеллкрист Харлановна",)
+    assert split_teachers("куратор: Фальконер К. Х.") == ("Фальконер К. Х.",)
     assert split_teachers("Кураторова Анна Петровна") == ("Кураторова Анна Петровна",)
 

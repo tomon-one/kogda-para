@@ -128,13 +128,13 @@ def test_teacher_names_in_place_of_subjects_are_a_row_shift():
     for g in honest.groups[:2]:
         first, *rest = two.schedule[g.id][day]
         two.schedule[g.id][day] = [
-            dataclasses.replace(first, subject="Шелби Скотт Андреевич"), *rest
+            dataclasses.replace(first, subject="Шелби Скотт Джонович"), *rest
         ]
     check_shift(two)
     three = copy.deepcopy(two)
     first, *rest = three.schedule[honest.groups[2].id][day]
     three.schedule[honest.groups[2].id][day] = [
-        dataclasses.replace(first, subject="Пейдж М. А."), *rest
+        dataclasses.replace(first, subject="Пейдж М. И."), *rest
     ]
     with pytest.raises(SourceFormatChanged, match="вместо названия ФИО"):
         check_shift(three)
@@ -225,7 +225,7 @@ def test_live_one_cell_insertion_is_rejected_by_the_parse(live):
 
 def test_lesson_numbers_are_part_of_the_vertical_check():
     """Сверка по вертикали сравнивает пары без номера: у съехавшей он другой."""
-    a = Lesson(number=3, subject="Физика", teachers=("Марс И. А.",), room="272")
+    a = Lesson(number=3, subject="Физика", teachers=("Марс И. Ш.",), room="272")
     from whensclass.parser.shift import _same_but_number
 
     assert _same_but_number(a, dataclasses.replace(a, number=2))
