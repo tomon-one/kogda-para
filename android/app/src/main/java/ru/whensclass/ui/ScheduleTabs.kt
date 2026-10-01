@@ -1,7 +1,9 @@
 package ru.whensclass.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,13 +18,28 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /** Разделы расписания. Пересдачи и экзамены колледж публикует отдельными листами. */
 enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String = "") {
@@ -39,10 +56,45 @@ enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String =
 private fun topTabs(teacherMode: Boolean): List<Tab> =
     if (teacherMode) listOf(Tab.TEACHERS, Tab.STUDENTS) else listOf(Tab.STUDENTS, Tab.TEACHERS)
 
+/**
+ * Вкладки над разделом и сам раздел ([content]). Нижний ряд — пересдачи и
+ * экзамены — уезжает вместе со списком и возвращается, когда список докручен до
+ * верха, как на сайте: пока эти разделы пусты, он только отнимает место. Выбран
+ * раздел из нижнего ряда — ряд стоит.
+ */
 @Composable
-internal fun ScheduleTabs(current: Tab, teacherMode: Boolean, onPick: (Tab) -> Unit) {
+internal fun ScheduleTabs(
+    current: Tab,
+    teacherMode: Boolean,
+    onPick: (Tab) -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val top = topTabs(teacherMode)
-    Column {
+    val pinned by rememberUpdatedState(current.ordinal >= 2)
+    var rowHeight by remember { mutableIntStateOf(0) }
+    // Насколько нижний ряд уехал вверх: от минус его высоты до нуля.
+    var shift by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(current) { shift = 0f }
+    val collapse = remember {
+        object : NestedScrollConnection {
+            fun move(dy: Float): Float {
+                if (pinned || rowHeight == 0) return 0f
+                val next = (shift + dy).coerceIn(-rowHeight.toFloat(), 0f)
+                val used = next - shift
+                shift = next
+                return used
+            }
+
+            // Вверх — сначала уезжает ряд, потом листается список.
+            override fun onPreScroll(available: Offset, source: NestedScrollSource) =
+                if (available.y < 0f) Offset(0f, move(available.y)) else Offset.Zero
+
+            // Вниз — ряд возвращается тем, что список не смог взять: он уже наверху.
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) =
+                if (available.y > 0f) Offset(0f, move(available.y)) else Offset.Zero
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
         // Полоска рисуется только в том ряду, где выбранная вкладка: иначе
         // подчёркнутыми оказываются сразу две.
         TabRow(
@@ -60,23 +112,39 @@ internal fun ScheduleTabs(current: Tab, teacherMode: Boolean, onPick: (Tab) -> U
         ) {
             top.forEach { TabButton(it, current, onPick) }
         }
-        TabRow(
-            selectedTabIndex = (current.ordinal - 2).coerceIn(0, 1),
-            containerColor = MaterialTheme.colorScheme.background,
-            divider = {},
-            indicator = { positions ->
-                // Полоску под нижним рядом рисуем, только когда там и правда
-                // выбран раздел: иначе она подчёркивает пустое место.
-                if (current.ordinal >= 2) {
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(positions[current.ordinal - 2]),
+        // Сдвиг читается только при раскладке: прокрутка не пересобирает экран.
+        Box(
+            Modifier
+                .clipToBounds()
+                .layout { measurable, constraints ->
+                    val row = measurable.measure(
+                        constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity),
                     )
-                }
-            },
+                    rowHeight = row.height
+                    val shown = (row.height + shift.roundToInt()).coerceAtLeast(0)
+                    layout(row.width, shown) { row.place(0, shown - row.height) }
+                },
         ) {
-            TabButton(Tab.RETAKES, current, onPick)
-            TabButton(Tab.EXAMS, current, onPick)
+            TabRow(
+                selectedTabIndex = (current.ordinal - 2).coerceIn(0, 1),
+                containerColor = MaterialTheme.colorScheme.background,
+                divider = {},
+                indicator = { positions ->
+                    // Полоску под нижним рядом рисуем, только когда там и правда
+                    // выбран раздел: иначе она подчёркивает пустое место.
+                    if (current.ordinal >= 2) {
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(positions[current.ordinal - 2]),
+                        )
+                    }
+                },
+            ) {
+                TabButton(Tab.RETAKES, current, onPick)
+                TabButton(Tab.EXAMS, current, onPick)
+            }
         }
+        Spacer(Modifier.height(8.dp))
+        Column(Modifier.weight(1f).nestedScroll(collapse), content = content)
     }
 }
 

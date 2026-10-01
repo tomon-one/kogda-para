@@ -6,9 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -243,70 +241,68 @@ fun TodayScreen(
                         scope.launch { snackbar.showSnackbar(picked.emptyMessage) }
                     }
                 },
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            when (tab) {
-                Tab.STUDENTS -> if (teacherMode) {
-                    // У преподавателя своей группы нет: раздел студентов —
-                    // это список групп, чьё расписание можно посмотреть.
-                    TeacherScreen(
-                        teachers = groups,
-                        loadSchedule = loadGroupSchedule,
-                        pinned = pinnedGroups,
-                        onTogglePin = onTogglePinnedGroup,
-                        reloadKey = reloadKey,
-                        searchLabel = "Поиск по названию группы",
-                        listName = "Список групп",
-                        othersTitle = "Другие группы",
-                        endNote = { n ->
-                            "Всё. " +
-                                plural(n, "группа", "группы", "групп") +
-                                "."
-                        },
-                    )
-                    return@Column
-                }
-
-                Tab.TEACHERS -> {
-                    // Отсутствие своего расписания преподавателя объясняется так
-                    // же, как у студента, — до списка чужих фамилий.
-                    if (teacherMode && explainMissing(schedule, today, sourceUrl, loading = refreshing)) {
-                        return@Column
+            ) {
+                when (tab) {
+                    Tab.STUDENTS -> if (teacherMode) {
+                        // У преподавателя своей группы нет: раздел студентов —
+                        // это список групп, чьё расписание можно посмотреть.
+                        TeacherScreen(
+                            teachers = groups,
+                            loadSchedule = loadGroupSchedule,
+                            pinned = pinnedGroups,
+                            onTogglePin = onTogglePinnedGroup,
+                            reloadKey = reloadKey,
+                            searchLabel = "Поиск по названию группы",
+                            listName = "Список групп",
+                            othersTitle = "Другие группы",
+                            endNote = { n ->
+                                "Всё. " +
+                                    plural(n, "группа", "группы", "групп") +
+                                    "."
+                            },
+                        )
+                        return@ScheduleTabs
                     }
-                    TeacherScreen(
-                        teachers = teachers,
-                        loadSchedule = loadTeacherSchedule,
-                        pinned = pinnedTeachers,
-                        onTogglePin = onTogglePinnedTeacher,
-                        reloadKey = reloadKey,
-                        // В роли преподавателя своё расписание уже загружено.
-                        ownSchedule = if (teacherMode) schedule else null,
-                        // День, на который нажали в виджете.
-                        startDay = if (teacherMode) startDay else null,
-                        startKey = startKey,
-                        // Себя отмечаем, только когда человек и правда
-                        // преподаватель: у студента это просто чужая фамилия.
-                        selfId = if (teacherMode) selfTeacherId else null,
-                    )
-                    return@Column
+
+                    Tab.TEACHERS -> {
+                        // Отсутствие своего расписания преподавателя объясняется так
+                        // же, как у студента, — до списка чужих фамилий.
+                        if (teacherMode && explainMissing(schedule, today, sourceUrl, loading = refreshing)) {
+                            return@ScheduleTabs
+                        }
+                        TeacherScreen(
+                            teachers = teachers,
+                            loadSchedule = loadTeacherSchedule,
+                            pinned = pinnedTeachers,
+                            onTogglePin = onTogglePinnedTeacher,
+                            reloadKey = reloadKey,
+                            // В роли преподавателя своё расписание уже загружено.
+                            ownSchedule = if (teacherMode) schedule else null,
+                            // День, на который нажали в виджете.
+                            startDay = if (teacherMode) startDay else null,
+                            startKey = startKey,
+                            // Себя отмечаем, только когда человек и правда
+                            // преподаватель: у студента это просто чужая фамилия.
+                            selfId = if (teacherMode) selfTeacherId else null,
+                        )
+                        return@ScheduleTabs
+                    }
+
+                    else -> Unit
                 }
 
-                else -> Unit
+                if (explainMissing(schedule, today, sourceUrl, loading = refreshing)) return@ScheduleTabs
+                schedule ?: return@ScheduleTabs
+
+                ScheduleDays(
+                    schedule = schedule,
+                    today = today,
+                    startDay = startDay,
+                    startKey = startKey,
+                    header = if (platesInList) plates else null,
+                    groupsByName = groupsByName,
+                )
             }
-
-        if (explainMissing(schedule, today, sourceUrl, loading = refreshing)) return@Column
-        schedule ?: return@Column
-
-        ScheduleDays(
-            schedule = schedule,
-            today = today,
-            startDay = startDay,
-            startKey = startKey,
-            header = if (platesInList) plates else null,
-            groupsByName = groupsByName,
-        )
         }
         }
     }
