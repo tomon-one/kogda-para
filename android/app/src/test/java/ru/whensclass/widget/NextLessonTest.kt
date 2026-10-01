@@ -107,4 +107,20 @@ class NextLessonTest {
         assertEquals("09:00 · каб. 275 · завтра", nextLessonHead("09:00", "завтра", false, null, place = "каб. 275"))
         assertEquals("идёт · онлайн", nextLessonHead("14:20", "идёт сейчас", true, null, place = "онлайн"))
     }
+
+    @Test
+    fun `блок пополам — ближайшая называет обе пары номера`() {
+        val german = LessonDto(number = 2, subject = "Немецкий", room = "55/1")
+        val english = LessonDto(number = 2, subject = "Английский", room = "467")
+        val s = schedule(
+            tuesday to listOf(lesson(1, "Физика"), german, english),
+            wednesday to listOf(german, english),
+        )
+
+        val now = nextLesson(s, tuesday.atTime(10, 35))
+        assertEquals(listOf("Немецкий", "Английский"), now?.lessons?.map { it.subject })
+        assertEquals("каб. 55/1 / каб. 467", now?.let(::places))
+        assertEquals(2, nextLesson(s, tuesday.atTime(19, 0))?.lessons?.size)
+        assertEquals(1, nextLesson(s, tuesday.atTime(8, 0))?.lessons?.size)
+    }
 }

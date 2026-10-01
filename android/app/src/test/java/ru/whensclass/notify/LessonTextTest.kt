@@ -108,4 +108,19 @@ class LessonTextTest {
         )
         assertTrue(text, text.endsWith("ИСП-924/2"))
     }
+
+    @Test
+    fun `две пары одного номера — строка на каждую, место первым`() {
+        val text = LessonAlarms.text(
+            LessonAlarms.Alarm(
+                at = LocalDateTime.of(2026, 10, 5, 14, 5),
+                lesson = LessonDto(number = 4, subject = "Немецкий", room = "55/1", teachers = listOf("Пикулина Л. Е.")),
+                minutes = 15,
+                day = "2026-10-05",
+                also = listOf(LessonDto(number = 4, subject = "Английский", room = "467", teachers = listOf("Здорик И. Р."))),
+            ),
+        )
+
+        assertEquals("Каб. 55/1 — Немецкий. Пикулина Л. Е.\nКаб. 467 — Английский. Здорик И. Р.", text)
+    }
 }

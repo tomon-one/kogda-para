@@ -63,14 +63,17 @@ object LessonAlarms {
             .forEachIndexed { index, alarm -> schedule(app, index, alarm) }
     }
 
-    /** Есть ли ещё пара из ключа напоминания («2026-09-29T21:47|Физика»), не отменённая. */
+    /**
+     * Есть ли ещё пара из ключа напоминания («2026-09-29T21:47|Физика»), не
+     * отменённая. У двух пар одного номера предметы в ключе — через [KEY_SEPARATOR].
+     */
     internal fun stillOn(schedule: ScheduleDto, key: String): Boolean {
         val start = key.substringBefore('|')
-        val subject = key.substringAfter('|')
+        val subjects = key.substringAfter('|').split(KEY_SEPARATOR).toSet()
         val date = start.take(10)
         val time = start.drop(11).take(5)
         return schedule.days.firstOrNull { it.date == date }?.lessons?.any { lesson ->
-            !lesson.isCancelled && lesson.subject == subject &&
+            !lesson.isCancelled && lesson.subject in subjects &&
                 schedule.bells[lesson.number.toString()]?.getOrNull(0) == time
         } == true
     }
@@ -84,11 +87,13 @@ object LessonAlarms {
             // Конец предыдущей пары этого дня. Отменённые не в счёт: пара после
             // отменённой — это уже возвращение с улицы.
             var busyUntil: LocalDateTime? = null
-            for (lesson in day.lessons.sortedBy { it.number }) {
-                if (lesson.isCancelled) continue
-                // Пары соседней подгруппы — не свои: о них не напоминаем, и их
-                // конец не глушит напоминание о своей. У преподавателя свои все.
-                if (schedule.isNeighbours(lesson)) continue
+            // Пары соседней подгруппы — не свои: о них не напоминаем, и их
+            // конец не глушит напоминание о своей. У преподавателя свои все.
+            val own = day.lessons.filter { !it.isCancelled && !schedule.isNeighbours(it) }
+            // Блок пополам — две пары одного номера в разных кабинетах: какая
+            // из них его, приложение не знает, и напоминание называет обе.
+            for ((_, same) in own.groupBy { it.number }.toSortedMap()) {
+                val lesson = same.first()
                 val bells = schedule.bells[lesson.number.toString()]
                 val start = bells?.getOrNull(0)
                     ?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: continue
@@ -108,6 +113,7 @@ object LessonAlarms {
                     Alarm(
                         fireAt, lesson, minutes, date.toString(), busyUntil,
                         ownGroup = schedule.groupName.takeUnless { schedule.isTeacher },
+                        also = same.drop(1),
                     ),
                 )
             }
@@ -124,16 +130,24 @@ object LessonAlarms {
         val end: LocalDateTime? = null,
         /** Своя группа студента: её имя в напоминании не пишется. */
         val ownGroup: String? = null,
+        /** Другие пары того же номера (блок пополам). */
+        val also: List<LessonDto> = emptyList(),
     ) {
         /** Когда пара начнётся: будильник стоит настолько же раньше. */
         val start: LocalDateTime get() = at.plusMinutes(minutes.toLong())
+
+        val lessons: List<LessonDto> get() = listOf(lesson) + also
+
+        /** Для заголовка: «Немецкий / Английский». */
+        val subject: String get() = lessons.joinToString(" / ") { it.subject }
     }
 
     private fun schedule(context: Context, index: Int, alarm: Alarm) {
         val manager = context.getSystemService(AlarmManager::class.java) ?: return
         val intent = Intent(context, LessonAlarmReceiver::class.java)
             // Предмет и время начала, а не готовый заголовок: см. title().
-            .putExtra(EXTRA_SUBJECT, alarm.lesson.subject)
+            .putExtra(EXTRA_SUBJECT, alarm.subject)
+            .putExtra(EXTRA_KEY, alarm.lessons.joinToString(KEY_SEPARATOR) { it.subject })
             .putExtra(EXTRA_START, alarm.start.toString())
             .putExtra(EXTRA_TEXT, text(alarm))
             .putExtra(EXTRA_DAY, alarm.day)
@@ -199,25 +213,47 @@ object LessonAlarms {
      * главное в нём — куда идти.
      */
     fun text(alarm: Alarm): String {
-        val lesson = alarm.lesson
-        val place = if (lesson.isOnline) {
-            "Онлайн" + (lesson.room?.trim()?.takeIf { it.isNotEmpty() }?.let { ", комната $it" } ?: "")
-        } else {
-            roomLabel(lesson.room)?.replaceFirstChar { it.uppercase() }
+        if (alarm.also.isNotEmpty()) {
+            // Строка на пару, место — первым; номер и время — в заголовке.
+            return alarm.lessons.joinToString("\n") { lesson ->
+                sentences(
+                    listOfNotNull(
+                        listOfNotNull(place(lesson), lesson.subject).joinToString(" — "),
+                        lesson.teachers.firstOrNull(),
+                        groupsOf(lesson, alarm.ownGroup),
+                    ),
+                )
+            }
         }
-        val parts = listOfNotNull(
-            place,
-            "${lesson.number} пара" + (kindName(lesson.kind)?.let { ", ${it.lowercase()}" } ?: ""),
-            lesson.teachers.firstOrNull(),
-            // Чья пара: у преподавателя — каким группам он идёт читать. Свою
-            // группу студенту не подписываем (склейка ставит её имя на общий номер).
-            lesson.groups?.trim()?.takeIf { it.isNotEmpty() && it != alarm.ownGroup },
+        val lesson = alarm.lesson
+        return sentences(
+            listOfNotNull(
+                place(lesson),
+                "${lesson.number} пара" + (kindName(lesson.kind)?.let { ", ${it.lowercase()}" } ?: ""),
+                lesson.teachers.firstOrNull(),
+                groupsOf(lesson, alarm.ownGroup),
+            ),
         )
-        // «Трухачев Д. Д.» уже кончается точкой — вторую не ставить.
-        return parts.reduce { acc, part -> acc + (if (acc.endsWith(".")) " " else ". ") + part }
     }
 
+    private fun place(lesson: LessonDto): String? = if (lesson.isOnline) {
+        "Онлайн" + (lesson.room?.trim()?.takeIf { it.isNotEmpty() }?.let { ", комната $it" } ?: "")
+    } else {
+        roomLabel(lesson.room)?.replaceFirstChar { it.uppercase() }
+    }
+
+    // Чья пара: у преподавателя — каким группам он идёт читать. Свою группу
+    // студенту не подписываем (склейка ставит её имя на общий номер).
+    private fun groupsOf(lesson: LessonDto, ownGroup: String?): String? =
+        lesson.groups?.trim()?.takeIf { it.isNotEmpty() && it != ownGroup }
+
+    // «Трухачев Д. Д.» уже кончается точкой — вторую не ставить.
+    private fun sentences(parts: List<String>): String =
+        parts.reduce { acc, part -> acc + (if (acc.endsWith(".")) " " else ". ") + part }
+
     const val EXTRA_SUBJECT = "subject"
+    const val EXTRA_KEY = "key"
+    private const val KEY_SEPARATOR = "\u001f"
     const val EXTRA_START = "start"
     const val EXTRA_TEXT = "text"
     const val EXTRA_DAY = "day"
@@ -239,7 +275,7 @@ class LessonAlarmReceiver : BroadcastReceiver() {
             text,
             intent.getStringExtra(LessonAlarms.EXTRA_DAY),
             until = end?.let { ru.whensclass.widget.millisOf(it) },
-            key = "$start|$subject",
+            key = "$start|" + (intent.getStringExtra(LessonAlarms.EXTRA_KEY) ?: subject),
         )
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {

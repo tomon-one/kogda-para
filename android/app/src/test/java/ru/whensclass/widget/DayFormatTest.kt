@@ -179,4 +179,15 @@ class DayFormatTest {
         )
         assertEquals("UTC", java.util.TimeZone.getDefault().id)
     }
+
+    @Test
+    fun `пары считаются по номерам — блок пополам не вторая пара`() {
+        val lessons = listOf(
+            LessonDto(number = 1, subject = "Право"),
+            LessonDto(number = 4, subject = "Немецкий"),
+            LessonDto(number = 4, subject = "Английский"),
+        )
+        assertEquals(2, numbers(lessons))
+        assertEquals("2 пары", pairsCount(numbers(lessons)))
+    }
 }

@@ -155,4 +155,19 @@ class LessonPlanTest {
         assertEquals(false, LessonAlarms.stillOn(day(lesson(1), lesson(2, cancelled = true)), key))
         assertEquals(false, LessonAlarms.stillOn(day(lesson(1)), key))
     }
+
+    @Test
+    fun `блок пополам — одно напоминание об обеих парах номера`() {
+        val german = LessonDto(number = 4, subject = "Немецкий", room = "55/1")
+        val english = LessonDto(number = 4, subject = "Английский", room = "467")
+        val plan = LessonAlarms.plan(day(german, english), minutes = 15, now = night)
+
+        assertEquals(1, plan.size)
+        assertEquals(listOf("Немецкий", "Английский"), plan.single().lessons.map { it.subject })
+        assertEquals("Немецкий / Английский", plan.single().subject)
+        // Отменили одну из двух — напоминание о второй не снимается.
+        val key = "2026-09-08T14:20|Немецкий\u001fАнглийский"
+        assertEquals(true, LessonAlarms.stillOn(day(german.copy(cancelled = 1), english), key))
+        assertEquals(false, LessonAlarms.stillOn(day(german.copy(cancelled = 1), english.copy(cancelled = 1)), key))
+    }
 }

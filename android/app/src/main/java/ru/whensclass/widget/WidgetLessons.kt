@@ -76,8 +76,8 @@ internal fun Lessons(
 
     val shown = lessons.subList(start, minOf(lessons.size, start + fits))
     // Два разных числа: сверху прячется прожитое, снизу — предстоящее.
-    val passed = start
-    val ahead = lessons.size - start - shown.size
+    val passed = numbers(lessons.subList(0, start))
+    val ahead = numbers(lessons.subList(start + shown.size, lessons.size))
 
     Column(modifier = modifier) {
         // Прожитое называем сверху — там, где оно исчезло.

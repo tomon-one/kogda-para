@@ -157,7 +157,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 val head = status + nextLessonHead(
                     time, when_, ongoing, lesson.groups,
                     // Без «⧉»: нажатие на шапку открывает приложение, а не копирует.
-                    place = if (tight) place(lesson, withKind = false).removeSuffix("  ⧉") else null,
+                    place = if (tight) places(next) else null,
                 )
                 Text(
                     head,
@@ -172,7 +172,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     ),
                 )
                 Text(
-                    lesson.subject,
+                    next.lessons.joinToString(" / ") { it.subject },
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 14.sp,
@@ -186,19 +186,27 @@ class NextLessonWidget : GlanceAppWidget() {
                 // Ссылка на чужой адрес не копируется одним нажатием: нажатие
                 // ведёт на экран пары, где хост назван.
                 val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
+                // Две пары одного номера — оба места, без копирования ссылки:
+                // нажатие открывает день, где у каждой пары своя.
+                val pair = next.also.isNotEmpty()
                 if (!tight) Text(
-                    if (foreign) "⚠ чужая ссылка · " + place(lesson).removeSuffix("  ⧉") else place(lesson),
+                    when {
+                        pair -> places(next)
+                        foreign -> "⚠ чужая ссылка · " + place(lesson).removeSuffix("  ⧉")
+                        else -> place(lesson)
+                    },
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = when {
+                            pair -> colors.text
                             foreign -> colors.error
                             lesson.isOnline -> colors.accent
                             else -> colors.text
                         },
                     ),
-                    modifier = lesson.url?.takeUnless { foreign }?.let { url ->
+                    modifier = lesson.url?.takeUnless { foreign || pair }?.let { url ->
                         val context = LocalContext.current
                         GlanceModifier.fillMaxWidth()
                             .clickable(actionStartActivity(CopyLinkActivity.intent(context, url)))
@@ -209,8 +217,13 @@ class NextLessonWidget : GlanceAppWidget() {
     }
 }
 
-/** Пара и день, на который она приходится. */
-data class NextLesson(val day: LocalDate, val lesson: LessonDto)
+/**
+ * Пара и день, на который она приходится. [also] — другие пары того же номера:
+ * блок пополам, две пары в разных кабинетах, и какая из них его, неизвестно.
+ */
+data class NextLesson(val day: LocalDate, val lesson: LessonDto, val also: List<LessonDto> = emptyList()) {
+    val lessons: List<LessonDto> get() = listOf(lesson) + also
+}
 
 /**
  * Идущая сейчас пара; если её нет — ближайшая из оставшихся сегодня; если и
@@ -226,21 +239,25 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
     val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }
         ?.lessons.orEmpty().filter(::mine)
 
+    fun found(date: LocalDate, lesson: LessonDto, day: List<LessonDto>) =
+        NextLesson(date, lesson, day.filter { it !== lesson && it.number == lesson.number })
+
     currentLessonNumber(bells, today, now)
         ?.let { number -> todayLessons.firstOrNull { it.number == number } }
-        ?.let { return NextLesson(today, it) }
+        ?.let { return found(today, it, todayLessons) }
 
     val time = now.toLocalTime()
     todayLessons.firstOrNull { lesson ->
         val start = parseTime(bells[lesson.number.toString()]?.getOrNull(0))
         start == null || start > time
-    }?.let { return NextLesson(today, it) }
+    }?.let { return found(today, it, todayLessons) }
 
     // Сегодня всё — ищем ближайший день, где пары есть.
     for (day in schedule.days) {
         val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
         if (date <= today) continue
-        day.lessons.firstOrNull(::mine)?.let { return NextLesson(date, it) }
+        val lessons = day.lessons.filter(::mine)
+        lessons.firstOrNull()?.let { return found(date, it, lessons) }
     }
     return null
 }
@@ -301,6 +318,10 @@ internal fun nextLessonHead(
 
 /** Три строки маленького виджета — в sp, без отступов. */
 private const val TIGHT_HEIGHT_SP = 52
+
+/** Места всех пар номера без вида: «каб. 55/1 / каб. 467». */
+internal fun places(next: NextLesson): String =
+    next.lessons.joinToString(" / ") { place(it, withKind = false).removeSuffix("  ⧉") }
 
 private fun place(lesson: LessonDto, withKind: Boolean = true): String = buildString {
     // Замена — первым словом: другой предмет без пометки похож на ошибку виджета.

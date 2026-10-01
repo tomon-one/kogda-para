@@ -182,7 +182,7 @@ private fun DaySummary(day: WeekDay, bells: Map<String, List<String>>, colors: P
             if (day.lessons.isEmpty()) {
                 if (day.absent) "  выходной" else "  пар нет"
             } else {
-                "  " + pairsCount(day.lessons.size) + (span(day, bells)?.let { " · $it" } ?: "")
+                "  " + pairsCount(numbers(day.lessons)) + (span(day, bells)?.let { " · $it" } ?: "")
             },
             maxLines = 1,
             style = TextStyle(fontSize = 11.sp, color = colors.textDim),
