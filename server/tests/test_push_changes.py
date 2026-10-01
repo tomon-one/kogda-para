@@ -185,6 +185,22 @@ def test_reminders_first_of_day_and_after_a_window():
     assert [a["number"] for a in changes.reminders(payload, 5, day)] == [1, 2, 4]
 
 
+def test_reminder_names_both_lessons_of_a_halved_block():
+    day = dt.date(2026, 9, 29)
+    payload = _group({TUE: [
+        _l(4, "Немецкий", r="55/1", t=["Пикулина Л. Е."]),
+        _l(4, "Английский", r="467", t=["Здорик И. Р."]),
+    ]})
+    plan = changes.reminders(payload, 15, day)
+    assert [a["number"] for a in plan] == [4]
+    assert plan[0]["title"] == "14:20 — Немецкий / Английский"
+    assert plan[0]["subject"] == "Немецкий / Английский"
+    assert plan[0]["text"] == "Каб. 55/1 — Немецкий. Пикулина Л. Е.\nКаб. 467 — Английский. Здорик И. Р."
+    # Отменили одну — напоминание об оставшейся, как об обычной паре.
+    payload["days"][0]["l"][0]["x"] = 1
+    assert changes.reminders(payload, 15, day)[0]["text"] == "Каб. 467. 4 пара. Здорик И. Р."
+
+
 def test_reminder_names_the_group_only_for_teacher():
     lesson = _l(2, "Физика", r="275", gr="ИСП-924/2")
     assert changes.reminder_text(lesson, "ИСП-924/1") == "Каб. 275. 2 пара. ИСП-924/2"
