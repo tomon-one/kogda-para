@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
 fun ReportLink(
     load: suspend () -> String,
     modifier: Modifier = Modifier,
-    /** Среди ссылок «О приложении» — как они, а не неприметной строкой (Tomon 29.09: ровно). */
+    /** Среди ссылок «О приложении» — как они, а не неприметной строкой. */
     asLink: Boolean = false,
 ) {
     var open by remember { mutableStateOf(false) }

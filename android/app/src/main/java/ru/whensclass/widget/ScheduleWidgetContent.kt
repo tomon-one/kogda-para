@@ -1,14 +1,12 @@
 package ru.whensclass.widget
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import android.content.Intent
-import android.net.Uri
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.appwidget.action.actionRunCallback
@@ -30,16 +28,12 @@ import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
-import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 import ru.whensclass.R
-import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
-import ru.whensclass.data.isKnownWebinar
 import ru.whensclass.data.sheetLink
 import ru.whensclass.ui.MainActivity
 
@@ -128,7 +122,7 @@ fun ScheduleWidgetContent(
                 )
             }
             // Свободный день: подсказка «нажмите, чтобы обновить» читалась как
-            // «не загрузилось» (разбор текстов 27.09) — нажатие ведёт в приложение.
+            // «не загрузилось» — нажатие ведёт в приложение.
             today.lessons.isEmpty() -> MissingHint(
                 "Пар нет", colors, open = actionStartActivity(openDay(context, day)),
             )
@@ -331,211 +325,9 @@ private fun TapButton(
     )
 }
 
-@Composable
-private fun Lessons(
-    lessons: List<LessonDto>,
-    bells: Map<String, List<String>>,
-    day: LocalDate,
-    now: LocalDateTime,
-    fit: Fit,
-    colors: Palette,
-    modifier: GlanceModifier = GlanceModifier.fillMaxWidth(),
-) {
-    if (lessons.isEmpty()) {
-        // Подстраховка: список без строк оставлял виджет пустым, и человек
-        // видел только шапку на чёрном фоне.
-        MissingHint("Пар нет", colors)
-        return
-    }
-    val current = currentLessonNumber(bells, day, now)
-    // Обычный список, не ленивый. Ленивый прокручивался пальцем, но жил только
-    // пока жив процесс приложения: система выгружала его — и виджет чернел
-    // насовсем, не оживая ни обновлением, ни запуском приложения.
-    // Высоты перемерены по снимку экрана 9 сентября (TECNO LF7n, плотность 480):
-    // шаг между плашками пар — 44,3 dp, от верха карточки до первой плашки —
-    // 47,7 dp. Прежние 52 и 58+16 были сняты на глаз и завышены: на виджете
-    // в 200 dp они съедали целую строку.
-    //
-    // Округлено вверх намеренно: ошибиться в меньшую сторону значит обрезать
-    // последнюю пару корпусом виджета, а прокрутки внутри виджета нет.
-    val rowHeight = (if (fit.dense) 41.dp else 45.dp) * fontScale()
-    // Шапка с группой и стрелками плюс строка «ещё N»: их место списку не
-    // достаётся. Раньше «ещё» отнимало строку у пары, и вместо двух занятий
-    // виджет показывал одно — хуже, чем не показать остаток вовсе.
-    val free = LocalSize.current.height - (if (fit.dense) 42.dp else 50.dp) * fontScale()
-    // Обычно показываем не меньше двух пар: одна пара на весь виджет
-    // выглядит как поломка. Но если оболочка ужала виджет ниже собственного
-    // минимума — а Nova это умеет, — вторая строка не влезет и обрежется
-    // корпусом. Тогда честнее показать одну целиком.
-    // Строка «прошло N пар» или «ещё N пар» тоже занимает место, и сколько их
-    // будет — видно только после того, как выбрано окно. Поэтому прикидка,
-    // потом уточнение: одного круга хватает, дальше число не меняется.
-    val lineHeight = 17.dp * fontScale()
-
-    // Сколько целых пар помещается — и не больше. Раньше при месте на одну-две
-    // пары (1 ≤ left/rowHeight < 2) виджет всё равно ставил две, и вторую
-    // обрезал корпус. Одна
-    // пара — минимум: пустой виджет хуже одной строки.
-    fun room(reserved: Dp): Int {
-        val left = free - reserved
-        return (left / rowHeight).toInt().coerceAtLeast(1).coerceAtMost(lessons.size)
-    }
-
-    var fits = room(0.dp)
-    var start = windowStart(lessons, bells, day, fits, now)
-    val labels = (if (start > 0) 1 else 0) + (if (start + fits < lessons.size) 1 else 0)
-    if (labels > 0) {
-        // Больше восьми пар и так не бывает, но подписи занимают места в
-        // контейнере наравне с парами, а их всего десять.
-        fits = room(lineHeight * labels).coerceAtMost(MAX_CHILDREN - labels)
-        start = windowStart(lessons, bells, day, fits, now)
-    }
-
-    val shown = lessons.subList(start, minOf(lessons.size, start + fits))
-    // Два разных числа, а не одно. Сверху прячется прожитое, снизу —
-    // предстоящее, и человеку это не одно и то же: «ещё две пары» под списком
-    // обещает пары впереди, даже когда они давно кончились.
-    val passed = start
-    val ahead = lessons.size - start - shown.size
-
-    Column(modifier = modifier) {
-        // Сверху — прожитое: список едет вниз вместе с днём, и то, что уехало
-        // за верхний край, должно быть названо там же, где исчезло.
-        if (passed > 0) HiddenLine(passedPairs(passed), day, colors)
-        shown.forEach { lesson ->
-            // Пара и отступ под ней — одним контейнером: разметка виджета
-            // вмещает не больше десяти детей, и по два на пару их не хватало бы
-            // на длинный день.
-            Column(modifier = GlanceModifier.fillMaxWidth()) {
-                // Отменённая пара в своё время — не «идёт сейчас».
-                LessonRow(lesson, day, bells, isNow = lesson.number == current && !lesson.isCancelled, fit, colors)
-                Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 4.dp))
-            }
-        }
-        if (ahead > 0) HiddenLine(morePairs(ahead), day, colors)
-    }
-}
-
-/** Строка о парах, которые в виджет не поместились. Нажатие открывает день. */
-@Composable
-private fun HiddenLine(text: String, day: LocalDate, colors: Palette) {
-    val context = LocalContext.current
-    Text(
-        text,
-        maxLines = 1,
-        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .padding(start = 4.dp)
-            .clickable(actionStartActivity(openDay(context, day))),
-    )
-}
-
-/**
- * Почему дня нет в расписании.
- *
- * Раньше на любой такой случай виджет отвечал «ещё не опубликовано» —
- * утверждением о колледже, которого приложение в этот момент знать не может.
- * Воскресенье внутри опубликованного листа объявлялось неопубликованным, а
- * недельной давности данные — тоже.
- */
-internal data class Missing(val text: String, val toSource: Boolean = false, val off: Boolean = false)
-
-/**
- * Проверял ли телефон сервер с начала сегодняшнего дня. Нет — «ещё не
- * опубликовано» утверждать нечем: телефон, который не будят в фоне (или без
- * сети), с четверга не видел недели, которую колледж выложил в пятницу
- * (четвёртый аудит, В20 прогона 1).
- */
-internal fun checkedToday(fetchedAt: Long, today: LocalDate): Boolean =
-    fetchedAt >= today.atStartOfDay(COLLEGE_ZONE).toInstant().toEpochMilli()
-
-internal fun missingDay(
-    schedule: ScheduleDto,
-    day: LocalDate,
-    serverBroken: Boolean,
-    /** Для недельного виджета — «на эти дни», а не «на этот день». */
-    week: Boolean = false,
-    /** Телефон проверял сервер сегодня ([checkedToday]). */
-    checked: Boolean = true,
-): Missing {
-    val covered = schedule.coverage.size == 2 && runCatching {
-        !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
-            !day.isAfter(LocalDate.parse(schedule.coverage[1]))
-    }.getOrDefault(false)
-    // «Выходной» — только про день между первым и последним скачанным днём:
-    // cov относится ко всему листу, а не к окну на телефоне, и будень новой
-    // недели при окне прошлой назывался выходным, хотя пары у группы есть.
-    val dates = schedule.days.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
-    val inWindow = dates.isNotEmpty() && !day.isBefore(dates.min()) && !day.isAfter(dates.max())
-    val off = Missing("Выходной", off = true)
-    return when {
-        // Воскресений в листах не бывает: это выходной всегда, и при cov,
-        // который кончается субботой. Но не для недели:
-        // пустая неделя в воскресенье — это «следующая не выложена», а не
-        // «выходной» без выхода к таблице (разбор текстов 27.09).
-        day.dayOfWeek == java.time.DayOfWeek.SUNDAY && !week -> off
-        covered && inWindow -> off
-        // Сбой проверяем раньше несвежести. Данные при сбое всегда рано
-        // или поздно стареют, и «нажмите на время в шапке» отправляло
-        // человека жать кнопку, которая в этом случае помочь не может.
-        //
-        // Пустой день и наша поломка выглядели одинаково, и человек
-        // спокойно ждал расписания, которого мы уже не принесём.
-        serverBroken -> Missing("Сбой: расписание не обновляется", toSource = true)
-        // Лист этот день покрывает, а на телефоне его нет — окно не то.
-        // Утверждать «выходной» или «не опубликовано» нечем.
-        covered || !checked -> Missing(
-            if (week) "Расписание на эти дни не загружено" else "Расписание на этот день не загружено",
-        )
-        // Единственное объяснение, которое приложение проверить не может:
-        // ровно так же выглядит наш собственный промах с поиском листа.
-        // Поэтому спорить о виновнике незачем — надо дать выход к таблице.
-        else -> Missing(
-            if (week) "Расписание на эти дни ещё не опубликовано"
-            else "Расписание на этот день ещё не опубликовано",
-            toSource = true,
-        )
-    }
-}
-
-/**
- * С какой пары начинать список, когда влезают не все.
- *
- * К обеду первые пары уже не нужны, а последние не видны. Поэтому сегодняшний
- * список начинается с той пары, которая ещё не кончилась, и съезжает вниз сам
- * собой в течение дня. Прошлые и будущие дни показываются с начала.
- */
-internal fun windowStart(
-    lessons: List<LessonDto>,
-    bells: Map<String, List<String>>,
-    day: LocalDate,
-    fits: Int,
-    now: LocalDateTime,
-): Int {
-    // Окно стоит там, где день граничит с «сейчас»: у будущего дня — в начале,
-    // у прожитого — в конце, у сегодняшнего — на ближайшей не кончившейся паре.
-    // «Сейчас» приходит параметром: см. currentLessonNumber.
-    val today = now.toLocalDate()
-    if (day.isAfter(today)) return 0
-    if (day.isBefore(today)) return maxOf(0, lessons.size - fits)
-    val time = now.toLocalTime()
-    val index = lessons.indexOfFirst { lesson ->
-        val end = bells[lesson.number.toString()]?.getOrNull(1)
-            ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
-        end == null || !time.isAfter(end)
-    }
-    // Все пары кончились: остаёмся в конце дня. Раньше indexOfFirst возвращал
-    // −1, условие «index <= 0» отбрасывало окно в начало, и вечером виджет
-    // прыгал обратно на утренние пары.
-    if (index < 0) return maxOf(0, lessons.size - fits)
-    if (index == 0) return 0
-    // У конца дня не оставляем пустоту снизу: окно упирается в последнюю пару.
-    return minOf(index, maxOf(0, lessons.size - fits))
-}
 
 /** Насколько тесно виджету — от этого зависит, что показывать. */
-private data class Fit(val narrow: Boolean, val dense: Boolean, val scale: Float = 1f)
+internal data class Fit(val narrow: Boolean, val dense: Boolean, val scale: Float = 1f)
 
 /** Приложение открывается на том же дне, что показывает виджет. */
 internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
@@ -551,167 +343,6 @@ internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
                 Intent.FLAG_ACTIVITY_SINGLE_TOP,
         )
 
-@Composable
-private fun LessonRow(
-    lesson: LessonDto,
-    day: LocalDate,
-    bells: Map<String, List<String>>,
-    isNow: Boolean,
-    fit: Fit,
-    colors: Palette,
-) {
-    Row(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .background(if (isNow) colors.nowSurface else colors.surface)
-            .cornerRadius(10.dp)
-            .padding(horizontal = 8.dp, vertical = if (fit.dense) 3.dp else 4.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        // Ширины хватает на «09:00–10:30» одной строкой: время, переносимое
-        // пополам, читается как опечатка. На узком виджете диапазон не влезает —
-        // тогда показываем только начало пары.
-        Column(modifier = GlanceModifier.width((if (fit.narrow) 48.dp else 72.dp) * fit.scale)) {
-            // У текущей пары номер уступает место словам: номер и так виден по
-            // времени рядом, а «идёт сейчас» ищут глазами первым. Строка та же,
-            // поэтому высота пары не меняется.
-            Text(
-                when {
-                    isNow && fit.narrow -> "сейчас"
-                    isNow -> "идёт сейчас"
-                    else -> "${lesson.number} пара"
-                },
-                maxLines = 1,
-                style = TextStyle(
-                    fontSize = 10.sp,
-                    fontWeight = if (isNow) FontWeight.Medium else FontWeight.Normal,
-                    color = if (isNow) colors.accent else colors.textDim,
-                ),
-            )
-            val time = if (fit.narrow) {
-                lessonStart(bells, lesson.number)
-            } else {
-                lessonTime(bells, lesson.number)
-            }
-            time?.let { time ->
-                Text(
-                    time,
-                    maxLines = 1,
-                    style = TextStyle(fontSize = 11.sp, color = colors.text),
-                )
-            }
-        }
-        Spacer(GlanceModifier.width(6.dp))
-        Column(modifier = GlanceModifier.defaultWeight()) {
-            Text(
-                lesson.subject,
-                maxLines = 1,
-                style = TextStyle(
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.text,
-                    textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
-                ),
-            )
-            Details(lesson, day, colors)
-        }
-    }
-}
-
-@Composable
-private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
-    // Одной строкой, а не тремя. Раньше тип, место и преподаватель занимали по
-    // строке каждый, пара выходила в четыре строки высотой, и в виджет помещалась
-    // одна — при том что смотрят в него ради двух ближайших.
-    val parts = buildList {
-        if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
-        // Место — раньше типа: строка одна, и тип вытеснял кабинет в
-        // многоточие.
-        // Замена — первым словом, как «Вместо: …» на экране (разбор текстов 27.09).
-        if (lesson.replaces != null && !lesson.isCancelled) add("замена")
-        add(if (lesson.isOnline) onlineLabel(lesson) else roomLabel(lesson.room) ?: "место не указано")
-        kindName(lesson.kind)?.let { add(it) }
-        // В расписании преподавателя вместо его имени — группы, которым читается
-        // пара: сам он и так знает, кто ведёт.
-        (lesson.groups ?: lesson.teachers.firstOrNull()?.let(::surnameOnly))?.let { add(it) }
-    }
-    if (parts.isEmpty()) return
-
-    val line = GlanceModifier.fillMaxWidth()
-    val context = LocalContext.current
-    // Ссылка на чужой адрес одним нажатием не копируется: без хоста и без
-    // пометки её вставляли в браузер, не глядя. Нажатие ведёт на экран пары,
-    // где хост назван.
-    val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
-    Text(
-        // Значок впереди строки, а не в хвосте: строка одна и обрезается
-        // справа, так что длинная фамилия преподавателя утаскивала за край
-        // единственную кнопку, ради которой на пару и нажимают.
-        when {
-            foreign -> "⚠ чужая ссылка · " + parts.joinToString(" · ")
-            lesson.url != null -> "⧉  " + parts.joinToString(" · ")
-            else -> parts.joinToString(" · ")
-        },
-        maxLines = 1,
-        style = TextStyle(
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = when {
-                lesson.isCancelled || foreign -> colors.error
-                lesson.isOnline -> colors.accent
-                else -> colors.text
-            },
-        ),
-        modifier = when {
-            foreign -> line.clickable(actionStartActivity(openDay(context, day)))
-            lesson.url != null ->
-                line.clickable(actionStartActivity(CopyLinkActivity.intent(context, lesson.url)))
-            else -> line
-        },
-    )
-}
-
-/**
- * Надпись вместо пар. [open] — нажатие открывает приложение, а не обновляет:
- * когда обновлять нечего (группа не выбрана).
- */
-@Composable
-internal fun MissingHint(
-    text: String,
-    colors: Palette,
-    sourceUrl: String? = null,
-    open: androidx.glance.action.Action? = null,
-) {
-    Column(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .clickable(open ?: actionRunCallback<RefreshAction>()),
-    ) {
-        Text(
-            text,
-            style = TextStyle(fontSize = 13.sp, color = colors.textDim),
-            modifier = GlanceModifier.padding(vertical = 8.dp),
-        )
-        // «Нажмите, чтобы обновить» под «откройте приложение» спорило с ним
-        // самим.
-        if (open == null && sourceUrl == null) {
-            Text(
-                "нажмите, чтобы обновить",
-                style = TextStyle(fontSize = 11.sp, color = colors.accent),
-            )
-        } else if (sourceUrl != null) {
-            // Второй строкой ровно одна подсказка, а не две: обновление
-            // здесь уже ничего не изменит — сервер сказал всё, что знает.
-            // На узком виджете третья строка к тому же не поместилась бы.
-            Text(
-                "открыть таблицу колледжа",
-                style = TextStyle(fontSize = 11.sp, color = colors.accent),
-                modifier = GlanceModifier
-                    .clickable(actionStartActivity(openSource(sourceUrl))),
-            )
-        }
-    }
-}
 
 /**
  * Во сколько раз система увеличила шрифт.
@@ -727,8 +358,3 @@ internal fun MissingHint(
 @Composable
 internal fun fontScale(): Float =
     LocalContext.current.resources.configuration.fontScale.coerceAtLeast(1f)
-
-/** Таблица колледжа в браузере: первоисточник, когда дня у нас нет. */
-private fun openSource(url: String): Intent =
-    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

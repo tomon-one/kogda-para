@@ -97,7 +97,7 @@ fun formatDayTitle(day: LocalDate): String {
 fun formatFetchedAt(millis: Long): String {
     // «Проверено», а не «обновлено»: время ставится при каждой удачной
     // проверке, и в сбой «обновлено 5 минут назад» стояло над плашкой «сбой с
-    // позавчера» (разбор текстов 27.09).
+    // позавчера».
     if (millis <= 0) return "ещё не проверялось"
     val moment = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
     val time = moment.format(DateTimeFormatter.ofPattern("HH:mm", RU))
@@ -302,7 +302,7 @@ fun formatSince(iso: String, now: Instant = Instant.now()): String {
 
 /**
  * Начало сбоя без «уже N часов» — для уведомления: оно выходит один раз и
- * висит сутками, и «уже 2 часа» через день было неправдой (разбор текстов 27.09).
+ * висит сутками, и «уже 2 часа» через день было неправдой.
  */
 fun formatSinceMoment(iso: String): String {
     val since = runCatching { Instant.parse(iso) }.getOrNull() ?: return iso

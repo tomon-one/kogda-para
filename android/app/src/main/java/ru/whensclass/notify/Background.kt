@@ -63,7 +63,7 @@ enum class Vendor(
                 names.any { n -> listOf("tecno", "infinix", "itel").any { n.startsWith(it) } } -> TRANSSION
                 // realme — 13 % продаж в России за 2025 год, вровень с Tecno;
                 // ColorOS и Funtouch гасят приложения в фоне (dontkillmyapp:
-                // 3 из 5). Раньше у них не было ни шага (четвёртый аудит, В19).
+                // 3 из 5). Раньше у них не было ни шага.
                 names.any { it in setOf("oppo", "realme", "oneplus") } -> OPPO
                 names.any { it in setOf("vivo", "iqoo") } -> VIVO
                 else -> null

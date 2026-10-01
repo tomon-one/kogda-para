@@ -81,7 +81,7 @@ fun TeacherScreen(
     // Выбор и поиск переживают поворот экрана.
     var browsing by rememberSaveable { mutableStateOf(false) }
     // Нажали на свой день виджета или своё уведомление — к своему
-    // расписанию, а не к открытому коллеге (четвёртый аудит, М10 прогона 1).
+    // расписанию, а не к открытому коллеге.
     // Только на новое нажатие: поворот экрана выбор не сбрасывает.
     var handledKey by rememberSaveable { mutableStateOf(startKey) }
     LaunchedEffect(startKey) {
