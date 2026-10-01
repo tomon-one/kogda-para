@@ -108,9 +108,9 @@ function lessonRow(lesson, bells, isNow, key, groups, byName) {
 
 /**
  * Значки групп под временем (GroupMarks в GroupMarks.kt) — только тех, у кого
- * пара есть: своя — закрашенным, другие — бледным; пустые рамки путали.
- * Подпись — название (shortLabels) или номер: место в настройках, 1 —
- * своя. Номера — по три в ряд, названия — сколько влезет.
+ * пара есть (пустые рамки путают): своя — закрашенным, другие — бледным.
+ * Подпись — название (shortLabels) или номер: место в настройках, 1 — своя.
+ * Номера — по три в ряд, названия — сколько влезет.
  */
 function groupMarks(slots, groups, byName) {
   var whose = slots.slice().sort().map(function (i) { return groups[i]; }).filter(Boolean);
@@ -122,10 +122,7 @@ function groupMarks(slots, groups, byName) {
   return box;
 }
 
-/**
- * Один значок: своя группа — закрашенный, другая — бледный. `name` — полное
- * название во всплывающей подсказке: длинное в значке обрезано.
- */
+/** Один значок. `name` — полное название во всплывающей подсказке: длинное в значке обрезано. */
 export function groupMark(label, own, name) {
   return h('span', { class: 'mark' + (own ? ' own' : ''), 'aria-hidden': 'true', title: name || null }, String(label));
 }

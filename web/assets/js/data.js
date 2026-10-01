@@ -11,7 +11,7 @@ import { render } from './render.js';
 
 /**
  * Свежие списки — не при каждом заходе: группа, открывшая ссылку разом с
- * общего адреса, упиралась в 429 на экране выбора.
+ * общего адреса, упрётся в 429 на экране выбора.
  */
 var LISTS_FRESH_MS = 12 * 3600 * 1000;
 var listsLoading = false;
@@ -58,8 +58,7 @@ var OTHER_FRESH_MS = 5 * 60 * 1000;
 
 export function loadOther(kind, id) {
   var other = state.other;
-  // Тот же и свежий — не качать; иначе показывался снимок первого открытия,
-  // пока жива страница.
+  // Тот же и свежий или уже грузится — не качать.
   if (other && other.kind === kind && other.id === id && !other.failed &&
     (other.loading || Date.now() - (other.at || 0) < OTHER_FRESH_MS)) return;
   // Перезапрос того же — прежнее остаётся на экране, пока не придёт новое, и
@@ -164,7 +163,7 @@ export function refresh(force, manual) {
   render();
   repo.refresh(force).then(function (result) {
     // Крестик — у любой неудачи, не только ручной, и снимается любой удачей:
-    // иначе автообновление без сети зажигало галочку.
+    // иначе автообновление без сети зажгло бы галочку.
     if (result.kind === 'failed') {
       state.refreshFailed = true;
       retrySoon();

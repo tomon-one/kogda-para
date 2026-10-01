@@ -176,9 +176,8 @@
 .setting-text { flex: 1 1 140px; min-width: 0; overflow-wrap: break-word; word-wrap: break-word; }
 .setting-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; padding: 4px 0; }
 .setting-buttons .action { margin: 2px 0 2px 8px; }
-/* Одна ширина — 116 px, как ROW_BUTTON приложения: «Сменить», «Убрать», «Добавить»,
-   «Скопировать», минуты напоминания; узко — кнопки строкой ниже, а не поверх
-   названия. */
+/* Одна ширина — 116 px, как ROW_BUTTON приложения: «Сменить», «Убрать»,
+   «Добавить», «Скопировать», минуты напоминания. */
 .action.fixed { width: 116px; padding: 0 8px; }
 
 /* Пометка у заголовка: beta, альфа-тест. */

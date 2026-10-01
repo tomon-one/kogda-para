@@ -49,9 +49,11 @@ export function icon(name, cls) {
   return span;
 }
 
-/** Кнопка на подложке — как ActionButton приложения. */
-/** `key` — для фокуса после перестройки экрана (data-key). */
-/** `spoken` — подпись для чтеца вместо надписи: «Убрать ИСП-924/2», а не «Убрать». */
+/**
+ * Кнопка на подложке — как ActionButton приложения. `key` — для фокуса после
+ * перестройки экрана (data-key), `spoken` — подпись для чтеца вместо надписи:
+ * «Убрать ИСП-924/2», а не «Убрать».
+ */
 export function actionButton(label, onClick, cls, key, spoken) {
   return h('button', {
     type: 'button', class: 'action' + (cls ? ' ' + cls : ''), 'data-key': key || null,

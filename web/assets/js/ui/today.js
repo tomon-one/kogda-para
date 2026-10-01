@@ -31,9 +31,9 @@ export function mainScreen(app) {
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
     head, secondTabs(), content);
 
-  // Сбой и пропажа — на любой вкладке, как в приложении: чужое расписание во
-  // время сбоя иначе выглядело свежим. На своём — у
-  // сегодняшнего дня, куда страница прокручивается.
+  // Сбой и пропажа — на любой вкладке, как в приложении: иначе чужое
+  // расписание во время сбоя выглядело бы свежим. На своём — у сегодняшнего
+  // дня, куда страница прокручивается.
   if (route.kind) {
     var top = plates(app);
     if (top) content.appendChild(top);
@@ -161,8 +161,8 @@ function plates(app) {
         (app.saved() ? 'На экране — последнее, что было.' : 'Выберите заново.')),
       actionButton('Выбрать заново', function () { app.go(teacherMode ? 'pick/self' : 'pick'); })));
   }
-  // Другая группа пропала из таблицы: её пары просто исчезали без слова, а
-  // приложение в этот момент присылает уведомление.
+  // Другая группа пропала из таблицы — сказать об этом, а не убирать её пары
+  // молча (приложение тут присылает уведомление).
   var goneExtras = teacherMode ? [] : app.extras().filter(function (g) { return g.gone; });
   if (goneExtras.length) {
     var names = goneExtras.map(function (g) { return g.name; });
@@ -197,8 +197,8 @@ function plates(app) {
  */
 function explainMissing(app, schedule, loading, fallback) {
   // Своё — 404 от здорового сервера, а сохранённого нет: сказать сразу, а не
-  // «проверьте интернет». Час подтверждения нужен только,
-  // чтобы не прятать сохранённое.
+  // «проверьте интернет». Час подтверждения нужен, только чтобы не прятать
+  // сохранённое.
   if (!schedule && !loading && fallback !== null && app.goneSuspected() && !app.gone()) {
     var teacherMode = app.isTeacher();
     return explanation(teacherMode ? 'Вас с таким именем нет в таблице' : 'Группы с таким названием нет в таблице',

@@ -66,8 +66,8 @@ self.addEventListener('install', function (event) {
         if (!response.ok) throw new Error(url + ': ' + response.status);
         if (url !== URLS[0]) return cache.put(url, response);
         // Страница — той же сборки, что воркер: попав в выкладку посреди
-        // копирования, он не должен запомнить смесь. Не та —
-        // установка не удалась, браузер повторит позже.
+        // копирования, он не должен запомнить смесь. Не та — установка не
+        // удалась, браузер повторит позже.
         return response.clone().text().then(function (html) {
           if (html.indexOf('content="' + BUILD + '"') < 0) throw new Error('страница другой сборки');
           return cache.put(url, response);
@@ -151,8 +151,8 @@ function showChanges(data) {
   // Непрочитанное прежнее не затирать: новые строки — к старым, прошедшие
   // дни — прочь (announceChanges в приложении). Прежнее закрыть: на айфоне
   // тот же tag не заменяет уведомление, а ставит второе рядом (WebKit 258922).
-  // Склеиваются строки только того же расписания: после смены группы висящая
-  // отмена прежней читалась как своя.
+  // Склеиваются строки только того же расписания, иначе после смены группы
+  // висящая отмена прежней читалась бы как своя.
   return self.registration.getNotifications({ tag: 'changes' }).then(function (open) {
     var older = [];
     open.forEach(function (n) {
@@ -162,8 +162,8 @@ function showChanges(data) {
     });
     var today = collegeToday();
     function live(l) { return l && !(l[0] && l[0] < today); }
-    // Повтор строки — на её последнем месте, а не на первом: «вернули →
-    // отменили → вернули» читалось последней строкой «отменили».
+    // Повтор строки — на её последнем месте, а не на первом, иначе «вернули →
+    // отменили → вернули» кончалось бы строкой «отменили».
     var all = older.concat(fresh).filter(live);
     var kept = all.filter(function (l, i) {
       return !all.slice(i + 1).some(function (m) { return m[1] === l[1]; });
@@ -201,10 +201,9 @@ function showLesson(data) {
   // Что пара уже идёт — по часам в момент показа: доставку могли задержать
   // (LessonAlarms.title в приложении).
   var title = data.start && Date.now() > data.start ? 'Пара уже идёт — ' + data.subject : data.title;
-  // Прежние напоминания — прочь: на айфоне они копились день за днём (tag там
-  // не заменяет), в Chrome второе с тем же tag приходило беззвучно, заменяя
-  // висящее первое. В приложении
-  // напоминание одно и снимается к концу пары.
+  // Прежние напоминания — прочь: на айфоне tag не заменяет, и они копились бы
+  // день за днём, а в Chrome второе с тем же tag приходит беззвучно, заменяя
+  // висящее. Как и в приложении, напоминание одно.
   return self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
     open.forEach(function (n) { n.close(); });
   }, function () { /* нечего закрывать */ }).then(function () {
@@ -265,8 +264,7 @@ self.addEventListener('pushsubscriptionchange', function (event) {
   if (!old) return;
   var fresh = event.newSubscription ? Promise.resolve(event.newSubscription)
     : self.registration.pushManager.subscribe(old.options);
-  // Не перенеслось (прежней записи уже нет — 404) — страница заметит новый
-  // адрес при открытии и перешлёт подписку с выбором (push.js, sync).
+  // Не перенеслось (прежней записи уже нет — 404) — перешлёт страница.
   event.waitUntil(fresh.then(function (sub) {
     var json = sub.toJSON();
     return fetch('/v1/push/move', {

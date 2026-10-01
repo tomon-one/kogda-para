@@ -80,8 +80,7 @@ export function notifications(app, teacherMode) {
         'она видит, когда уведомление пришло, но не его текст.'),
     ], [
       { label: 'Отмена' },
-      // Разрешение браузера спрашивается прямо в этом нажатии: айфон
-      // спрашивает только по нажатию.
+      // Разрешение браузера спрашивается в этом же нажатии (push.update).
       { label: 'Включить', onClick: function () { closeDialog(); app.setPush(next); } },
     ]);
   }
@@ -102,8 +101,8 @@ export function notifications(app, teacherMode) {
     }, 'push-remind'),
   ];
   if (now.remind > 0) {
-    // Кнопка с выбранным, выбор — в своём окне: выпадающий
-    // список браузера выглядел чужим, и своего времени в нём не было.
+    // Кнопка с выбранным, выбор — в своём окне: выпадающий список браузера
+    // выглядит чужим, и своего времени в нём не задать.
     body.push(h('div', { class: 'value-row' }, h('span', null, 'За сколько предупредить'),
       actionButton(durationShort(now.remind), function () {
         remindDialog(now.remind, function (m) { app.setPush({ changes: now.changes, remind: m }); });
