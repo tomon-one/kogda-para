@@ -33,11 +33,8 @@ android {
     signingConfigs {
         create("release") {
             // Ключ и пароли лежат вне репозитория: ~/WhensClass-keys на
-            // линуксе, C:/WhensClass-keys на прежней машине с Windows.
-            // Потеря ключа означает, что обновить приложение у одногруппников
-            // уже нельзя, — папку не удалять и держать в копии.
-            // Потерять его нельзя — с другим ключом обновление не встанет
-            // поверх уже установленного приложения.
+            // линуксе, C:/WhensClass-keys на Windows. Потерять ключ нельзя: с
+            // другим обновление не встанет поверх установленного приложения.
             val keysDir = listOf(
                 File(System.getProperty("user.home"), "WhensClass-keys"),
                 File("C:/WhensClass-keys"),
@@ -114,9 +111,8 @@ android {
         localeFilters += listOf("ru", "en")
     }
 
-    // Тесты — в поясе, который не колледжа: машина автора живёт в
-    // Asia/Novosibirsk, и возврат любого места к часам телефона все тесты
-    // пропускали, а в другом поясе DayFormatTest вечером падал сам.
+    // Тесты — в поясе, который не колледжа: в Asia/Novosibirsk они не
+    // заметили бы место, где время колледжа подменили часами телефона.
     testOptions {
         unitTests.all { it.systemProperty("user.timezone", "UTC") }
     }
@@ -125,8 +121,8 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         // Их читает только kotlin-reflect, а его в сборке нет.
         resources.excludes += listOf("kotlin/**.kotlin_builtins", "DebugProbesKt.bin")
-        // Загрузчик этой библиотеки (многопроцессный DataStore) R8 вырезает:
-        // четыре .so лежали несжатыми впустую.
+        // Загрузчик этой библиотеки (многопроцессный DataStore) R8 вырезает,
+        // и .so лежали бы в APK впустую.
         jniLibs.excludes += "**/libdatastore_shared_counter.so"
     }
 }

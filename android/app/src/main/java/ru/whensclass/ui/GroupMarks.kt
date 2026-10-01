@@ -28,12 +28,11 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Значки групп под временем пары — только тех, у кого эта пара есть: своя —
- * закрашенным, другие — бледным. Так видно совмещённые: пустые
- * рамки для групп без пары только путали.
+ * закрашенным, другие — бледным. Так видно совмещённые.
  *
- * Подпись — название ([shortLabels]) или номер: место группы в настройках,
- * своя — 1. Что именно — выбирается в настройках. Номера — по три в ряд,
- * названия — сколько влезет в колонку времени.
+ * Подпись — название ([shortLabels]) или номер (место группы в настройках,
+ * своя — 1), как выбрано в настройках. Номера — по три в ряд, названия —
+ * сколько влезет в колонку времени.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -57,8 +56,7 @@ fun GroupMarks(slots: List<Int>, names: List<String>, byName: Boolean, modifier:
 fun GroupMark(label: String, own: Boolean, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     // В светлой теме подпись бледного значка — темнее фирменного красного, как
-    // на сайте (#C20302): у #D60403 на бледно-розовом было 3,9–4,4:1 при
-    // нужных 4,5:1 для мелкого текста.
+    // на сайте (#C20302): иначе на бледно-розовом не набирается контраст 4,5:1.
     val ink = if (colors.surface.luminance() > 0.5f) MARK_INK_LIGHT else colors.primary
     val shape = RoundedCornerShape(4.dp)
     // Растёт со шрифтом, как колонка времени: подпись в sp, значок в dp.
@@ -73,8 +71,8 @@ fun GroupMark(label: String, own: Boolean, modifier: Modifier = Modifier) {
     ) {
         Text(
             label,
-            // Высота строки — своя, по размеру цифр: без неё бралась строка
-            // основного текста, втрое выше значка, и подпись съезжала вниз.
+            // Высота строки — своя, по размеру цифр: строка основного текста
+            // втрое выше значка, и подпись съезжает вниз.
             style = TextStyle(
                 fontSize = 11.sp,
                 lineHeight = 11.sp,
@@ -90,8 +88,7 @@ fun GroupMark(label: String, own: Boolean, modifier: Modifier = Modifier) {
 
 /**
  * Подписи групп для значков: подгруппы той же группы, что своя, — коротко,
- * «/1», «/2»; остальные — полным названием. Иначе «ИСП-924/1 ИСП-924/2
- * ИСП-924/3» не влезали в колонку времени.
+ * «/1», «/2», чтобы влезли в колонку времени; остальные — полным названием.
  */
 fun shortLabels(names: List<String>): List<String> {
     val base = names.firstOrNull()?.let { SUBGROUP.matchEntire(it.trim())?.groupValues?.get(1) }

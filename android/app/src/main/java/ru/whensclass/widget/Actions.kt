@@ -24,9 +24,8 @@ class ShiftDayAction : ActionCallback {
         parameters: ActionParameters,
     ) {
         val step = parameters[KEY_STEP] ?: return
-        // Границы — те же, что гасят стрелки: дни, что лежат на телефоне. Раньше
-        // ±MAX_OFFSET, и быстрое второе нажатие, пришедшее раньше перерисовки,
-        // уводило за край окна — будень следующей недели назывался «выходным».
+        // Границы — те же, что гасят стрелки: дни, что лежат на телефоне. Иначе
+        // быстрое второе нажатие до перерисовки уведёт за край окна.
         val schedule = ScheduleWidget.parse(
             runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()?.scheduleJson
         )
@@ -74,15 +73,12 @@ class RefreshAction : ActionCallback {
     ) {
         val repository = AppContainer.get(context).repository
         // Обновление уже идёт (другое нажатие, часовой заход, открытие): второе
-        // не запускаем и чужие отметки не трогаем — раньше одно нажатие писало
-        // «обновлено», пока другое ещё шло.
+        // не запускаем и чужие отметки не трогаем.
         if (repository.refreshing) return
         mark(context, glanceId, busy = true, done = false, failed = false)
         val result = repository.refresh(force = true)
         // «Обновлено» на пару секунд: нажавшему нужен ответ и тогда, когда
-        // расписание не изменилось (время в шапке — время проверки, и оно
-        // сдвигается при каждом удачном ответе). Но ответ должен быть честным:
-        // раньше «обновлено» загоралось и после неудачи.
+        // расписание не изменилось. После неудачи — «не обновилось».
         val failed = result is RefreshResult.Failed
         mark(context, glanceId, busy = false, done = !failed, failed = failed)
         delay(DONE_MS)
@@ -101,7 +97,7 @@ class RefreshAction : ActionCallback {
             prefs.toMutablePreferences().apply {
                 this[ScheduleWidget.KEY_BUSY] = busy
                 // Момент начала: процесс может умереть посреди нажатия, и
-                // «обновляю…» висело навсегда, пряча «сбой». Старше минуты — не считается.
+                // «обновляю…» висело бы навсегда ([refreshing]).
                 if (busy) this[ScheduleWidget.KEY_BUSY_AT] = System.currentTimeMillis()
                 this[ScheduleWidget.KEY_DONE] = done
                 this[ScheduleWidget.KEY_FAILED] = failed

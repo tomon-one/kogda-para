@@ -15,17 +15,15 @@ import ru.whensclass.work.SyncWorker
 
 class MainActivity : ComponentActivity() {
 
-    // Разрешение на точное время напоминаний выдаётся в настройках телефона,
-    // за пределами приложения. Перечитываем его при каждом возвращении, иначе
-    // переключатель остаётся выключенным сразу после того, как его включили.
+    // Разрешения и состояние телефона меняются в его настройках, за пределами
+    // приложения, — поэтому перечитываются при каждом возвращении (onResume).
+    // Точное время напоминаний.
     private val exactAlarms = mutableStateOf(false)
 
-    // Разрешение на сами уведомления. Его тоже могут выдать и отобрать в
-    // настройках телефона, поэтому перечитываем при каждом возвращении.
+    // Уведомления.
     private val notifications = mutableStateOf(true)
 
-    // Что телефон делает с приложением помимо его настроек: каналы, фон,
-    // пояс, разрешение на установку. Тоже меняется снаружи.
+    // Каналы, фон, пояс, разрешение на установку.
     private val phone = mutableStateOf(ru.whensclass.notify.PhoneState())
 
     // Первый onResume идёт сразу за onCreate, где расписание уже запрошено:
@@ -35,9 +33,8 @@ class MainActivity : ComponentActivity() {
     /**
      * С чем открыли: день из виджета, настройки из уведомления о версии.
      * [seq] растёт на каждое нажатие по живому экрану: виджет и уведомления
-     * зовут с SINGLE_TOP, и экран не пересоздаётся, а получает onNewIntent.
-     * Раньше каждое нажатие уничтожало и создавало экран заново — пустой
-     * кадр, лишние запросы, сброшенные вкладка, поиск и прокрутка.
+     * зовут с SINGLE_TOP, и экран не пересоздаётся, а получает onNewIntent —
+     * без пустого кадра и со своими вкладкой, поиском и прокруткой.
      */
     private data class Opened(val day: String?, val update: Boolean, val seq: Int)
 
@@ -51,8 +48,7 @@ class MainActivity : ComponentActivity() {
             intent.getBooleanExtra(EXTRA_UPDATE, false),
             opened.value.seq + 1,
         )
-        // Ответ — тот же, что при открытии заново: счёт ответов не должен
-        // потерять нажатия оттого, что экран теперь не пересоздаётся.
+        // Ответ — тот же, что при открытии заново.
         lifecycleScope.launch { runCatching { AppContainer.get(applicationContext).store.countOpen() } }
     }
 
@@ -60,10 +56,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Часы экрана пересчитываются при каждом возвращении: см. rememberNow.
         ScreenClock.resumes++
-        // «Приложение забирает расписание при каждом открытии» — обещание из
-        // настроек. Оба захода за расписанием висели на onCreate, поэтому
-        // возврат из фона (список недавних, значок на экране) ничего не
-        // запрашивал: Activity жива, onCreate не зовётся.
+        // Расписание — при каждом открытии, и при возврате из фона тоже:
+        // Activity жива, onCreate не зовётся.
         if (started) SyncWorker.now(this)
         started = true
         notifications.value = Notifications.allowed(this)
@@ -71,9 +65,8 @@ class MainActivity : ComponentActivity() {
         val allowed = LessonAlarms.exactAllowed(this)
         if (allowed != exactAlarms.value) {
             exactAlarms.value = allowed
-            // Разрешение появилось — переставить будильники уже точными: и
-            // напоминания, и звонок для виджетов — подсветка идущей пары ждёт
-            // его же.
+            // Разрешение сменилось — переставить и напоминания, и звонок для
+            // подсветки на виджетах.
             LessonAlarms.reschedule(this)
             lifecycleScope.launch { ru.whensclass.work.MidnightUpdater.schedule(applicationContext) }
         }
@@ -82,13 +75,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // За свежим расписанием сходит сам экран (LaunchedEffect ниже): он же
-        // и покажет результат. Раньше отсюда вдобавок ставился SyncWorker, и
-        // на каждое открытие приложение дважды дёргало сервер — за одним и
-        // тем же, без всякой блокировки между заходами.
-        // Счёт ответов: ещё один раз таблицу открывать не пришлось. Только на
-        // настоящем открытии: поворот экрана пересоздаёт Activity, и открытие
-        // засчитывалось заново — счётчик обещает ответы, а не перевороты.
+        // За свежим расписанием сходит сам экран (App): он же и покажет
+        // результат, второй заход отсюда был бы лишним.
+        // Счёт ответов — только на настоящем открытии, не на повороте.
         if (savedInstanceState == null) {
             lifecycleScope.launch { runCatching { AppContainer.get(applicationContext).store.countOpen() } }
         }

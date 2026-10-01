@@ -15,7 +15,7 @@ class ScheduleWidgetReceiver : OwnWidgetReceiver() {
     ) {
         val ids = ownIds(context, appWidgetManager, appWidgetIds)
         // Чужая рассылка без наших id не должна и дёргать сеть: каждое
-        // SyncWorker.now отменяло идущее обновление.
+        // SyncWorker.now отменяет идущее обновление.
         if (ids.isEmpty()) return
         super.onUpdate(context, appWidgetManager, ids)
         // Виджет только что поставили на экран — не заставлять человека ждать

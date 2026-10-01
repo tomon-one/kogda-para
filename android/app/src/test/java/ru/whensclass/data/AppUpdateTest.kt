@@ -15,8 +15,7 @@ import org.junit.Test
 
 /**
  * Загрузка обновления: что видит человек, когда не вышло, и чего телефон не
- * делает по одному слову сервера. Раньше тестов на AppUpdate не было
- * вовсе, и мёртвую ветку «сервер занят» ничто не поймало.
+ * делает по одному слову сервера.
  */
 class AppUpdateTest {
 
@@ -161,7 +160,7 @@ class AppUpdateTest {
 
     @Test
     fun `объявленный номер с потолка не глушит настоящие сборки`() {
-        // Один ответ с 2147483647 раньше навсегда выключал объявления.
+        // Один ответ с 2147483647 не должен навсегда выключать объявления.
         assertTrue(shouldAnnounce(release = 82, installed = 81, announced = Int.MAX_VALUE))
         assertFalse(shouldAnnounce(release = 82, installed = 81, announced = 82))
         assertFalse(shouldAnnounce(release = 81, installed = 81, announced = 0))
@@ -170,7 +169,7 @@ class AppUpdateTest {
     @Test
     fun `подпись с ротацией ключа принимается, чужая — нет`() {
         // Установлена сборка со старым ключом; новая подписана новым с
-        // историей [старый, новый] — Android её поставит, и мы тоже.
+        // историей [старый, новый] — Android её поставит, и приложение тоже.
         assertTrue(signedAlike(installedCurrent = setOf("старый"), archiveAll = setOf("старый", "новый")))
         assertTrue(signedAlike(setOf("старый"), setOf("старый")))
         assertFalse(signedAlike(setOf("старый"), setOf("чужой")))

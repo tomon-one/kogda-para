@@ -15,21 +15,17 @@ import ru.whensclass.R
 import ru.whensclass.ui.MainActivity
 
 /**
- * Уведомления приложения.
- *
- * Их три вида, и намеренно в разных каналах: напоминание о паре человек хочет
- * слышать, сообщение об изменении расписания — скорее видеть, а о новой сборке
- * достаточно узнать молча. Разделение даёт отключить одно, не трогая другое,
- * прямо в системных настройках.
+ * Уведомления приложения — каждый вид в своём канале: напоминание о паре
+ * человек хочет слышать, изменения — видеть, а о новой сборке достаточно
+ * узнать молча. Так любое можно отключить в системных настройках, не трогая
+ * остальные.
  */
 object Notifications {
 
     const val CHANNEL_LESSON = "lesson_soon"
     const val CHANNEL_CHANGES = "schedule_changes"
     const val CHANNEL_UPDATE = "app_update"
-    // Свои каналы у сбоя сервера и у пропажи другой группы: раньше они шли
-    // каналом изменений, и выключить одно, не тронув другое, было нельзя. Id
-    // канала пропажи — от «соседней подгруппы» сборок до 0.1.4: новый id
+    // Id канала пропажи — от «соседней подгруппы» сборок до 0.1.4: новый id
     // оставил бы у людей прежний канал висеть в настройках телефона.
     const val CHANNEL_SERVER = "server_down"
     const val CHANNEL_SUBGROUP = "subgroup_gone"
@@ -51,11 +47,9 @@ object Notifications {
     private const val ID_LESSON = 1
     private const val ID_CHANGES = 2
     private const val ID_UPDATE = 3
-    // Своё для «сервер лежит»: с общим ID_CHANGES новое уведомление об
-    // изменениях перезаписывало непрочитанное о сбое и наоборот.
+    // У каждого вида свой id: с общим новое уведомление затирает
+    // непрочитанное другого вида.
     private const val ID_SERVER = 4
-    // Своё для «группы нет в таблице»: с общим ID_CHANGES оно затирало
-    // непрочитанное «Расписание изменилось».
     private const val ID_SUBGROUP = 5
 
     fun ensureChannels(context: Context) {
@@ -98,13 +92,8 @@ object Notifications {
     }
 
     /**
-     * Разрешено ли показывать уведомления.
-     *
-     * С Android 13 есть отдельное разрешение, которое спрашивают. Но
-     * выключить уведомления руками в настройках телефона можно было
-     * всегда, и раньше на Android 8–12 мы отвечали «разрешено» не глядя:
-     * приложение уверяло, что напомнит о паре, а система молча гасила
-     * каждое уведомление.
+     * Разрешено ли показывать уведомления: и разрешение Android 13+, и
+     * выключатель в настройках телефона, который бывает на любой версии.
      */
     fun allowed(context: Context): Boolean {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
@@ -124,11 +113,7 @@ object Notifications {
             extras = key?.let { android.os.Bundle().apply { putString(EXTRA_LESSON_KEY, it) } })
     }
 
-    /**
-     * `until` — когда снять само: новость про сегодняшний день к полуночи
-     * устаревает, и наутро висящее «Завтра: добавилась пара» читалось бы как
-     * новость о послезавтра.
-     */
+    /** `until` — когда снять само: новость о дне к его концу устаревает. */
     fun changes(context: Context, title: String, text: String, until: Long? = null) {
         show(context, CHANNEL_CHANGES, ID_CHANGES, title, text, day = null, until = until)
     }
@@ -138,17 +123,14 @@ object Notifications {
     }
 
     /**
-     * Сервер лежит дольше двух часов — свой канал и свой id.
-     * true — показано: засчитывать сбой объявленным можно только тогда, иначе
-     * после выдачи разрешения посреди сбоя уведомление не приходило никогда.
+     * Сервер лежит дольше двух часов. true — показано: только тогда сбой
+     * засчитывается объявленным, иначе после выдачи разрешения посреди сбоя
+     * уведомление не пришло бы никогда.
      */
     fun serverDown(context: Context, title: String, text: String): Boolean =
         show(context, CHANNEL_SERVER, ID_SERVER, title, text, day = null) && !channelOff(context, CHANNEL_SERVER)
 
-    /**
-     * Сервер починился — снять «не обновляется»: оно висело в шторке рядом со
-     * свежими данными сколько угодно.
-     */
+    /** Сервер починился — снять «не обновляется» из шторки. */
     fun serverBack(context: Context) {
         runCatching { NotificationManagerCompat.from(context).cancel(ID_SERVER) }
     }
@@ -184,8 +166,8 @@ object Notifications {
      * true — уведомление ушло в систему; false — уведомления запрещены.
      */
     fun newVersion(context: Context, title: String, text: String): Boolean =
-        // Канал выключен в настройках телефона — система уведомление молча
-        // выбросит: сборка не должна считаться объявленной, как и у сбоя.
+        // Канал выключен — система уведомление молча выбросит, и сборка не
+        // должна считаться объявленной, как и у сбоя.
         show(context, CHANNEL_UPDATE, ID_UPDATE, title, text, day = null, update = true) &&
             !channelOff(context, CHANNEL_UPDATE)
 
@@ -208,8 +190,7 @@ object Notifications {
         ensureChannels(context)
 
         val intent = Intent(context, MainActivity::class.java)
-            // SINGLE_TOP — живой экран получает onNewIntent, а не
-            // пересоздаётся.
+            // SINGLE_TOP — живой экран получает onNewIntent, а не пересоздаётся.
             .addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP,

@@ -56,6 +56,10 @@ private val TIME_COLUMN = 92.dp
 /** Уже этого (ширина экрана в dp, делённая на шрифт) — время над названием, а не сбоку. */
 private const val STACK_BELOW_DP = 340
 
+/**
+ * Строка пары. Колонка времени одной ширины на все строки, чтобы взгляд
+ * находил начало следующей; в тесноте время уходит строкой над названием.
+ */
 @Composable
 internal fun LessonRow(
     lesson: LessonDto,
@@ -70,13 +74,11 @@ internal fun LessonRow(
     // значкам — приглушённая строка на сером фоне и подпись.
     val foreign = groups.isNotEmpty() && 0 !in lesson.slots
     val main = if (past || foreign) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-    // Колонка растёт со шрифтом: «09:00–10:30» в sp, колонка в dp, и с
-    // крупным шрифтом конец пары уходил в многоточие.
+    // Колонка растёт со шрифтом: «09:00–10:30» в sp, колонка в dp.
     val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     val timeColumn = TIME_COLUMN * scale
-    // Тесно (крупный шрифт или крупный масштаб экрана) — время строкой над
-    // названием: сбоку оно оставляло названию ~170 dp, и «алгоритмизации»
-    // рвалось посреди слова без дефиса (tested 603, шрифт 1,3).
+    // Тесно (крупный шрифт или масштаб экрана) — время строкой над названием:
+    // сбоку оно оставляет названию слишком мало, и длинные слова рвутся.
     val stacked = LocalConfiguration.current.screenWidthDp / scale < STACK_BELOW_DP
     val background = Modifier
         .fillMaxWidth()
@@ -84,8 +86,7 @@ internal fun LessonRow(
             when {
                 isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
                 // В тёмной теме — белый 7 % поверх карточки, как на сайте:
-                // surfaceVariant отличался от неё на 1,07:1, «серый фон»
-                // из подсказки был не виден.
+                // surfaceVariant от неё почти не отличим.
                 foreign -> if (MaterialTheme.colorScheme.surface.luminance() < 0.5f)
                     Color.White.copy(alpha = 0.07f).compositeOver(MaterialTheme.colorScheme.surface)
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
@@ -96,9 +97,8 @@ internal fun LessonRow(
         Column {
             Text(
                 lesson.subject,
-                // Перенос — по слогам с дефисом и по дефису в слове: без него
-                // «Оперативно-розыскная» рвалась «Оперативно-розыскна / я» без
-                // всякого знака.
+                // Перенос — по слогам с дефисом и по дефису в слове, а не
+                // посреди слова без знака.
                 style = MaterialTheme.typography.bodyLarge.copy(
                     hyphens = Hyphens.Auto,
                     lineBreak = LineBreak.Paragraph,
@@ -116,13 +116,11 @@ internal fun LessonRow(
             }
 
             Spacer(Modifier.height(4.dp))
-            // Тип занятия и аудитория — то, ради чего сюда и заглядывают,
-            // поэтому они идут сразу под названием и заметно, а не подписью
-            // мелким шрифтом.
+            // Тип занятия и аудитория — то, ради чего сюда заглядывают: сразу
+            // под названием и заметно.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Аудитория ужимается, тип занятия — нет: «Лекция» короче
-                // и важнее, а длинное текстовое название места иначе съедало
-                // строку целиком.
+                // Аудитория ужимается, тип занятия — нет: иначе длинное
+                // название места съедает строку целиком.
                 val shrink = Modifier.weight(1f, fill = false)
                 if (lesson.isOnline) {
                     Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, muted = past || foreign, modifier = shrink)
@@ -143,9 +141,8 @@ internal fun LessonRow(
 
             lesson.url?.let { OnlineLink(it) }
 
-            // Подпись группы стоит вместо преподавателя: у преподавателя в
-            // своём расписании важно, кому читается пара. Чья пара у
-            // выбранных групп — видно по значкам, там преподаватель.
+            // Подпись группы — вместо преподавателя: в своём расписании
+            // преподавателю важно, кому читается пара.
             val group = lesson.groups
             if (group != null) {
                 Text(
@@ -243,10 +240,7 @@ internal fun LessonRow(
                         fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
                         color = if (isNow) MaterialTheme.colorScheme.primary else main,
                         maxLines = 1,
-                        // Колонка времени шириной ровно под «09:00–10:30» при
-                        // обычном шрифте. С крупным системным диапазон перестаёт
-                        // помещаться, и обрыв без многоточия читается как другое
-                        // время.
+                        // Обрыв без многоточия читался бы как другое время.
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -273,12 +267,7 @@ internal fun LessonRow(
     }
 }
 
-/**
- * Место занятия — единственная выделенная пометка в строке.
- *
- * Раньше рядом стояла вторая такая же, для типа занятия, и две капсулы подряд
- * выбивались из спокойного вида остальных строк.
- */
+/** Место занятия — единственная выделенная пометка в строке. */
 @Composable
 private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Modifier) {
     Text(
@@ -289,10 +278,8 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
         else MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,
         // Две строки: аудитория бывает и текстом — «Спортзал Б.Хмельницкого
-        // 2», «выездная, с 15.00», — и в одну строку её хвост уходил в
-        // многоточие рядом с типом занятия. Без
-        // многоточия обрыв читался как самостоятельное короткое название, а
-        // без weight эта строка отбирала место у типа, и «Лекция» пропадала.
+        // 2», «выездная, с 15.00». Многоточие — чтобы обрыв не читался
+        // самостоятельным названием.
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier.padding(end = 8.dp),

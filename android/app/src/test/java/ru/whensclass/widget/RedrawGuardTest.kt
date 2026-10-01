@@ -5,10 +5,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Перерисовка виджетов — только через [redrawWidgets] и KEY_TICK. Голый
+ * Перерисовка виджетов — только через [redrawWidgets] и KEY_TICK: голый
  * updateAll при живой сессии виджета ничего не перерисовывает, а вернуть его
- * можно одной строкой без нового импорта: три
- * мёртвых импорта лежали наготове.
+ * легко одной строкой.
  */
 class RedrawGuardTest {
 
