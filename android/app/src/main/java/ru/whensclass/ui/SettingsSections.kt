@@ -34,15 +34,12 @@ internal fun GroupSection(
     onRemoveGroup: (String) -> Unit,
 ) {
     Section(if (teacherMode) "Преподаватель" else "Группа") {
-        // Название и кнопка одной строкой: столбиком раздел выходил
-        // вдвое выше, а читается так же. Кнопки раздела — одной ширины.
-        // С другими группами у каждой — её значок, как под временем пар:
-        // номер или короткое название.
+        // Название и кнопка одной строкой; кнопки раздела — одной ширины. С
+        // другими группами у каждой — её значок, как под временем пар.
         val marks = if (teacherMode || extraGroups.isEmpty()) null
         else if (groupsByName) shortLabels(listOf(groupName.orEmpty()) + extraGroups.map { it.name })
         else (1..extraGroups.size + 1).map { it.toString() }
-        // Значок, повторяющий название целиком, только сжимал его, а чтецу он
-        // не нужен — как у строк других групп.
+        // Значок, повторяющий название целиком, только сжимает его; чтецу он не нужен.
         val ownMark = marks?.getOrNull(0)?.takeIf { it != groupName }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (ownMark != null) {
@@ -63,17 +60,13 @@ internal fun GroupSection(
         }
 
         if (!teacherMode) {
-            // Остальные группы — любые, до шести вместе со своей. Значок —
-            // тот же, что под временем пар.
-            // С ключом: без него после «Убрать» или «Добавить» строка
-            // следующей группы вставала на место ушедшей и забирала её
-            // подсветку нажатия.
+            // Остальные группы — любые, до [MAX_GROUPS] вместе со своей. С
+            // ключом: иначе после «Убрать» строка следующей группы забирает
+            // подсветку нажатия ушедшей.
             extraGroups.forEachIndexed { index, group ->
                 key(group.id) {
                     GroupRow(
                         name = group.name + if (group.gone) " — нет в таблице" else "",
-                        // Значок, повторяющий название целиком (не подгруппа
-                        // своей), только сжимал само название в столбик.
                         mark = marks?.getOrNull(index + 1)?.takeIf { it != group.name },
                         action = "Убрать",
                         onAction = { onRemoveGroup(group.id) },
@@ -81,8 +74,7 @@ internal fun GroupSection(
                 }
             }
             // Подгруппы своей группы — строками с «Добавить», как у
-            // добавленных «Убрать»: две кнопки рядом выходили разной
-            // высоты.
+            // добавленных «Убрать».
             subgroups.forEach { group ->
                 key(group.id) {
                     GroupRow(
@@ -153,26 +145,20 @@ internal fun NotificationsSection(
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_LESSON)
         }
         if (notifyEnabled) {
-            // Обещание должно совпадать с поведением: напоминаем не о
-            // каждой паре, и человек вправе знать об этом до того, как
-            // решит, что напоминания сломались.
+            // Напоминаем не о каждой паре — сказать заранее, чтобы это не
+            // приняли за поломку.
             Text(
                 "Напоминание о первой паре дня или между парами.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 10.dp),
             )
-            // Строка с кнопкой, выбор — в своём окне: одиннадцать
-            // фишек прямо в карточке занимали полэкрана, а
-            // стандартное выпадающее меню выглядело чужим. Разброс большой:
-            // кому-то хватит десяти минут, кому-то ехать через весь город,
-            // а кому-то ровно сорок семь — для того своё время.
+            // Строка с кнопкой, выбор — в своём окне: фишки в карточке
+            // занимали бы полэкрана.
             MinutesRow(current = notifyBefore, onOpen = onAskMinutes)
         }
 
-        // У каждого вида уведомлений — свой выключатель и свой канал:
-        // сбой сервера и пропажа другой группы раньше шли под
-        // «изменениями».
+        // У каждого вида уведомлений — свой выключатель и свой канал.
         SwitchRow("Сообщать об изменениях", notifyChanges, onNotifyChanges)
         if (notifyChanges && notifications && phone.changesChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES)
@@ -185,8 +171,7 @@ internal fun NotificationsSection(
         }
         Hint("Если расписание не обновляется дольше двух часов.")
 
-        // Только студенту с другими выбранными группами: остальным
-        // этого уведомления не бывает.
+        // Только студенту с другими выбранными группами: остальным его не бывает.
         if (!teacherMode && extraGroups.isNotEmpty()) {
             SwitchRow("Сообщать о пропаже других групп", notifyGroupsGone, onNotifyGroupsGone)
             if (notifyGroupsGone && notifications && phone.subgroupChannelOff) {
@@ -219,8 +204,7 @@ internal fun VersionSection(
     modifier: Modifier = Modifier,
 ) {
     Section(
-        // Установленная версия — сам заголовок блока: строкой ниже она
-        // повторяла то, что и так написано сверху.
+        // Установленная версия — сам заголовок блока.
         "Версия ${BuildConfig.VERSION_NAME}",
         modifier = modifier,
     ) {
@@ -238,10 +222,9 @@ internal fun VersionSection(
                 )
             }
             if (!phone.canInstall) {
-                // Заранее: иначе системный запрет «установка из этого
-                // источника» для самой «Когда пара?» выглядел подозрительно,
-                // и осторожный человек отказывал.
-                // Имя — как у этого приложения: у tested оно своё.
+                // Заранее: иначе системный запрос на установку из этого
+                // источника выглядит подозрительно, и осторожный человек
+                // отказывает. Имя — как у этого приложения: у tested оно своё.
                 val name = LocalContext.current.getString(ru.whensclass.R.string.app_name)
                 Text(
                     "В первый раз Android попросит разрешить «$name» установку " +
@@ -253,8 +236,8 @@ internal fun VersionSection(
                 )
             }
             if (remember { Vendor.current() } == Vendor.SAMSUNG) {
-                // С One UI 6.1.1 «Автоблокировка» запрещает установку из
-                // файлов, и обновление молча не вставало.
+                // С One UI 6.1.1 «Автоблокировка» молча запрещает установку
+                // из файлов.
                 Text(
                     "Samsung может не дать поставить: тогда выключите на время " +
                         "«Настройки» → «Безопасность и конфиденциальность» → «Автоблокировка».",
@@ -277,11 +260,8 @@ internal fun VersionSection(
                 )
             }
         } else {
-            // Раньше кнопка молчала, когда обновления не было, и выглядела
-            // сломанной. Теперь всегда отвечает.
+            // Кнопка отвечает всегда, и «не дозвонился» отдельно от «новее нет».
             if (updateChecked && !checkingUpdate) {
-                // «Не дозвонился» и «новее нет» раньше выглядели одинаково,
-                // и человек уходил уверенным, что у него свежая сборка.
                 Text(
                     if (updateFailed) {
                         "Проверить не вышло: сервер не ответил"
@@ -316,8 +296,7 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
     // Два текста, которые читают один раз, — одной карточкой.
     Section("Данные и ответственность") {
         Text(
-            // У преподавателя на сервер уходит не группа, а он сам —
-            // писать про группу было бы неправдой.
+            // У преподавателя на сервер уходит не группа, а он сам.
             if (teacherMode) {
                 "На сервер уходит выбранное имя, как оно записано в таблице " +
                 "колледжа. Больше ничего: " +
@@ -343,8 +322,7 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
                 "сроков не обещает. Пропущенная пара остаётся на вашей совести, " +
                 "даже если приложение в этот момент показывало неправильно. " +
                 "Сверяйтесь с таблицей, когда это важно.",
-            // Тем же приглушённым, что и остальные пояснения: белый текст
-            // читался как что-то важнее прочего.
+            // Тем же приглушённым, что и остальные пояснения.
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -357,9 +335,7 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        // Ссылки — в том же порядке, что в «О сайте». «Я преподаватель»
-        // отсюда убрано: тот же переход — первой строкой списка, куда
-        // ведёт «Сменить».
+        // Ссылки — в том же порядке, что в «О сайте».
         Link("Сайт для айфона и браузера", "https://kogda-para-nsk.ru")
         Link("Нашли ошибку? Напишите автору в Telegram", "https://t.me/toomonn")
         ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth(), asLink = true)

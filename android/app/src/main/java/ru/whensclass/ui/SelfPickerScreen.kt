@@ -111,8 +111,7 @@ fun SelfPickerScreen(
                         else teachers.filter { matchesQuery(it.name, query) }
                     }
                     if (filtered.isEmpty()) {
-                        // Тот же ответ, что и в списке групп: пустой экран после
-                        // поиска читается как поломка, а не как «не нашлось».
+                        // Пустой экран после поиска читается как поломка.
                         Text(
                             "Ничего не нашлось",
                             style = MaterialTheme.typography.bodyMedium,

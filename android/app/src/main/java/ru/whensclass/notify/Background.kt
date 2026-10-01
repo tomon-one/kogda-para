@@ -13,9 +13,9 @@ import android.provider.Settings
  *
  * Будильники звонка, напоминания и часовое обновление на них не срабатывают,
  * пока приложение не открыть, особенно после перезагрузки или очистки
- * недавних. Снимается это только руками в настройках телефона, у каждой
- * марки на своём экране. Какие экраны и что на них — dontkillmyapp.com и
- * списки из открытых приложений, собранные 28.09.2026.
+ * недавних. Снимается это только руками, у каждой марки на своём экране.
+ * Какие экраны и что на них — по dontkillmyapp.com и спискам из открытых
+ * приложений.
  */
 enum class Vendor(
     private val defaultTitle: String,
@@ -62,8 +62,7 @@ enum class Vendor(
                 // У Transsion производитель — «TECNO MOBILE LIMITED» и т. п.
                 names.any { n -> listOf("tecno", "infinix", "itel").any { n.startsWith(it) } } -> TRANSSION
                 // realme — 13 % продаж в России за 2025 год, вровень с Tecno;
-                // ColorOS и Funtouch гасят приложения в фоне (dontkillmyapp:
-                // 3 из 5). Раньше у них не было ни шага.
+                // ColorOS и Funtouch гасят приложения в фоне (dontkillmyapp: 3 из 5).
                 names.any { it in setOf("oppo", "realme", "oneplus") } -> OPPO
                 names.any { it in setOf("vivo", "iqoo") } -> VIVO
                 else -> null

@@ -11,9 +11,9 @@ import java.time.LocalDateTime
  *
  * updateAll при живой сессии виджета (~45 с после отрисовки, а в глубоком сне
  * и дольше) не перекомпонует корень, если не изменились ни Preferences
- * виджета, ни WidgetState: звонок и полночь без сети были холостыми, и момент
- * времени в корне не пересчитывался — подсветка не переезжала. Поэтому перед перерисовкой в состояние каждого виджета пишется новый
- * [ScheduleWidget.KEY_TICK], а корень читает его через [moment].
+ * виджета, ни WidgetState, — звонок без сети был бы холостым. Поэтому в
+ * состояние каждого виджета пишется новый [ScheduleWidget.KEY_TICK], а корень
+ * читает его через [moment].
  */
 suspend fun redrawWidgets(context: Context) {
     val manager = GlanceAppWidgetManager(context)

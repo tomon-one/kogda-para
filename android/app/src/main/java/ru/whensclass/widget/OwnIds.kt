@@ -10,8 +10,7 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 /**
  * Только свои id. Приёмники виджетов экспортированы — иначе система не
  * доставит им обновление, — а APPWIDGET_UPDATE не защищённая рассылка: чужое
- * приложение могло прислать id недельного виджета маленькому приёмнику, и
- * Glance рисовал на месте недели одну строку.
+ * приложение может прислать id одного виджета приёмнику другого.
  */
 internal fun GlanceAppWidgetReceiver.ownIds(
     context: Context,
@@ -25,14 +24,13 @@ internal fun GlanceAppWidgetReceiver.ownIds(
 
 /**
  * Приёмник виджета, который слушает только свои id — во всех входах, а не
- * только в onUpdate. Чужое приложение слало DEBUG_UPDATE (Glance подставлял
- * все настоящие id, и каждая рассылка дёргала сеть), APPWIDGET_UPDATE_OPTIONS
- * с id чужого виджета (на месте недели рисовалась «Ближайшая пара») и
- * APPWIDGET_DELETED (стиралось состояние виджета).
+ * только в onUpdate: чужое приложение может прислать DEBUG_UPDATE (Glance
+ * подставит все настоящие id), APPWIDGET_UPDATE_OPTIONS с id чужого виджета и
+ * APPWIDGET_DELETED (сотрёт состояние виджета).
  */
 abstract class OwnWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // Отладочная рассылка Glance: система её не шлёт, а своим мы её не шлём.
+        // Отладочная рассылка Glance: ни система, ни само приложение её не шлют.
         if (intent.action == DEBUG_UPDATE) return
         super.onReceive(context, intent)
     }

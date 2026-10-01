@@ -43,11 +43,9 @@ import ru.whensclass.data.sheetLink
 import ru.whensclass.ui.daysWithGaps
 
 /**
- * Виджет на неделю целиком.
- *
- * Большой виджет отвечает на вопрос «что сегодня», а этот — на «когда у меня
- * окно» и «что в четверг»: всю неделю видно сразу, без листания. Поэтому
- * строка пары здесь короткая — номер, начало, название и кабинет.
+ * Виджет на неделю целиком: отвечает на «когда у меня окно» и «что в
+ * четверг» без листания. Поэтому строка пары короткая — начало, название и
+ * кабинет.
  */
 class WeekWidget : GlanceAppWidget() {
 
@@ -59,25 +57,20 @@ class WeekWidget : GlanceAppWidget() {
         val first = runCatching { store.widgetState() }.getOrNull()
 
         provideContent {
-            // См. ScheduleWidget: читать хранилище до provideContent мало —
-            // прочитанное живёт до конца сессии и не меняется от updateAll.
+            // Потоком, а не разовым чтением: см. [ScheduleStore.widgetStates].
             val state by store.widgetStates.collectAsState(initial = first)
             val schedule = ScheduleWidget.parse(state?.scheduleJson)
             val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
-            // Часы — только здесь. Этот корень перекомпонуется на каждый
-            // updateAll (звонок, полночь) и на каждое изменение хранилища,
-            // а вложенные функции — лишь когда меняются их параметры.
-            // Разобранное расписание кэшируется по тексту, палитра одна на
-            // всех, и Week с теми же входами Compose пропускал целиком: 14
-            // сентября 2026 виджет с 15:50 до ночи подсвечивал кончившуюся
-            // пару при честном времени в шапке. Момент идёт параметром вниз.
+            // Часы — только здесь, и дальше параметром: корень
+            // перекомпонуется на каждую перерисовку, а вложенные функции с
+            // теми же входами Compose пропускает, и подсветка застревала бы на
+            // кончившейся паре.
             val now = moment(currentState(ScheduleWidget.KEY_TICK))
             val today = now.toLocalDate()
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()
-                    // Нажатие по пустому месту открывает приложение —
-                    // так же, как по дню или по шапке.
+                    // Нажатие по пустому месту открывает приложение.
                     .clickable(actionStartActivity(openDay(context, today)))
                     .background(colors.background)
                     .cornerRadius(16.dp)
@@ -109,13 +102,9 @@ class WeekWidget : GlanceAppWidget() {
                     )
 
                     schedule == null -> MissingHint("Расписание ещё не загружено", colors)
-                    // Проверяем то, что рисуется, а не то, что пришло: дни
-                    // старше сегодняшнего виджет выбрасывает, и при непустом
-                    // days под шапкой оставалась пустота без единого слова.
-                    // Пустая неделя — как пустой день у дневного виджета: сбой,
-                    // «не загружено» или «не опубликовано» с выходом к таблице.
-                    // Раньше всегда «нажмите на время в шапке», хотя при сбое и
-                    // при неопубликованном листе обновление не поможет.
+                    // Проверяем то, что рисуется, а не то, что пришло: прожитые
+                    // дни виджет выбрасывает. Пустая неделя объясняется как
+                    // пустой день у дневного виджета ([missingDay]).
                     weekDays(days, today).isEmpty() -> {
                         val missing = missingDay(
                             schedule, today, state?.serverBroken == true, week = true,
@@ -127,9 +116,8 @@ class WeekWidget : GlanceAppWidget() {
                             open = if (missing.off) actionStartActivity(openDay(context, today)) else null,
                         )
                     }
-                    // Долю высоты список получает здесь, из Column:
-                    // без неё он в некоторых оболочках схлопывается в
-                    // ноль, и под шапкой остаётся пустота.
+                    // Долю высоты список получает здесь, из Column: без неё в
+                    // некоторых оболочках он схлопывается в ноль.
                     else -> Week(
                         days,
                         schedule.bells,
@@ -174,8 +162,8 @@ private fun Header(
         )
         Spacer(GlanceModifier.width(6.dp))
 
-        // Статус — второй строкой, рядом с группой, как в дневном виджете.
-        // В одной строке с заголовком он побеждал: «Неделя 28 сент. – …».
+        // Статус — второй строкой, рядом с группой, как в дневном виджете:
+        // в строке заголовка он обрезал бы даты.
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
                 weekTitle(days, today),
@@ -199,10 +187,8 @@ private fun Header(
                     when {
                         busy -> " · обновление…"
                         failed -> " · не обновилось"
-                        // Сбой и пропажа группы — раньше «обновлено»: см. дневной виджет.
+                        // Пропажа и сбой — как в дневном виджете.
                         gone -> " · нет в таблице"
-                        // О сбое на сервере говорят все три виджета, а не только
-                        // дневной: неделя на экране в этот момент прежняя.
                         serverBroken -> " · сбой"
                         done -> " · обновлено"
                         else -> " · " + formatFetchedShort(fetchedAt, nowMillis)
@@ -216,15 +202,12 @@ private fun Header(
                             else -> colors.textDim
                         },
                     ),
-                    // Группы нет в таблице — обновление ничего не даст: в
-                    // приложение, к «выбрать заново», как на дневном
-                    // виджете.
+                    // Группы нет в таблице — в приложение, к «выбрать заново».
                     modifier = GlanceModifier.clickable(
                         if (gone) openApp else actionRunCallback<RefreshAction>(),
                     ),
                 )
-                // Всегда, а не кроме «обновляю»: пропадая, он менял ширину
-                // строки, и статус прыгал.
+                // Всегда: пропадая, значок менял бы ширину строки.
                 Text(
                     " ↻",
                     maxLines = 1,

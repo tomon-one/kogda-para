@@ -21,12 +21,11 @@ class SyncWorker(context: Context, params: WorkerParameters) :
     override suspend fun doWork(): Result {
         val container = AppContainer.get(applicationContext)
         val result = container.repository.refresh()
-        // Заодно смотрим, не вышла ли новая сборка: раз в час — ровно та
-        // частота, с которой об этом стоит узнавать.
+        // Заодно смотрим, не вышла ли новая сборка.
         runCatching { container.updates.announceIfNew(container.store) }
-        // Повтор с паузой — только у разовой работы. У периодической retry()
-        // подменял час экспоненциальной паузой до пяти часов, и после
-        // починки сервера телефон часами держал «сбой»: она придёт сама через час.
+        // Повтор с паузой — только у разовой работы: у периодической retry()
+        // подменяет час экспоненциальной паузой до пяти часов, а она и так
+        // придёт через час.
         return when {
             result is RefreshResult.Failed && ONE_SHOT_TAG in tags -> Result.retry()
             else -> Result.success()
@@ -52,11 +51,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         /**
          * Обновить прямо сейчас: открыли приложение, сменили группу, нажали кнопку.
          *
-         * Без setExpedited. Срочная работа на Android 8–11 требует
-         * getForegroundInfo, а его у нас нет: WorkManager 2.11 валил такую
-         * работу до doWork, и обновление при открытии, при установке виджета
-         * и ночью не выполнялось вовсе. Обычная разовая
-         * работа с сетью и так запускается почти сразу.
+         * Без setExpedited: на Android 8–11 срочная работа требует
+         * getForegroundInfo, без него WorkManager 2.11 валит её до doWork.
+         * Обычная разовая работа с сетью и так запускается почти сразу.
          */
         fun now(context: Context) {
             val request = OneTimeWorkRequestBuilder<SyncWorker>()

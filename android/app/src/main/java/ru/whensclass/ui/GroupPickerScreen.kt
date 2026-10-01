@@ -35,12 +35,7 @@ import androidx.compose.ui.unit.dp
 import ru.whensclass.data.GroupDto
 import ru.whensclass.widget.plural
 
-/**
- * Выбор группы из почти двух сотен.
- *
- * Без поиска список бесполезен: пролистывать 187 строк, чтобы найти свою, —
- * ровно та морока, от которой мы уходим.
- */
+/** Выбор группы из почти двух сотен — с поиском: без него список бесполезен. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupPickerScreen(
@@ -81,8 +76,8 @@ fun GroupPickerScreen(
             )
         },
     ) { padding ->
-        // Список отступает от клавиатуры: окно под неё не ужимается
-        // (enableEdgeToEdge), и найденное пряталось под ней.
+        // Список отступает от клавиатуры: при enableEdgeToEdge окно под неё
+        // не ужимается.
         Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             OutlinedTextField(
                 value = query,
@@ -107,9 +102,8 @@ fun GroupPickerScreen(
                 list.isEmpty() -> LoadFailed("Список групп", loadDiagnostics, onRetry)
 
                 else -> {
-                    // Отбор считаем только когда меняется запрос или сам список:
-                    // иначе он пересчитывался на каждую букву, и список из 187
-                    // строк заметно подтормаживал.
+                    // Отбор — только при смене запроса или списка, не на каждую
+                    // перекомпоновку.
                     val filtered = remember(list, query) {
                         if (query.isBlank()) list
                         else list.filter { matchesQuery(it.name, query) }
@@ -125,14 +119,12 @@ fun GroupPickerScreen(
                     LazyColumn(
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
                     ) {
-                        // Приложением пользуются и преподаватели: им нужна не
-                        // группа, а собственное расписание.
+                        // Преподавателю нужна не группа, а собственное расписание.
                         onTeacherMode?.let { switchRole ->
                             item(key = "роль") { RoleSwitchRow("Я преподаватель", switchRole) }
                         }
                         lettered(filtered, name = { it.name }, key = { it.id }, onPick = onPick)
-                        // Дно списка. Видит только тот, кто долистал до
-                        // конца вместо того, чтобы искать поиском.
+                        // Дно списка — для тех, кто листает, а не ищет.
                         if (query.isBlank()) {
                             item(key = "конец") {
                                 ListEnd(
