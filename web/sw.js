@@ -20,6 +20,9 @@ var FILES = [
   'manifest.json',
   'manifest-tested.json',
   'assets/app.css',
+  'assets/days.css',
+  'assets/screens.css',
+  'assets/motion.css',
   'assets/boot.js',
   'assets/icon.svg',
   'assets/icon-192.png',
@@ -27,18 +30,25 @@ var FILES = [
   'assets/apple-touch-icon.png',
   'assets/qr.png',
   'assets/js/api.js',
+  'assets/js/catalog.js',
+  'assets/js/data.js',
   'assets/js/format.js',
   'assets/js/main.js',
   'assets/js/push.js',
+  'assets/js/render.js',
   'assets/js/repo.js',
+  'assets/js/route.js',
   'assets/js/schedule.js',
   'assets/js/search.js',
+  'assets/js/site.js',
+  'assets/js/state.js',
   'assets/js/store.js',
   'assets/js/time.js',
   'assets/js/version.js',
   'assets/js/ui/days.js',
   'assets/js/ui/dom.js',
   'assets/js/ui/lists.js',
+  'assets/js/ui/notifications.js',
   'assets/js/ui/report.js',
   'assets/js/ui/settings.js',
   'assets/js/ui/today.js',
@@ -50,13 +60,13 @@ var URLS = FILES.map(function (f) { return new URL(f, self.registration.scope).h
 self.addEventListener('install', function (event) {
   event.waitUntil(caches.open(CACHE).then(function (cache) {
     // Сверяясь с сервером (ETag), а не мимо HTTP-кэша: неизменившиеся файлы
-    // приходят ответом 304 без тела, а не второй раз целиком (аудит, W2).
+    // приходят ответом 304 без тела, а не второй раз целиком.
     return Promise.all(URLS.map(function (url) {
       return fetch(new Request(url, { cache: 'no-cache' })).then(function (response) {
         if (!response.ok) throw new Error(url + ': ' + response.status);
         if (url !== URLS[0]) return cache.put(url, response);
         // Страница — той же сборки, что воркер: попав в выкладку посреди
-        // копирования, он не должен запомнить смесь (аудит сайта, W8). Не та —
+        // копирования, он не должен запомнить смесь. Не та —
         // установка не удалась, браузер повторит позже.
         return response.clone().text().then(function (html) {
           if (html.indexOf('content="' + BUILD + '"') < 0) throw new Error('страница другой сборки');
@@ -142,7 +152,7 @@ function showChanges(data) {
   // дни — прочь (announceChanges в приложении). Прежнее закрыть: на айфоне
   // тот же tag не заменяет уведомление, а ставит второе рядом (WebKit 258922).
   // Склеиваются строки только того же расписания: после смены группы висящая
-  // отмена прежней читалась как своя (четвёртый аудит, М7 прогона 1).
+  // отмена прежней читалась как своя.
   return self.registration.getNotifications({ tag: 'changes' }).then(function (open) {
     var older = [];
     open.forEach(function (n) {
@@ -153,21 +163,21 @@ function showChanges(data) {
     var today = collegeToday();
     function live(l) { return l && !(l[0] && l[0] < today); }
     // Повтор строки — на её последнем месте, а не на первом: «вернули →
-    // отменили → вернули» читалось последней строкой «отменили» (контроль №1).
+    // отменили → вернули» читалось последней строкой «отменили».
     var all = older.concat(fresh).filter(live);
     var kept = all.filter(function (l, i) {
       return !all.slice(i + 1).some(function (m) { return m[1] === l[1]; });
     });
     if (kept.length > MAX_LINES) {
       // Свежая правка важнее висящих строк, а в ней — сначала сегодня: строки
-      // идут по дням (М33).
+      // идут по дням.
       var mine = fresh.filter(live);
       var newest = kept.filter(function (l) { return mine.some(function (m) { return m[1] === l[1]; }); });
       if (newest.length >= MAX_LINES) {
         kept = newest.slice(0, MAX_LINES);
       } else {
         // Из висящих уходят сначала строки о более далёком дне, в одном дне —
-        // более старые: сегодняшнее важнее завтрашнего (прогон 2).
+        // более старые: сегодняшнее важнее завтрашнего.
         var rest = kept.filter(function (l) { return newest.indexOf(l) < 0; });
         var order = rest.map(function (l, i) { return i; }).sort(function (a, b) {
           var da = rest[a][0] || '', db = rest[b][0] || '';
@@ -178,7 +188,7 @@ function showChanges(data) {
       }
     }
     // Все строки про прошедшие дни (телефон вышел в сеть назавтра) — не
-    // показывать вчерашнее как новость (М37).
+    // показывать вчерашнее как новость.
     var body = kept.length ? kept.map(function (l) { return l[1]; }).join('\n')
       : 'Изменения касались прошедших дней.';
     return show(data.title || 'Расписание изменилось', body, 'changes', { lines: kept, who: who });
@@ -193,7 +203,7 @@ function showLesson(data) {
   var title = data.start && Date.now() > data.start ? 'Пара уже идёт — ' + data.subject : data.title;
   // Прежние напоминания — прочь: на айфоне они копились день за днём (tag там
   // не заменяет), в Chrome второе с тем же tag приходило беззвучно, заменяя
-  // висящее первое (четвёртый аудит, В5 и М40 прогона 1). В приложении
+  // висящее первое. В приложении
   // напоминание одно и снимается к концу пары.
   return self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
     open.forEach(function (n) { n.close(); });
@@ -223,7 +233,7 @@ self.addEventListener('push', function (event) {
 });
 
 // Окно этого сайта: у корня — не окно /tested/, хоть оно и под тем же
-// префиксом (четвёртый аудит, М27 прогона 1).
+// префиксом.
 function ours(client) {
   var scope = self.registration.scope;
   if (client.url.indexOf(scope) !== 0) return false;
@@ -238,7 +248,7 @@ self.addEventListener('notificationclick', function (event) {
     for (var i = 0; i < list.length; i++) {
       if (ours(list[i]) && 'focus' in list[i]) {
         // Уведомление — о своём расписании: страница уходит к нему, а не
-        // остаётся на открытом чужом (М10).
+        // остаётся на открытом чужом.
         list[i].postMessage({ t: 'own' });
         return list[i].focus();
       }
@@ -256,7 +266,7 @@ self.addEventListener('pushsubscriptionchange', function (event) {
   var fresh = event.newSubscription ? Promise.resolve(event.newSubscription)
     : self.registration.pushManager.subscribe(old.options);
   // Не перенеслось (прежней записи уже нет — 404) — страница заметит новый
-  // адрес при открытии и перешлёт подписку с выбором (push.js, sync; М75).
+  // адрес при открытии и перешлёт подписку с выбором (push.js, sync).
   event.waitUntil(fresh.then(function (sub) {
     var json = sub.toJSON();
     return fetch('/v1/push/move', {

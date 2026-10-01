@@ -7,7 +7,7 @@ export function h(tag, attrs) {
       var value = attrs[key];
       if (value == null || value === false) return;
       // Текст — только детьми, через createTextNode: ключа для innerHTML нет
-      // нарочно (аудит сайта, W1, W3).
+      // нарочно.
       if (key === 'class') el.className = value;
       else if (key.indexOf('on') === 0) el.addEventListener(key.slice(2), value);
       else el.setAttribute(key, value === true ? '' : value);
@@ -69,6 +69,11 @@ export function actionLink(label, href, cls) {
 
 export function externalLink(label, href, cls) {
   return h('a', { class: cls || 'link', href: href, target: '_blank', rel: 'noopener noreferrer' }, label);
+}
+
+/** Карточка с заголовком — раздел настроек. */
+export function section(title, body) {
+  return h('section', { class: 'card' }, h('h2', { class: 'card-title' }, title), body);
 }
 
 // ——— плашка внизу экрана ———
@@ -139,7 +144,7 @@ export function dialog(title, body, buttons, opts) {
     if (e.target === overlay) closeDialog();
   });
   // Окно держит фокус: Tab ходит по его кнопкам и ссылкам, не уходя на
-  // страницу под ним (аудит сайта, W7).
+  // страницу под ним.
   var onKey = function (e) {
     if (e.key === 'Escape' || e.key === 'Esc') {
       closeDialog();
@@ -164,7 +169,7 @@ export function dialog(title, body, buttons, opts) {
   };
   document.addEventListener('keydown', onKey);
   // Кнопку, с которой открыли, запомнить ключом: экран под окном могут
-  // перестроить, и сам узел пропадёт (аудит, прогон 2).
+  // перестроить, и сам узел пропадёт.
   var from = document.activeElement;
   openDialog = { el: overlay, onKey: onKey, restore: from, restoreKey: from && from.getAttribute && from.getAttribute('data-key') };
   document.body.appendChild(overlay);

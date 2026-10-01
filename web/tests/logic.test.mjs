@@ -96,7 +96,7 @@ test('ссылки на вебинары', () => {
   assert.equal(isKnownWebinar('https://mts-link.ru.evil.com/j'), false);
   assert.equal(isKnownWebinar('https://notzoom.us/j'), false);
   assert.equal(isKnownWebinar('https://user@zoom.us/j'), true);
-  // Хост — как у браузера: всё до «@» — учётные данные, «\» — это «/» (аудит сайта, W1).
+  // Хост — как у браузера: всё до «@» — учётные данные, «\» — это «/».
   for (const evil of ['https://my.mts-link.ru:443@evil.example/j/333',
     'https://evil.example\\.mts-link.ru/j/444', 'https://evil.example\\@my.mts-link.ru/j/555']) {
     assert.equal(isKnownWebinar(evil), false, evil);

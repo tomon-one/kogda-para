@@ -1,0 +1,427 @@
+/* Списки, настройки, приветствие, окна и плашка внизу. Подключается после
+   days.css. */
+
+/* ——— списки ——— */
+
+.search-wrap { padding: 8px 12px; }
+
+.search {
+  display: block;
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--fg);
+  /* 16 px и больше — иначе Safari увеличивает страницу при вводе. */
+  font: inherit;
+  font-size: 16px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search:focus { border-color: var(--primary); outline: none; }
+
+.results { padding: 0 12px 24px; }
+.others .results { padding: 0 0 24px; }
+.others .search-wrap { padding: 8px 0; }
+
+.role-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.role-row span:first-child { flex: 1; }
+.chevron { font-size: 22px; line-height: 1; }
+
+.letter {
+  padding: 14px 16px 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.list-card {
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.list-row {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--bg);
+}
+
+.list-row:last-child { border-bottom: 0; }
+.list-row:active, .pin-open:active, .role-row:active { background: var(--surface-variant); }
+
+.list-end, .nothing {
+  padding: 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.list-end { text-align: center; }
+
+.section-title {
+  padding: 10px 8px 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.pin-row {
+  display: flex;
+  align-items: stretch;
+  margin-top: 6px;
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.pin-open {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 16px;
+}
+
+.pin-open span { display: block; }
+.self-mark { font-size: 11px; color: var(--primary); }
+
+.pin-star {
+  flex: none;
+  min-width: 52px;
+  font-size: 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pin-star.on { color: var(--primary); }
+
+.load-failed { padding: 16px 4px; font-size: 14px; }
+.load-failed .link { display: inline-block; padding: 4px 0; }
+.load-failed .text-link { display: block; margin-top: 12px; }
+
+.back-row { padding: 0 0 4px; }
+
+.chosen-head {
+  display: flex;
+  align-items: center;
+  padding: 0 0 8px 4px;
+}
+
+.chosen-title { flex: 1; min-width: 0; }
+.chosen-name { font-size: 17px; font-weight: 600; }
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: 1px solid var(--divider);
+  text-align: center;
+}
+
+/* ——— настройки ——— */
+
+.cards { padding-top: 4px; }
+
+.card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.card p {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.card p + p, .card p + .action, .card .action + p { margin-top: 8px; }
+.card p a, .card p .text-link { font-size: 15px; }
+
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 52px;
+}
+
+.setting-row + .setting-row { margin-top: 8px; }
+/* Узко — кнопки строкой ниже, а не поверх названия. */
+.setting-text { flex: 1 1 140px; min-width: 0; overflow-wrap: break-word; word-wrap: break-word; }
+.setting-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; padding: 4px 0; }
+.setting-buttons .action { margin: 2px 0 2px 8px; }
+/* Одна ширина — 116 px, как ROW_BUTTON приложения: «Сменить», «Убрать», «Добавить»,
+   «Скопировать», минуты напоминания; узко — кнопки строкой ниже, а не поверх
+   названия. */
+.action.fixed { width: 116px; padding: 0 8px; }
+
+/* Пометка у заголовка: beta, альфа-тест. */
+.badge {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--primary);
+  vertical-align: 2px;
+}
+
+/* Выключатель строкой — SwitchRow приложения. */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  cursor: pointer;
+}
+.switch {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  border-radius: 13px;
+  background: var(--outline);
+  cursor: pointer;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+.switch:checked { background: var(--primary); }
+.switch:checked::after { transform: translateX(18px); }
+.switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* Строка с кнопкой-значением: «За сколько предупредить» и «20 мин». */
+.value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+}
+.value-row > span { flex: 1 1 auto; min-width: 0; padding-right: 8px; }
+.value-row .action { flex: none; margin-top: 0; }
+/* Ограничение, которое не вышло обойти, — рядом с тем, что оно портит. */
+.card p.warning, .warning { color: var(--primary); }
+
+.segmented {
+  display: flex;
+  height: 44px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface-variant);
+}
+
+.segment {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 38px;
+  padding: 0 6px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.segment.on { background: var(--selected-bg); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary); }
+
+.signature { margin-top: 12px; font-size: 13px; color: var(--muted); }
+
+/* ——— приветствие ——— */
+
+.welcome {
+  padding: calc(40px + env(safe-area-inset-top)) 24px 32px;
+  text-align: center;
+}
+
+.welcome-icon { display: block; margin: 0 auto 12px; border-radius: 22px; }
+.welcome h1 { font-size: 28px; font-weight: 700; }
+.welcome-sub { color: var(--muted); margin-top: 4px; }
+
+.point { margin-top: 24px; text-align: left; }
+.point h2 { font-size: 16px; font-weight: 600; }
+.point p { margin-top: 4px; font-size: 14px; color: var(--muted); }
+
+.primary-button {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin-top: 32px;
+  padding: 0 24px;
+  line-height: 48px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 12px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+  text-align: center;
+}
+
+.primary-button:active { opacity: 0.85; }
+
+.welcome-android { margin-top: 20px; font-size: 13px; color: var(--muted); }
+
+/* ——— окна и плашка ——— */
+
+.overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--overlay);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 440px;
+  max-height: 85vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 20px 8px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.dialog-title { font-size: 20px; font-weight: 600; margin-bottom: 12px; }
+.dialog-body p { font-size: 14px; }
+.dialog-body p + p, .dialog-body p + pre { margin-top: 10px; }
+.dialog-buttons { display: flex; justify-content: flex-end; margin-top: 8px; }
+.dialog-buttons .text-button { margin-left: 4px; }
+
+/* Заголовок окна с крестиком справа (окно выбора минут). */
+.dialog-head { display: flex; align-items: center; margin: -8px -12px 4px 0; }
+.dialog-head .dialog-title { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+.dialog-close { width: 40px; height: 40px; color: var(--muted); }
+.dialog-caption { margin: 12px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
+
+/* Окно выбора минут (ReminderDialog.kt): плитки 5 × 2 одной высоты и ширины. */
+.remind-dialog { padding-bottom: 20px; }
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-gap: 8px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  min-width: 0;
+  border-radius: 12px;
+  background: var(--surface-variant);
+  color: var(--fg);
+  overflow: hidden;
+}
+.tile.on { background: var(--primary); color: var(--on-primary); }
+.tile-number { font-size: 22px; font-weight: 600; line-height: 26px; white-space: nowrap; }
+.tile-unit { font-size: 11px; line-height: 14px; opacity: 0.75; }
+.tile:focus-visible, .own-field:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+.own-row { display: flex; align-items: center; }
+.own-row .action { flex: none; margin: 0 0 0 8px; }
+.own-field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--surface-variant);
+  box-shadow: inset 0 0 0 1.5px transparent;
+  cursor: text;
+}
+.own-field.chosen { box-shadow: inset 0 0 0 1.5px var(--primary); }
+.own-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+}
+.own-input::placeholder { color: var(--muted); opacity: 0.8; }
+.own-unit { flex: none; margin-left: 6px; font-size: 14px; color: var(--muted); }
+.own-hint { margin-top: 6px; }
+.own-hint.error { color: var(--primary); }
+
+.tally-number { font-size: 28px; font-weight: 700; }
+
+.report {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-variant);
+  font: 12px/1.45 ui-monospace, Menlo, Consolas, "Roboto Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.snackbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 200;
+  width: calc(100% - 32px);
+  max-width: 600px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--surface-variant);
+  color: var(--fg);
+  font-size: 14px;
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+}

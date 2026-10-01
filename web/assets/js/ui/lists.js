@@ -162,7 +162,7 @@ export function othersList(app, kind, selfId) {
             popped = null;
             // Список перестроен — фокус на ту же звезду, а не на body.
             // Без прокрутки: снятая звезда переезжает вниз списка, и страница
-            // уезжала за ней (аудит сайта, прогон 3).
+            // уезжала за ней.
             var star = results.querySelector('[data-key="star:' + item.id + '"]');
             if (star) {
               try { star.focus({ preventScroll: true }); } catch (e) { star.focus(); }
