@@ -155,6 +155,37 @@ def test_cells_in_the_empty_columns_of_a_block_are_a_shift(fixture_csv):
         parse_sheet(rows, "фикстура", FIXTURE)
 
 
+def test_halved_block_is_two_lessons_not_a_shift(fixture_csv):
+    """Блок, поделённый пополам (подгруппы с разными языками: название и
+    аудитория слева, название и аудитория справа), — две пары с одним
+    номером, а не вставка ячеек, сколько бы таких строк ни было."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    lesson_rows = [i for i, r in enumerate(rows) if len(r) > 1 and r[1].strip().isdigit()]
+    for i in lesson_rows[:6]:
+        rows[i][2:6] = ["Иностранный язык, немецкий (Пр)", "55/1",
+                        "Иностранный язык, английский (Пр)", "467"]
+        rows[i + 1][2:6] = ["Пикулина Л. Е.", "", "Здорик И. Р.", ""]
+    snapshot = parse_sheet(rows, "фикстура", FIXTURE)
+    halves = [
+        sorted((l.room, l.teachers) for l in lessons if l.number == 1)
+        for by_date in snapshot.schedule.values()
+        for lessons in by_date.values()
+        if any(l.room == "55/1" for l in lessons)
+    ]
+    assert halves and halves[0] == [("467", ("Здорик И. Р.",)), ("55/1", ("Пикулина Л. Е.",))]
+
+
+def test_two_cell_insertion_is_still_a_shift(fixture_csv):
+    """Вставка на две ячейки тоже кладёт название в +2, но в +3 у неё пусто —
+    это не половинки."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    lesson_rows = [i for i, r in enumerate(rows) if len(r) > 1 and r[1].strip().isdigit()]
+    for i in lesson_rows[:10]:
+        rows[i][2:2] = ["", ""]
+    with pytest.raises(SourceFormatChanged, match="пустых колонок"):
+        parse_sheet(rows, "фикстура", FIXTURE)
+
+
 # --- Живой лист -------------------------------------------------------------
 
 def _live(name: str) -> str:
