@@ -15,6 +15,7 @@ import pytest
 
 from whensclass.domain.models import SourceFormatChanged
 from whensclass.sources import sheet_index as si
+from whensclass.sources import sheet_memory
 from whensclass.sources.gsheets import SheetInfo
 
 DAY = dt.date(2026, 9, 14)
@@ -100,7 +101,7 @@ def test_unreachable_sheet_breaks_the_lookup(tmp_path, monkeypatch):
 
 def test_sheet_unread_only_by_network_is_a_network_failure(tmp_path, monkeypatch):
     """Сеть легла в момент поиска: это сетевой сбой с получасом льготы, а не
-    «лист не нашёлся» со stale сразу (М39 прогона 1 аудита 4)."""
+    «лист не нашёлся» со stale сразу."""
     import httpx
 
     sheets = visible("расписание групп 01.-05.09", "расписание групп 14.-19.09")
@@ -223,8 +224,8 @@ def test_unreadable_candidate_is_not_remembered_as_a_miss(tmp_path, monkeypatch)
 
 def test_unfilled_group_sheet_is_not_published_rather_than_unreachable(tmp_path, monkeypatch):
     """Каркас дат без пар (колледж заводит лист на каникулах) — лист
-    прочитан: это «ещё не выложено», а не «добраться не вышло» со stale у всех
-    (В14 прогона 1 аудита 4). Поиск берёт ближайший известный лист."""
+    прочитан: это «ещё не выложено», а не «добраться не вышло» со stale у всех.
+    Поиск берёт ближайший известный лист."""
     from whensclass.domain.models import SheetTooSmall
 
     sheets = visible("расписание групп 01.-05.09", "расписание групп 14.-19.09")
@@ -242,7 +243,8 @@ def test_unfilled_group_sheet_is_not_published_rather_than_unreachable(tmp_path,
 def test_new_sheet_with_two_dates_is_found(tmp_path, monkeypatch, fixture_csv):
     """Новый лист, где заполнены только понедельник и вторник, — наш лист:
     поиск узнаёт его по заголовку групп, а не по объёму."""
-    from whensclass.parser.csv_schedule import FIXTURE, collapse_export, read_csv
+    from whensclass.parser.csv_schedule import FIXTURE
+    from whensclass.parser.export import collapse_export, read_csv
 
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     third = [i for i, r in enumerate(rows) if r and r[0].strip()[:2].isdigit()][2]
@@ -272,7 +274,7 @@ def test_empty_date_skeleton_does_not_count_as_covered(tmp_path, monkeypatch):
         ),
     )
     si.resolve_for(dt.date(2026, 9, 21), tmp_path, deep=True)
-    index = si.SheetIndex(tmp_path)
+    index = sheet_memory.SheetIndex(tmp_path)
     assert index.known["расписание групп 01.-19.09"]["to"] == "2026-09-26"
     assert index.covering(dt.date(2026, 9, 28)) is None
 
@@ -289,7 +291,7 @@ def test_closed_table_during_search_is_closed_not_unreachable(tmp_path, monkeypa
 def test_next_sheet_is_searched_deep_when_the_refresh_is_deep(tmp_path, monkeypatch):
     """Поиск следующего листа шёл без deep, и
     свежий промах прятал только что появившийся лист до ночи."""
-    index = si.SheetIndex(tmp_path)
+    index = sheet_memory.SheetIndex(tmp_path)
     index.remember("лист A", "1", dt.date(2026, 9, 21), dt.date(2026, 9, 26))
     asked = []
 
@@ -328,7 +330,7 @@ def test_sheet_renamed_in_place_is_read_once(tmp_path, monkeypatch):
     def resolve_for(day, state_dir, deep=False):
         return ("старое имя", "1") if day == dt.date(2026, 9, 25) else ("новое имя", "1")
 
-    index = si.SheetIndex(tmp_path)
+    index = sheet_memory.SheetIndex(tmp_path)
     index.remember("старое имя", "1", dt.date(2026, 9, 21), dt.date(2026, 9, 26))
     monkeypatch.setattr(si, "resolve_for", resolve_for)
     assert si.resolve_window(dt.date(2026, 9, 25), 8, tmp_path, deep=True) == [("новое имя", "1")]
@@ -342,7 +344,7 @@ def test_network_blip_on_the_next_sheet_keeps_the_current(tmp_path, monkeypatch)
             return "лист A", "1"
         raise httpx.ConnectError("нет маршрута")
 
-    index = si.SheetIndex(tmp_path)
+    index = sheet_memory.SheetIndex(tmp_path)
     index.remember("лист A", "1", dt.date(2026, 9, 21), dt.date(2026, 9, 26))
     monkeypatch.setattr(si, "resolve_for", resolve_for)
     assert si.resolve_window(dt.date(2026, 9, 25), 8, tmp_path, deep=True) == [("лист A", "1")]
@@ -368,12 +370,12 @@ def test_sheets_api_unreachable_is_a_network_failure(monkeypatch):
 @pytest.mark.parametrize("status", [429, 503])
 def test_google_busy_while_looking_for_the_next_sheet_keeps_the_current(tmp_path, monkeypatch, status):
     """429 или 5xx от Google при поиске следующего листа — следующий не
-    главнее текущего: отдаём что есть, а не роняем заход (прогон 2 аудита 4)."""
+    главнее текущего: отдаём что есть, а не роняем заход."""
     import httpx
 
     from whensclass.sources import gsheets
 
-    index = si.SheetIndex(tmp_path)
+    index = sheet_memory.SheetIndex(tmp_path)
     index.remember("расписание групп 21.-03.10", "111", dt.date(2026, 9, 21), dt.date(2026, 10, 3))
     monkeypatch.setattr(si, "list_sheets", lambda: [
         SheetInfo(title="расписание групп 21.-03.10", gid="111", hidden=False),

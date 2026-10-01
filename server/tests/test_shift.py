@@ -20,15 +20,9 @@ import pytest
 from conftest import FIXTURES
 from test_invariants import synthetic_sheet
 from whensclass.domain.models import Lesson, SourceFormatChanged
-from whensclass.parser.csv_schedule import (
-    FIXTURE,
-    check_shift,
-    collapse_export,
-    parse_export,
-    parse_sheet,
-    read_csv,
-    shift_seed,
-)
+from whensclass.parser.csv_schedule import FIXTURE, parse_sheet
+from whensclass.parser.export import collapse_export, parse_export, read_csv
+from whensclass.parser.shift import check_shift, shift_seed
 
 # Строки листа с неделей 21–26.09 в версии 18.09 21:20 (как в Sheets).
 NEW_WEEK = (214, 285)
@@ -102,8 +96,8 @@ def test_vertical_shift_on_three_days():
     """«удалить ячейки, сдвиг вверх» в блоке
     группы — её пары съезжают на номер до конца листа. Один-два дня —
     законная перестановка, три — сдвиг. У одной группы это подозрение, а не
-    отказ: 25.09 колледж так переставил неделю КП-923 и держал её трое суток
-    (четвёртый аудит, В12 прогона 1). У двух групп — отказ."""
+    отказ: 25.09 колледж так переставил неделю КП-923 и держал её трое суток.
+    У двух групп — отказ."""
     honest = synthetic_sheet()
     gid, other = honest.groups[4].id, honest.groups[-2].id
     assert not any("по вертикали" in x for x in
@@ -235,7 +229,7 @@ def test_live_one_cell_insertion_is_rejected_by_the_parse(live):
 def test_lesson_numbers_are_part_of_the_vertical_check():
     """Сверка по вертикали сравнивает пары без номера: у съехавшей он другой."""
     a = Lesson(number=3, subject="Физика", teachers=("Марс И. А.",), room="272")
-    from whensclass.parser.csv_schedule import _same_but_number
+    from whensclass.parser.shift import _same_but_number
 
     assert _same_but_number(a, dataclasses.replace(a, number=2))
     assert not _same_but_number(a, dataclasses.replace(a, number=2, room="273"))

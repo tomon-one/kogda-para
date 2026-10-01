@@ -5,14 +5,9 @@ import datetime as dt
 import pytest
 
 from whensclass.domain.models import SourceFormatChanged
-from whensclass.parser.csv_schedule import (
-    FIXTURE,
-    _parse_date,
-    collapse_export,
-    parse_csv,
-    parse_sheet,
-    read_csv,
-)
+from whensclass.parser.csv_schedule import FIXTURE, parse_sheet
+from whensclass.parser.dates import _parse_date
+from whensclass.parser.export import collapse_export, parse_csv, read_csv
 from whensclass.parser.groups import build_column_map, find_header_rows, split_group_names
 
 
@@ -331,7 +326,7 @@ def test_export_keeps_the_text_gviz_dropped(fixture_csv):
 
 def test_export_remembers_sheet_rows_of_days(fixture_csv):
     """Номера строк дней — как в Sheets: 6, 18, 30 — для ссылки к ячейке."""
-    from whensclass.parser.csv_schedule import parse_export
+    from whensclass.parser.export import parse_export
 
     snapshot = parse_export(fixture_csv, "фикстура", gid="656498718", limits=FIXTURE)
     rows = [snapshot.places[d].row for d in sorted(snapshot.places)]
@@ -347,7 +342,7 @@ def test_export_remembers_sheet_rows_of_days(fixture_csv):
         "Дисциплина Преподаватель",
         "Дисциплина Преподаватель —",
         # Опечатка в первом слове — блок не становился ни группой, ни
-        # безымянным, и группа молча уходила в 404 (В9 прогона 1 аудита 4).
+        # безымянным, и группа молча уходила в 404.
         "Дисциплна Преподаватель ГД-1125",
         "Дисциплинa Преподаватель ГД-1125",  # латинская «a»
         "дисциплина Преподаватель ГД-1125",
@@ -372,7 +367,7 @@ def test_broken_name_in_main_header_keeps_the_group(fixture_csv, broken):
 def test_nameless_block_with_lessons_is_reported(fixture_csv):
     """Имени нет нигде — ни в главном, ни в повторном: блок безымянный, но
     пары под ним считаются, и служба по ним узнаёт пропавшую группу."""
-    from whensclass.service.refresher import _check_lost_names
+    from whensclass.service.gates import _check_lost_names
 
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
@@ -463,7 +458,7 @@ def test_row_inserted_before_the_bell_row_does_not_steal_the_teachers(fixture_cs
 def test_block_with_erased_head_is_still_a_block():
     """Ячейку «Дисциплина …» стёрли или испортили («Дисц.»), а «Ауд.» блока на
     месте — это блок без шапки, а не пустое место: иначе группа молча уходила
-    в 404 при ok (прогон 2 аудита 4)."""
+    в 404 при ok."""
     from whensclass.parser.groups import header_blocks
 
     row = ["", "", "Дисциплина Преподаватель А-1", "", "", "Ауд.",

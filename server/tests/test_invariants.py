@@ -12,7 +12,8 @@ import pytest
 
 from whensclass.domain.models import SourceFormatChanged
 from whensclass.parser.cells import parse_lesson
-from whensclass.parser.csv_schedule import FIXTURE, collapse_export, parse_sheet, read_csv
+from whensclass.parser.csv_schedule import FIXTURE, parse_sheet
+from whensclass.parser.export import collapse_export, read_csv
 
 
 def rows_of(fixture_csv):
@@ -127,7 +128,7 @@ def test_otmetka_is_not_a_cancellation():
 def test_losing_a_third_of_groups_at_once_is_rejected(fixture_csv):
     """Заголовок сломан наполовину: сто групп проходят порог, восемьдесят — в 404."""
     from whensclass.domain.models import Snapshot
-    from whensclass.service.refresher import _check_group_drop
+    from whensclass.service.gates import _check_group_drop
 
     before = parse_sheet(rows_of(fixture_csv), "фикстура", FIXTURE)
     after = Snapshot(sheet_title=before.sheet_title, groups=before.groups[:2],
@@ -171,7 +172,7 @@ def test_shift_below_last_repeated_header_is_caught_by_content():
     """Блок строк без повторного заголовка сдвинут на группу — по содержимому видно."""
     import copy
 
-    from whensclass.parser.csv_schedule import check_shift
+    from whensclass.parser.shift import check_shift
 
     honest = synthetic_sheet()
     check_shift(honest)
@@ -258,7 +259,7 @@ def test_shift_from_the_second_lesson_is_caught():
     Голос у группы за день: чужих три, своя одна — за сдвиг."""
     import copy
 
-    from whensclass.parser.csv_schedule import check_shift
+    from whensclass.parser.shift import check_shift
 
     honest = synthetic_sheet()
     ids = [g.id for g in honest.groups]
@@ -277,7 +278,7 @@ def test_first_week_of_a_sheet_is_checked_against_the_previous_snapshot():
     import copy
 
     from whensclass.domain.models import Snapshot
-    from whensclass.parser.csv_schedule import check_shift, shift_seed
+    from whensclass.parser.shift import check_shift, shift_seed
 
     previous = synthetic_sheet(days=10)
     ids = [g.id for g in previous.groups]
@@ -307,7 +308,7 @@ def test_first_week_of_a_sheet_is_checked_against_the_previous_snapshot():
 def test_today_dropping_out_of_the_snapshot_is_not_an_update():
     """gid умер, поиск взял соседний лист: сегодня в нём нет — это подмена, не обновление."""
     from whensclass.domain.models import Snapshot
-    from whensclass.service.refresher import _check_today_kept
+    from whensclass.service.gates import _check_today_kept
 
     previous = synthetic_sheet(days=5)
     today = previous.dates[2]
@@ -329,7 +330,7 @@ def test_shift_of_a_window_of_groups_is_caught_by_neighbours():
     """
     import copy
 
-    from whensclass.parser.csv_schedule import SHIFT_RUN_REJECT, check_shift
+    from whensclass.parser.shift import SHIFT_RUN_REJECT, check_shift
 
     honest = synthetic_sheet()
     ids = [g.id for g in honest.groups]
@@ -348,7 +349,7 @@ def test_honest_edits_are_not_a_shift():
     отвергал их как «сдвиг колонок», и весь лист уходил в stale."""
     import copy
 
-    from whensclass.parser.csv_schedule import check_shift
+    from whensclass.parser.shift import check_shift
 
     honest = synthetic_sheet()
     ids = [g.id for g in honest.groups]
@@ -381,7 +382,7 @@ def test_honest_edits_are_not_a_shift():
 def test_subgroups_sharing_lessons_are_not_a_shift():
     """Подгруппы с общими парами: пара соседа, которую знает и своя история, —
     не голос за сдвиг. На живом листе это давало честные серии до 4."""
-    from whensclass.parser.csv_schedule import check_shift
+    from whensclass.parser.shift import check_shift
 
     honest = synthetic_sheet()
     for i in range(0, len(honest.groups) - 1, 2):
@@ -402,7 +403,7 @@ def test_new_day_without_a_date_is_named_as_such(fixture_csv):
 
 def test_messages_point_to_the_sheet_row(fixture_csv):
     """Номер строки в тексте отказа — как в Sheets, а не после схлопывания шапки."""
-    from whensclass.parser.csv_schedule import collapse_with_rows
+    from whensclass.parser.export import collapse_with_rows
 
     raw = read_csv(fixture_csv)
     rows, numbers = collapse_with_rows(raw, FIXTURE.min_groups)
@@ -426,7 +427,7 @@ def test_winter_holidays_inside_a_sheet_are_not_a_typo(fixture_csv):
 
 
 def _parse_cell_date(cell):
-    from whensclass.parser.csv_schedule import _parse_date
+    from whensclass.parser.dates import _parse_date
 
     return _parse_date(cell)
 
@@ -437,7 +438,8 @@ def test_dates_out_of_order_name_the_row(fixture_csv):
     import csv
     import io
 
-    from whensclass.parser.csv_schedule import FIXTURE, parse_export
+    from whensclass.parser.csv_schedule import FIXTURE
+    from whensclass.parser.export import parse_export
 
     rows = list(csv.reader(io.StringIO(fixture_csv)))
     dated = [i for i, r in enumerate(rows) if r and r[0].strip()[:2].isdigit()]
@@ -482,7 +484,7 @@ def test_empty_date_skeleton_far_ahead_is_cut_not_rejected(fixture_csv):
     import dataclasses
     import io
 
-    from whensclass.parser.csv_schedule import parse_csv
+    from whensclass.parser.export import parse_csv
 
     rows = read_csv(fixture_csv)
     width = max(len(r) for r in rows)

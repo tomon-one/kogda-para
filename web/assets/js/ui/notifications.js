@@ -130,7 +130,7 @@ export function notifications(app, teacherMode) {
   return section(title, body);
 }
 
-/** Границы своего времени — те же, что у службы (REMIND_MIN, REMIND_MAX в push/service.py). */
+/** Границы своего времени — те же, что у службы (REMIND_MIN, REMIND_MAX в push/subscription.py). */
 var REMIND_MIN = 10;
 var REMIND_MAX = 240;
 

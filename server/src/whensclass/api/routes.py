@@ -16,7 +16,7 @@ import zoneinfo
 from fastapi import APIRouter, Query, Request, Response
 
 from ..config import settings
-from ..push.service import BadSubscription, parse_keys, parse_subscription
+from ..push.subscription import BadSubscription, parse_keys, parse_subscription
 from ..service.bells import BELLS
 from ..service.refresher import state_dir
 from .etag import etag_for, matches
@@ -315,7 +315,7 @@ async def push_subscribe(request: Request) -> Response:
 
 def _rejected(body: object, exc: Exception) -> None:
     """Отвергнутая подписка — в журнал хост её службы рассылки (не адрес): вдруг у
-    какого-то браузера служба своя и её нет в списке (поиск 28.09)."""
+    какого-то браузера служба своя и её нет в списке."""
     endpoint = body.get("endpoint") if isinstance(body, dict) else None
     host = None
     if isinstance(endpoint, str):
@@ -341,7 +341,7 @@ async def push_move(request: Request) -> Response:
         return _error(422, str(exc))
     if not push.move(body["old"], fresh):
         # Прежней записи нет (стёрта по 410): сервис-воркер сбросит отметку, и
-        # страница перешлёт подписку с выбором при первом открытии (М75).
+        # страница перешлёт подписку с выбором при первом открытии.
         return _error(404, "прежней подписки нет")
     return Response(status_code=204)
 

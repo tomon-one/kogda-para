@@ -16,15 +16,12 @@ from __future__ import annotations
 import concurrent.futures
 import datetime as dt
 import hashlib
-import heapq
 import json
 import logging
 import pathlib
 import threading
 import time
-import urllib.parse
 import zoneinfo
-from typing import NamedTuple
 
 import httpx
 
@@ -32,50 +29,23 @@ from ..config import settings
 from ..service import alerts
 from ..storage.atomic import write_json
 from . import changes, webpush
+from .delivery import MAX_PENDING_RETRIES, TIMEOUT, Delivery, Job, _Delayed
+from .messages import (
+    MAX_LINE,
+    changes_message,
+    changes_ttl,
+    gone_message,
+    message,
+    welcome_text,
+)
+from .subscription import _host
 
 log = logging.getLogger(__name__)
 
-# Службы рассылки браузеров. Адрес подписки приходит от браузера, то есть от
-# кого угодно: без списка служба слала бы POST на любой адрес, который ей
-# назовут, — в том числе во внутреннюю сеть машины.
-PUSH_HOSTS = (
-    "fcm.googleapis.com",                   # Chrome, Яндекс Браузер, Samsung
-    "updates.push.services.mozilla.com",    # Firefox
-    "web.push.apple.com",                   # Safari, сайт со значком на айфоне
-)
-PUSH_SUFFIXES = (".notify.windows.com", ".push.apple.com")
-
-MAX_ENDPOINT = 1024
 # Потолок подписок: запись в файл целиком, и без потолка его можно раздуть.
 MAX_SUBSCRIPTIONS = 20000
-# Как «За сколько предупредить» в приложении: от 10 минут до 4 часов.
-REMIND_MIN, REMIND_MAX = 10, 240
-# Изменения живут у службы рассылки до конца последнего дня в сводке, но не
-# меньше минуты (`changes_ttl`). Было — 12 часов при любом дне: «на завтра»,
-# отправленное вечером, истекало ночью, до пары, а «на сегодня» приходило
-# назавтра (четвёртый аудит, контроль №5 и М37 прогона 1).
-CHANGES_TTL_MIN = 60
-# Сообщение целиком — до 4 КБ зашифрованным (Apple, RFC 8291: 3993 байта
-# открытого текста); с запасом.
-MAX_PAYLOAD = 3000
-MAX_LINE = 300
-# Одна повторная попытка на 429 и 5xx: через Retry-After, но не дольше двух минут.
-RETRY_AFTER = 30
-RETRY_MAX = 120
-# Повторы ждут в одной очереди с одним потоком; больше стольких — не встают.
-# Было — поток ОС на каждый повтор: 20 000 неудач за минуту упирались в
-# MemoryMax (четвёртый аудит, В26 прогона 1).
-MAX_PENDING_RETRIES = 2000
-# Соединение со службой рассылки — не дольше трёх секунд: пока Google не
-# отвечает, его подписки держали очередь по 10 с каждая (В6).
-TIMEOUT = httpx.Timeout(10.0, connect=3.0)
-WORKERS_PER_SERVICE = 4
-# Подписку, которая не доставляется столько раз подряд, служба снимает — если
-# та же служба рассылки за это время доставляла другим: сбой всей службы
-# или нашего ключа подписки не стирает (В16).
-DROP_AFTER_FAILS = 5
-# Раз в столько секунд — сводка отказов по службам рассылки (тревога владельцу,
-# М38) и проверка пропавших групп (В21).
+# Раз в столько секунд — сводка отказов по службам рассылки (тревога владельцу)
+# и проверка пропавших групп.
 CHECK_EVERY = 600
 ALARM_MIN_FAILS = 5
 # Группа или преподаватель пропали из таблицы: через час (как в приложении) —
@@ -83,104 +53,11 @@ ALARM_MIN_FAILS = 5
 GONE_NOTICE_AFTER = 3600
 GONE_DROP_DAYS = 14
 # Напоминания, чья минута пропущена (перезапуск, выкладка), догоняются, пока
-# пара не началась; после перезапуска — за столько минут назад (М25).
+# пара не началась; после перезапуска — за столько минут назад.
 CATCH_UP_MINUTES = 10
 
 
-def family(endpoint: str) -> str:
-    """Служба рассылки: у каждой своя очередь."""
-    host = _host(endpoint)
-    for name, suffix in (("google", "googleapis.com"), ("mozilla", "mozilla.com"),
-                         ("apple", "apple.com"), ("microsoft", "windows.com")):
-        if host == suffix or host.endswith("." + suffix):
-            return name
-    return host
-
-
-class Job(NamedTuple):
-    sub: dict
-    message: dict
-    ttl: int
-    # Позже этого (секунды эпохи) повторять незачем: пара уже началась.
-    deadline: float | None = None
-
-
-def endpoint_allowed(endpoint: str) -> bool:
-    if not isinstance(endpoint, str) or len(endpoint) > MAX_ENDPOINT:
-        return False
-    # Только печатный ASCII без пробелов: urlsplit молча выкидывает \t и \n, а
-    # httpx на таком адресе бросал InvalidURL мимо журнала (М76).
-    if any(not 32 < ord(c) < 127 for c in endpoint):
-        return False
-    try:
-        parts = urllib.parse.urlsplit(endpoint)
-        port = parts.port
-    except ValueError:
-        return False
-    host = (parts.hostname or "").lower()
-    if parts.scheme != "https" or port not in (None, 443) or parts.username or parts.password:
-        return False
-    return host in PUSH_HOSTS or any(host.endswith(s) for s in PUSH_SUFFIXES)
-
-
-class BadSubscription(ValueError):
-    pass
-
-
-def parse_subscription(body: object) -> dict:
-    """Проверить тело POST /v1/push/subscribe и вернуть запись для хранения."""
-    if not isinstance(body, dict):
-        raise BadSubscription("ждали объект JSON")
-    endpoint = body.get("endpoint")
-    if not endpoint_allowed(endpoint):
-        raise BadSubscription("адрес подписки не от службы рассылки браузера")
-    keys = body.get("keys") if isinstance(body.get("keys"), dict) else {}
-    try:
-        p256dh = webpush.b64decode(str(keys.get("p256dh", "")))
-        auth = webpush.b64decode(str(keys.get("auth", "")))
-    except ValueError as exc:
-        raise BadSubscription("ключи подписки — не base64url") from exc
-    if len(p256dh) != 65 or p256dh[0] != 4 or len(auth) != 16:
-        raise BadSubscription("ключи подписки не той длины")
-    if not webpush.valid_key(p256dh):
-        raise BadSubscription("ключ подписки — не точка кривой P-256")
-    kind = body.get("kind")
-    subject = body.get("id")
-    if kind not in ("group", "teacher") or not isinstance(subject, str) or not subject \
-            or len(subject) > 200:
-        raise BadSubscription("чьё расписание — kind group|teacher и id")
-    remind = body.get("remind", 0)
-    if isinstance(remind, bool) or not isinstance(remind, int) \
-            or not (remind == 0 or REMIND_MIN <= remind <= REMIND_MAX):
-        raise BadSubscription(f"remind — 0 или от {REMIND_MIN} до {REMIND_MAX} минут")
-    changes_on = body.get("changes", False)
-    if not isinstance(changes_on, bool):
-        raise BadSubscription("changes — true или false")
-    # Какой сайт подписан — туда и ведёт нажатие на уведомление.
-    site = body.get("site", "main")
-    if site not in ("main", "tested"):
-        raise BadSubscription("site — main или tested")
-    return {
-        "endpoint": endpoint,
-        "p256dh": webpush.b64encode(p256dh),
-        "auth": webpush.b64encode(auth),
-        "kind": kind,
-        "id": subject,
-        "changes": changes_on,
-        "remind": remind,
-        "site": site,
-    }
-
-
-def parse_keys(body: object) -> dict:
-    """Новый адрес и ключи — для переноса подписки (POST /v1/push/move)."""
-    if not isinstance(body, dict) or not isinstance(body.get("old"), str):
-        raise BadSubscription("нужны old, endpoint и keys")
-    full = parse_subscription({**body, "kind": "group", "id": "-"})
-    return {"endpoint": full["endpoint"], "p256dh": full["p256dh"], "auth": full["auth"]}
-
-
-class Push:
+class Push(Delivery):
     """Подписки на диске и рассылка. Один на службу."""
 
     def __init__(self, state_dir: pathlib.Path, vapid: webpush.Vapid | None):
@@ -190,7 +67,7 @@ class Push:
         self._lock = threading.RLock()
         self._subs: dict[str, dict] = self._load()
         # Своя очередь у каждой службы рассылки: пока Google не отвечает, его
-        # подписки не держат айфоны (четвёртый аудит, В6 прогона 1).
+        # подписки не держат айфоны.
         self._pools: dict[str, concurrent.futures.ThreadPoolExecutor] = {}
         self._client = httpx.Client(timeout=TIMEOUT, headers={"User-Agent": settings.user_agent})
         # Какие напоминания уже ушли: (хеш адреса, номер пары) за день — на
@@ -212,7 +89,7 @@ class Push:
         # Кого нет в снимке: (kind, id) -> с какого часа (monotonic).
         self._missing: dict[tuple[str, str], float] = {}
         # Имя преподавателя из прежних снимков (SnapshotStore.known_teacher):
-        # уведомления считаются тем же путём, что /v1/teacher (М41).
+        # уведомления считаются тем же путём, что /v1/teacher.
         self.known_teacher = lambda teacher_id: None
 
     @property
@@ -237,8 +114,7 @@ class Push:
         """Записать или заменить подписку. False — мест нет.
 
         Новый адрес — сразу «Уведомления включены»: человек видит, что они
-        доходят, а не ждёт первой отмены пары (Tomon 28.09: проверить на
-        телефоне).
+        доходят, а не ждёт первой отмены пары.
         """
         with self._lock:
             if not sub["changes"] and not sub["remind"]:
@@ -257,7 +133,7 @@ class Push:
             self._subs[sub["endpoint"]] = record
             self._save()
         # В журнал — служба рассылки и выбор, без адреса и группы: по ним
-        # видно, откуда взялось лишнее «Уведомления включены» (Tomon 28.09).
+        # видно, откуда взялось лишнее «Уведомления включены».
         log.info("%s подписка на уведомления: %s, изменения %s, напоминание %s, всего %d",
                  "новая" if new else "обновлена", _host(sub["endpoint"]),
                  "да" if sub["changes"] else "нет", sub["remind"] or "нет", len(self._subs))
@@ -270,7 +146,7 @@ class Push:
         """Мест нет — снять самую старую подписку, которой ни разу не
         доставили (у настоящей «Уведомления включены» доходит сразу). Мусором
         с выдуманными адресами потолок забивался за часы, и новые люди
-        получали «сервер не принял» (прогон 2 аудита 4). Под замком."""
+        получали «сервер не принял». Под замком."""
         victim = min((s for s in self._subs.values() if not s.get("ok")),
                      key=lambda s: s.get("since", ""), default=None)
         if victim is None:
@@ -284,7 +160,7 @@ class Push:
         """Браузер сменил подписку сам (pushsubscriptionchange): прежний выбор —
         на новый адрес. Знать прежний адрес — и есть право: он секретен.
         False — прежней записи нет (её уже стёрли по 410): маршрут отвечает
-        404, и страница перешлёт подписку сама (М75)."""
+        404, и страница перешлёт подписку сама."""
         with self._lock:
             record = self._subs.pop(old, None)
             if record is None:
@@ -311,124 +187,6 @@ class Push:
         with self._lock:
             return list(self._subs.values())
 
-    # --- рассылка ------------------------------------------------------------
-
-    def _send(self, job: Job, attempt: int = 0) -> None:
-        """Одна доставка. Любое исключение — в журнал, а не в Future, которую
-        никто не читает (М76)."""
-        try:
-            self._deliver(job, attempt)
-        except Exception as exc:  # noqa: BLE001 — страховка потока пула
-            log.warning("уведомление не ушло (%s): %s", _host(job.sub["endpoint"]),
-                        type(exc).__name__)
-            self._failed(job.sub, "error", type(exc).__name__)
-
-    def _deliver(self, job: Job, attempt: int) -> None:
-        if self.vapid is None:
-            return
-        sub = job.sub
-        kind = job.message["notification"]["data"]["t"]
-        if job.deadline is not None and time.time() >= job.deadline:
-            # Очередь продержала напоминание до начала пары — оно уже не нужно.
-            log.info("напоминание опоздало к началу пары (%s) — не шлю", _host(sub["endpoint"]))
-            return
-        try:
-            result = webpush.send(
-                self._client, self.vapid, sub["endpoint"], sub["p256dh"], sub["auth"],
-                job.message, job.ttl, urgency="high" if kind == "lesson" else "normal",
-            )
-        except webpush.TooLarge as exc:
-            # Наша ошибка, не подписки: не снимаем и не повторяем.
-            log.warning("уведомление не влезло (%s): %s", kind, exc)
-            return
-        except ValueError as exc:
-            # Ключи подписки не расшифровываются (не точка кривой) — до сети:
-            # доставить такую нельзя никогда.
-            self.unsubscribe(sub["endpoint"], why=f"ключи не годятся: {exc}")
-            return
-        except httpx.HTTPError as exc:
-            # Адрес — только хост: путь подписки и есть её секрет.
-            log.warning("уведомление не ушло (%s): %s", _host(sub["endpoint"]), type(exc).__name__)
-            if not self._retry(job, attempt, None):
-                self._failed(sub, "dns" if _no_such_host(exc) else "net", type(exc).__name__)
-            return
-        if result.status < 300:
-            self._succeeded(sub)
-            return
-        said = f"{result.status}" + (f" {result.reason}" if result.reason else "")
-        if result.status in webpush.GONE or result.reason == "VapidPkHashMismatch":
-            # Подписки нет или она под другим ключом — слать дальше незачем;
-            # страница при открытии подпишется заново.
-            self.unsubscribe(sub["endpoint"], why=f"служба рассылки ответила {said}")
-            return
-        log.warning("служба рассылки %s ответила %s (%s)", _host(sub["endpoint"]), said, kind)
-        if result.status in webpush.RETRY and self._retry(job, attempt, result.retry_after):
-            return
-        self._failed(sub, "status", said)
-
-    def _succeeded(self, sub: dict) -> None:
-        name = family(sub["endpoint"])
-        with self._lock:
-            self._delivered[name] = time.monotonic()
-            self._fails.pop(sub["endpoint"], None)
-            self._stats.setdefault(name, [0, 0, None])[0] += 1
-            # Доставлялось хоть раз — настоящая подписка: не снимается ни как
-            # мусор под потолком, ни за несуществующий адрес.
-            record = self._subs.get(sub["endpoint"])
-            if record is not None and not record.get("ok"):
-                record["ok"] = dt.date.today().isoformat()
-                self._save()
-
-    def _failed(self, sub: dict, how: str, said: str) -> None:
-        """Доставка не удалась окончательно (повторы кончились или не нужны)."""
-        endpoint, name = sub["endpoint"], family(sub["endpoint"])
-        now = time.monotonic()
-        with self._lock:
-            stat = self._stats.setdefault(name, [0, 0, None])
-            stat[1] += 1
-            stat[2] = said
-            count, since = self._fails.get(endpoint, (0, now))
-            count += 1
-            self._fails[endpoint] = (count, since)
-            # Адреса нет в DNS, и ни разу не доставлялось — выдуманный поддомен
-            # службы рассылки: у Microsoft доставок другим нет вовсе, и такая
-            # подписка не снималась никогда (прогон 2 аудита 4).
-            never = not self._subs.get(endpoint, sub).get("ok")
-            dead = count >= DROP_AFTER_FAILS and (
-                self._delivered.get(name, -1.0) > since or (how == "dns" and never)
-            )
-        if dead:
-            self.unsubscribe(endpoint, why=f"не доставляется {count} раз подряд: {said}")
-
-    def _retry(self, job: Job, attempt: int, after: int | None) -> bool:
-        """Одна повторная попытка; напоминание — только пока пара не началась.
-        True — повтор встал в очередь."""
-        if attempt > 0:
-            return False
-        delay = min(max(after or RETRY_AFTER, 1), RETRY_MAX)
-        if job.deadline is not None and time.time() + delay >= job.deadline:
-            return False
-        again = job._replace(ttl=max(60, job.ttl - delay))
-        if self._later(delay, lambda: self._submit(again, attempt + 1)) is False:
-            log.warning("очередь повторов полна (%d) — повтор не встал", MAX_PENDING_RETRIES)
-            return False
-        return True
-
-    def _submit(self, job: Job, attempt: int = 0) -> None:
-        name = family(job.sub["endpoint"])
-        with self._lock:
-            pool = self._pools.get(name)
-            if pool is None:
-                pool = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=WORKERS_PER_SERVICE, thread_name_prefix=f"push-{name}"[:15]
-                )
-                self._pools[name] = pool
-        pool.submit(self._send, job, attempt)
-
-    def _dispatch(self, jobs: list[Job]) -> None:
-        for job in jobs:
-            self._submit(job)
-
     def _check(self, snapshot, teachers, today: dt.date, fresh: bool) -> None:
         """Раз в CHECK_EVERY: тревога о службах рассылки и пропавшие группы."""
         now = time.monotonic()
@@ -440,7 +198,7 @@ class Push:
         for name, (ok, failed, said) in sorted(stats.items()):
             if failed >= ALARM_MIN_FAILS and ok == 0:
                 # Сплошной отказ (ключ VAPID, 403 FCM, служба лежит) раньше
-                # был виден только строками в журнале (М38).
+                # был виден только строками в журнале.
                 alerts.notify(
                     f"push-{name}",
                     f"Уведомления сайта через {name} не доходят: {failed} отказов за "
@@ -452,7 +210,7 @@ class Push:
     def _check_gone(self, snapshot, teachers, today: dt.date) -> None:
         """Группы или преподавателя больше нет в таблице (переименовали): через
         час — одно уведомление «выберите заново», через GONE_DROP_DAYS — запись
-        стёрта. Было — тишина навсегда и вечная запись (В21, М79)."""
+        стёрта. Было — тишина навсегда и вечная запись."""
         now = time.monotonic()
         subs = self._snapshot_subs()
         keys = {(s["kind"], s["id"]) for s in subs}
@@ -503,7 +261,7 @@ class Push:
                     continue
                 lines = changes.change_lines(old, new, today)
             except Exception:  # noqa: BLE001
-                # Сбой одного не глушит остальных (В27).
+                # Сбой одного не глушит остальных.
                 log.exception("изменения для %s не посчитались", key[0])
                 continue
             if suspects:
@@ -525,12 +283,12 @@ class Push:
 
     def _suspects(self, before, snapshot, today: dt.date) -> dict | None:
         """Группы, чья правка похожа на пары соседа (сдвиг, который отказ не
-        поймал): им — без уведомлений, владельцу — тревога (М32)."""
-        from ..parser.csv_schedule import neighbour_runs, vertical_groups
+        поймал): им — без уведомлений, владельцу — тревога."""
+        from ..parser.shift import neighbour_runs, vertical_groups
 
         try:
             # И пары, съехавшие по вертикали в одной колонке: лист принят с
-            # подозрением, номера пар под вопросом (прогон 2 аудита 4).
+            # подозрением, номера пар под вопросом.
             ids = neighbour_runs(snapshot, before, today) | vertical_groups(snapshot, before)
         except Exception:  # noqa: BLE001
             log.exception("сверка с соседями для уведомлений упала")
@@ -570,7 +328,7 @@ class Push:
         Шлётся всё, чья минута пришлась на время с прошлого запуска (после
         перезапуска — за CATCH_UP_MINUTES), пока пара не началась: раньше
         минута сверялась на равенство, и выкладка в минуту напоминания его
-        теряла (М25). При заморозке — молчит: снимок заведомо чужой (М36).
+        теряла. При заморозке — молчит: снимок заведомо чужой.
         """
         if not self.enabled or snapshot is None:
             return
@@ -620,138 +378,9 @@ class Push:
             self._dispatch(jobs)
 
 
-class _Delayed:
-    """Отложенные повторы — одна очередь и один поток, а не поток ОС на
-    каждый повтор (четвёртый аудит, В26 прогона 1)."""
-
-    def __init__(self, limit: int):
-        self._heap: list[tuple[float, int, object]] = []
-        self._cond = threading.Condition()
-        self._seq = 0
-        self._limit = limit
-        self._thread: threading.Thread | None = None
-
-    def add(self, delay: float, action) -> bool:
-        with self._cond:
-            if len(self._heap) >= self._limit:
-                return False
-            self._seq += 1
-            heapq.heappush(self._heap, (time.monotonic() + delay, self._seq, action))
-            if self._thread is None:
-                self._thread = threading.Thread(target=self._run, name="push-retry", daemon=True)
-                self._thread.start()
-            self._cond.notify()
-        return True
-
-    def _run(self) -> None:
-        while True:
-            with self._cond:
-                while not self._heap:
-                    self._cond.wait()
-                due, _, action = self._heap[0]
-                wait = due - time.monotonic()
-                if wait > 0:
-                    self._cond.wait(wait)
-                    continue
-                heapq.heappop(self._heap)
-            try:
-                action()
-            except Exception:  # noqa: BLE001
-                log.exception("повтор уведомления упал")
-
-
 def _mark(endpoint: str) -> str:
     """Отметка напоминания на диске — хеш адреса, а не сам адрес: он секретен."""
     return hashlib.sha256(endpoint.encode("utf-8")).hexdigest()[:16]
-
-
-def changes_ttl(lines: list[list[str]], now: dt.datetime | None = None) -> int:
-    """Сколько сводке жить у службы рассылки: до конца последнего её дня по
-    времени колледжа. Сводка «на сегодня» не придёт назавтра, «на завтра» —
-    не истечёт ночью."""
-    zone = zoneinfo.ZoneInfo(settings.timezone)
-    now = now or dt.datetime.now(zone)
-    last = max(dt.date.fromisoformat(day) for day, _ in lines)
-    end = dt.datetime.combine(last + dt.timedelta(days=1), dt.time(), tzinfo=zone)
-    return max(CHANGES_TTL_MIN, int((end - now).total_seconds()))
-
-
-def message(sub: dict, kind: str, title: str, body: str, data: dict | None = None) -> dict:
-    """Сообщение в декларативном формате Apple (iOS 18.4+, поиск 28.09):
-    сервис-воркер показывает его сам, а не проснулся или упал — айфон покажет
-    это же и не отзовёт подписку за «невидимое» уведомление. Chrome и Firefox
-    получают тот же JSON в сервис-воркер как обычные данные.
-
-    tag на айфоне уведомления не заменяет (WebKit 258922) — склеивает строки и
-    закрывает прежнее сервис-воркер.
-    """
-    return {
-        "web_push": 8030,
-        "notification": {
-            "title": title,
-            "body": body,
-            "navigate": site_url(sub),
-            "tag": kind,
-            "data": {"t": kind, **(data or {})},
-        },
-        "mutable": True,
-    }
-
-
-def changes_message(sub: dict, lines: list[list[str]]) -> dict:
-    """Изменения: строки — текстом, их дни — рядом, чтобы сервис-воркер склеил
-    с висящим. Не влезает в MAX_PAYLOAD — прочь завтрашний хвост, а не
-    сегодняшнее: строки идут по дням (М33 прогона 1 аудита 4)."""
-    kept = [[day, text[:MAX_LINE]] for day, text in lines]
-    while True:
-        # who — чьё расписание: сервис-воркер склеивает с висящим только
-        # строки того же (М7 прогона 1 аудита 4).
-        out = message(sub, "changes", "Расписание изменилось", "\n".join(t for _, t in kept),
-                      {"days": [d for d, _ in kept], "who": f"{sub['kind']}:{sub['id']}"})
-        if len(kept) == 1 or len(json.dumps(out, ensure_ascii=False).encode("utf-8")) <= MAX_PAYLOAD:
-            return out
-        kept = kept[:-1]
-
-
-def gone_message(sub: dict) -> dict:
-    """Группы или преподавателя больше нет в таблице — как в приложении."""
-    if sub.get("kind") == "teacher":
-        title, what = "Вас больше нет в таблице", "себя"
-    else:
-        title, what = "Группы больше нет в таблице", "группу"
-    return message(sub, "gone", title,
-                   f"Откройте сайт и выберите {what} заново: до этого уведомлений не будет.")
-
-
-def site_url(sub: dict) -> str:
-    return f"https://{settings.domain}/" + ("tested/" if sub.get("site") == "tested" else "")
-
-
-def _no_such_host(exc: BaseException) -> bool:
-    """Имени нет в DNS (EAI_NONAME), а не сбой сети или своего резолвера."""
-    import socket
-
-    seen = 0
-    while exc is not None and seen < 6:
-        if isinstance(exc, socket.gaierror) and exc.errno == socket.EAI_NONAME:
-            return True
-        exc = exc.__cause__ or exc.__context__
-        seen += 1
-    return False
-
-
-def _host(endpoint: str) -> str:
-    """Только хост: путь адреса подписки и есть её секрет."""
-    return urllib.parse.urlsplit(endpoint).hostname or "?"
-
-
-def welcome_text(sub: dict) -> str:
-    what = []
-    if sub["changes"]:
-        what.append("отмены и замены на сегодня и завтра")
-    if sub["remind"]:
-        what.append("напоминания о паре")
-    return "Сюда будут приходить " + " и ".join(what) + "."
 
 
 def _payload(
@@ -759,7 +388,7 @@ def _payload(
 ) -> dict | None:
     """Сегодня и завтра этого субъекта — как их отдал бы API: у преподавателя
     тем же путём, что /v1/teacher, с полной записью по краткой и днями без пар
-    для того, кто был в прежних снимках (М41)."""
+    для того, кто был в прежних снимках."""
     from ..api.payloads import schedule_payload, teacher_answer
     from ..service.bells import BELLS
 

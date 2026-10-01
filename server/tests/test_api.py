@@ -8,7 +8,8 @@ from fastapi.testclient import TestClient
 
 from whensclass.api.routes import router
 from whensclass.domain.models import SheetPlace
-from whensclass.parser.csv_schedule import FIXTURE, parse_csv
+from whensclass.parser.csv_schedule import FIXTURE
+from whensclass.parser.export import parse_csv
 
 
 class FakeStore:

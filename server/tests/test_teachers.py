@@ -6,7 +6,8 @@ import pytest
 
 from whensclass.api.payloads import teacher_payload, teachers_payload
 from whensclass.domain.teachers import build_index, teacher_id
-from whensclass.parser.csv_schedule import FIXTURE, parse_csv
+from whensclass.parser.csv_schedule import FIXTURE
+from whensclass.parser.export import parse_csv
 
 GENERATED = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
 

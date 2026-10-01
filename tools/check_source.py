@@ -34,11 +34,14 @@ import datetime as dt  # noqa: E402
 
 from whensclass.config import settings  # noqa: E402
 from whensclass.domain.models import SourceFormatChanged  # noqa: E402
-from whensclass.parser.csv_schedule import check_shift, parse_export, shift_seed  # noqa: E402
+from whensclass.parser.export import parse_export  # noqa: E402
+from whensclass.parser.shift import check_shift, shift_seed  # noqa: E402
 from whensclass.service import alerts  # noqa: E402
-from whensclass.service.refresher import (  # noqa: E402
-    _check_days_emptied, _check_group_drop, _check_lost_names, _limits, _today,
+from whensclass.service.clock import _today  # noqa: E402
+from whensclass.service.gates import (  # noqa: E402
+    _check_days_emptied, _check_group_drop, _check_lost_names,
 )
+from whensclass.service.refresher import _limits  # noqa: E402
 from whensclass.sources import gsheets, sheet_index  # noqa: E402
 from whensclass.storage.snapshot_store import SnapshotStore  # noqa: E402
 
@@ -76,7 +79,7 @@ def check_cert(quiet: bool) -> None:
     except ssl.SSLError as exc:
         # Чужой, самоподписанный или просроченный сертификат на домене: у
         # телефонов и сайта «сервер не отвечает», а тревоги не было — только
-        # строка в журнале (четвёртый аудит, М43 прогона 1). Сеть и таймаут —
+        # строка в журнале. Сеть и таймаут —
         # не сюда: о сети скажет служба.
         print(f"БЕДА: сертификат {host} не проверился: {type(exc).__name__}: {exc}")
         alerts.notify(

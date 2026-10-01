@@ -7,7 +7,7 @@
 
 import datetime as dt
 
-from whensclass.sources.sheet_index import SheetIndex
+from whensclass.sources.sheet_memory import SheetIndex
 
 
 def index_with(tmp_path, *ranges):

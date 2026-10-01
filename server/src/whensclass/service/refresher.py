@@ -10,38 +10,32 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import json
 import logging
 import pathlib
 import threading
-import zoneinfo
 
 import httpx
 
 from ..config import settings
-from ..domain.models import ChangedAgainstPrevious, SheetTooSmall, SourceFormatChanged, a1_column
+from ..domain.models import ChangedAgainstPrevious, SheetTooSmall, SourceFormatChanged
 from ..domain.teachers import build_index
-from ..parser.csv_schedule import Limits, check_shift, parse_export, shift_seed
+from ..parser.csv_schedule import Limits
+from ..parser.export import parse_export
+from ..parser.shift import check_shift, shift_seed
 from ..sources import gsheets, sheet_index
+from ..sources.sheet_memory import SheetIndex
 from ..storage import history
 from . import alerts
+from .clock import _today
+from .failing import CRASHES_TO_ALERT, Failing
+from .gates import _check_days_emptied, _check_group_drop, _check_lost_names, _check_today_kept
+from .sheet_watch import SheetWatch
 from ..storage.snapshot_store import SnapshotStore
-from ..storage.atomic import write_json
 
 log = logging.getLogger(__name__)
 
 
-def _today() -> dt.date:
-    """Сегодня по часовому поясу колледжа, а не по поясу машины.
-
-    WHENSCLASS_TIMEZONE управлял только планировщиком, а вся арифметика дат шла
-    через date.today(). На сервере в UTC ночная переиндексация в 03:30 по
-    Новосибирску считала вчерашнюю дату и искала лист на вчера.
-    """
-    return dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone)).date()
-
-
-class Refresher:
+class Refresher(Failing, SheetWatch):
     def __init__(self, store: SnapshotStore, state_dir: pathlib.Path):
         self.store = store
         self.state_dir = state_dir
@@ -75,8 +69,7 @@ class Refresher:
         # снимком (ChangedAgainstPrevious). Файл, а не настройка: разовый, его
         # стирает первый принятый лист (руководство по серверу, «Когда что-то
         # не так»). Прежний обход — убрать snapshot.json — не работал: load()
-        # поднимал snapshot.prev.json, и лист отвергался снова (четвёртый
-        # аудит, В13 прогона 1).
+        # поднимал snapshot.prev.json, и лист отвергался снова.
         self._accept_path = state_dir / "accept-next"
         self._accepting = False
         try:
@@ -164,34 +157,6 @@ class Refresher:
                 log.warning("рычаг accept-next не стёрся: %s", exc)
             log.warning("лист принят без сверки с прежним снимком (accept-next), рычаг снят")
 
-    def _load_seen_titles(self) -> set[str] | None:
-        try:
-            data = json.loads(self._seen_path.read_text("utf-8"))
-        except (OSError, ValueError):
-            return None
-        return set(data) if isinstance(data, list) else None
-
-    def _save_seen_titles(self) -> None:
-        try:
-            write_json(self._seen_path, sorted(self._seen_titles or ()))
-        except OSError as exc:
-            log.warning("имена листов для слежки не записались: %s", exc)
-
-    def _freeze(self) -> None:
-        """Заморожено владельцем: прежний снимок, stale, в сеть не ходим."""
-        self.checked_at = dt.datetime.now(dt.timezone.utc)
-        if self.failing_since is None:
-            self.failing_since = self.checked_at
-            log.warning("служба заморожена (WHENSCLASS_FREEZE) — в таблицу не хожу")
-        self._fetch_only = False
-        self.last_error = "заморожено владельцем: отдаётся прежнее расписание"
-        self.status = self._visible_status()
-        self._save_failing()
-
-    def restore_status(self) -> None:
-        """Состояние после перезапуска: какое было — такое и есть."""
-        self.status = self._visible_status()
-
     def _refresh(self, today: dt.date, force: bool, retried: bool = False) -> bool:
         self.checked_at = dt.datetime.now(dt.timezone.utc)
         texts: list[tuple[str, str | None, str, str]] = []
@@ -220,7 +185,7 @@ class Refresher:
                             "лист %r по gid %s не отдаётся (%s) — забываю и ищу заново",
                             title, gid, exc.response.status_code,
                         )
-                        sheet_index.SheetIndex(self.state_dir).forget(title)
+                        SheetIndex(self.state_dir).forget(title)
                         self._sheets = None
                         return self._refresh(today, force=True, retried=True)
                     raise
@@ -384,62 +349,6 @@ class Refresher:
         except Exception:
             log.exception("уведомления об изменениях не посчитались")
 
-    def look_for_new_sheet(self) -> bool:
-        """Не появился ли в книге лист, которого мы ещё не видели.
-
-        Проверка дешёвая: один маленький запрос к Sheets API. Нужна ради
-        перехода между листами — самого опасного места в службе. Раньше новый
-        лист искался только ночью, и о неделе, выложенной в пятницу днём, мы
-        узнавали в субботу. Три дня форы на починку стоят одного запроса
-        в полчаса. Без ключа Sheets API список листов не получить — тогда
-        просто False.
-        """
-        if settings.freeze:
-            return False
-        with self._lock:
-            return self._look()
-
-    def _look(self) -> bool:
-        try:
-            titles = {
-                sheet.title
-                for sheet in sheet_index.candidates(sheet_index.list_sheets(), _today())
-            }
-        except Exception as exc:
-            # Не дозвонились — не беда: ночной поиск никуда не делся.
-            log.warning("список листов не посмотрелся: %s", exc)
-            return False
-
-        if self._seen_titles is None:
-            # Самый первый взгляд — файла ещё нет: запоминаем, с чем сравнивать.
-            # Гнать поиск прямо сейчас незачем — служба и так обновилась на старте.
-            self._seen_titles = titles
-            self._save_seen_titles()
-            return False
-
-        fresh = (titles - self._seen_titles) | (set(self._retry_titles) & titles)
-        self._seen_titles = titles
-        self._save_seen_titles()
-        if not fresh:
-            return False
-
-        log.info("в книге появился лист: %s — ищу заново", ", ".join(sorted(fresh)))
-        changed = self.refresh(force=True)
-        # Лист «групп», заведённый пустым, поиск отвергает, а заполненный
-        # позже служба узнавала только ночью:
-        # такие имена перепроверяются на следующих слежках, до RETRY_LOOKS раз.
-        known = set(sheet_index.SheetIndex(self.state_dir).known)
-        for title in fresh:
-            if title in known or not sheet_index.looks_like_groups(title):
-                self._retry_titles.pop(title, None)
-                continue
-            tries = self._retry_titles.get(title, 0) + 1
-            if tries > RETRY_LOOKS:
-                self._retry_titles.pop(title, None)
-            else:
-                self._retry_titles[title] = tries
-        return changed
-
     def _parse(self, texts, today: dt.date):
         """Тексты листов -> (снимок, индекс преподавателей) или None.
 
@@ -496,9 +405,9 @@ class Refresher:
                     if snapshot is None:
                         raise rejected from exc
                     # Черновик следующей вкладки с ошибкой формата валил весь
-                    # заход: правки сегодняшнего листа не доходили до людей
-                    # (четвёртый аудит, В10 прогона 1). Теперь он выпадает
-                    # из окна, как недописанный, а владельцу — тревога.
+                    # заход: правки сегодняшнего листа не доходили до людей.
+                    # Теперь он выпадает из окна, как недописанный, а
+                    # владельцу — тревога.
                     log.warning("следующий лист %r отвергнут (%s) — пока без него", name, exc)
                     self._dropped[title] = f"следующий лист отвергнут: {exc}"
                     self._next_rejected = (name, rejected)
@@ -508,7 +417,7 @@ class Refresher:
                 if self._dropped and len(self._dropped) == len(texts):
                     # Все листы окна — недописанные будущие: каникулы, колледж
                     # заводит следующий лист. Это «ещё не выложено» при ok, а
-                    # не сбой (четвёртый аудит, В14 прогона 1).
+                    # не сбой.
                     raise NotYetPublished(", ".join(self._dropped.values()))
                 return None
             if self._next_rejected and snapshot.coverage and snapshot.coverage[1] < today:
@@ -524,121 +433,6 @@ class Refresher:
             raise SourceFormatChanged(f"разбор споткнулся о значение: {exc}") from exc
         return snapshot, teachers
 
-    def _visible_status(self, now: dt.datetime | None = None) -> str:
-        if self.store.snapshot is None:
-            return "empty"
-        if self.failing_since is None:
-            return "ok"
-        now = now or dt.datetime.now(dt.timezone.utc)
-        if self._fetch_only and now - self.failing_since < FETCH_GRACE:
-            # Чих Google: владельцу о нём не говорят полчаса, и телефонам
-            # незачем полчаса показывать «сбой на нашем сервере».
-            return "ok"
-        return "stale"
-
-    def _fail(self, message: str, kind: str = "error", public: str | None = None) -> None:
-        now = dt.datetime.now(dt.timezone.utc)
-        first = self.failing_since is None
-        if first:
-            self.failing_since = now
-            self._alerted = False
-            self._fetch_only = True
-        self._fetch_only = self._fetch_only and kind == "fetch"
-        # Сеть отсчитывается от первого сетевого отказа подряд, а не от начала
-        # всего сбоя: один таймаут посреди отказа по формату сразу уходил
-        # тревогой «таблица не прочиталась» и подменял err — а по runbook это
-        # «чинится само».
-        self._fetch_since = (self._fetch_since or now) if kind == "fetch" else None
-        if kind != "fetch" or self._fetch_only:
-            self.last_error = public or message
-        self.status = self._visible_status(now)
-        self._sheets = None
-        log.error("%s (состояние: %s)", message, self.status)
-
-        # Формат и поиск листа сами не чинятся — говорить сразу. Сеть и
-        # Google чинятся к следующему заходу: о них — только если сеть лежит
-        # дольше получаса, иначе каждый чих Google будит человека дважды.
-        if kind != "fetch" or now - self._fetch_since >= FETCH_GRACE:
-            sent = alerts.notify(
-                kind,
-                f"{message}. Состояние: {self.status}, "
-                + ("отдаётся прежнее расписание." if self.status == "stale"
-                   else "отдавать нечего.")
-                + ("" if first else
-                   f" Лежим с {self.failing_since.astimezone(_zone()):%d.%m %H:%M}."),
-                force=not self._alerted,
-            )
-            if sent:
-                self._alerted = True
-        self._save_failing()
-
-    def _recovered(self) -> None:
-        """Обновление удалось после сбоя: сказать, что и сколько лежало."""
-        since = self.failing_since
-        if since is None:
-            return
-        lying = dt.datetime.now(dt.timezone.utc) - since
-        if self._alerted:
-            healed = not self._lever_used and since >= self._started
-            alerts.notify(
-                "recovered",
-                ("Само исправилось. " if healed else "")
-                + f"Расписание снова обновляется. Лежало {_lying(lying)}, "
-                f"с {since.astimezone(_zone()):%d.%m %H:%M}.",
-                force=True, good=True,
-            )
-        self._lever_used = False
-        for kind in FAIL_KINDS:
-            alerts.forget(kind)
-        self.failing_since, self.last_error, self._alerted = None, None, False
-        self._fetch_since = None
-        self._fetch_only = True
-        self._save_failing()
-
-    def _save_failing(self) -> None:
-        try:
-            if self.failing_since is None:
-                self._failing_path.unlink(missing_ok=True)
-                return
-            write_json(self._failing_path, {
-                "since": self.failing_since.isoformat(),
-                "error": self.last_error,
-                "fetch_only": self._fetch_only,
-                "alerted": self._alerted,
-                "fetch_since": self._fetch_since.isoformat() if self._fetch_since else None,
-            })
-        except OSError as exc:
-            log.warning("состояние сбоя не записалось: %s", exc)
-
-    def _load_failing(self) -> None:
-        # Когда уходила тревога каждого вида, помнит alerts.json (keep_in
-        # выше): перезапуск посреди сбоя её не повторит.
-        self._fetch_since: dt.datetime | None = None
-        try:
-            data = json.loads(self._failing_path.read_text("utf-8"))
-            self.failing_since = dt.datetime.fromisoformat(data["since"])
-            self.last_error = data.get("error")
-            self._alerted = bool(data.get("alerted"))
-            # Старые файлы без признака — сбой не сетевой: показывать как был.
-            self._fetch_only = bool(data.get("fetch_only", False))
-            if data.get("fetch_since"):
-                self._fetch_since = dt.datetime.fromisoformat(data["fetch_since"])
-        except (OSError, ValueError, KeyError, TypeError):
-            self.failing_since, self.last_error, self._alerted = None, None, False
-
-    def _mark_running(self) -> None:
-        try:
-            self._running_path.write_text(str(self._crashes + 1), "utf-8")
-        except OSError as exc:
-            log.warning("отметка захода не записалась: %s", exc)
-
-    def _clear_running(self) -> None:
-        self._crashes = 0
-        try:
-            self._running_path.unlink(missing_ok=True)
-        except OSError as exc:
-            log.warning("отметка захода не снялась: %s", exc)
-
 
 class NotYetPublished(Exception):
     """В окне только листы, которые колледж ещё заводит, и все — в будущем."""
@@ -653,139 +447,9 @@ class SheetRejected(SourceFormatChanged):
         self.against_previous = against_previous
 
 
-# Сколько раз слежка (раз в полчаса) перепроверяет новый лист «групп», который
-# поиск ещё не принял: шесть часов.
-RETRY_LOOKS = 12
 # Сколько живёт рычаг accept-next: поставил и забыл — не пропускать без сверки
 # лист, который отвергнут через неделю.
 ACCEPT_NEXT_TTL = dt.timedelta(hours=2)
-# Сколько сетевой сбой держим за чих: ни тревоги, ни stale наружу.
-FETCH_GRACE = dt.timedelta(minutes=30)
-# После скольких заходов подряд, умерших посреди разбора, — тревога.
-CRASHES_TO_ALERT = 2
-# Виды тревог о сбое: все забываются, когда обновление снова удалось.
-FAIL_KINDS = ("format", "sheet", "fetch", "error", "closed", "crash")
-
-
-# Набор групп упал больше чем на 30 % между двумя снимками одного и того же
-# листа — это не «колледж убрал группы», а сломанный заголовок: 105 из 187
-# групп проходят порог в сто, и 80 групп молча получают 404. Самая крупная
-# когорта (-926) — 28 % от всех, уход целого курса под отказ не попадает.
-MAX_GROUP_DROP = 0.3
-# Выложенный день, опустевший у стольких групп — не меньше DAY_EMPTIED_COUNT
-# и доли DAY_EMPTIED_SHARE, — отказ (`_check_days_emptied`). Честно за заход
-# день опустевает целиком максимум у 2 групп (архив 14–29.09), а при пороге
-# 30 % четверть очищенного листа проходила валом «убрали» (прогон 2). У дней,
-# где пары были меньше чем у DAY_EMPTIED_MIN_GROUPS групп, не проверяется:
-# суббота у пары десятков групп опустеет и честно.
-DAY_EMPTIED_SHARE = 0.1
-DAY_EMPTIED_COUNT = 12
-DAY_EMPTIED_MIN_GROUPS = 20
-
-
-def _check_group_drop(previous, current) -> str | None:
-    """Отказ, если группы пропали толпой при тех же датах или на соседней
-    неделе.
-
-    Новый лист, впервые увиденный сразу первым (колледж выложил его в
-    понедельник утром), с прежним дат не делит: сверка раньше пропускалась, и
-    лист без трети групп принимался молча (четвёртый аудит, В11 прогона 1).
-    Соседний лист — зазор до трёх дней, как у `shift_seed`, — сверяется так
-    же. После каникул состав законно другой: там — подозрение строкой, для
-    тревоги, а не отказ.
-    """
-    if previous is None or not previous.groups or not previous.dates or not current.dates:
-        return None
-    kept = {g.id for g in current.groups}
-    lost = [g.name for g in previous.groups if g.id not in kept]
-    if len(lost) <= MAX_GROUP_DROP * len(previous.groups):
-        return None
-    message = (
-        f"пропало {len(lost)} групп из {len(previous.groups)}: "
-        + ", ".join(lost[:10]) + ("…" if len(lost) > 10 else "")
-    )
-    gap = (min(current.dates) - max(previous.dates)).days
-    if set(previous.dates) & set(current.dates) or 0 <= gap <= 3:
-        raise ChangedAgainstPrevious(message)
-    return f"новый лист после перерыва в {gap} дн.: {message}"
-
-
-def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False) -> None:
-    """Отказ, если на уже выложенном дне (сегодня и дальше) пары пропали
-    целиком у многих групп.
-
-    Так выглядит день, вырезанный вместо копирования или очищенный по ошибке:
-    лист с тринадцатью тысячами пар проходил все пороги, и в том же заходе
-    всем подписчикам сайта уходило «убрали N пару», а когда колледж возвращал
-    день — второй вал «добавилась» (четвёртый аудит, В8 прогона 1). Честно за
-    заход пары убирают у 12 групп из 190 (15.09, архив 14–28.09). Если колледж
-    правда отменил день — рычаг accept-next.
-    """
-    if previous is None:
-        return
-    for day in sorted(set(previous.dates) & set(current.dates)):
-        if day < today:
-            continue
-        had = [g.id for g in previous.groups if previous.schedule.get(g.id, {}).get(day)]
-        if len(had) < DAY_EMPTIED_MIN_GROUPS:
-            continue
-        # Следующий лист выпал из окна, а в текущем на его даты — пустой
-        # каркас: пары этих дней приходили из выпавшего, и «опустели» они
-        # вместе с ним, а не вырезаны. Раньше весь заход отвергался (прогон 2).
-        if dropped and not any(current.schedule.get(g.id, {}).get(day) for g in current.groups):
-            continue
-        emptied = [gid for gid in had if not current.schedule.get(gid, {}).get(day)]
-        if len(emptied) >= max(DAY_EMPTIED_COUNT, DAY_EMPTIED_SHARE * len(had)):
-            raise ChangedAgainstPrevious(
-                f"{day} у {len(emptied)} групп из {len(had)} пропали все пары — похоже на "
-                "вырезанный или очищенный день"
-            )
-
-
-def _check_lost_names(previous, current, gid: str | None) -> None:
-    """Отказ, если группа пропала, а её колонка на месте и с парами.
-
-    Так выглядит стёртое или испорченное имя в главном заголовке, которого
-    нет и в повторных: блок разбирается безымянным, и группа молча уходила в
-    404 при ok. Пропажа одной группы не
-    доходит до `_check_group_drop`, а колонка с парами — не убранная группа.
-    """
-    if previous is None or not current.unnamed or not gid:
-        return
-    if not (set(previous.dates) & set(current.dates)):
-        return
-    was = previous.sheet_columns.get(gid, {})
-    kept = {g.id for g in current.groups}
-    for group in previous.groups:
-        column = was.get(group.id)
-        if group.id not in kept and column in current.unnamed:
-            raise ChangedAgainstPrevious(
-                f"в главном заголовке у колонки {a1_column(column)} пропало имя группы "
-                f"{group.name}, а пары под ним на месте ({current.unnamed[column]})"
-            )
-
-
-def _check_today_kept(previous, current, today: dt.date) -> None:
-    """Прежний снимок знал сегодняшний день, новый — нет: это не обновление.
-
-    Так выглядит подмена рабочего листа соседним: gid умер (или Google
-    ответил 400), поиск не нашёл лист на сегодня и взял «ближайший» — и
-    телефоны увидели бы «пар нет» при ok там, где минуту назад были пары.
-    """
-    if previous is None or today not in previous.dates or today in current.dates:
-        return
-    raise sheet_index.SheetNotFound(
-        f"новый набор листов ({current.sheet_title!r}) не покрывает {today}, прежний покрывал"
-    )
-
-
-def _lying(delta: dt.timedelta) -> str:
-    """Сколько лежали, по-человечески: учебная тревога 14 сентября 2026
-    длилась две минуты и отчиталась «лежало 0.0 ч»."""
-    minutes = int(delta.total_seconds() // 60)
-    if minutes < 60:
-        return f"{minutes} мин"
-    return f"{minutes / 60:.1f} ч".replace(".", ",")
 
 
 def _limits() -> Limits:
@@ -796,10 +460,6 @@ def _limits() -> Limits:
         max_gap_days=settings.max_gap_days,
         max_days_ahead=settings.max_days_ahead,
     )
-
-
-def _zone() -> zoneinfo.ZoneInfo:
-    return zoneinfo.ZoneInfo(settings.timezone)
 
 
 def state_dir() -> pathlib.Path:

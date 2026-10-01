@@ -13,7 +13,8 @@ import pytest
 
 from whensclass.api.payloads import groups_payload, schedule_payload
 from whensclass.domain.models import GroupRef, Lesson, Snapshot
-from whensclass.parser.csv_schedule import FIXTURE, parse_csv
+from whensclass.parser.csv_schedule import FIXTURE
+from whensclass.parser.export import parse_csv
 
 from conftest import GOLDEN
 
@@ -258,7 +259,7 @@ def test_teacher_day_waits_for_all_his_groups():
 def test_group_on_practice_does_not_hide_teacher_days():
     """Группа ушла на практику — колонка пуста до конца листа. Её край резал
     всем её преподавателям дни после себя, включая сегодняшние пары в других
-    группах (В15 прогона 1 аудита 4). Край — по группам, у которых он ведёт
+    группах. Край — по группам, у которых он ведёт
     пары с понедельника этой недели; сегодня не режется никогда."""
     from whensclass.api.payloads import teacher_payload
     from whensclass.domain.models import Lesson
@@ -284,8 +285,8 @@ def test_group_on_practice_does_not_hide_teacher_days():
 def test_teacher_week_not_published_while_his_other_groups_are_not():
     """На этой неделе пары у него только в группе, заполненной вперёд, а его
     другая группа жива (пары у других преподавателей), но дописана лишь до
-    вторника. Недописанные дни не выдаются выложенными с «Пар нет» (прогон 2
-    аудита 4): край — по живым группам, не только по тем, где он ведёт."""
+    вторника. Недописанные дни не выдаются выложенными с «Пар нет»: край — по
+    живым группам, не только по тем, где он ведёт."""
     from whensclass.api.payloads import teacher_payload
     from whensclass.domain.models import Lesson
     from whensclass.domain.teachers import build_index
