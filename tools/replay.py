@@ -51,12 +51,6 @@ def _archive() -> pathlib.Path:
     chosen = os.environ.get("WHENSCLASS_ARCHIVE")
     if chosen:
         return pathlib.Path(chosen)
-    for candidate in (
-        pathlib.Path.home() / "WhensClass-state" / "history",
-        pathlib.Path.home() / ".claude/projects/-home-tomon-WhensClass/audit/archive",
-    ):
-        if candidate.is_dir():
-            return candidate
     return pathlib.Path.home() / "WhensClass-state" / "history"
 
 

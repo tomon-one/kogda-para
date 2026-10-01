@@ -6,7 +6,8 @@ import json
 import pytest
 
 from whensclass.config import settings
-from whensclass.parser.csv_schedule import FIXTURE, parse_csv
+from whensclass.parser.csv_schedule import FIXTURE
+from whensclass.parser.export import parse_csv
 from whensclass.service import alerts
 from whensclass.service.refresher import Refresher
 from whensclass.storage.snapshot_store import SnapshotStore
@@ -104,7 +105,7 @@ def test_failure_state_survives_restart_and_recovery_reports_duration(tmp_path, 
 
 
 def test_recovery_duration_is_human():
-    from whensclass.service.refresher import _lying
+    from whensclass.service.failing import _lying
 
     assert _lying(dt.timedelta(minutes=2)) == "2 мин"
     assert _lying(dt.timedelta(minutes=59, seconds=59)) == "59 мин"

@@ -66,7 +66,7 @@ def _replaces(lesson: dict) -> str | None:
 def _split(url: str) -> urllib.parse.SplitResult | None:
     """Разбор адреса, как у браузера: «\\» — это «/» (WHATWG URL). Кривой адрес
     («https://[…», полноширинная «／») — None, а не исключение: оно роняло
-    сводку изменений всем подписчикам (четвёртый аудит, В27 прогона 1)."""
+    сводку изменений всем подписчикам."""
     try:
         parts = urllib.parse.urlsplit(url.strip().replace("\\", "/"))
         parts.hostname, parts.port  # noqa: B018 — бросают на кривом хосте и порте
@@ -78,7 +78,7 @@ def _split(url: str) -> urllib.parse.SplitResult | None:
 def known_webinar(url: str) -> bool:
     # «\» браузер читает как «/» и ведёт на хост до неё, а java.net.URI в
     # приложении такой адрес не разбирает вовсе: и там и тут он чужой
-    # (format.js, аудит сайта W1; четвёртый аудит, М24 прогона 1).
+    # (format.js).
     if "\\" in url:
         return False
     parts = _split(url)
@@ -111,7 +111,7 @@ def same_subject(a: str, b: str) -> bool:
     """Та же пара под чуть другим названием: исправили опечатку, регистр или
     точку («Обествознание» → «Обществознание»), или у одной записи полное
     «А / Б», у другой — только «А». Раньше это уходило строками «убрали» и
-    «добавилась» (четвёртый аудит, М35 прогона 1). ScheduleDiff.sameSubject."""
+    «добавилась». ScheduleDiff.sameSubject."""
     if a == b:
         return True
     na, nb = _norm(a), _norm(b)
@@ -194,8 +194,7 @@ def _compare_number(
 
     # Группы на этом номере до и после: у преподавателя записи склеены из
     # групп, и к паре присоединяется или уходит группа — «добавилась» и
-    # «убрали» только о ней, а не о всей записи (четвёртый аудит, М34
-    # прогона 1).
+    # «убрали» только о ней, а не о всей записи.
     before_groups = set().union(*(groups_of(x) for x in was)) if was else set()
     after_groups = set().union(*(groups_of(x) for x in now)) if now else set()
 
@@ -296,7 +295,7 @@ def _compare_number(
         if teacher and gone.get("gr"):
             # Все её группы на номере остались при той же паре — запись просто
             # склеилась с другой. При другом предмете у тех же групп это
-            # замена, и «убрали» прежний нужен (прогон 2 аудита 4).
+            # замена, и «убрали» прежний нужен.
             kept = set().union(*(groups_of(x) for x in now if same_subject(x["s"], gone["s"]))) \
                 if now else set()
             left = groups_of(gone) - kept
@@ -319,8 +318,7 @@ def change_lines(old: dict | None, fresh: dict, today: dt.date) -> list[list[str
         if day in soon:
             out.append([day, f"{day_label(dt.date.fromisoformat(day))}: {text}"])
     # Строки идут по дням, сначала сегодня: обрезка внутри одной правки
-    # режет завтрашний хвост, а не срочное сегодняшнее (четвёртый аудит, М33
-    # прогона 1).
+    # режет завтрашний хвост, а не срочное сегодняшнее.
     return out[:MAX_LINES]
 
 

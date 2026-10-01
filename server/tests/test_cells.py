@@ -123,9 +123,8 @@ def test_room_zero_or_one_means_not_assigned_yet():
 
 @pytest.mark.parametrize("room", ["Элжур", "элжур", "Эл. журнал", "Электронный журнал"])
 def test_journal_in_room_column_is_a_cancellation(room):
-    """«Элжур» — задание в электронном журнале вместо пары, «грубо говоря
-    отмена» (Tomon 29.09), а не кабинет: иначе переход с онлайна объявлялся
-    «снова очная» (четвёртый аудит, В7 прогона 1)."""
+    """«Элжур» — задание в электронном журнале вместо пары, по сути отмена, а
+    не кабинет: иначе переход с онлайна объявлялся «снова очная»."""
     lesson = parse_lesson(2, "Физика (Лек)", room, "Сеченов Дмитрий Сергеевич")
     assert lesson.cancelled and lesson.room is None and not lesson.online
     assert lesson.note == "задание в электронном журнале"
@@ -454,7 +453,7 @@ def test_dash_or_no_is_nothing(subject, room):
 ])
 def test_curator_hour_written_off_template_is_a_replacement(subject, teacher, why):
     """Кураторский час вместо пары, записанный не по шаблону, уходил отменой
-    с часом в причине или показывался прежней лекцией (М29 прогона 1 аудита 4)."""
+    с часом в причине или показывался прежней лекцией."""
     lesson = parse_lesson(4, subject, "", teacher)
     assert lesson.subject == "Кураторский час" and not lesson.cancelled
     assert lesson.note.endswith("вместо: " + subject.split(" (")[0].split(" Отмена")[0])
@@ -464,13 +463,13 @@ def test_curator_hour_written_off_template_is_a_replacement(subject, teacher, wh
 
 def test_first_letter_is_capital_for_every_lesson():
     """Заглавную делали только у замен, и «кураторский час» с «Кураторский
-    час» были разными предметами (М30). Адрес вместо названия не трогается."""
+    час» были разными предметами. Адрес вместо названия не трогается."""
     assert parse_lesson(4, "кураторский час", "", "").subject == "Кураторский час"
     assert parse_lesson(4, "ОБЖ (Лек)", "", "").subject == "ОБЖ"
 
 
 def test_curator_placeholder_is_not_a_teacher():
-    """«Куратор» — должность, а не человек: в /v1/teachers ему не место (М31)."""
+    """«Куратор» — должность, а не человек: в /v1/teachers ему не место."""
     assert parse_lesson(4, "Кураторский час (Пр)", "", "Куратор").teachers == ()
     assert parse_lesson(4, "Физика", "", "Кураторова А. А.").teachers == ("Кураторова А. А.",)
 
@@ -482,14 +481,14 @@ def test_curator_placeholder_is_not_a_teacher():
 ])
 def test_text_next_to_a_link_is_not_a_room(room, note):
     """Рядом со ссылкой место — только кабинет или «онлайн N»: «Ссылка:» и
-    вторая ссылка делали онлайн-пару очной с кабинетом-словом (прогон 2 аудита 4)."""
+    вторая ссылка делали онлайн-пару очной с кабинетом-словом."""
     lesson = parse_lesson(number=1, subject_raw="Физика (Лек)", room_raw=room, teacher_raw="")
     assert (lesson.room, lesson.online, lesson.note) == (None, True, note)
 
 
 def test_role_before_a_name_is_dropped_not_the_name():
     """«Куратор Фальконер Квеллкрист Андреевна» — человек, а «Куратор» целиком —
-    заглушка (М31; прогон 2 аудита 4)."""
+    заглушка."""
     from whensclass.parser.cells import split_teachers
 
     assert split_teachers("Куратор") == ()

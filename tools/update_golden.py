@@ -18,7 +18,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server" / "src"))
 
 from whensclass.api.payloads import schedule_payload  # noqa: E402
-from whensclass.parser.csv_schedule import FIXTURE, parse_csv  # noqa: E402
+from whensclass.parser.csv_schedule import FIXTURE  # noqa: E402
+from whensclass.parser.export import parse_csv  # noqa: E402
 
 TESTS = ROOT / "server" / "tests"
 GENERATED = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)

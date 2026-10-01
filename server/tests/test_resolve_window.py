@@ -16,6 +16,7 @@ import datetime as dt
 import pytest
 
 from whensclass.sources import sheet_index as si
+from whensclass.sources import sheet_memory
 
 # Лист колледжа живёт с понедельника по субботу через неделю; воскресенье
 # между листами не покрыто ничем, и это норма, а не поломка.
@@ -28,7 +29,7 @@ MONDAY = dt.date(2026, 9, 7)
 @pytest.fixture
 def index(tmp_path):
     def build(*ranges):
-        memory = si.SheetIndex(tmp_path)
+        memory = sheet_memory.SheetIndex(tmp_path)
         for title, first, last in ranges:
             memory.remember(
                 title, None, dt.date.fromisoformat(first), dt.date.fromisoformat(last)

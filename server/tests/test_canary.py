@@ -71,7 +71,7 @@ def test_certificate_close_to_expiry_is_an_alarm(canary, monkeypatch):
 
 def test_wrong_certificate_is_an_alarm_but_network_is_not(canary, monkeypatch):
     """Чужой или самоподписанный сертификат на домене — только строка в
-    журнале, без тревоги (М43 прогона 1 аудита 4). Таймаут — не беда канарейки."""
+    журнале, без тревоги. Таймаут — не беда канарейки."""
     import ssl
 
     module, sent = canary

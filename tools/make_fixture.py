@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "server" / "src"))
 
-from whensclass.parser.csv_schedule import collapse_export  # noqa: E402
+from whensclass.parser.export import collapse_export  # noqa: E402
 from whensclass.parser.groups import build_column_map  # noqa: E402
 
 # Группы, ради которых фикстура и существует: своя, составная колонка,

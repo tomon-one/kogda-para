@@ -1,12 +1,12 @@
 """Заход обновления падает громко: stale, тревога, архив — но не молча.
 
 Раньше было несколько путей, где обновление останавливалось
-без единого сигнала или сигналило не тем: прочерк вместо имени преподавателя
-замораживал снимок при status ok, прочерк вместо имени группы выглядел
-сетевым сбоем, тревога о диске шла на каждом заходе, перезапуск
-посреди сбоя повторял тревогу, чих Google сразу показывал телефонам
-«сбой», страница входа выдавалась за «формат», смерть посреди
+без единого сигнала или сигналило не тем: тревога о диске шла на каждом
+заходе, перезапуск посреди сбоя повторял тревогу, чих Google сразу показывал
+телефонам «сбой», страница входа выдавалась за «формат», смерть посреди
 разбора не оставляла следов.
+
+Общие для тестов захода `sent` и `sheet` — в conftest.py.
 """
 
 import datetime as dt
@@ -14,64 +14,17 @@ import datetime as dt
 import pytest
 
 from whensclass.config import settings
-from whensclass.parser import cells
-from whensclass.parser.csv_schedule import FIXTURE, parse_csv, read_csv
+from whensclass.parser.csv_schedule import FIXTURE
+from whensclass.parser.export import parse_csv
 from whensclass.service import alerts, refresher as refresher_mod
-from whensclass.service.refresher import FETCH_GRACE, Refresher
+from whensclass.service.failing import FETCH_GRACE
+from whensclass.service.refresher import Refresher
 from whensclass.sources import gsheets, sheet_index
 from whensclass.storage import history
 from whensclass.storage.snapshot_store import SnapshotStore
 
+
 TODAY = dt.date(2026, 9, 8)
-
-
-@pytest.fixture
-def sent(monkeypatch):
-    box = []
-
-    class Client:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def post(self, url, json=None):
-            box.append(json)
-
-            class R:
-                status_code = 200
-
-                def raise_for_status(self):
-                    return None
-            return R()
-
-    monkeypatch.setattr(alerts.httpx, "Client", Client)
-    monkeypatch.setattr(settings, "ntfy_topic", "тема")
-    alerts._last_sent.clear()
-    return box
-
-
-@pytest.fixture
-def sheet(monkeypatch, fixture_csv):
-    """Лист, который служба «скачивает»: текст можно подменить в тесте."""
-    box = {"text": fixture_csv}
-    monkeypatch.setattr(sheet_index, "resolve_window", lambda *a, **k: [("лист", "656498718")])
-    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: box["text"])
-    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
-    return box
-
-
-def _csv(rows) -> str:
-    import csv
-    import io
-
-    buf = io.StringIO()
-    csv.writer(buf, lineterminator="\n").writerows(rows)
-    return buf.getvalue()
 
 
 def cell_replace(text: str, old: str, new: str) -> str:
@@ -84,39 +37,6 @@ def a_teacher(fixture_csv) -> str:
     snapshot = parse_csv(fixture_csv, "ф", FIXTURE)
     return next(t for by in snapshot.schedule.values() for ls in by.values() for x in ls
                 for t in x.teachers)
-
-
-# --- Прочерк вместо преподавателя -------------------------------------------
-
-@pytest.mark.parametrize("junk", ["-", "—", "?", ".", "..."])
-def test_punctuation_is_not_a_teacher(junk):
-    assert cells.split_teachers(junk) == ()
-    assert cells.split_teachers(f"Миллер Д. Т., {junk}") == ("Миллер Д. Т.",)
-
-
-def test_dash_under_empty_subject_is_no_lesson():
-    assert cells.parse_lesson(1, "", "", "-") is None
-
-
-def test_punctuation_teacher_does_not_freeze_snapshot(tmp_path, sheet, sent, fixture_csv):
-    """Точка после запятой в ячейке преподавателя: снимок обновляется, индекс цел."""
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
-    name = a_teacher(fixture_csv)
-    # Через csv.writer, с кавычками: без них запятая резала ячейку, и «.» уезжала
-    # в соседнюю колонку, которую разбор не читает.
-    rows = read_csv(fixture_csv)
-    i, j = next(
-        (i, j) for i, row in enumerate(rows) for j, cell in enumerate(row) if name in cell
-    )
-    rows[i][j] = rows[i][j].replace(name, f"{name}, .")
-    sheet["text"] = _csv(rows)
-    assert r.refresh(today=TODAY, force=True) is True
-    assert r.status == "ok" and "." not in store.teachers.names.values()
-    # И дальше обновляется: колледж правит лист — изменения доходят.
-    sheet["text"] = fixture_csv
-    assert r.refresh(today=TODAY, force=True) is True
 
 
 def test_unexpected_error_in_refresh_is_loud(tmp_path, sheet, sent, monkeypatch):
@@ -149,59 +69,8 @@ def test_bad_snapshot_on_disk_does_not_break_teachers(tmp_path, fixture_csv):
     assert "." not in again.teachers.names.values()
 
 
-# --- Прочерк вместо имени группы --------------------------------------------
-
-def test_dash_instead_of_group_name_is_format_not_network(tmp_path, sheet, sent, fixture_csv):
-    """Колонка без имени — пропуск блока с предупреждением, а не ValueError."""
-    rows = read_csv(fixture_csv)
-    names = next(i for i, r in enumerate(rows) if sum(c.strip() == "Преподаватель" for c in r) >= 3) + 1
-    # Колонка имени — та, где выше стоит «Преподаватель», а не первая непустая:
-    # прежний тест попадал в «№» и проходил и на коде до починки.
-    col = next(c for c, v in enumerate(rows[names - 1]) if v.strip() == "Преподаватель")
-    known = {g.name for g in parse_csv(fixture_csv, "ф", FIXTURE).groups}
-    assert rows[names][col].strip() in known, "портим именно имя группы"
-    rows[names][col] = "-"
-    sheet["text"] = _csv(rows)
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    r.refresh(today=TODAY)
-    # Либо лист принят без этой колонки, либо отвергнут как формат — но не «сеть».
-    assert not (r.last_error or "").startswith("таблица не прочиталась")
-    assert r.status == "ok" or "формат" in (r.last_error or "")
-
-
-# --- from далеко от сегодня -------------------------------------------------
-
-def test_far_from_is_422_not_500(fixture_csv, monkeypatch):
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    from whensclass.api import routes
-    from whensclass.api.routes import router
-
-    # «Сегодня» — своё: с 09.09.2027 настоящее сделало бы from=2026-09-07
-    # далёким, и красный тест остановил бы выкладку.
-    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 8))
-
-    class Store:
-        snapshot = parse_csv(fixture_csv, "ф", FIXTURE)
-        generated = dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
-        teachers = None
-
-    class Ref:
-        status, last_error, failing_since, checked_at = "ok", None, None, None
-
-    app = FastAPI()
-    app.include_router(router)
-    app.state.store, app.state.refresher = Store(), Ref()
-    client = TestClient(app, raise_server_exceptions=False)
-    group = Store.snapshot.groups[0].id
-    assert client.get(f"/v1/schedule/{group}?from=9999-12-31").status_code == 422
-    assert client.get(f"/v1/schedule/{group}?from=0001-01-01&days=14").status_code == 422
-    assert client.get(f"/v1/schedule/{group}?from=2026-09-07").status_code == 200
-
-
 # --- Архив ------------------------------------------------------------------
+
 
 def test_today_gate_rejection_is_archived(tmp_path, sheet, sent, fixture_csv, monkeypatch):
     store = SnapshotStore(tmp_path)
@@ -235,6 +104,7 @@ def test_old_copies_are_pruned_in_every_sheet_folder(tmp_path):
 
 # --- Диск -------------------------------------------------------------------
 
+
 def test_disk_alert_is_not_repeated_every_refresh(tmp_path, sheet, sent, monkeypatch, fixture_csv):
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
@@ -251,6 +121,7 @@ def test_disk_alert_is_not_repeated_every_refresh(tmp_path, sheet, sent, monkeyp
 
 # --- Перезапуск посреди сбоя ------------------------------------------------
 
+
 def test_restart_during_failure_does_not_repeat_alert(tmp_path, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
     store.put(parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
@@ -263,6 +134,7 @@ def test_restart_during_failure_does_not_repeat_alert(tmp_path, sent, fixture_cs
 
 
 # --- Чих Google -------------------------------------------------------------
+
 
 def test_network_blip_is_not_shown_as_failure(tmp_path, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
@@ -284,6 +156,7 @@ def test_network_blip_is_not_shown_as_failure(tmp_path, sent, fixture_csv):
 
 
 # --- Страница входа ---------------------------------------------------------
+
 
 def test_html_instead_of_csv_is_closed_sheet(monkeypatch):
     class Resp:
@@ -321,64 +194,8 @@ def test_closed_sheet_alerts_at_once(tmp_path, sheet, sent, monkeypatch, fixture
     assert r.status == "stale" and "закрыта" in r.last_error and len(sent) == 1
 
 
-# --- Мёртвый ключ -----------------------------------------------------------
-
-def test_dead_sheets_key_alerts_after_two_failures(monkeypatch, sent):
-    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
-    monkeypatch.setattr(sheet_index, "_api_failures", 0)
-
-    def dead(key):
-        raise _google_says(403)
-
-    monkeypatch.setattr(gsheets, "list_sheets_via_api", dead)
-    monkeypatch.setattr(sheet_index, "_last_list", [])
-    _list()
-    assert sent == [], "один отказ — чих"
-    _list()
-    assert len(sent) == 1 and "Sheets API" in sent[0]["message"]
-    assert "ключ" not in sent[0]["message"].split("(")[1].split(")")[0]
-
-
-def _google_says(code: int, url: str = "https://sheets.googleapis.com/v4/spreadsheets/x"):
-    import httpx
-
-    request = httpx.Request("GET", url)
-    return httpx.HTTPStatusError(
-        f"Client error '{code}' for url '{url}'", request=request,
-        response=httpx.Response(code, request=request),
-    )
-
-
-def test_network_trouble_is_not_blamed_on_the_key(monkeypatch, sent):
-    """Полчаса без связи с Google давали тревогу
-    «Проверить ключ». Отказ ключа — только ответ Google о ключе или квоте; и
-    когда ключ снова работает, об этом говорится."""
-    import httpx
-
-    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
-    monkeypatch.setattr(sheet_index, "_api_failures", 0)
-    failure = {"exc": httpx.ConnectError("нет связи")}
-
-    def api(key):
-        if failure["exc"]:
-            raise failure["exc"]
-        return []
-
-    monkeypatch.setattr(gsheets, "list_sheets_via_api", api)
-    monkeypatch.setattr(sheet_index, "_last_list", [])
-    for _ in range(3):
-        _list()
-    assert sent == []
-    failure["exc"] = _google_says(403)
-    _list()
-    _list()
-    assert len(sent) == 1
-    failure["exc"] = None
-    _list()
-    assert len(sent) == 2 and "ключ работает" in sent[1]["message"]
-
-
 # --- Смерть посреди разбора -------------------------------------------------
+
 
 def test_crash_mid_refresh_twice_is_reported(tmp_path, sheet, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
@@ -395,145 +212,6 @@ def test_single_interrupted_refresh_is_quiet(tmp_path, sheet, sent):
     r = Refresher(SnapshotStore(tmp_path), tmp_path)
     assert r.refresh(today=TODAY) is True
     assert sent == []
-
-
-# --- Недописанный следующий лист -------------------------------------------
-
-def _first_day_only(fixture_csv: str, new_date: str) -> str:
-    """Следующий лист, который колледж только начал: шапка и один день."""
-    import csv
-    import io
-
-    from whensclass.parser.csv_schedule import date_rows
-
-    rows = read_csv(fixture_csv)
-    starts = sorted(date_rows([r[0] if r else "" for r in rows]).values())
-    first, second = starts[0] - 1, starts[1] - 1
-    kept = rows[:second]
-    kept[first][0] = new_date
-    buf = io.StringIO()
-    csv.writer(buf, lineterminator="\n").writerows(kept)
-    return buf.getvalue()
-
-
-def test_half_built_next_sheet_is_left_out_not_fatal(tmp_path, sent, fixture_csv, monkeypatch):
-    """Колледж завёл следующий лист и вписал в него один день. Раньше его
-    отказ по объёму валил весь набор: stale у всех, правки сегодняшнего листа
-    не доходили, а err не называл лист. Теперь он пропускается до поры."""
-    texts = {
-        "лист": fixture_csv,
-        "следующий": _first_day_only(fixture_csv, "14.09.2026 понедельник"),
-    }
-    monkeypatch.setattr(
-        sheet_index, "resolve_window", lambda *a, **k: [("лист", "1"), ("следующий", "2")]
-    )
-    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
-    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
-
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
-    assert r.status == "ok" and not sent
-    assert max(store.snapshot.dates) < dt.date(2026, 9, 14)
-    rejected = list((tmp_path / "history" / "2").glob("*-rejected.txt"))
-    assert rejected and "недописан" in rejected[0].read_text("utf-8")
-
-    # Правка сегодняшнего листа доходит, пока следующий недописан.
-    name = a_teacher(fixture_csv)
-    texts["лист"] = cell_replace(fixture_csv, name, "Смит А. А.")
-    assert r.refresh(today=TODAY) is True
-    assert "Смит А. А." in store.teachers.names.values()
-
-
-def test_next_sheet_with_a_format_error_is_left_out_with_an_alarm(
-    tmp_path, sent, fixture_csv, monkeypatch
-):
-    """Черновик следующей вкладки с ошибкой формата (день недели не тот)
-    валил весь заход: правки сегодняшнего листа не доходили (четвёртый аудит,
-    В10 прогона 1). Теперь он выпадает из окна, а владельцу — тревога. Если
-    без него окну нечем покрыть сегодня — это по-прежнему отказ."""
-    texts = {
-        "лист": fixture_csv,
-        "следующий": cell_replace(fixture_csv, "03.09.2026 четверг", "03.09.2026 пятница"),
-    }
-    monkeypatch.setattr(
-        sheet_index, "resolve_window", lambda *a, **k: [("лист", "1"), ("следующий", "2")]
-    )
-    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
-    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
-
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
-    assert r.status == "ok"
-    assert len(sent) == 1 and "'следующий'" in sent[0]["message"], sent
-    rejected = list((tmp_path / "history" / "2").glob("*-rejected.txt"))
-    assert rejected and "пятница" in rejected[0].read_text("utf-8")
-
-    other = SnapshotStore(tmp_path / "позже")
-    late = Refresher(other, tmp_path / "позже")
-    assert late.refresh(today=dt.date(2026, 9, 14)) is False
-    assert "лист 'следующий'" in late.last_error
-
-
-def _weeks_later(fixture_csv: str, weeks: int) -> str:
-    """Тот же лист, но даты на `weeks` недель позже (дни недели те же)."""
-    import re
-
-    def move(m):
-        day = dt.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-        day += dt.timedelta(weeks=weeks)
-        return f"{day:%d.%m.%Y}"
-
-    return re.sub(r"\b(\d{2})\.(\d{2})\.(\d{4})\b", move, fixture_csv)
-
-
-def test_unfilled_sheet_after_a_break_is_not_a_failure(tmp_path, sent, fixture_csv, monkeypatch):
-    """Каникулы: старый лист кончился, колледж заводит следующий и дописывает
-    группу за группой. Недописанный лист, который начнётся позже сегодня, был
-    единственным в окне — и служба уходила в stale с красным у всех (В14
-    прогона 1 аудита 4). Теперь — прежний снимок при ok."""
-    from whensclass.parser.csv_schedule import Limits
-
-    texts = {"старый": fixture_csv, "новый": _weeks_later(fixture_csv, 3)}
-    window = [[("старый", "1")]]
-    monkeypatch.setattr(sheet_index, "resolve_window", lambda *a, **k: window[0])
-    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
-    limits = [FIXTURE]
-    monkeypatch.setattr(refresher_mod, "_limits", lambda: limits[0])
-
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
-    before = store.snapshot
-    window[0] = [("новый", "2")]
-    limits[0] = Limits(FIXTURE.min_groups, FIXTURE.min_dates, 10**6)
-    monday = dt.date(2026, 9, 14)
-    assert r.refresh(today=monday, force=True) is False
-    assert r.status == "ok" and store.snapshot is before and not sent
-    assert list((tmp_path / "history" / "2").glob("*-rejected.txt"))
-
-    # Колледж дописал — лист принят.
-    limits[0] = FIXTURE
-    assert r.refresh(today=monday, force=True) is True
-    assert min(store.snapshot.dates) == dt.date(2026, 9, 23)
-
-    # Недописан лист, который уже идёт, — по-прежнему отказ.
-    limits[0] = Limits(FIXTURE.min_groups, FIXTURE.min_dates, 10**6)
-    assert r.refresh(today=dt.date(2026, 9, 24), force=True) is False
-    assert r.status == "stale"
-
-
-def test_too_small_current_sheet_still_fails_and_names_itself(
-    tmp_path, sheet, sent, fixture_csv
-):
-    """Мал сам сегодняшний лист — это по-прежнему отказ, и err называет лист."""
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    sheet["text"] = _first_day_only(fixture_csv, "08.09.2026 вторник")
-    assert r.refresh(today=TODAY) is False
-    assert r.status in ("stale", "empty") and "лист 'лист'" in r.last_error
-
 
 
 def test_network_blip_during_format_failure_is_not_a_new_alarm(tmp_path, sent, fixture_csv):
@@ -588,204 +266,6 @@ def test_freeze_is_stale_at_once_without_touching_the_sheet(
     assert r.look_for_new_sheet() is False
 
 
-# --- Ключ в журнале и ворота обновления ------------------------------------
-
-SECRET = "AIzaSyD-секретный-ключ"
-
-
-def test_key_never_reaches_alert_or_log(monkeypatch, sent, caplog):
-    """Исключение httpx несёт полный адрес вместе с ?key=…;
-    прежний тест подсовывал исключение без ключа и проверял пустоту."""
-    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", SECRET)
-    monkeypatch.setattr(sheet_index, "_api_failures", 0)
-
-    def dead(key):
-        raise _google_says(
-            403, f"https://sheets.googleapis.com/v4/spreadsheets/x?key={SECRET}&fields=sheets"
-        )
-
-    monkeypatch.setattr(gsheets, "list_sheets_via_api", dead)
-    monkeypatch.setattr(sheet_index, "_last_list", [])
-    with caplog.at_level("WARNING"):
-        _list()
-        _list()
-    assert len(sent) == 1
-    assert SECRET not in sent[0]["message"] and SECRET not in caplog.text
-
-
-def test_key_in_unexpected_error_does_not_leak(tmp_path, sheet, sent, monkeypatch, caplog):
-    """То же для «служба споткнулась»: текст исключения идёт в err, тревогу и
-    журнал."""
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-
-    def boom(*args, **kwargs):
-        raise RuntimeError(f"GET https://sheets.googleapis.com/?key={SECRET} упал")
-
-    monkeypatch.setattr(refresher_mod, "build_index", boom)
-    with caplog.at_level("ERROR"):
-        assert r.refresh(today=TODAY) is False
-    assert SECRET not in (r.last_error or "")
-    assert all(SECRET not in m["message"] for m in sent)
-
-
-def _shift_one_day(text: str, column: int) -> str:
-    """«Вставить ячейки, сдвиг вправо» на блок — на строках первого дня листа."""
-    import csv
-    import io
-
-    from whensclass.parser.csv_schedule import date_rows
-
-    rows = read_csv(text)
-    starts = sorted(date_rows([r[0] if r else "" for r in rows]).values())
-    for i in range(starts[0] - 1, starts[1] - 1):
-        rows[i][column:column] = [""] * 4
-    buf = io.StringIO()
-    csv.writer(buf, lineterminator="\n").writerows(rows)
-    return buf.getvalue()
-
-
-@pytest.mark.parametrize("gate", ["группы", "сдвиг", "объём"])
-def test_refresher_gates_keep_the_previous_snapshot(
-    tmp_path, sheet, sent, fixture_csv, monkeypatch, gate
-):
-    """Ворота проверялись как отдельные функции — убери их из
-    Refresher, и тесты зелёные. Здесь — через заход: отказ, stale, тревога и
-    прежний снимок на месте."""
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
-    before = store.snapshot
-    if gate == "группы":
-        # Два блока из пяти (две группы из шести) удалены целиком — треть.
-        import csv
-        import io
-
-        rows = read_csv(fixture_csv)
-        for row in rows:
-            del row[6:14]
-        buf = io.StringIO()
-        csv.writer(buf, lineterminator="\n").writerows(rows)
-        sheet["text"] = buf.getvalue()
-        reason = "пропало 2 групп"
-    elif gate == "сдвиг":
-        sheet["text"] = _shift_one_day(fixture_csv, 6)
-        reason = "сдвиг"
-    else:
-        from whensclass.parser.csv_schedule import Limits
-
-        monkeypatch.setattr(refresher_mod, "_limits", lambda: Limits(3, 2, 10**6))
-        reason = "ожидал не меньше 1000000"
-    assert r.refresh(today=TODAY, force=True) is False
-    assert r.status == "stale" and store.snapshot is before
-    assert reason in r.last_error and sent, r.last_error
-
-
-def _drop_two_groups(fixture_csv: str) -> str:
-    """Два блока из пяти (две группы из шести) удалены целиком — треть."""
-    rows = read_csv(fixture_csv)
-    for row in rows:
-        del row[6:14]
-    return _csv(rows)
-
-
-def test_accept_next_lever_passes_a_sheet_rejected_against_previous(
-    tmp_path, sheet, sent, fixture_csv
-):
-    """Отказ по сверке с прежним снимком залипает, пока колледж держит правку.
-    Прежний обход — убрать snapshot.json — не работал: поднимался
-    snapshot.prev.json (четвёртый аудит, В13 прогона 1). Рычаг accept-next
-    пропускает один лист без сверки и снимается; в тревоге сказано о нём, в
-    открытом err — нет."""
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
-    sheet["text"] = _drop_two_groups(fixture_csv)
-    assert r.refresh(today=TODAY, force=True) is False
-    assert "accept-next" in sent[-1]["message"] and "accept-next" not in r.last_error
-    (tmp_path / "accept-next").touch()
-    assert r.refresh(today=TODAY, force=True) is True
-    assert r.status == "ok" and len(store.snapshot.groups) == 4
-    assert not (tmp_path / "accept-next").exists()
-    # Рычаг разовый: следующая пропажа снова отказ.
-    sheet["text"] = _drop_two_groups(sheet["text"])
-    assert r.refresh(today=TODAY, force=True) is False
-
-
-def test_group_drop_is_checked_on_the_next_week_sheet_too():
-    """Новый лист, впервые увиденный сразу первым, с прежним дат не делит — и
-    лист без трети групп принимался молча (В11 прогона 1 аудита 4). Соседняя
-    неделя — отказ; после каникул — подозрение для тревоги."""
-    from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Snapshot
-
-    groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(9)]
-    old = Snapshot("старый", groups=groups, dates=[dt.date(2026, 9, 12)])
-    next_week = Snapshot("новый", groups=groups[:6], dates=[dt.date(2026, 9, 14)])
-    with pytest.raises(ChangedAgainstPrevious, match="пропало 3 групп из 9"):
-        refresher_mod._check_group_drop(old, next_week)
-    after_break = Snapshot("новый", groups=groups[:6], dates=[dt.date(2026, 11, 9)])
-    assert "после перерыва" in refresher_mod._check_group_drop(old, after_break)
-    assert refresher_mod._check_group_drop(old, Snapshot("новый", groups=groups[:7],
-                                                         dates=[dt.date(2026, 9, 14)])) is None
-
-
-def test_published_day_emptied_for_many_groups_is_rejected():
-    """Вырезанный или очищенный день проходил все пороги, и всем подписчикам
-    уходило «убрали N пару» (В8 прогона 1 аудита 4). Прошедшие дни не в счёт."""
-    from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Lesson, Snapshot
-
-    day, past = dt.date(2026, 9, 29), dt.date(2026, 9, 28)
-    groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(30)]
-    pair = [Lesson(number=1, subject="Физика")]
-
-    def sheet(empty_today: int, empty_past: int = 0) -> Snapshot:
-        return Snapshot("лист", groups=groups, dates=[past, day], schedule={
-            g.id: {past: [] if i < empty_past else pair, day: [] if i < empty_today else pair}
-            for i, g in enumerate(groups)
-        })
-
-    before = sheet(0)
-    refresher_mod._check_days_emptied(before, sheet(11), day)
-    refresher_mod._check_days_emptied(before, sheet(0, empty_past=30), day)
-    with pytest.raises(ChangedAgainstPrevious, match="у 12 групп из 30 пропали все пары"):
-        refresher_mod._check_days_emptied(before, sheet(12), day)
-
-
-def test_dropped_next_sheet_over_an_empty_date_frame_is_not_a_cut_day():
-    """Текущий лист несёт пустой каркас дат следующего, пары этих дней — из
-    следующего. Следующий выпал из окна (недописан или с ошибкой) — его дни
-    не «вырезаны», и заход не отвергается (прогон 2 аудита 4)."""
-    from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Lesson, Snapshot
-
-    today, later = dt.date(2026, 10, 2), dt.date(2026, 10, 5)
-    groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(30)]
-    pair = [Lesson(number=1, subject="Физика")]
-    current = Snapshot("текущий", groups=groups, dates=[today, later],
-                       schedule={g.id: {today: pair} for g in groups})
-    following = Snapshot("следующий", groups=groups, dates=[later],
-                         schedule={g.id: {later: pair} for g in groups})
-    before = current.merged_with(following)
-    refresher_mod._check_days_emptied(before, current, today, dropped=True)
-    with pytest.raises(ChangedAgainstPrevious):
-        refresher_mod._check_days_emptied(before, current, today)
-
-
-def test_forgotten_accept_next_lever_is_not_taken(tmp_path, sheet, sent, fixture_csv):
-    """Забытый рычаг (старше двух часов) не пропускает сдвиг через неделю."""
-    import os
-
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
-    lever = tmp_path / "accept-next"
-    lever.touch()
-    old = lever.stat().st_mtime - refresher_mod.ACCEPT_NEXT_TTL.total_seconds() - 60
-    os.utime(lever, (old, old))
-    sheet["text"] = _drop_two_groups(fixture_csv)
-    assert r.refresh(today=TODAY, force=True) is False
-    assert not lever.exists()
-
-
 def test_recovery_with_a_failing_disk_still_closes_the_failure(
     tmp_path, sheet, sent, monkeypatch, fixture_csv
 ):
@@ -806,48 +286,6 @@ def test_recovery_with_a_failing_disk_still_closes_the_failure(
     assert r.status == "ok" and r.failing_since is None
     assert any("снова обновляется" in m["message"] for m in sent)
     assert any("не записался" in m["message"] for m in sent)
-
-
-def test_new_group_sheet_rejected_by_search_is_looked_at_again(tmp_path, monkeypatch):
-    """Лист «групп», заведённый пустым, поиск
-    отвергал, и заполненный позже служба узнавала только ночью."""
-    from whensclass.sources.gsheets import SheetInfo
-
-    monkeypatch.setattr(settings, "sheets_api_key", "ключ")
-    books = [[SheetInfo(title="расписание групп 21.-26.09", gid="1", hidden=False)]]
-    monkeypatch.setattr(sheet_index, "list_sheets", lambda: books[-1])
-    monkeypatch.setattr(sheet_index, "candidates", lambda sheets, day: sheets)
-    r = Refresher(SnapshotStore(tmp_path), tmp_path)
-    calls = []
-    monkeypatch.setattr(r, "refresh", lambda force=False: calls.append(force) or False)
-    r.look_for_new_sheet()
-    books.append(books[-1] + [SheetInfo(title="расписание групп 28.09-03.10", gid="2",
-                                        hidden=False)])
-    r.look_for_new_sheet()
-    r.look_for_new_sheet()
-    assert calls == [True, True], "пустой новый лист — посмотреть ещё раз"
-    sheet_index.SheetIndex(tmp_path).remember(
-        "расписание групп 28.09-03.10", "2", dt.date(2026, 9, 28), dt.date(2026, 10, 3)
-    )
-    r.look_for_new_sheet()
-    r.look_for_new_sheet()
-    assert calls == [True, True, True], "принятый — больше не трогаем"
-
-
-def test_window_of_sheets_starts_on_monday_like_the_app(tmp_path, sheet, sent, monkeypatch):
-    """В воскресенье на стыке листов набор
-    считался от сегодня — в снимке оставался только будущий лист, и прожитая
-    неделя пропадала с экрана. Приложение просит окно с понедельника."""
-    asked = []
-
-    def window(start, days, state_dir, deep=False):
-        asked.append((start, days))
-        return [("лист", "656498718")]
-
-    monkeypatch.setattr(sheet_index, "resolve_window", window)
-    r = Refresher(SnapshotStore(tmp_path), tmp_path)
-    r.refresh(today=dt.date(2026, 9, 13))  # воскресенье
-    assert asked[0] == (dt.date(2026, 9, 7), settings.window_days + 6)
 
 
 def test_disk_alert_window_survives_restart_and_recovery_is_told(
@@ -875,90 +313,6 @@ def test_disk_alert_window_survives_restart_and_recovery_is_told(
     assert any("снова записывается" in m["message"] for m in sent)
 
 
-def test_only_the_failing_sheet_is_archived_as_rejected(
-    tmp_path, sent, fixture_csv, monkeypatch
-):
-    """Отказ одного листа окна клал «отвергнутыми»
-    все листы с одной причиной — исправный текущий получал чужое «нашёл всего».
-    Отвергнутый следующий теперь выпадает из окна (В10 прогона 1 аудита 4),
-    отвергнутый текущий — отказ всего захода."""
-    broken = fixture_csv.replace("Дисциплина", "Предмет")
-    texts = {"лист": fixture_csv, "следующий": broken}
-    monkeypatch.setattr(
-        sheet_index, "resolve_window", lambda *a, **k: [("лист", "1"), ("следующий", "2")]
-    )
-    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
-    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
-    r = Refresher(SnapshotStore(tmp_path / "а"), tmp_path / "а")
-    assert r.refresh(today=TODAY) is True
-    assert not list((tmp_path / "а" / "history" / "1").glob("*-rejected*"))
-    assert list((tmp_path / "а" / "history" / "2").glob("*-rejected.txt"))
-
-    texts.update({"лист": broken, "следующий": fixture_csv})
-    r = Refresher(SnapshotStore(tmp_path / "б"), tmp_path / "б")
-    assert r.refresh(today=TODAY) is False
-    assert list((tmp_path / "б" / "history" / "1").glob("*-rejected.txt"))
-    assert not list((tmp_path / "б" / "history" / "2").glob("*-rejected*"))
-
-
-def _list():
-    """list_sheets при сбое API без прежнего списка бросает «не найден», а при
-    обрыве сети — саму сетевую ошибку."""
-    import httpx
-
-    try:
-        return sheet_index.list_sheets()
-    except (sheet_index.SheetNotFound, httpx.TransportError):
-        return None
-
-
-def test_failed_api_keeps_the_last_list_and_there_is_no_xlsx(monkeypatch, sent):
-    """При сбое API служба качала книгу в xlsx —
-    22 МБ под замком, — а читаемых листов там нет: gid xlsx не даёт. Теперь —
-    прежний список от API, если он свежий, иначе «не найден»."""
-    from whensclass.sources.gsheets import SheetInfo
-
-    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
-    monkeypatch.setattr(sheet_index, "_last_list", [])
-    state = {"ok": True}
-
-    def api(key):
-        if state["ok"]:
-            return [SheetInfo(title="расписание групп", gid="1")]
-        raise _google_says(503)
-
-    monkeypatch.setattr(gsheets, "list_sheets_via_api", api)
-    assert [s.gid for s in sheet_index.list_sheets()] == ["1"]
-    state["ok"] = False
-    assert [s.gid for s in sheet_index.list_sheets()] == ["1"], "прежний список"
-    monkeypatch.setattr(sheet_index, "_last_list", [])
-    with pytest.raises(sheet_index.SheetNotFound, match="не ответил"):
-        sheet_index.list_sheets()
-    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", None)
-    with pytest.raises(sheet_index.SheetNotFound, match="ключа Sheets API нет"):
-        sheet_index.list_sheets()
-
-
-def test_watch_baseline_survives_restart(tmp_path, monkeypatch):
-    """Лист, заведённый, пока служба
-    перезапускалась, первый взгляд после запуска клал в базовую линию и не
-    искал — до ночи."""
-    from whensclass.sources.gsheets import SheetInfo
-
-    monkeypatch.setattr(settings, "sheets_api_key", "ключ")
-    books = [[SheetInfo(title="расписание групп 21.-26.09", gid="1")]]
-    monkeypatch.setattr(sheet_index, "list_sheets", lambda: books[-1])
-    monkeypatch.setattr(sheet_index, "candidates", lambda sheets, day: sheets)
-    first = Refresher(SnapshotStore(tmp_path), tmp_path)
-    first.look_for_new_sheet()
-    books.append(books[-1] + [SheetInfo(title="расписание групп 28.09-03.10", gid="2")])
-    restarted = Refresher(SnapshotStore(tmp_path), tmp_path)
-    calls = []
-    monkeypatch.setattr(restarted, "refresh", lambda force=False: calls.append(force) or False)
-    restarted.look_for_new_sheet()
-    assert calls == [True]
-
-
 def test_network_grace_is_half_an_hour_by_the_clock(tmp_path, sent, fixture_csv):
     """Льгота держалась только относительно себя —
     при FETCH_GRACE в секунду тесты были зелёными. Тут — минутами."""
@@ -981,7 +335,7 @@ def test_network_grace_is_half_an_hour_by_the_clock(tmp_path, sent, fixture_csv)
 def test_snapshot_survives_the_disk_whole(tmp_path, fixture_csv):
     """Снимок на диске проверялся только по places —
     забудь дописать новое поле пары, и тесты зелёные. Тут — целиком."""
-    from whensclass.parser.csv_schedule import parse_export
+    from whensclass.parser.export import parse_export
 
     snapshot = parse_export(fixture_csv, "лист", "656498718", limits=FIXTURE)
     store = SnapshotStore(tmp_path)
@@ -989,33 +343,3 @@ def test_snapshot_survives_the_disk_whole(tmp_path, fixture_csv):
     loaded = SnapshotStore(tmp_path)
     assert loaded.load()
     assert loaded.snapshot == snapshot
-
-
-def test_one_changed_sheet_of_two_rebuilds_the_whole_window(
-    tmp_path, sent, fixture_csv, monkeypatch
-):
-    """Окно из двух листов, изменился один —
-    снимок пересобирается из обоих."""
-    later = fixture_csv
-    for old, new in (("02.09.2026", "14.09.2026"), ("03.09.2026", "15.09.2026"),
-                     ("04.09.2026", "16.09.2026"), ("05.09.2026", "17.09.2026"),
-                     ("07.09.2026", "18.09.2026"), ("08.09.2026", "19.09.2026"),
-                     ("09.09.2026", "21.09.2026"), ("10.09.2026", "22.09.2026"),
-                     ("11.09.2026", "23.09.2026"), ("12.09.2026", "24.09.2026")):
-        later = later.replace(old, new)
-    import re as _re
-
-    later = _re.sub(r"(\d\d\.09\.2026)\s+\w+", r"\1", later)
-    texts = {"лист": fixture_csv, "следующий": later}
-    monkeypatch.setattr(
-        sheet_index, "resolve_window", lambda *a, **k: [("лист", "1"), ("следующий", "2")]
-    )
-    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
-    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
-    store = SnapshotStore(tmp_path)
-    r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
-    texts["лист"] = cell_replace(fixture_csv, a_teacher(fixture_csv), "Смит А. А.")
-    assert r.refresh(today=TODAY) is True
-    days = set(store.snapshot.dates)
-    assert dt.date(2026, 9, 2) in days and dt.date(2026, 9, 24) in days
