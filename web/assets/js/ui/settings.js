@@ -1,7 +1,7 @@
 // Настройки (SettingsScreen.kt) — без того, чего у сайта нет: виджетов, работы
-// в фоне, уведомлений и обновления приложения. Порядок тот же: группа, своё
-// для этого телефона (значок, приложение), таблица, оформление, данные и «О
-// сайте». Раздел уведомлений — notifications.js.
+// в фоне и обновления приложения. Порядок тот же: группа, своё для этого
+// телефона (значок, уведомления, приложение), таблица, оформление, данные и
+// «О сайте». Раздел уведомлений — notifications.js.
 
 import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, dialog, copyText, section } from './dom.js';
 import { sheetLink } from '../format.js';
@@ -42,9 +42,9 @@ var SITE = 'https://kogda-para-nsk.ru';
 var REPO = 'https://github.com/tomon-one/kogda-para';
 
 /**
- * «Поделиться» (ShareDialog в приложении): код для камеры,
- * ссылки на сайт и на исходный код с копированием, системное «Отправить»,
- * где оно есть. Код ведёт в репозиторий: оттуда и сайт, и файл приложения.
+ * «Поделиться» (ShareDialog в приложении): код для камеры, ссылки на сайт и
+ * на исходный код с копированием, системное «Отправить», где оно есть. Код
+ * ведёт в репозиторий: оттуда и сайт, и файл приложения.
  */
 function share() {
   function copyRow(label, url) {
@@ -85,7 +85,8 @@ export function settingsScreen(app) {
     : byName ? shortLabels([own ? own.name : ''].concat(extras.map(function (g) { return g.name; })))
       : extras.concat([null]).map(function (g, i) { return String(i + 1); });
 
-  // Значок, повторяющий название целиком, только сжимал его — как у других групп.
+  // Значок, повторяющий название целиком, только сжимал бы его — такой не
+  // ставится ни своей группе, ни другим.
   var ownMark = marks && own && marks[0] !== own.name ? marks[0] : null;
   var group = [row(
     h('span', { class: 'group-name' }, ownMark ? groupMark(ownMark, true) : null,
@@ -96,7 +97,6 @@ export function settingsScreen(app) {
     // Остальные группы — любые, до шести вместе со своей.
     extras.forEach(function (g, i) {
       group.push(row(
-        // Значок, повторяющий название целиком, только сжимал его.
         h('span', { class: 'group-name' }, marks && marks[i + 1] !== g.name ? groupMark(marks[i + 1], false) : null,
           h('span', { class: 'group-name-text' }, g.name + (g.gone ? ' — нет в таблице' : ''))),
         null,
@@ -108,7 +108,7 @@ export function settingsScreen(app) {
       return !extras.some(function (x) { return x.id === g.id; });
     }).slice(0, room) : [];
     // Подгруппы своей группы — строками с «Добавить», как у добавленных
-    // «Убрать»: две кнопки рядом выходили разной высоты.
+    // «Убрать»: две кнопки рядом вышли бы разной высоты.
     subgroups.forEach(function (g) {
       group.push(row(g.name, 'подгруппа вашей группы',
         actionButton('Добавить', function () { app.addExtras([g]); }, 'fixed', 'add:' + g.id, 'Добавить ' + g.name)));
@@ -144,9 +144,9 @@ export function settingsScreen(app) {
     h('main', { class: 'content cards' },
       section(teacherMode ? 'Преподаватель' : 'Группа', group),
 
-      // Только во вкладке браузера: открытому значком он ни к чему. Шаги — для
-      // этого телефона; есть кнопка браузера — она вместо шагов.
-      // На компьютере без кнопки браузера шаги для телефонов ни к чему.
+      // Только во вкладке браузера: открытому значком он ни к чему. Есть
+      // кнопка браузера — она вместо шагов; шаги — для этого телефона, а на
+      // компьютере без кнопки раздела нет.
       standalone() || (!install && !ios && !android) ? null : section('Значок на экране', [
         h('p', null, 'Сайт можно открыть значком с домашнего экрана, как приложение.'),
         install ? actionButton('Добавить значок', app.install) : null,
@@ -209,8 +209,8 @@ export function settingsScreen(app) {
           'неправильно. Сверяйтесь с таблицей, когда это важно.'),
       ]),
 
-      // «Я преподаватель» отсюда убрано: тот же переход — первой строкой
-      // списка, куда ведёт «Сменить».
+      // «Я преподаватель» здесь нет: тот же переход — первой строкой списка,
+      // куда ведёт «Сменить».
       section('О сайте', [
         h('p', null, 'Неофициальный сайт для студентов и преподавателей НГОК.'),
         h('p', null, externalLink('Нашли ошибку? Напишите автору в Telegram', 'https://t.me/toomonn')),

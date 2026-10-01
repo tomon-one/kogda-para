@@ -21,10 +21,7 @@ export function applyTheme() {
   }
 }
 
-/**
- * Окно «Тестовый режим» — только на /tested/: основной сайт из теста вышел, а
- * tested тестовым и остаётся.
- */
+/** Окно «Тестовый режим» — только на /tested/, проверочной копии сайта. */
 export function testNotice() {
   if (store.CHANNEL !== 'tested') return;
   var key = store.CHANNEL + ':test-notice';
@@ -82,14 +79,13 @@ export function registerWorker() {
   var hadController = !!navigator.serviceWorker.controller;
   // Первое открытие после выкладки отдаёт прежняя сборка из кэша, а новая
   // встаёт за ним через секунды. Пока страницу не трогали — показать новую
-  // сразу: иначе новая сборка доходила только при следующем открытии, а на
-  // быстрой перезагрузке — и не при нём.
+  // сразу: иначе она дойдёт только при следующем открытии, а при быстрой
+  // перезагрузке — и не при нём.
   var touched = false;
   ['pointerdown', 'keydown', 'wheel'].forEach(function (type) {
     window.addEventListener(type, function () { touched = true; }, { capture: true, passive: true });
   });
   navigator.serviceWorker.addEventListener('controllerchange', function () {
-    // Первый захват воркером — не новая сборка; следующие — новая.
     if (hadController) {
       workerUpdated = true;
       if (!touched && document.visibilityState === 'visible' && !document.querySelector('.overlay')) {

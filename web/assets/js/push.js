@@ -45,8 +45,8 @@ function webView() {
  */
 export function blocker() {
   if (isIos() && !standalone()) return 'home';
-  // Сайт раздаётся ссылкой из Telegram: во встроенном просмотрщике «браузер
-  // не умеет» уводило от уведомлений совсем.
+  // Сайт раздаётся ссылкой из Telegram: встроенному просмотрщику — свой
+  // ответ, а не «браузер не умеет».
   if (!supported() && webView()) return 'webview';
   if (!supported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
@@ -64,10 +64,7 @@ export function enabled() {
   return c.changes || c.remind > 0;
 }
 
-/**
- * За сколько напоминать при включении: прежний выбор, а не всегда 20 —
- * выключение стирало минуты.
- */
+/** За сколько напоминать при включении: прежний выбор (его помнит и выключение), иначе 20. */
 export function lastRemind() {
   var saved = store.get(KEY);
   return (saved && (saved.remind || saved.last)) || 20;
@@ -76,7 +73,7 @@ export function lastRemind() {
 /**
  * Включены, но браузер сам снял разрешение (Chrome отзывает его у сайтов, на
  * уведомления которых не нажимают) или его сбросили: подписки больше нет,
- * а выключатели показывали «включено».
+ * хоть выбор и говорит «включено».
  */
 export function revoked() {
   return enabled() && supported() && Notification.permission !== 'granted';
@@ -84,8 +81,7 @@ export function revoked() {
 
 /**
  * Служба рассылки этой подписки словами — для «идут через серверы …»: по
- * адресу подписки, а до неё — по браузеру. Раньше выбор был только между
- * Google и Mozilla.
+ * адресу подписки, а до неё — по браузеру.
  */
 export function service() {
   var saved = store.get(KEY);
@@ -176,8 +172,8 @@ function subscription(registration) {
   });
 }
 
-// Смены — по одной: быстрые нажатия шли параллельно, и у службы оказывались
-// две подписки вместо одной.
+// Смены — по одной: параллельные быстрые нажатия оставляли бы у службы две
+// подписки вместо одной.
 var queue = Promise.resolve();
 function serial(work) {
   var run = queue.then(work, work);
@@ -185,10 +181,7 @@ function serial(work) {
   return run;
 }
 
-/**
- * Включить или поменять. `who` — {kind: 'group'|'teacher', id}. Разрешение
- * спрашивается сразу, в том же нажатии: айфон спрашивает только по нажатию.
- */
+/** Включить или поменять. `who` — {kind: 'group'|'teacher', id}. */
 export function update(next, who) {
   if (!next.changes && !(next.remind > 0)) return disable();
   // Вопрос о разрешении — в этом же нажатии, до очереди: айфон спрашивает
@@ -227,7 +220,7 @@ var REMOVE_KEY = 'push-remove';
 /** Выключить: отписать браузер и стереть запись у службы. */
 export function disable() {
   return serial(function () {
-    // Минуты — помнить: при включении снова — прежние, а не 20.
+    // Минуты — помнить для следующего включения.
     store.set(KEY, { last: lastRemind() });
     if (!supported()) return choice();
     return navigator.serviceWorker.getRegistration().then(function (registration) {

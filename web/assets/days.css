@@ -80,8 +80,7 @@
   vertical-align: 1px;
 }
 
-/* Значки групп под временем (GroupMarks.kt) — только тех, у кого пара есть:
-   своя — закрашенный, другая — бледный. Номера — по три в ряд. */
+/* Значки групп под временем (groupMarks в ui/days.js). Номера — по три в ряд. */
 .marks {
   display: flex;
   flex-wrap: wrap;
@@ -134,15 +133,15 @@
 }
 
 /* Узко (телефон 320 px или страница увеличена): время строкой над парой,
-   иначе колонке предмета оставалось по две буквы. В em
-   — порог растёт и с размером шрифта браузера по умолчанию. */
+   иначе колонке предмета остаётся по две буквы. В em — порог растёт и с
+   размером шрифта браузера по умолчанию. */
 @media (max-width: 21.25em) {
   .lesson { flex-direction: column; }
   .lesson-time { width: auto; }
   .lesson-time .pair, .lesson-time .time, .lesson-time .now-label { display: inline; margin-right: 6px; }
   .lesson-time .marks { display: inline-flex; width: auto; margin-top: 0; vertical-align: middle; }
-  /* Длинное название в значке — в пределах строки, с многоточием: при
-     увеличении 200 % оно уходило за край карточки. */
+  /* Длинное название в значке — в пределах строки, с многоточием: иначе при
+     увеличении 200 % оно уходит за край карточки. */
   .lesson-time .marks.names { display: flex; flex-wrap: wrap; max-width: 100%; }
   .lesson-time .mark { margin-bottom: 0; }
   .lesson-body { margin: 4px 0 0; padding: 0; border-left: 0; }
@@ -157,8 +156,8 @@
 
 .subject.cancelled { text-decoration: line-through; }
 
-/* Вид занятия уходит строкой ниже, а не отнимает место у кабинета: при
-   увеличении номер резался до двух цифр. */
+/* Вид занятия уходит строкой ниже, а не отнимает место у кабинета: иначе при
+   увеличении номер режется до двух цифр. */
 .lesson-meta {
   display: flex;
   flex-wrap: wrap;
@@ -192,7 +191,7 @@
 .online-link { margin-top: 2px; }
 
 /* Хост — целиком, строка переносится: ради него адрес и показан, по нему
-   отличают чужую ссылку; многоточие на узком экране оставляло «my.…». */
+   отличают чужую ссылку, а многоточие на узком экране оставило бы «my.…». */
 .link-where {
   font-size: 13px;
   color: var(--muted);

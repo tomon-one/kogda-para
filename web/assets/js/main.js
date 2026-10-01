@@ -82,8 +82,8 @@ Object.assign(app, {
   addExtras: function (groups) {
     repo.addExtras(groups);
     render();
-    // Фокус — на «Убрать» той же группы: кнопка «Добавить» ушла, и фокус падал
-    // на body.
+    // Фокус — на «Убрать» той же группы: кнопка «Добавить» исчезла, и фокус
+    // упал бы на body.
     if (groups.length) focusKey('remove:' + groups[0].id);
     refresh(true, false);
   },
@@ -129,8 +129,8 @@ var pushTries = 0;
 
 /**
  * Служба должна знать нынешнюю подписку и группу. Не вышло — повторить через
- * минуту, до пяти раз: после смены группы неудачная пересылка ждала
- * перезагрузки страницы, и всё это время приходило о прежней группе.
+ * минуту, до пяти раз, а не ждать перезагрузки: всё это время приходило бы о
+ * прежней группе.
  */
 function syncPush(again) {
   clearTimeout(pushRetry);
@@ -157,7 +157,7 @@ function pick(mode, row) {
   if (mode === 'extra') {
     repo.addExtras([row]);
     // В настройки — шагом назад, а не новой записью: иначе «назад» оттуда
-    // снова открывал настройки.
+    // снова открыл бы настройки.
     if (app.route.screen === 'pick' && stepsNow() > 0) back();
     else if (app.route.screen !== 'settings') go('settings', true);
     else render();
@@ -230,8 +230,7 @@ setInterval(tick, 10000);
 // Раз в час, пока страница открыта, — как фоновое обновление у приложения.
 setInterval(function () {
   if (document.visibilityState !== 'hidden') refresh(false, false);
-  // Смена группы так и не дошла до службы — пробовать снова, а не до
-  // перезагрузки: всё это время приходило бы о прежней.
+  // Смена группы так и не дошла до службы — пробовать снова.
   if (push.behind(pushSubject())) syncPush(true);
 }, 60 * 60 * 1000);
 
@@ -264,8 +263,8 @@ window.__whensclassStarted = true;
 repo.migrateGroups();
 applyTheme();
 countOpen();
-// К сегодняшнему дню и на первом заходе, а не только при смене экрана: со
-// вторника по субботу наверху стоял понедельник.
+// К сегодняшнему дню и на первом заходе, а не только при смене экрана, иначе
+// наверху стоял бы понедельник.
 state.wanted = collegeNow().date;
 if (repo.cachedGroups().length) state.groups = repo.cachedGroups();
 if (repo.cachedTeachers().length) state.teachers = repo.cachedTeachers();

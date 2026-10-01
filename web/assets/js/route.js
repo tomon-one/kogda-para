@@ -93,8 +93,8 @@ export function onRoute() {
     route = { screen: 'pick', mode: 'group' };
     history.replaceState({ steps: stepsNow(), pending: pending }, '', location.pathname + location.search + '#pick');
   }
-  // Больше шести групп не выбрать: жест «вперёд» открывал «7-я группа», а
-  // нажатие молча ничего не добавляло.
+  // Больше шести групп не выбрать: иначе жест «вперёд» открыл бы «7-я
+  // группа», где нажатие молча ничего не добавит.
   if (route.screen === 'pick' && route.mode === 'extra' &&
       (repo.isTeacher() || repo.extras().length >= MAX_GROUPS - 1)) {
     route = { screen: 'settings' };
@@ -106,8 +106,8 @@ export function onRoute() {
   var oldRoute = app.route;
   app.route = route;
   // Глубже — справа, назад — слева. Внутри главного экрана шапка и вкладки
-  // стоят на месте, едет только содержимое: иначе смена вкладки выглядела как
-  // перезагрузка страницы.
+  // стоят на месте, едет только содержимое: иначе смена вкладки выглядела бы
+  // как перезагрузка страницы.
   var depth = depthOf(route);
   var oldTab = nav.depth == null ? null : tabOf(oldRoute);
   var newTab = tabOf(route);
