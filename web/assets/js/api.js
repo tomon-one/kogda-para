@@ -48,8 +48,9 @@ function getJson(path) {
   });
 }
 
+// marks=1 — сайт знает пометку непрочитанного дня (docs/api.md).
 function query(from, days) {
-  return '?from=' + encodeURIComponent(from) + '&days=' + days;
+  return '?from=' + encodeURIComponent(from) + '&days=' + days + '&marks=1';
 }
 
 export function meta() {

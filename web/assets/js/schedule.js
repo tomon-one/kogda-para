@@ -82,6 +82,12 @@ export function combineGroups(main, extras) {
     ((pair[1] && pair[1].days) || []).forEach(function (d) { byDate[d.d] = d.l || []; });
     return byDate;
   });
+  // Непрочитанный день другой группы — пометка с её именем, а не на весь день.
+  var marks = extras.map(function (pair) {
+    var byDate = {};
+    ((pair[1] && pair[1].days) || []).forEach(function (d) { if (d.un) byDate[d.d] = d.un; });
+    return byDate;
+  });
   var have = {};
   (main.days || []).forEach(function (d) { have[d.d] = true; });
   var added = {};
@@ -92,13 +98,7 @@ export function combineGroups(main, extras) {
   });
   var days = (main.days || []).concat(Object.keys(added).map(function (date) { return { d: date, l: [] }; }))
     .sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
-  // Непрочитанный день любой из групп — пометка на дне: часть пар в нём прежняя.
-  var unread = {};
-  [main].concat(extras.map(function (pair) { return pair[1]; })).forEach(function (s) {
-    ((s && s.unread) || []).forEach(function (date) { unread[date] = true; });
-  });
   return copy(main, {
-    unread: Object.keys(unread).sort(),
     groupNames: [main.gn].concat(extras.map(function (pair) { return pair[0]; })),
     days: days.map(function (day) {
       var rows = (day.l || []).map(function (l) { return copy(l, { slots: [0] }); });
@@ -122,7 +122,11 @@ export function combineGroups(main, extras) {
       var sorted = rows.map(function (l, i) { return { l: l, i: i }; })
         .sort(function (a, b) { return a.l.n - b.l.n || a.i - b.i; })
         .map(function (x) { return x.l; });
-      return copy(day, { l: sorted });
+      var others = [];
+      marks.forEach(function (byDate, index) {
+        if (byDate[day.d]) others.push({ name: extras[index][0], un: byDate[day.d] });
+      });
+      return others.length ? copy(day, { l: sorted, unOthers: others }) : copy(day, { l: sorted });
     }),
   });
 }
@@ -157,7 +161,7 @@ export function subgroupsOf(name, groups) {
  * `cov`: выдумывать дни за краем листа нельзя. У вставленного `absent`.
  */
 export function daysWithGaps(schedule) {
-  return withUnread(schedule, gaps(schedule));
+  return gaps(schedule);
 }
 
 function gaps(schedule) {
@@ -175,25 +179,6 @@ function gaps(schedule) {
     else if (day >= cov[0] && day <= cov[1]) out.push({ d: day, l: [], absent: true });
   }
   return out;
-}
-
-/**
- * Дни, которые служба не прочитала (`unread`): `kept` — в ответе прежние пары
- * дня, `missing` — прежних у службы нет, и день вставляется пустым, чтобы было
- * видно, что он есть и что с ним.
- */
-function withUnread(schedule, days) {
-  var unread = schedule.unread || [];
-  if (!unread.length) return days;
-  var marked = {};
-  unread.forEach(function (date) { marked[date] = true; });
-  var out = days.map(function (day) {
-    if (!marked[day.d]) return day;
-    delete marked[day.d];
-    return copy(day, { unread: day.absent ? 'missing' : 'kept' });
-  });
-  Object.keys(marked).forEach(function (date) { out.push({ d: date, l: [], unread: 'missing' }); });
-  return out.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
 }
 
 /** Первый день не раньше `date`; все раньше — последний. */
@@ -267,9 +252,43 @@ export function freeDay(day, teacher, nextFree, now) {
   return phrases[dayOfYear(day.d) % phrases.length];
 }
 
+/**
+ * Пометки дня, который служба не прочитала (unreadNotes в DayList.kt):
+ * своего — без имени, у преподавателя — с группами из `ug`, у других
+ * выбранных групп — с их именами. `kept` — пары прежние, `missing` — их нет.
+ */
+export function unreadNotes(day) {
+  var out = [];
+  var base = 'Сервер не смог прочитать этот день';
+  if (day.un && day.ug && day.ug.length) {
+    var many = day.ug.length > 1;
+    out.push(base + ' у ' + joinNames(day.ug) + ': ' + (day.un === 'kept'
+      ? 'пары с ' + (many ? 'ними' : 'ней') + ' — какими были до этого.'
+      : 'пар с ' + (many ? 'ними' : 'ней') + ' может не хватать.'));
+  } else if (day.un) {
+    out.push(base + (day.un === 'kept' ? ' в таблице: пары — какими были до этого.' : ' в таблице.'));
+  }
+  ['kept', 'missing'].forEach(function (un) {
+    var names = (day.unOthers || []).filter(function (o) { return o.un === un; }).map(function (o) { return o.name; });
+    if (!names.length) return;
+    var many = names.length > 1;
+    out.push(base + ' у ' + joinNames(names) + ': ' + (un === 'kept'
+      ? (many ? 'их' : 'её') + ' пары — какими были до этого.'
+      : (many ? 'их' : 'её') + ' пар здесь нет.'));
+  });
+  return out;
+}
+
+// Больше трёх групп (день без даты задевает все) — числом: список занял бы экран.
+function joinNames(names) {
+  var n = names.length;
+  if (n > 3) return n + (n % 10 === 1 && n % 100 !== 11 ? ' группы' : ' групп');
+  return n > 1 ? names.slice(0, -1).join(', ') + ' и ' + names[n - 1] : names[0];
+}
+
 /** День будний, пришёл с сервера и без своих пар — для «повезло дважды». */
 export function freeOwnDay(day, groups) {
-  if (!day || day.absent || !isDate(day.d) || weekday(day.d) === 6) return false;
+  if (!day || day.absent || day.un === 'missing' || !isDate(day.d) || weekday(day.d) === 6) return false;
   var lessons = day.l || [];
   if (!groups || !groups.length) return !lessons.length;
   return lessons.every(function (l) { return (l.slots || []).indexOf(0) < 0; });
@@ -311,14 +330,15 @@ export function cleanSchedule(body) {
       if (Array.isArray(range)) out.bells[n] = range.filter(function (t) { return typeof t === 'string'; });
     });
   }
-  if (Array.isArray(body.unread)) {
-    var unread = body.unread.filter(isDate);
-    if (unread.length) out.unread = unread;
-  }
   body.days.forEach(function (day) {
     if (!day || typeof day.d !== 'string') return;
     var clean = { d: day.d, l: [] };
     if (typeof day.row === 'number') clean.row = day.row;
+    if (day.un === 'kept' || day.un === 'missing') {
+      clean.un = day.un;
+      var ug = Array.isArray(day.ug) ? day.ug.filter(function (g) { return typeof g === 'string'; }) : [];
+      if (ug.length) clean.ug = ug;
+    }
     (Array.isArray(day.l) ? day.l : []).forEach(function (l) {
       if (!l || typeof l.n !== 'number') return;
       var lesson = { n: l.n, s: text(l.s) || 'Занятие' };

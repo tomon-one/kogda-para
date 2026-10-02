@@ -223,7 +223,7 @@ export function shown() {
 /**
  * Состояние обновления. Непрочитанные дни одной-двух групп служба отдаёт
  * общим `stale` для прежних версий, а `refresh` — без них: их пометка — у
- * самих дней (`unread` в расписании), не плашкой сбоя на всех.
+ * самих дней (`un` в расписании), не плашкой сбоя на всех.
  */
 export function health(meta) {
   return meta.refresh || meta.status;
@@ -341,8 +341,19 @@ function extrasMissing() {
   return extras().some(function (g) { return !g.gone && (!schedules[g.id] || schedules[g.id].gen !== gen); });
 }
 
+// Сохранённое прежней версией расписание без нынешних полей (пометки
+// непрочитанного дня) перезапрашивается один раз, а не ждёт правки таблицы.
+var FORMAT = 2;
+
+function migrateFormat() {
+  if (store.get('format') === FORMAT) return;
+  store.remove('gen');
+  store.set('format', FORMAT);
+}
+
 function refreshOnce(force) {
   migrateGroups();
+  migrateFormat();
   var asked = subject();
   var teacherMode = isTeacher();
   var own = chosen();

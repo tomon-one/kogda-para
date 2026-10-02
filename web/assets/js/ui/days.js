@@ -3,7 +3,7 @@
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
 import { dayTitle, capitalize } from '../time.js';
-import { currentLessonNumber, daysWithGaps, freeDay, freeOwnDay, lessonTime, shortLabels } from '../schedule.js';
+import { currentLessonNumber, daysWithGaps, freeDay, freeOwnDay, lessonTime, shortLabels, unreadNotes } from '../schedule.js';
 import {
   isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
@@ -44,21 +44,18 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
     'data-day': day.d,
   }, h('h3', { class: 'day-title' }, dayTitle(day.d, now.date)));
 
-  if (day.unread === 'missing') {
-    card.appendChild(h('p', { class: 'day-note' }, 'Сервер не смог прочитать этот день в таблице.'));
-    return card;
-  }
-  if (day.unread) {
-    card.appendChild(h('p', { class: 'day-note' },
-      'Сервер не смог прочитать этот день в таблице: пары — какими были до этого.'));
-  }
+  unreadNotes(day).forEach(function (note) {
+    card.appendChild(h('p', { class: 'day-note' }, note));
+  });
+  // Свой день не прочитан, и пар нет — это не «пар нет».
+  var unknown = day.un === 'missing';
   if (!lessons.length) {
-    card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
+    if (!unknown) card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
     return card;
   }
   // Своих пар нет, а у выбранных групп есть: «пар нет» — над их серыми
   // строками, как пишет виджет приложения.
-  if (groups.length && lessons.every(function (l) { return isForeign(l, groups); })) {
+  if (!unknown && groups.length && lessons.every(function (l) { return isForeign(l, groups); })) {
     card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
   }
   lessons.forEach(function (lesson, index) {
