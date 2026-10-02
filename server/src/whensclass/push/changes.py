@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 import urllib.parse
 
 from ..service.bells import BELLS
@@ -57,10 +58,13 @@ def _online(lesson: dict) -> bool:
 
 
 def _replaces(lesson: dict) -> str | None:
-    note = lesson.get("c")
-    if not note or not note.startswith(INSTEAD):
-        return None
-    return note[len(INSTEAD):].strip() or None
+    """«вместо: X» — в любом месте приписки: разбор дописывает его через «; »
+    к причине отмены или к тексту рядом со ссылкой."""
+    for part in (lesson.get("c") or "").split(";"):
+        part = part.strip()
+        if part.startswith(INSTEAD):
+            return part[len(INSTEAD):].strip() or None
+    return None
 
 
 def _split(url: str) -> urllib.parse.SplitResult | None:
@@ -155,13 +159,45 @@ def compare(old: dict | None, fresh: dict) -> list[tuple[str, str]]:
             continue
         numbers = sorted({x["n"] for x in before["l"]} | {x["n"] for x in day["l"]})
         for number in numbers:
-            _compare_number(
-                day["d"], number,
-                [x for x in before["l"] if x["n"] == number],
-                [x for x in day["l"] if x["n"] == number],
-                teacher, name, changes,
-            )
+            was = [x for x in before["l"] if x["n"] == number]
+            now = [x for x in day["l"] if x["n"] == number]
+            if not teacher:
+                _compare_number(day["d"], number, was, now, teacher, name, changes)
+                continue
+            # У преподавателя запись склеена из групп, и меняется обычно одна:
+            # её убрали, отменили, перевели в онлайн. Сравниваем по группам, а
+            # одинаковые строки потом склеиваем обратно.
+            lines: list[tuple[str, str]] = []
+            _compare_number(day["d"], number, _per_group(was), _per_group(now), teacher, name, lines)
+            changes.extend(_merge_groups(lines))
     return changes
+
+
+def _per_group(lessons: list[dict]) -> list[dict]:
+    out = []
+    for lesson in lessons:
+        groups = [p.strip() for p in (lesson.get("gr") or "").split(",") if p.strip()]
+        out += [{**lesson, "gr": g} for g in groups] or [lesson]
+    return out
+
+
+_GROUP_TAG = re.compile(r" \(([^()]+)\)")
+# Место групп в склеиваемой строке: такого знака в тексте пары не бывает.
+_SLOT = "\x00"
+
+
+def _merge_groups(lines: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """«отменили 5 пару (А)» и «отменили 5 пару (Б)» → «… (А, Б)»."""
+    merged: dict[tuple[str, str], list[str]] = {}
+    for day, text in lines:
+        found = _GROUP_TAG.search(text)
+        if found is None:
+            merged.setdefault((day, text), [])
+            continue
+        key = (day, text[:found.start()] + " (" + _SLOT + ")" + text[found.end():])
+        merged.setdefault(key, []).append(found.group(1))
+    return [(day, text.replace(_SLOT, ", ".join(groups)) if groups else text)
+            for (day, text), groups in merged.items()]
 
 
 def _compare_number(
@@ -178,6 +214,26 @@ def _compare_number(
         if groups is None or (groups == name and not teacher):
             return ""
         return f" ({groups})"
+
+    def own(lesson: dict) -> bool:
+        return not teacher and lesson.get("gr") in (None, name)
+
+    # Две свои пары на номере (блок пополам) — какая из них, говорит предмет,
+    # а при одинаковом — ещё и преподаватель: иначе подгруппа, у которой
+    # ничего не менялось, пойдёт в чужой кабинет.
+    several = sum(map(own, was)) > 1 or sum(map(own, now)) > 1
+
+    def named(lesson: dict) -> str:
+        """Название пары в строке; у половинки с тем же названием — и преподаватель."""
+        twins = several and lesson.get("t") and any(
+            x["s"] == lesson["s"] and x.get("t") != lesson.get("t") for x in was + now)
+        return f"{lesson['s']}, {lesson['t'][0]}" if twins else lesson["s"]
+
+    def tag(lesson: dict) -> str:
+        """Чья пара — для строк без названия («переехала», «стала онлайн»)."""
+        if several and own(lesson):
+            return f" ({named(lesson)})"
+        return whose(lesson)
 
     def say(text: str) -> None:
         changes.append((day, text))
@@ -224,9 +280,9 @@ def _compare_number(
             index = next((i for i, x in enumerate(unmatched) if same_subject(x["s"], instead)), -1)
         if index < 0:
             continue
-        unmatched.pop(index)
+        old = unmatched.pop(index)
         replaced.append(lesson)
-        say(f"замена {number} пары{whose(lesson)}: {instead} → {lesson['s']}")
+        say(f"замена {number} пары{whose(lesson)}: {named(old)} → {lesson['s']}")
 
     for lesson in now:
         if any(lesson is r for r in replaced):
@@ -243,7 +299,7 @@ def _compare_number(
         if index < 0:
             index = next((i for i, x in enumerate(unmatched)
                           if x["s"] == lesson["s"] and overlap(x, lesson)), -1)
-        if index < 0:
+        if index < 0 and not teacher:
             index = next((i for i, x in enumerate(unmatched) if x["s"] == lesson["s"]), -1)
         if index < 0:
             # Та же пара под чуть другим названием — у тех же групп (у
@@ -252,8 +308,9 @@ def _compare_number(
                           if same_subject(x["s"], lesson["s"]) and overlap(x, lesson)
                           and x.get("t") == lesson.get("t")), -1)
         if index < 0:
-            source = next((x for x in was if x["s"] == lesson["s"] and overlap(x, lesson)), None) \
-                or next((x for x in was if x["s"] == lesson["s"]), None)
+            source = next((x for x in was if x["s"] == lesson["s"] and overlap(x, lesson)), None)
+            if source is None and not teacher:
+                source = next((x for x in was if x["s"] == lesson["s"]), None)
             if source is not None and not _cancelled(source) and _cancelled(lesson):
                 say(f"отменили {number} пару{whose(lesson)}: {lesson['s']}")
             elif source is not None and _cancelled(source) and not _cancelled(lesson):
@@ -267,7 +324,7 @@ def _compare_number(
             continue
 
         previous = unmatched.pop(index)
-        tag = whose(lesson)
+        label = tag(lesson)
         if teacher:
             added = groups_of(lesson) - before_groups
             if added:
@@ -277,41 +334,37 @@ def _compare_number(
                 say(f"убрали {number} пару ({listed(previous, left)}): {previous['s']}")
         teachers = lesson.get("t") or []
         if not _cancelled(previous) and _cancelled(lesson):
-            say(f"отменили {number} пару{tag}: {lesson['s']}")
+            say(f"отменили {number} пару{label}: {lesson['s']}")
         elif _cancelled(previous) and not _cancelled(lesson):
-            say(f"вернули {number} пару{tag}: {lesson['s']}")
+            say(f"вернули {number} пару{label}: {lesson['s']}")
         elif not _online(previous) and _online(lesson):
-            say(f"{number} пара{tag} стала онлайн")
+            say(f"{number} пара{label} стала онлайн")
         elif _online(previous) and not _online(lesson):
-            say(f"{number} пара{tag} снова очная")
+            say(f"{number} пара{label} снова очная")
         elif teachers and (previous.get("t") or []) != teachers:
-            say(f"у {number} пары{tag} другой преподаватель: {', '.join(teachers)}")
+            say(f"у {number} пары{label} другой преподаватель: {', '.join(teachers)}")
 
         room = lesson.get("r")
         if not _cancelled(lesson) and room is not None and previous.get("r") != room:
             if _online(lesson):
-                say(f"у {number} пары{tag} онлайн-комната {room}")
+                say(f"у {number} пары{label} онлайн-комната {room}")
             else:
                 place = room_label(room) or room
-                say(f"{number} пара{tag} переехала в {place}" if place.startswith("каб.")
-                    else f"{number} пара{tag} переехала: {place}")
+                say(f"{number} пара{label} переехала в {place}" if place.startswith("каб.")
+                    else f"{number} пара{label} переехала: {place}")
 
         url = lesson.get("u")
         if url is None or url == previous.get("u"):
             pass
         elif not known_webinar(url):
             verb = "появилась" if previous.get("u") is None else "сменилась"
-            say(f"у {number} пары{tag} {verb} ссылка — чужой адрес: {url_host(url)}")
+            say(f"у {number} пары{label} {verb} ссылка — чужой адрес: {url_host(url)}")
         elif previous.get("u") is None:
-            say(f"у {number} пары{tag} появилась ссылка")
+            say(f"у {number} пары{label} появилась ссылка")
         else:
-            say(f"у {number} пары{tag} сменилась ссылка")
+            say(f"у {number} пары{label} сменилась ссылка")
 
     for gone in unmatched:
-        # Та же пара слилась с записью других групп — не новость. С записью тех
-        # же групп (половинка блока одного языка) — убрали.
-        if any(x["s"] == gone["s"] and groups_of(x) != groups_of(gone) for x in now):
-            continue
         if teacher and gone.get("gr"):
             # Все её группы на номере остались при той же паре — запись просто
             # склеилась с другой. При другом предмете у тех же групп это
@@ -323,7 +376,11 @@ def _compare_number(
                 continue
             say(f"убрали {number} пару ({listed(gone, left)}): {gone['s']}")
             continue
-        say(f"убрали {number} пару{whose(gone)}: {gone['s']}")
+        # Та же пара слилась с записью других групп — не новость. С записью тех
+        # же групп (половинка блока одного языка) — убрали.
+        if any(x["s"] == gone["s"] and groups_of(x) != groups_of(gone) for x in now):
+            continue
+        say(f"убрали {number} пару{whose(gone)}: {named(gone)}")
 
 
 def change_lines(old: dict | None, fresh: dict, today: dt.date) -> list[list[str]]:
@@ -360,10 +417,14 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
     # и называет все места.
     by_number: dict[int, list[dict]] = {}
     for lesson in today["l"]:
-        if not _cancelled(lesson):
-            by_number.setdefault(lesson["n"], []).append(lesson)
+        by_number.setdefault(lesson["n"], []).append(lesson)
     for number in sorted(by_number):
-        same = by_number[number]
+        same = [x for x in by_number[number] if not _cancelled(x)]
+        # Отменённая половинка — строкой «Отменена»: её подгруппа иначе пошла
+        # бы на чужую пару, приняв её за свою.
+        off = [x for x in by_number[number] if _cancelled(x)]
+        if not same:
+            continue
         lesson = same[0]
         bells = BELLS.get(str(number))
         if not bells:
@@ -376,6 +437,7 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
             continue
         names = _distinct(x["s"] for x in same)
         subject = " / ".join(names)
+        differ = len(_distinct(x["s"] for x in same + off)) > 1
         out.append({
             "at": fire,
             "start": start,
@@ -383,8 +445,9 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
             "number": number,
             "title": f"{start:%H:%M} — {subject}",
             "subject": subject,
-            "text": reminder_text(lesson, own) if len(same) == 1
-            else "\n".join([_number_line(same)] + [_pair_line(x, own, len(names) > 1) for x in same]),
+            "text": reminder_text(lesson, own) if len(same) == 1 and not off
+            else "\n".join([_number_line(same)] + [_pair_line(x, own, differ) for x in same]
+                           + [_off_line(x, own, differ) for x in off]),
         })
     return out
 
@@ -433,6 +496,12 @@ def _number_line(lessons: list[dict]) -> str:
     kinds = {kind_name(x.get("k")) for x in lessons}
     kind = kinds.pop() if len(kinds) == 1 else None
     return f"{lessons[0]['n']} пара" + (f", {kind.lower()}" if kind else "")
+
+
+def _off_line(lesson: dict, own_group: str | None, with_subject: bool) -> str:
+    """Отменённая пара того же номера: «Отменена — Немецкий. Миллер Д. Х.»."""
+    head = "Отменена" + (f" — {lesson['s']}" if with_subject else "")
+    return _sentences([head, (lesson.get("t") or [None])[0], _groups(lesson, own_group)])
 
 
 def _pair_line(lesson: dict, own_group: str | None, with_subject: bool) -> str:
