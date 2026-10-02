@@ -11,13 +11,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Конфиги сервера ставятся на сервер копированием, и правка в них расходится с
-# тем, что стоит, — их чистят вместе со следующей настоящей правкой.
 SKIP = re.compile(
     r"^(server/tests/fixtures/|server/tests/golden/|android/app/src/main/res/|"
-    r"docs/screenshots/|server/deploy/|server/tests/test_public_text\.py$)"
+    r"docs/screenshots/|server/tests/test_public_text\.py$)"
 )
-TEXT = re.compile(r"\.(py|kt|kts|mjs|js|sh|css|html|json|toml|txt|md|yml|properties)$")
+# Конфиги сервера — без расширения или с .conf, .socket, .service, .timer.
+TEXT = re.compile(
+    r"(\.(py|kt|kts|mjs|js|sh|css|html|json|toml|txt|md|yml|properties|xml|conf|socket|service|timer)"
+    r"|^server/deploy/.*)$"
+)
 
 FORBIDDEN = {
     "имя": re.compile(r"Tomon"),
@@ -57,3 +59,32 @@ def test_no_history_in_public_files():
                 if rx.search(line):
                     found.append(f"{rel}:{n}: {what}: {line.strip()[:100]}")
     assert not found, f"{len(found)} строк:\n" + "\n".join(found)
+
+
+# «freeDay в DayList.kt», «(Link в SettingsParts.kt)»: правила сайта и
+# приложения общие, и комментарий ведёт к их второй стороне.
+KOTLIN_REF = re.compile(r"\b([A-Za-z_]\w*)(?:\(\))? (?:в|из) ([A-Z]\w*\.kt)\b")
+KOTLIN_FILE = re.compile(r"\b([A-Z]\w*\.kt)\b")
+
+
+def test_references_to_app_files_lead_somewhere():
+    """Ссылка комментария на файл приложения ведёт к существующему файлу, а
+    «имя в Файл.kt» — к файлу, где это имя есть: после переноса кода по
+    файлам такие ссылки врут молча."""
+    sources = {p.name: p.read_text(encoding="utf-8")
+               for p in (ROOT / "android").rglob("*.kt")}
+    found = []
+    for rel in _tracked():
+        if not rel.startswith(("web/", "android/", "server/src/")):
+            continue
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for name in KOTLIN_FILE.findall(line):
+                if name not in sources:
+                    found.append(f"{rel}:{n}: нет файла {name}")
+            for symbol, name in KOTLIN_REF.findall(line):
+                if name in sources and not re.search(rf"\b{re.escape(symbol)}\b", sources[name]):
+                    found.append(f"{rel}:{n}: {symbol} нет в {name}")
+    assert not found, "\n".join(found)

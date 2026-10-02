@@ -250,6 +250,8 @@ def test_gone_group_gets_one_notice_then_is_dropped(tmp_path, snapshots, monkeyp
     clock[0] += service.GONE_NOTICE_AFTER + service.CHECK_EVERY
     push._check(after, at, day, fresh=True)
     assert [j.message["notification"]["title"] for j in push.sent] == ["Группы больше нет в таблице"]
+    # Служба уже ждала час — страница не ждёт своего (main.js, ?gone=1).
+    assert push.sent[0].message["notification"]["navigate"].endswith("/?gone=1")
     clock[0] += service.CHECK_EVERY
     push._check(after, at, day, fresh=True)
     assert len(push.sent) == 1, "одно уведомление, не каждые десять минут"

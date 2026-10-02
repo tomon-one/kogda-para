@@ -242,13 +242,16 @@ function ours(client) {
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  var url = (event.notification.data && event.notification.data.url) || self.registration.scope;
+  var data = event.notification.data || {};
+  // «Выберите заново»: служба уже ждала час — страница не ждёт своего (main.js).
+  var gone = data.t === 'gone';
+  var url = (data.url || self.registration.scope) + (gone ? '?gone=1' : '');
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
     for (var i = 0; i < list.length; i++) {
       if (ours(list[i]) && 'focus' in list[i]) {
         // Уведомление — о своём расписании: страница уходит к нему, а не
         // остаётся на открытом чужом.
-        list[i].postMessage({ t: 'own' });
+        list[i].postMessage({ t: 'own', gone: gone });
         return list[i].focus();
       }
     }

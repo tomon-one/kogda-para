@@ -180,7 +180,7 @@
    «Добавить», «Скопировать», минуты напоминания. */
 .action.fixed { width: 116px; padding: 0 8px; }
 
-/* Пометка у заголовка: beta, альфа-тест. */
+/* Пометка у заголовка: beta. */
 .badge {
   display: inline-block;
   padding: 0 6px;

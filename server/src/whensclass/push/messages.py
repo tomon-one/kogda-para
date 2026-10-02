@@ -33,7 +33,8 @@ def changes_ttl(lines: list[list[str]], now: dt.datetime | None = None) -> int:
     return max(CHANGES_TTL_MIN, int((end - now).total_seconds()))
 
 
-def message(sub: dict, kind: str, title: str, body: str, data: dict | None = None) -> dict:
+def message(sub: dict, kind: str, title: str, body: str, data: dict | None = None,
+            query: str = "") -> dict:
     """Сообщение в декларативном формате Apple (iOS 18.4+):
     сервис-воркер показывает его сам, а не проснулся или упал — айфон покажет
     это же и не отзовёт подписку за «невидимое» уведомление. Chrome и Firefox
@@ -47,7 +48,7 @@ def message(sub: dict, kind: str, title: str, body: str, data: dict | None = Non
         "notification": {
             "title": title,
             "body": body,
-            "navigate": site_url(sub),
+            "navigate": site_url(sub) + query,
             "tag": kind,
             "data": {"t": kind, **(data or {})},
         },
@@ -76,8 +77,11 @@ def gone_message(sub: dict) -> dict:
         title, what = "Вас больше нет в таблице", "себя"
     else:
         title, what = "Группы больше нет в таблице", "группу"
+    # ?gone=1 — служба уже ждала час: страница не ждёт ещё час своего, а сразу
+    # просит выбрать заново (main.js).
     return message(sub, "gone", title,
-                   f"Откройте сайт и выберите {what} заново: до этого уведомлений не будет.")
+                   f"Откройте сайт и выберите {what} заново: до этого уведомлений не будет.",
+                   query="?gone=1")
 
 
 def site_url(sub: dict) -> str:

@@ -1,5 +1,5 @@
 // Дни расписания карточками — общий вид для своего и чужого расписания
-// (DayCard и LessonRow в TodayScreen.kt).
+// (DayCard в DayList.kt, LessonRow.kt).
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
 import { dayTitle, capitalize } from '../time.js';

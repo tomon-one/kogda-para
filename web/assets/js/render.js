@@ -4,7 +4,7 @@
 
 import * as repo from './repo.js';
 import * as store from './store.js';
-import { h, clear } from './ui/dom.js';
+import { h, clear, fitLabels } from './ui/dom.js';
 import { dayIndex } from './schedule.js';
 import { mainScreen } from './ui/today.js';
 import { pickerScreen } from './ui/lists.js';
@@ -127,6 +127,7 @@ function renderScreen(navigated) {
   }
   clear(root);
   root.appendChild(screen);
+  fitLabels(screen);
   if (focusKey && !navigated && document.activeElement !== active && root.contains(active)) active.focus();
   if (!focusKey) restoreFocus(signature);
   // Переход, а той же кнопки на новом экране нет — фокус на заголовок, а не
