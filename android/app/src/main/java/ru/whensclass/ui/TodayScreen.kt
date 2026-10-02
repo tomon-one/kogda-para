@@ -95,6 +95,8 @@ fun TodayScreen(
     serverBroken: Boolean = false,
     /** Сервер не отвечает телефону — не то же, что «не прочитал таблицу». */
     unreachable: Boolean = false,
+    /** Сервер больше не обслуживает эту сборку — нужно обновить приложение. */
+    unsupported: Boolean = false,
     sourceUrl: String? = null,
     /** С какого момента сервер лежит (ISO, UTC) — для давности на плашке. */
     serverSince: String? = null,
@@ -177,6 +179,7 @@ fun TodayScreen(
                         brokenWhy = when {
                             refreshFailed -> "Не удалось обновить расписание"
                             gone -> if (teacherMode) "Вас нет в таблице" else "Группы нет в таблице"
+                            unsupported -> "Нужно обновить приложение"
                             unreachable -> "Сервер расписания не отвечает"
                             serverBroken -> "Сервер не смог обновить расписание"
                             else -> null
@@ -218,7 +221,9 @@ fun TodayScreen(
         // рассказал, где они; иначе просто в книгу.
         val plates: @Composable () -> Unit = {
             if (gone) Gone(groupName, teacherMode, onRepick)
-            if (serverBroken) {
+            if (unsupported) {
+                Unsupported(onUpdateBadge)
+            } else if (serverBroken) {
                 ServerBroken(
                     sheetLink(schedule, today, sourceUrl), serverSince, now, unreachable,
                 )

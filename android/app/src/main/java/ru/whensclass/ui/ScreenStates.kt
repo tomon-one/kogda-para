@@ -96,6 +96,38 @@ internal fun ServerBroken(
 }
 
 /**
+ * Плашка «обновите приложение»: сервер больше не обслуживает эту сборку (426
+ * или `min` в /v1/meta), расписание не обновится, пока её не заменят. Кнопка
+ * ведёт к обновлению в настройках.
+ */
+@Composable
+internal fun Unsupported(onUpdate: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                "Нужно обновить приложение",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                "Сервер больше не поддерживает эту версию, расписание не обновляется. " +
+                    "На экране — то, что пришло раньше.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ActionButton(label = "Обновить", onClick = onUpdate, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/**
  * Плашка «группы в таблице больше нет»: сервер отвечает 404 при здоровом
  * состоянии — группу переименовали, разделили или убрали, и старый
  * идентификатор больше ни на что не указывает. Выход один — выбрать заново.

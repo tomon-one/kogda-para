@@ -553,6 +553,7 @@ internal fun App(
                         loadTally = { container.store.tally() },
                         serverBroken = serverStatus != "ok",
                         unreachable = serverStatus == ru.whensclass.data.STATUS_UNREACHABLE,
+                        unsupported = serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED,
                         sourceUrl = tableUrl,
                         serverSince = serverSince,
                         gone = gone,
@@ -608,6 +609,7 @@ internal fun partialText(missed: List<String>, fresh: Set<String>): String {
 internal fun refreshFailure(error: Throwable, teacher: Boolean = false): String = when (error) {
     is ru.whensclass.data.HttpFailure -> when (error.code) {
         429 -> "Сервер занят, попробуйте через минуту"
+        426 -> "Эта версия приложения больше не поддерживается — обновите его"
         // Первый час после пропажи ([ScheduleStore.gone]): код ответа выглядел
         // бы поломкой приложения.
         404 -> if (teacher) "Вас не нашлось в таблице. Не вернётся за час — выберите себя заново"
