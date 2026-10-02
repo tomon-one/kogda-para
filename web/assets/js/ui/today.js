@@ -25,6 +25,8 @@ export function mainScreen(app) {
   var tab = route.kind === 'teachers' ? 'teachers'
     : route.kind === 'groups' ? 'students'
     : teacherMode ? 'teachers' : 'students';
+  // С ролью — своя память: своя вкладка преподавателя — не то, что смотрел студент.
+  app.state.opened[teacherMode + tab] = route.kind ? route.kind + (route.id ? '/' + route.id : '') : '';
 
   var head = h('div', { class: 'head' }, topbar(app, own), tabs(app, tab, teacherMode));
   var content = h('main', { class: 'content' });
@@ -130,9 +132,15 @@ function tabs(app, current, teacherMode) {
       type: 'button', class: 'tab' + (on ? ' on' : ''), 'aria-current': on ? 'page' : null, 'data-key': 'tab:' + tab,
       onclick: function () {
         if (on) return;
-        // Своя вкладка — своё расписание; чужая — список.
+        // Вкладка — к тому, что на ней было открыто (TodayScreen.kt: вкладки
+        // помнят своё); в первый раз своя — своё расписание, чужая — список.
         var mine = teacherMode ? tab === 'teachers' : tab === 'students';
-        app.go(mine ? '' : teacherMode ? 'groups' : 'teachers');
+        var opened = app.state.opened[teacherMode + tab];
+        var path = opened != null ? opened : mine ? '' : teacherMode ? 'groups' : 'teachers';
+        // К открытому из списка — через список, как шли в первый раз: «К списку»
+        // и «назад» ведут к нему, а не к своему расписанию.
+        if (path.indexOf('/') > 0) app.go(path.split('/')[0]);
+        app.go(path);
       },
     }, h('span', { class: 'tab-label' }, names[tab]));
   }));
