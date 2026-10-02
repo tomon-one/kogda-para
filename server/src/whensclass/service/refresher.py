@@ -270,7 +270,13 @@ class Refresher(Failing, SheetWatch):
             self._sheets = None
 
         self._accepted()
-        before = (self.store.snapshot, self.store.teachers) if self.on_update else (None, None)
+        old = self.store.snapshot
+        if snapshot.unread:
+            snapshot.unread_since = (
+                old.unread_since if old is not None and old.unread and old.unread_since
+                else dt.datetime.now(dt.timezone.utc)
+            )
+        before = (old, self.store.teachers) if self.on_update else (None, None)
         try:
             self.store.put(snapshot, dt.datetime.now(dt.timezone.utc), teachers=teachers)
         except OSError as exc:
@@ -290,6 +296,7 @@ class Refresher(Failing, SheetWatch):
             # не лёг на диск: о диске своя тревога выше.
             self.status = "ok"
             self._recovered()
+            self._tell_unread(old, snapshot)
             self._announce(before, snapshot, teachers, today)
             return True
         if self._disk_alerted:
@@ -304,6 +311,7 @@ class Refresher(Failing, SheetWatch):
             history.archive(self.state_dir, gid, text, digest, rejected=dropped)
         self.status = "ok"
         self._recovered()
+        self._tell_unread(old, snapshot)
         self._announce(before, snapshot, teachers, today)
         if self._next_rejected:
             name, exc = self._next_rejected
@@ -325,6 +333,24 @@ class Refresher(Failing, SheetWatch):
             snapshot.sheet_title, len(snapshot.groups), snapshot.total_lessons(),
         )
         return True
+
+    def _tell_unread(self, old, snapshot) -> None:
+        """Непрочитанные дни — владельцу сразу, как появились новые; прочитались
+        все — что снова всё."""
+        was = {(g, d) for g, days in (old.unread if old else {}).items() for d in days}
+        now = {(g, d) for g, days in snapshot.unread.items() for d in days}
+        if now:
+            alerts.notify(
+                "unread",
+                "Лист принят, но не прочитаны дни: " + "; ".join(snapshot.unread_why[:3])
+                + ". Там отдаётся прежнее, а где его нет — «ещё не опубликовано»; "
+                "старые версии приложения видят сбой. Присмотреться (руководство по "
+                "серверу, «Когда что-то не так»).",
+                force=bool(now - was),
+            )
+        elif was:
+            alerts.forget("unread")
+            alerts.notify("unread-ok", "Все дни листа снова прочитаны.", force=True, good=True)
 
     def _announce(self, before, snapshot, teachers, today: dt.date) -> None:
         """Сказать подписчикам об изменениях; их поломка — не поломка обновления."""
@@ -357,6 +383,7 @@ class Refresher(Failing, SheetWatch):
                 name = title or f"gid {gid}"
                 try:
                     current = parse_export(text, name, gid, limits=_limits(), around=today)
+                    _hold_unread(current, self.store.snapshot)
                     # Сдвиг ищется по порядку колонок, а он у каждого листа
                     # свой: проверять лист отдельно, до склейки. Историю даёт
                     # прежний снимок и — для следующего листа — только что
@@ -429,6 +456,24 @@ class SheetRejected(SourceFormatChanged):
 
 
 ACCEPT_NEXT_TTL = dt.timedelta(hours=2)
+
+
+def _hold_unread(snapshot, before) -> None:
+    """Непрочитанные дни групп — прежними парами, если прежний снимок их знал.
+
+    Не знал (неделя пришла впервые) — дня у группы нет, и край её расписания
+    встаёт перед ним: «ещё не опубликовано», а не «пар нет».
+    """
+    for gid, days in snapshot.unread.items():
+        for day in days:
+            known = (
+                before is not None and day in before.dates and gid in before.schedule
+                and before.unread.get(gid, {}).get(day, True)
+            )
+            lessons = before.schedule.get(gid, {}).get(day) if known else None
+            if lessons:
+                snapshot.schedule.setdefault(gid, {})[day] = list(lessons)
+            days[day] = bool(known)
 
 
 def _limits() -> Limits:

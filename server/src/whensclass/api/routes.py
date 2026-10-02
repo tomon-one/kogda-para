@@ -100,6 +100,8 @@ def healthz(request: Request) -> Response:
         reason = "расписание ещё не загружено"
     elif refresher.status != "ok":
         reason = f"не обновляется: {refresher.last_error or refresher.status}"
+    elif snapshot.unread:
+        reason = _outward(store, refresher)[2]
     else:
         coverage = snapshot.coverage
         busy, fullest = filling(snapshot)
@@ -118,7 +120,7 @@ def healthz(request: Request) -> Response:
                 f"сегодня пары вписаны у {busy[today]} групп из {len(snapshot.groups)} — "
                 "лист на сегодня не дописан или праздник"
             )
-    body = {"ok": reason is None, "status": refresher.status}
+    body = {"ok": reason is None, "status": _outward(store, refresher)[0]}
     if reason:
         body["reason"] = reason
     elif note:
@@ -128,6 +130,19 @@ def healthz(request: Request) -> Response:
         status_code=200 if reason is None else 503,
         media_type=JSON,
     )
+
+
+def _outward(store, refresher) -> tuple[str, dt.datetime | None, str | None]:
+    """Что видно наружу: (status, since, err).
+
+    Непрочитанные дни при здоровом обновлении — тоже stale: старые версии
+    приложения других пометок не знают, и сбой у них лучше, чем прежние пары
+    без знака. Новые читают `refresh` и `unread` в /v1/meta.
+    """
+    snapshot = store.snapshot
+    if refresher.status != "ok" or snapshot is None or not snapshot.unread:
+        return refresher.status, refresher.failing_since, refresher.last_error
+    return "stale", snapshot.unread_since, "не прочитаны дни: " + "; ".join(snapshot.unread_why)
 
 
 def _not_loaded() -> Response:
@@ -172,9 +187,10 @@ def meta(request: Request) -> Response:
     store, refresher = _state(request)
     if store.snapshot is None:
         return _not_loaded()
-    body = meta_payload(store.snapshot, store.generated, refresher.status,
+    status, since, error = _outward(store, refresher)
+    body = meta_payload(store.snapshot, store.generated, status,
                         refresher.checked_at, today=_today(),
-                        failing_since=refresher.failing_since, error=refresher.last_error)
+                        failing_since=since, error=error, refresh=refresher.status)
     return _json_response(request, body, cache=False)
 
 

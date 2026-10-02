@@ -104,3 +104,23 @@ def test_closed_table_during_the_search_is_an_alarm_not_a_crash(canary, monkeypa
     monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
     assert module.main() == 2
     assert sent == [("canary-closed", False)]
+
+
+@pytest.mark.parametrize("sheets, dropped", [(1, False), (2, True)])
+def test_one_sheet_against_a_two_sheet_snapshot_is_not_a_cut_day(canary, monkeypatch, tmp_path,
+                                                                  fixture_csv, sheets, dropped):
+    """Снимок службы из двух листов, канарейка читает один: пустые у неё дни
+    следующего листа — не вырезанный день, как у службы при выпавшем листе."""
+    from whensclass.parser.export import parse_csv
+    from whensclass.storage.snapshot_store import SnapshotStore
+
+    module, sent = canary
+    monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
+    snapshot = parse_csv(fixture_csv, "лист", FIXTURE)
+    snapshot.sheet_columns = {str(i): {} for i in range(sheets)}
+    SnapshotStore(tmp_path).put(snapshot, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    seen = []
+    monkeypatch.setattr(module, "_check_days_emptied",
+                        lambda previous, current, today, dropped=False: seen.append(dropped))
+    assert module.main() == 0
+    assert seen == [dropped]
