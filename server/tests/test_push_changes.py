@@ -236,3 +236,11 @@ def test_halves_with_one_subject_are_matched_by_teacher_and_room(now, lines):
     was = [_l(4, "Иностранный язык", r="55/1", t=["Миллер Д. Х."]),
            _l(4, "Иностранный язык", r="467", t=["Уэллс Д. Р."])]
     assert [text for _, text in changes.compare(_group({TUE: was}), _group({TUE: now}))] == lines
+
+
+def test_own_lesson_merged_with_the_neighbours_is_a_move_not_a_removal():
+    """Подгруппы сидели в разных кабинетах — две записи с подписями; своя
+    переехала к соседям — одна общая строка без подписи (ScheduleDiffTest)."""
+    was = _group({TUE: [_l(2, "Физика", r="101", gr="ИСП-924/2"), _l(2, "Физика", r="102", gr="ИСП-924/1")]})
+    now = _group({TUE: [_l(2, "Физика", r="101")]})
+    assert [text for _, text in changes.compare(was, now)] == ["2 пара переехала в каб. 101"]
