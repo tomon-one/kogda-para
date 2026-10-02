@@ -65,7 +65,7 @@ def not_a_person(name: str) -> bool:
 
 
 def _surname_initials(name: str) -> tuple[str, str]:
-    """«Нечаев Данил Сергеевич», «Филатова Л.А.» -> (фамилия, инициалы)."""
+    """«Нечаев Сергей Алексеевич», «Филатова Л.А.» -> (фамилия, инициалы)."""
     words = [w for w in re.split(r"[\s.]+", name.replace("ё", "е").replace("Ё", "Е")) if w]
     if not words:
         return "", ""

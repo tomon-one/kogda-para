@@ -18,8 +18,8 @@ class SearchTest {
 
     @Test
     fun `е находит ё`() {
-        assertTrue(matchesQuery("Королёва Валерия Дмитриевна", "Королева"))
-        assertTrue(matchesQuery("Королёва Валерия Дмитриевна", "королёва в"))
+        assertTrue(matchesQuery("Арасака Ёринобу Сабурович", "Еринобу"))
+        assertTrue(matchesQuery("Арасака Ёринобу Сабурович", "арасака ёр"))
     }
 }
 
@@ -28,7 +28,7 @@ class LetterTest {
     fun `разделы по первой букве`() {
         org.junit.Assert.assertEquals("И", letterOf("ИСП-924/1"))
         org.junit.Assert.assertEquals("0–9", letterOf("01.26.Р.ИИ.ГД.ОФ.9-НСК"))
-        org.junit.Assert.assertEquals("Е", letterOf("Ёринобу А. А."))
+        org.junit.Assert.assertEquals("Е", letterOf("Ёринобу Арасака"))
         org.junit.Assert.assertEquals("#", letterOf(""))
     }
 }

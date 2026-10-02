@@ -244,10 +244,10 @@ test('другие группы: склейка, значки, подгрупп�
 test('поиск и буквы', () => {
   assert.equal(matchesQuery('ИСП-924/1', 'исп924'), true);
   assert.equal(matchesQuery('ИСП-924/1', 'исп 924'), true);
-  assert.equal(matchesQuery('Королёва Анна', 'королева'), true);
+  assert.equal(matchesQuery('Арасака Ёринобу', 'еринобу'), true);
   assert.equal(matchesQuery('ИСП-924/1', 'дп'), false);
   assert.equal(matchesQuery('что угодно', '  '), true);
-  assert.equal(letterOf('Ёринобу'), 'Е');
+  assert.equal(letterOf('Ёринобу Арасака'), 'Е');
   assert.equal(letterOf('01-26.РКИ'), '0–9');
   assert.equal(letterOf('«Кавычки»'), '#');
   assert.deepEqual(lettered([{ name: 'Б1' }, { name: 'А1' }, { name: 'Б2' }], (x) => x.name)

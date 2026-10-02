@@ -48,12 +48,12 @@ class LessonTextTest {
                     subject = "Английский",
                     room = "12",
                     online = 1,
-                    teachers = listOf("Кушинада Л. А."),
+                    teachers = listOf("Кушинада Л. Т."),
                 ),
             ),
         )
 
-        assertEquals("Онлайн, комната 12. 2 пара. Кушинада Л. А.", text)
+        assertEquals("Онлайн, комната 12. 2 пара. Кушинада Л. Т.", text)
 
         // Просто «онлайн», без номера — и текст без комнаты.
         val bare = LessonAlarms.text(

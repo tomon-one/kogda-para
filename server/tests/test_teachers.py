@@ -141,18 +141,18 @@ def test_spelling_twin_is_the_same_surname_and_initials():
 
     index = TeacherIndex(
         names={
-            "nechaev-daniil": "Нечаев Даниил Сергеевич",
+            "nechaev-sergei": "Нечаев Сергей Алексеевич",
             "filatova": "Филатова Лариса Андреевна",
-            "zaharov-h": "Захаров Харитон Радионович",
+            "zaharov-h": "Захаров Харитон Радеонович",
         },
-        schedule={"nechaev-daniil": {1: [1]}, "filatova": {1: [1]}, "zaharov-h": {1: [1]}},
+        schedule={"nechaev-sergei": {1: [1]}, "filatova": {1: [1]}, "zaharov-h": {1: [1]}},
     )
-    assert spelling_twin(index, "Нечаев Данил Сергеевич") == "nechaev-daniil"
+    assert spelling_twin(index, "Нечаев Сергий Алексеевич") == "nechaev-sergei"
     assert spelling_twin(index, "Филатова Л.А.") == "filatova"
-    assert spelling_twin(index, "Захаров Иван Радионович") is None
-    assert spelling_twin(index, "Нечаев Даниил Сергеевич") is None, "сам себе не двойник"
-    index.schedule.pop("nechaev-daniil")
-    assert spelling_twin(index, "Нечаев Данил Сергеевич") is None, "без пар — не замена"
+    assert spelling_twin(index, "Захаров Иван Радеонович") is None
+    assert spelling_twin(index, "Нечаев Сергей Алексеевич") is None, "сам себе не двойник"
+    index.schedule.pop("nechaev-sergei")
+    assert spelling_twin(index, "Нечаев Сергий Алексеевич") is None, "без пар — не замена"
 
 
 def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_days():
