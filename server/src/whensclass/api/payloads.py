@@ -110,10 +110,15 @@ def _group_edge(snapshot: Snapshot, group_id: str, sheet: list[date]) -> date | 
     """
     by_date = snapshot.schedule.get(group_id, {})
     last = max((day for day, lessons in by_date.items() if lessons), default=None)
-    if last is None or not sheet:
-        return last
-    week_end = last + timedelta(days=6 - last.weekday())
-    return max(last, min(week_end, sheet[-1]))
+    if last is not None and sheet:
+        week_end = last + timedelta(days=6 - last.weekday())
+        last = max(last, min(week_end, sheet[-1]))
+    # Непрочитанный день, которого прежний снимок не знал, и всё за ним — ещё
+    # не опубликовано: «пар нет» там было бы неправдой.
+    unknown = [day for day, kept in snapshot.unread.get(group_id, {}).items() if not kept]
+    if unknown and last is not None:
+        last = min(last, min(unknown) - timedelta(days=1))
+    return last
 
 
 def _upto(snapshot: Snapshot, edge: date | None) -> list[date]:
@@ -161,6 +166,17 @@ def teacher_published(
 def _alive_since(snapshot: Snapshot, group: str, since: date) -> bool:
     """Есть ли у группы пары в `since` или позже — колонка не опустела."""
     return any(lessons for day, lessons in snapshot.schedule.get(group, {}).items() if day >= since)
+
+
+def _unread(snapshot: Snapshot, group_ids, start: date, days: int) -> list[str]:
+    """Непрочитанные дни этих групп в окне — пометка для новых версий."""
+    end = start + timedelta(days=days)
+    return sorted({
+        day.isoformat()
+        for gid in group_ids
+        for day in snapshot.unread.get(gid, {})
+        if start <= day < end
+    })
 
 
 def _cov(dates: list[date]) -> list[str] | None:
@@ -316,6 +332,8 @@ def teacher_payload(
         payload["cov"] = cov
     if bells:
         payload["bells"] = bells
+    if unread := _unread(snapshot, index.groups.get(teacher_id, ()), start, days):
+        payload["unread"] = unread
     return payload
 
 
@@ -387,6 +405,8 @@ def schedule_payload(
         payload["cov"] = cov
     if bells:
         payload["bells"] = bells
+    if unread := _unread(snapshot, [group_id], start, days):
+        payload["unread"] = unread
     return payload
 
 
@@ -398,7 +418,10 @@ def meta_payload(
     today: date | None = None,
     failing_since: datetime | None = None,
     error: str | None = None,
+    refresh: str | None = None,
 ) -> dict:
+    """`status` — для всех версий; `refresh` — состояние обновления без
+    непрочитанных дней (их список — `unread`), его читают новые."""
     # Куда идти, когда мы подвели: на лист, где лежит сегодняшний день, а
     # без него — просто в книгу. Ближайший известный день годится тоже:
     # в воскресенье это завтрашний понедельник.
@@ -426,6 +449,13 @@ def meta_payload(
             out["since"] = _iso(failing_since)
         if error:
             out["err"] = error
+    if snapshot.unread:
+        out["refresh"] = refresh or status
+        out["unread"] = [
+            {"g": gid, "d": day.isoformat()}
+            for gid, days in sorted(snapshot.unread.items())
+            for day in sorted(days)
+        ]
     return out
 
 

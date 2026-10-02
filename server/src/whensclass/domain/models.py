@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 
 def a1_column(column: int) -> str:
@@ -112,6 +112,12 @@ class Snapshot:
     # Блоки главного заголовка без имени: колонка -> сколько под ней пар.
     # Только для проверки при обновлении, на диск не пишется.
     unnamed: dict[int, int] = field(default_factory=dict)
+    # Дни групп, которые разбор не прочитал: id группы -> дата -> есть ли
+    # вместо них прежние пары (True) или прежний снимок этого дня не знал.
+    unread: dict[str, dict[date, bool]] = field(default_factory=dict)
+    # Почему не прочитаны — словами для владельца; и с какого момента.
+    unread_why: list[str] = field(default_factory=list)
+    unread_since: datetime | None = None
 
     def column_of(
         self, group: GroupRef, day: date | None = None, gid: str | None = None
@@ -149,6 +155,13 @@ class Snapshot:
             by_date.update(self.schedule.get(gid, {}))
             combined.schedule[gid] = by_date
 
+        for gid, days in other.unread.items():
+            kept = {day: v for day, v in days.items() if day not in self.dates}
+            if kept:
+                combined.unread[gid] = kept
+        for gid, days in self.unread.items():
+            combined.unread.setdefault(gid, {}).update(days)
+        combined.unread_why = self.unread_why + other.unread_why
         combined.dates = sorted(set(self.dates) | set(other.dates))
         combined.places = {**other.places, **self.places}
         combined.sheet_columns = {**other.sheet_columns, **self.sheet_columns}

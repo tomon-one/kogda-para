@@ -148,6 +148,12 @@ def _to_dict(snapshot: Snapshot) -> dict:
             }
             for gid, by_date in snapshot.schedule.items()
         },
+        "unread": {
+            gid: {day.isoformat(): kept for day, kept in days.items()}
+            for gid, days in snapshot.unread.items()
+        },
+        "unread_why": snapshot.unread_why,
+        "unread_since": snapshot.unread_since.isoformat() if snapshot.unread_since else None,
     }
 
 
@@ -202,4 +208,11 @@ def _from_dict(data: dict) -> Snapshot:
         }
         for gid, by_date in data["schedule"].items()
     }
+    snapshot.unread = {
+        gid: {dt.date.fromisoformat(day): bool(kept) for day, kept in days.items()}
+        for gid, days in data.get("unread", {}).items()
+    }
+    snapshot.unread_why = list(data.get("unread_why", []))
+    if data.get("unread_since"):
+        snapshot.unread_since = dt.datetime.fromisoformat(data["unread_since"])
     return snapshot

@@ -175,6 +175,27 @@ def test_halved_block_is_two_lessons_not_a_shift(fixture_csv):
     assert halves and halves[0] == [("467", ("Здорик И. Р.",)), ("55/1", ("Пикулина Л. Е.",))]
 
 
+@pytest.mark.parametrize("cells, teacher, halved", [
+    # Аудитория справа есть — половинки, даже без ФИО и без левой половины.
+    (["Немецкий (Пр)", "55/1", "Английский (Пр)", "467"], ["", "", "", ""], True),
+    (["", "", "Английский (Пр)", "467"], ["", "", "Уэллс Д. Р.", ""], True),
+    # Аудитории справа ещё нет — половинки узнаются по ФИО под правым названием.
+    (["Немецкий (Пр)", "55/1", "Английский (Пр)", ""], ["Миллер Д. Х.", "", "Уэллс Д. Р.", ""], True),
+    # Без ФИО справа и без аудитории — не половинки.
+    (["Немецкий (Пр)", "55/1", "Английский (Пр)", ""], ["Миллер Д. Х.", "", "", ""], False),
+    # Левой половины нет и аудитории справа нет — так выглядит вставка на две ячейки.
+    (["", "", "Английский (Пр)", ""], ["", "", "Уэллс Д. Р.", ""], False),
+    # В +2 номер аудитории — это кабинет соседа, а не название.
+    (["Немецкий (Пр)", "", "467", "55"], ["Миллер Д. Х.", "", "", ""], False),
+    # В +0 кабинет — колонка предмета съехала.
+    (["467", "", "Английский (Пр)", "55"], ["", "", "Уэллс Д. Р.", ""], False),
+])
+def test_each_condition_of_a_halved_block(cells, teacher, halved):
+    from whensclass.parser.csv_schedule import _halves
+
+    assert _halves(cells, 0, teacher) is halved
+
+
 def test_two_cell_insertion_is_still_a_shift(fixture_csv):
     """Вставка на две ячейки тоже кладёт название в +2, но в +3 у неё пусто —
     это не половинки."""
@@ -276,3 +297,37 @@ def test_vertical_shift_of_many_groups_on_one_day_is_rejected():
         many = _vertical(many, g.id, day)
     with pytest.raises(SourceFormatChanged, match="у 10 групп"):
         check_shift(many, previous=honest)
+
+
+# --- Кому не слать уведомления: соседи и вертикаль ---------------------------
+
+def _with_shared_column(snapshot):
+    """Вторая группа в колонке Г-1 — как «ДП-923 и ДП-1124»."""
+    from whensclass.domain.models import GroupRef
+
+    first = snapshot.groups[1]
+    snapshot.groups.insert(2, GroupRef(name="Г-1б", id="g-1b", column=first.column))
+    snapshot.schedule["g-1b"] = copy.deepcopy(snapshot.schedule[first.id])
+    return snapshot
+
+
+def test_neighbour_lessons_reach_every_group_of_a_shared_column():
+    from whensclass.parser.shift import neighbour_runs
+
+    honest = _with_shared_column(synthetic_sheet())
+    moved = shifted(honest, [0, 1], 2, since=7)
+    moved.schedule["g-1b"] = copy.deepcopy(moved.schedule["g-1"])
+    assert neighbour_runs(moved, honest, honest.dates[7]) == {"g-0", "g-1", "g-1b"}
+
+
+def test_vertical_shift_names_every_group_of_its_column():
+    from whensclass.parser.shift import vertical_groups
+
+    honest = _with_shared_column(synthetic_sheet())
+    moved = copy.deepcopy(honest)
+    # Съехала колонка, а сверка видит это у одной группы — назвать надо обе.
+    for day in honest.dates[5:]:
+        moved.schedule["g-1"][day] = [
+            dataclasses.replace(x, number=x.number + 1) for x in honest.schedule["g-1"][day]
+        ]
+    assert vertical_groups(moved, honest) == {"g-1", "g-1b"}

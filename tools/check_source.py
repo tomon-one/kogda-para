@@ -143,7 +143,11 @@ def main() -> int:
         # при парах на месте и пропажа групп толпой.
         _check_lost_names(previous, snapshot, gid)
         _check_group_drop(previous, snapshot)
-        _check_days_emptied(previous, snapshot, today)
+        # Канарейка читает один лист, а снимок службы бывает склейкой двух:
+        # тогда дни следующего листа у неё пусты, как у службы при выпавшем
+        # листе.
+        two = previous is not None and len(previous.sheet_columns) > 1
+        _check_days_emptied(previous, snapshot, today, dropped=two)
     except SourceFormatChanged as exc:
         print(f"БЕДА: формат таблицы изменился — {exc}")
         print("Сверьтесь с docs/source-format.md: там записано, как было.")
@@ -155,6 +159,9 @@ def main() -> int:
         return 2
 
     coverage = snapshot.coverage
+    for why in snapshot.unread_why:
+        # Владельцу об этом скажет служба: она же решает, что отдать вместо.
+        print(f"ВНИМАНИЕ: не прочитан день — {why}")
     if not args.quiet:
         print(f"лист {snapshot.sheet_title!r}")
         print(f"групп {len(snapshot.groups)}, дней {len(snapshot.dates)}, "
