@@ -66,6 +66,7 @@ class NextLessonWidget : GlanceAppWidget() {
             val lesson = next?.lesson
             val broken = state?.serverBroken == true
             val gone = state?.gone == true
+            val unsupported = state?.unsupported == true
 
             Column(
                 modifier = GlanceModifier
@@ -91,6 +92,7 @@ class NextLessonWidget : GlanceAppWidget() {
                         noNextLesson(
                             state?.groupName, schedule, today, broken,
                             checked = checkedToday(state?.fetchedAt ?: 0L, today),
+                            unsupported = unsupported,
                         ),
                         style = TextStyle(fontSize = 13.sp, color = colors.textDim),
                     )
@@ -107,6 +109,7 @@ class NextLessonWidget : GlanceAppWidget() {
                             busy -> "обновление…"
                             failed -> "не обновилось ⟳"
                             gone -> "нет в таблице"
+                            unsupported -> "обновите приложение"
                             broken -> "сбой ⟳"
                             done -> "обновлено"
                             else -> formatFetchedShort(state?.fetchedAt ?: 0L) + " ⟳"
@@ -122,7 +125,7 @@ class NextLessonWidget : GlanceAppWidget() {
                         // Группы нет в таблице — обновление ничего не даст: в
                         // приложение, к «выбрать заново».
                         modifier = GlanceModifier.clickable(
-                            if (gone) {
+                            if (gone || unsupported) {
                                 actionStartActivity(openDay(LocalContext.current, today))
                             } else {
                                 actionRunCallback<RefreshAction>()
@@ -148,6 +151,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 // без сбоя (телефон долго без сети) не красные.
                 val status = when {
                     gone -> "нет в таблице · "
+                    unsupported -> "обновите приложение · "
                     broken -> "сбой · "
                     next.unreadOn == next.day -> "не прочитан · "
                     next.unreadOn != null -> formatDayTitleShort(next.unreadOn).substringBefore(",") +
@@ -296,10 +300,13 @@ internal fun noNextLesson(
     broken: Boolean,
     /** Телефон проверял сервер сегодня: иначе «не опубликовано» утверждать нечем. */
     checked: Boolean = true,
+    /** Сервер эту сборку не обслуживает (426). */
+    unsupported: Boolean = false,
 ): String {
     // «…группу или себя»: виджет ставит и преподаватель.
     if (groupName == null) return "Откройте приложение и выберите группу или себя"
     if (schedule == null) return "Расписание не загружено"
+    if (unsupported) return "Нужно обновить приложение"
     if (broken) return "Сбой: расписание не обновляется"
     // Пар впереди нет, но день сервер не прочитал — это не «пар нет».
     schedule.days.firstOrNull { day ->

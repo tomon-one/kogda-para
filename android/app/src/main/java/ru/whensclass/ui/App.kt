@@ -240,6 +240,17 @@ internal fun App(
         reloadKey++
     }
 
+    // Сервер эту сборку не обслуживает (426): списки не придут — к обновлению
+    // в настройках, а не «проверьте интернет».
+    val toUpdate: (() -> Unit)? = if (serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED) {
+        {
+            focusUpdate = true
+            screen = Screen.SETTINGS
+        }
+    } else {
+        null
+    }
+
     // Выбрали группу или себя: сразу на экран расписания, и ⟳ крутится, пока
     // идёт сеть.
     val afterPick: (suspend () -> Unit) -> Unit = { select ->
@@ -389,6 +400,7 @@ internal fun App(
                             teachers = teachers,
                             onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
+                            onUpdate = toUpdate,
                             canGoBack = chosenName != null,
                             onBack = {
                                 pickTeacher = null
@@ -404,6 +416,7 @@ internal fun App(
                             groups = groups,
                             onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
+                            onUpdate = toUpdate,
                             canGoBack = chosenName != null,
                             onBack = {
                                 pickTeacher = null

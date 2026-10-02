@@ -101,7 +101,11 @@ internal fun ServerBroken(
  * ведёт к обновлению в настройках.
  */
 @Composable
-internal fun Unsupported(onUpdate: () -> Unit) {
+internal fun Unsupported(
+    onUpdate: () -> Unit,
+    text: String = "Сервер больше не поддерживает эту версию, расписание не обновляется. " +
+        "На экране — то, что пришло раньше.",
+) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -117,8 +121,7 @@ internal fun Unsupported(onUpdate: () -> Unit) {
                 color = MaterialTheme.colorScheme.error,
             )
             Text(
-                "Сервер больше не поддерживает эту версию, расписание не обновляется. " +
-                    "На экране — то, что пришло раньше.",
+                text,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

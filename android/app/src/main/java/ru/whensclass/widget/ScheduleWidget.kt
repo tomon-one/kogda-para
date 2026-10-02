@@ -66,6 +66,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 failed = currentState(KEY_FAILED) == true,
                 serverBroken = state?.serverBroken == true,
                 gone = state?.gone == true,
+                unsupported = state?.unsupported == true,
                 sourceUrl = state?.sourceUrl,
             )
         }
@@ -87,6 +88,7 @@ class ScheduleWidget : GlanceAppWidget() {
         failed: Boolean,
         serverBroken: Boolean,
         gone: Boolean,
+        unsupported: Boolean,
         sourceUrl: String?,
     ) {
         ScheduleWidgetContent(
@@ -98,6 +100,7 @@ class ScheduleWidget : GlanceAppWidget() {
             failed = failed,
             serverBroken = serverBroken,
             gone = gone,
+            unsupported = unsupported,
             sourceUrl = sourceUrl,
             colors = colors,
             now = now,

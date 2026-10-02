@@ -56,6 +56,7 @@ fun ScheduleWidgetContent(
     failed: Boolean = false,
     serverBroken: Boolean = false,
     gone: Boolean = false,
+    unsupported: Boolean = false,
     sourceUrl: String? = null,
     modifier: GlanceModifier = GlanceModifier,
 ) {
@@ -92,6 +93,7 @@ fun ScheduleWidgetContent(
             failed,
             serverBroken,
             gone,
+            unsupported,
             // Пары дня прежние: сервер его не прочитал.
             schedule?.days?.firstOrNull { it.date == day.toString() }?.unread == UnreadDay.KEPT,
             fit,
@@ -110,13 +112,14 @@ fun ScheduleWidgetContent(
             today == null -> {
                 val missing = missingDay(
                     schedule, day, serverBroken, checked = checkedToday(fetchedAt, now.toLocalDate()),
+                    unsupported = unsupported,
                 )
                 // К своей колонке и к этому дню, а не в книгу целиком.
                 val link = sheetLink(schedule, day, sourceUrl)
                 MissingHint(
                     missing.text, colors, if (missing.toSource) link else null,
                     // Выходной — не повод «нажмите, чтобы обновить».
-                    open = if (missing.off) actionStartActivity(openDay(context, day)) else null,
+                    open = if (missing.toApp) actionStartActivity(openDay(context, day)) else null,
                 )
             }
             // Сервер день не прочитал, прежних пар нет — это не «пар нет».
@@ -176,6 +179,7 @@ private fun Header(
     failed: Boolean,
     serverBroken: Boolean,
     gone: Boolean,
+    unsupported: Boolean,
     kept: Boolean,
     fit: Fit,
     colors: Palette,
@@ -247,6 +251,7 @@ private fun Header(
                         // расписание в нём прежнее. Группы в таблице нет —
                         // нажатие ведёт в приложение, к «выбрать заново».
                         gone -> " · нет в таблице"
+                        unsupported -> " · обновите приложение"
                         // Сбой показываем и тогда, когда пары на экране есть:
                         // снимок прежний. Коротко — подробности на плашке в
                         // приложении.
@@ -258,13 +263,13 @@ private fun Header(
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || serverBroken || gone -> colors.error
+                            failed || serverBroken || gone || unsupported -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },
                     ),
                     modifier = GlanceModifier.clickable(
-                        if (gone) openApp else actionRunCallback<RefreshAction>(),
+                        if (gone || unsupported) openApp else actionRunCallback<RefreshAction>(),
                     ),
                 )
                 // Отдельным текстом, а не хвостом времени: внутри одного текста

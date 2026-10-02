@@ -299,9 +299,35 @@ class ScheduleRepository(
             .orEmpty()
     }
 
+    /**
+     * Расписание сервер этой сборке уже не отдаст: на экране, в виджетах и
+     * уведомлением — «обновите», а не сбой сервера и не попытка за попыткой.
+     * Уведомление — один раз, когда это случилось.
+     */
+    private suspend fun markUnsupported(sourceUrl: String? = null) {
+        val first = store.serverStatus.first() != STATUS_UNSUPPORTED
+        store.clearUnreachable()
+        store.putServerState(STATUS_UNSUPPORTED, sourceUrl, null)
+        updateWidgets()
+        if (first) {
+            ru.whensclass.notify.Notifications.newVersion(
+                context,
+                "Нужно обновить приложение",
+                "Сервер больше не поддерживает эту версию, расписание не обновляется. " +
+                    "Нажмите, чтобы установить новую.",
+            )
+        }
+    }
+
+    private suspend fun <T> loadList(load: () -> T): T? {
+        val answer = runCatching(load)
+        if ((answer.exceptionOrNull() as? HttpFailure)?.code == 426) markUnsupported()
+        return answer.getOrNull()
+    }
+
     /** Свежий список групп; null — сервер не ответил. */
     suspend fun freshGroups(): List<GroupDto>? = withContext(Dispatchers.IO) {
-        val fresh = runCatching { api.groups() }.getOrNull() ?: return@withContext null
+        val fresh = loadList { api.groups() } ?: return@withContext null
         store.putGroups(json.encodeToString(fresh))
         fresh.groups
     }
@@ -314,7 +340,7 @@ class ScheduleRepository(
 
     /** Свежий список преподавателей; null — сервер не ответил. */
     suspend fun freshTeachers(): List<GroupDto>? = withContext(Dispatchers.IO) {
-        val fresh = runCatching { api.teachers() }.getOrNull() ?: return@withContext null
+        val fresh = loadList { api.teachers() } ?: return@withContext null
         store.putTeachers(json.encodeToString(fresh))
         fresh.teachers
     }
@@ -433,6 +459,7 @@ class ScheduleRepository(
         // его со своими парами значило бы объявить её пары отменёнными.
         store.migrateGroups()
         store.migrateFormat()
+        store.forgetUnsupportedAfterUpdate()
         val asked = subject()
         val teacherMode = asked.teacher
         val subject = asked.id
@@ -460,11 +487,7 @@ class ScheduleRepository(
             val tooOld = (metaAnswer.exceptionOrNull() as? HttpFailure)?.code == 426 ||
                 (meta?.minBuild ?: 0) > appBuild(BuildConfig.VERSION_CODE, BuildConfig.CHANNEL)
             if (tooOld) {
-                // Расписание сервер этой сборке уже не отдаст: на экране —
-                // «обновите», а не сбой сервера и не попытка за попыткой.
-                store.clearUnreachable()
-                store.putServerState(STATUS_UNSUPPORTED, meta?.sourceUrl, null)
-                updateWidgets()
+                markUnsupported(meta?.sourceUrl)
                 return@withContext RefreshResult.Failed(HttpFailure(426, "/v1/meta"))
             }
             if (meta != null) {

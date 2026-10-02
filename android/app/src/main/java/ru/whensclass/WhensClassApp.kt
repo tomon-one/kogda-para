@@ -16,6 +16,7 @@ class WhensClassApp : Application() {
         // виджеты теперь только о своей: перевести до первой перерисовки.
         CoroutineScope(Dispatchers.Default).launch {
             runCatching { AppContainer.get(this@WhensClassApp).store.migrateGroups() }
+            runCatching { AppContainer.get(this@WhensClassApp).store.forgetUnsupportedAfterUpdate() }
         }
         SyncWorker.schedule(this)
         CoroutineScope(Dispatchers.Default).launch { MidnightUpdater.schedule(this@WhensClassApp) }

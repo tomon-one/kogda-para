@@ -92,6 +92,13 @@ class MissingDayTest {
     }
 
     @Test
+    fun `сборке, которую сервер не обслуживает, — «обновите», и нажатие в приложение`() {
+        val answer = missingDay(schedule("2026-09-02", "2026-09-12"), monday, true, unsupported = true)
+        assertEquals("Нужно обновить приложение", answer.text)
+        assertTrue(answer.toApp && !answer.toSource)
+    }
+
+    @Test
     fun `неделя в воскресенье без выложенной следующей — не «выходной», а к таблице`() {
         // Для недели воскресенье — не «выходной» без выхода к таблице.
         val answer = missingDay(schedule("2026-09-07", "2026-09-12"), sunday, false, week = true)
