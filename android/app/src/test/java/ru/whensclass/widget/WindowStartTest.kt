@@ -101,4 +101,17 @@ class WindowStartTest {
         // Кончились пять из шести, влезает три: 4-я, 5-я, 6-я, а не одна 6-я.
         assertEquals(3, windowStart(lessons(6), realDay, today, fits = 3, now = evening))
     }
+
+    @Test
+    fun `окно не режет две пары одного номера`() {
+        fun l(n: Int) = ru.whensclass.data.LessonDto(number = n, subject = "П$n")
+        val day = listOf(l(1), l(2), l(3), l(4), l(4), l(5))
+        // Влезает три: 2, 3 и половина 4-й — 4-я уходит целиком вниз.
+        org.junit.Assert.assertEquals(1 until 3, windowRange(day, 1, 3))
+        // Начало на второй половине 4-й — она уходит вверх целиком.
+        org.junit.Assert.assertEquals(5 until 6, windowRange(day, 4, 2))
+        // Влезает одна строка, а номер из двух — окно как было.
+        org.junit.Assert.assertEquals(3 until 4, windowRange(day, 3, 1))
+    }
 }
+

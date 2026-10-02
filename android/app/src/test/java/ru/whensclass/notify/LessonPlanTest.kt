@@ -165,6 +165,10 @@ class LessonPlanTest {
         assertEquals(1, plan.size)
         assertEquals(listOf("Немецкий", "Английский"), plan.single().lessons.map { it.subject })
         assertEquals("Немецкий / Английский", plan.single().subject)
+        // Общая часть названий — один раз: однострочный заголовок не теряет второе.
+        assertEquals("Иностранный язык: немецкий / английский",
+            ru.whensclass.widget.joinSubjects(listOf("Иностранный язык, немецкий", "Иностранный язык, английский")))
+        assertEquals("Физика", ru.whensclass.widget.joinSubjects(listOf("Физика")))
         // Отменили одну из двух — напоминание о второй не снимается.
         val key = "2026-09-08T14:20|Немецкий\u001fАнглийский"
         assertEquals(true, LessonAlarms.stillOn(day(german.copy(cancelled = 1), english), key))

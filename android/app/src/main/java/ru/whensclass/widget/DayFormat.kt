@@ -180,6 +180,19 @@ fun distinctSubjects(lessons: List<LessonDto>): List<String> =
     lessons.map { it.subject.trim(' ', '.') }.distinctBy { it.lowercase() }
 
 /**
+ * Названия пар одного номера в одну строку: «Иностранный язык, немецкий /
+ * Иностранный язык, английский» в однострочном заголовке теряет второе —
+ * общая часть один раз: «Иностранный язык: немецкий / английский»
+ * (_join_subjects в push/changes.py).
+ */
+fun joinSubjects(names: List<String>): String {
+    val head = names.firstOrNull()?.substringBefore(", ", "").orEmpty()
+    val shared = names.size > 1 && head.isNotEmpty() && names.all { it.startsWith("$head, ") }
+    return if (shared) head + ": " + names.joinToString(" / ") { it.removePrefix("$head, ") }
+    else names.joinToString(" / ")
+}
+
+/**
  * Расшифровка сокращений типа занятия из таблицы колледжа. Незнакомое
  * оставляем как есть: колледж может завести новое, и непонятное лучше, чем
  * ничего.
