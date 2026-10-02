@@ -188,20 +188,51 @@ def test_reminders_first_of_day_and_after_a_window():
 def test_reminder_names_both_lessons_of_a_halved_block():
     day = dt.date(2026, 9, 29)
     payload = _group({TUE: [
-        _l(4, "Немецкий", r="55/1", t=["Пикулина Л. Е."]),
-        _l(4, "Английский", r="467", t=["Здорик И. Р."]),
+        _l(4, "Немецкий", r="55/1", t=["Миллер Д. Х."]),
+        _l(4, "Английский", r="467", t=["Уэллс Д. Р."]),
     ]})
     plan = changes.reminders(payload, 15, day)
     assert [a["number"] for a in plan] == [4]
     assert plan[0]["title"] == "14:20 — Немецкий / Английский"
     assert plan[0]["subject"] == "Немецкий / Английский"
-    assert plan[0]["text"] == "Каб. 55/1 — Немецкий. Пикулина Л. Е.\nКаб. 467 — Английский. Здорик И. Р."
+    assert plan[0]["text"] == "4 пара\nКаб. 55/1 — Немецкий. Миллер Д. Х.\nКаб. 467 — Английский. Уэллс Д. Р."
     # Отменили одну — напоминание об оставшейся, как об обычной паре.
     payload["days"][0]["l"][0]["x"] = 1
-    assert changes.reminders(payload, 15, day)[0]["text"] == "Каб. 467. 4 пара. Здорик И. Р."
+    assert changes.reminders(payload, 15, day)[0]["text"] == "Каб. 467. 4 пара. Уэллс Д. Р."
+
+
+def test_reminder_of_one_lesson_in_two_halls_names_the_subject_once():
+    """У преподавателя одна пара у групп в двух залах — две записи номера."""
+    day = dt.date(2026, 9, 29)
+    payload = _group({TUE: [
+        _l(3, "Физическая культура", k="Пр", r="Спортзал 2", gr="БП-1126"),
+        _l(3, "Физическая культура.", k="Пр", r="Спортзал 3", gr="Т-925/3"),
+    ]})
+    payload["kind"] = "teacher"
+    plan = changes.reminders(payload, 15, day)
+    assert plan[0]["title"] == "12:30 — Физическая культура"
+    assert plan[0]["text"] == "3 пара, практика\nСпортзал 2. БП-1126\nСпортзал 3. Т-925/3"
 
 
 def test_reminder_names_the_group_only_for_teacher():
     lesson = _l(2, "Физика", r="275", gr="ИСП-924/2")
     assert changes.reminder_text(lesson, "ИСП-924/1") == "Каб. 275. 2 пара. ИСП-924/2"
     assert changes.reminder_text(_l(2, "Физика", r="актовый зал"), "ИСП-924/1") == "Актовый зал. 2 пара"
+
+
+@pytest.mark.parametrize("now, lines", [
+    # Левую подгруппу сняли — «убрали», а не «другой преподаватель» и «переехала».
+    ([_l(4, "Иностранный язык", r="467", t=["Уэллс Д. Р."])],
+     ["убрали 4 пару: Иностранный язык"]),
+    # Половинки поменялись местами — у каждой подгруппы всё прежнее.
+    ([_l(4, "Иностранный язык", r="467", t=["Уэллс Д. Р."]),
+      _l(4, "Иностранный язык", r="55/1", t=["Миллер Д. Х."])], []),
+    # Заменили правую — замена только у неё.
+    ([_l(4, "Иностранный язык", r="55/1", t=["Миллер Д. Х."]),
+      _l(4, "Математика", r="467", t=["Сильверхенд Д."], c="вместо: Иностранный язык")],
+     ["замена 4 пары: Иностранный язык → Математика"]),
+])
+def test_halves_with_one_subject_are_matched_by_teacher_and_room(now, lines):
+    was = [_l(4, "Иностранный язык", r="55/1", t=["Миллер Д. Х."]),
+           _l(4, "Иностранный язык", r="467", t=["Уэллс Д. Р."])]
+    assert [text for _, text in changes.compare(_group({TUE: was}), _group({TUE: now}))] == lines
