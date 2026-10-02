@@ -342,7 +342,10 @@ async def push_subscribe(request: Request) -> Response:
         known = any(g.id == sub["id"] for g in store.snapshot.groups)
     else:
         index = store.teachers
-        known = bool(index and sub["id"] in index.names) or store.known_teacher(sub["id"]) is not None
+        known = (
+            bool(index and (sub["id"] in index.names or sub["id"] in index.aliases))
+            or store.known_teacher(sub["id"]) is not None
+        )
     if not known:
         return _error(404, "группа не найдена" if sub["kind"] == "group" else "преподаватель не найден")
     if not push.subscribe(sub, _today()):

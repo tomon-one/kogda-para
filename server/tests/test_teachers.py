@@ -216,3 +216,31 @@ def test_initials_are_merged_into_the_single_full_name():
     assert set(index.names) == {full, teacher_id("Филин А. Б.")}
     assert set(index.days(full)) == {d1, d2}
     assert index.aliases == {teacher_id("Филатова Л.А."): full}
+
+
+def test_full_name_with_a_typo_is_the_same_teacher():
+    """«Данил» и «Даниил» при тех же фамилии и отчестве —
+    один человек: в списке одно имя, у которого больше пар, и все пары у него.
+    Старый id отвечает им же. «Анна» и «Алла» — две буквы, двое разных."""
+    from whensclass.api.payloads import teacher_answer
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+
+    days = [dt.date(2026, 9, 7) + dt.timedelta(days=i) for i in range(3)]
+    snap = Snapshot(sheet_title="л", groups=[GroupRef(name="А-1", id="a-1", column=2)], dates=days)
+    snap.schedule = {"a-1": {
+        days[0]: [Lesson(number=1, subject="Х", teachers=("Безухов Даниил Кириллович",)),
+                  Lesson(number=2, subject="У", teachers=("Каренина Анна Аркадьевна",))],
+        days[1]: [Lesson(number=1, subject="Х", teachers=("Безухов Даниил Кириллович",)),
+                  Lesson(number=2, subject="У", teachers=("Каренина Алла Аркадьевна",))],
+        days[2]: [Lesson(number=1, subject="Х", teachers=("Безухов Данил Кириллович",)),
+                  Lesson(number=2, subject="У", teachers=("Безухов Д. К.",))],
+    }}
+    index = build_index(snap)
+    main, typo = teacher_id("Безухов Даниил Кириллович"), teacher_id("Безухов Данил Кириллович")
+    assert set(index.names) == {main, teacher_id("Каренина Анна Аркадьевна"),
+                                teacher_id("Каренина Алла Аркадьевна")}
+    assert [len(index.days(main)[d]) for d in days] == [1, 1, 2]
+    assert index.aliases == {typo: main, teacher_id("Безухов Д. К."): main}
+    body = teacher_answer(snap, index, lambda _tid: None, typo, days[0], 3,
+                          dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc))
+    assert body["g"] == main and body["gn"] == "Безухов Даниил Кириллович"
