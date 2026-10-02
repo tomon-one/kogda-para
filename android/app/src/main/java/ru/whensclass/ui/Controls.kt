@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -73,11 +74,17 @@ val BUTTON_HEIGHT = 44.dp
 val ROW_BUTTON = 116.dp
 
 /**
- * Надпись, которой тесно, мельчает до 10 sp, а не рвётся на две строки.
- * Работает только с `maxLines = 1`: с `softWrap = false` Compose не видит,
- * что текст не влез, и не мельчает.
+ * Надпись, которой тесно, мельчает, а не рвётся на две строки. Нижний предел
+ * — 10 dp, а не 10 sp: sp растут со шрифтом телефона, и при шрифте 2,0
+ * предел становился 20 — «Преподавателям» уходило в многоточие. Работает
+ * только с `maxLines = 1`: с `softWrap = false` Compose не видит, что текст
+ * не влез, и не мельчает.
  */
-internal val FIT = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 14.sp, stepSize = 0.5.sp)
+internal val FIT: TextAutoSize
+    @Composable get() {
+        val smallest = with(LocalDensity.current) { 10.dp.toSp() }
+        return TextAutoSize.StepBased(minFontSize = smallest, maxFontSize = 14.sp, stepSize = 0.5.sp)
+    }
 
 /**
  * Движение бегунка: пружина, а не отсчёт по времени — сдвиг за ровное время
@@ -361,7 +368,8 @@ fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Uni
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        // Длинная подпись переносится, а не налезает на тумблер.
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
         MinimalSwitch(checked = checked, onCheckedChange = null)
     }
 }
