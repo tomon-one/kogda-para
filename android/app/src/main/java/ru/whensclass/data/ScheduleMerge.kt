@@ -48,6 +48,10 @@ fun combineGroups(main: ScheduleDto, extras: List<Pair<String, ScheduleDto?>>): 
     val theirs = extras.map { (_, schedule) ->
         schedule?.days.orEmpty().associateBy({ it.date }, { it.lessons })
     }
+    // Непрочитанный день другой группы — пометка с её именем, а не на весь день.
+    val marks = extras.map { (name, schedule) ->
+        schedule?.days.orEmpty().mapNotNull { day -> day.unread?.let { day.date to UnreadOther(name, it) } }.toMap()
+    }
     // Дни, которых у своей группы нет, а у выбранной есть, — внутри окна.
     val extraDates = theirs.flatMap { it.keys }
         .filter { first != null && last != null && it >= first && it <= last }
@@ -56,8 +60,6 @@ fun combineGroups(main: ScheduleDto, extras: List<Pair<String, ScheduleDto?>>): 
     val days = (main.days + extraDates.map { DayDto(date = it) }).sortedBy { it.date }
     return main.copy(
         groupNames = names,
-        // Непрочитанный день любой из групп — пометка на дне: часть пар в нём прежняя.
-        unread = (main.unread + extras.flatMap { it.second?.unread.orEmpty() }).distinct().sorted(),
         days = days.map { day ->
             val rows = day.lessons.map { it.copy(slots = listOf(0)) }.toMutableList()
             theirs.forEachIndexed { index, byDate ->
@@ -69,7 +71,7 @@ fun combineGroups(main: ScheduleDto, extras: List<Pair<String, ScheduleDto?>>): 
                 }
             }
             // sortedBy устойчива: в один номер своя пара выше чужих.
-            day.copy(lessons = rows.sortedBy { it.number })
+            day.copy(lessons = rows.sortedBy { it.number }, unreadOthers = marks.mapNotNull { it[day.date] })
         },
     )
 }

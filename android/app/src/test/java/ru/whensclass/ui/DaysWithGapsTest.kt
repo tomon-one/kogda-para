@@ -96,16 +96,36 @@ class DaysWithGapsTest {
     }
 
     @Test
-    fun `непрочитанный день помечен, а без прежних пар вставлен пустым`() {
-        val week = schedule(listOf("2026-09-07", "2026-09-08"), "2026-09-07", "2026-09-08")
-            .copy(unread = listOf("2026-09-08", "2026-09-09"))
-
-        val days = daysWithGaps(week)
-
-        assertEquals(listOf(null, UnreadDay.KEPT, UnreadDay.MISSING), days.map { it.unread })
-        assertEquals(listOf("2026-09-07", "2026-09-08", "2026-09-09"), dates(days))
-        // У выбранной вместе группы день не прочитан — пометка на общем дне.
-        val other = schedule(listOf("2026-09-07", "2026-09-08")).copy(unread = listOf("2026-09-07"))
-        assertEquals(listOf("2026-09-07"), combineGroups(schedule(listOf()), listOf("ИСП-924/2" to other)).unread)
+    fun `пометка непрочитанного дня — из ответа, с именем группы, если она не своя`() {
+        val body = """{"g":"isp-924-1","gn":"ИСП-924/1","gen":"G","cov":["2026-09-07","2026-09-09"],"days":[
+            {"d":"2026-09-07","l":[]},
+            {"d":"2026-09-08","l":[{"n":1,"s":"Физика"}],"un":"kept"},
+            {"d":"2026-09-09","l":[],"un":"missing"},
+            {"d":"2026-09-10","l":[],"un":"вздор"}]}"""
+        val days = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            .decodeFromString<ScheduleDto>(body).days
+        assertEquals(listOf(null, UnreadDay.KEPT, UnreadDay.MISSING, null), days.map { it.unread })
+        assertEquals(listOf("Сервер не смог прочитать этот день в таблице: пары — какими были до этого."),
+            unreadNotes(days[1]))
+        assertEquals(listOf("Сервер не смог прочитать этот день в таблице."), unreadNotes(days[2]))
+        // Непрочитанный будний — не «повезло дважды» накануне.
+        assertEquals(false, freeOwnDay(days[2], emptyList()))
+        // Преподавателю — по группам, из-за которых пометка (тексты — как у сайта).
+        assertEquals(listOf("Сервер не смог прочитать этот день у ПХД-923/1: пар с ней может не хватать."),
+            unreadNotes(DayDto(date = "2026-09-09", unreadMark = "missing", unreadGroups = listOf("ПХД-923/1"))))
+        assertEquals(listOf("Сервер не смог прочитать этот день у А-1, Б-1 и В-1: пары с ними — какими были до этого."),
+            unreadNotes(DayDto(date = "2026-09-08", unreadMark = "kept", unreadGroups = listOf("А-1", "Б-1", "В-1"))))
+        assertEquals(listOf("Сервер не смог прочитать этот день у 26 групп: пар с ними может не хватать."),
+            unreadNotes(DayDto(date = "2026-09-09", unreadMark = "missing", unreadGroups = List(26) { "Г-$it" })))
+        // Другая выбранная группа: свой день без пометки, её — с её именем; за
+        // краем своего окна её дни не добавляются.
+        val other = ScheduleDto(
+            groupId = "isp-924-2", groupName = "ИСП-924/2", generatedAt = "G",
+            days = listOf(DayDto(date = "2026-09-07", unreadMark = "missing"), DayDto(date = "2026-09-12", unreadMark = "missing")),
+        )
+        val merged = combineGroups(schedule(listOf(), "2026-09-07"), listOf("Б" to other))
+        assertEquals(listOf("2026-09-07"), dates(merged.days))
+        assertEquals(null, merged.days[0].unread)
+        assertEquals(listOf("Сервер не смог прочитать этот день у Б: её пар здесь нет."), unreadNotes(merged.days[0]))
     }
 }

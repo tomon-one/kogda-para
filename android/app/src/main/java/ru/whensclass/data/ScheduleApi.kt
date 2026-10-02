@@ -71,16 +71,17 @@ class ScheduleApi(
 
     fun groups(): GroupsDto = get("/v1/groups").let(json::decodeFromString)
 
+    // marks=1 — приложение знает пометку непрочитанного дня (docs/api.md).
     fun schedule(groupId: String, from: java.time.LocalDate? = null, days: Int = 7):
         ScheduleDto = get(
-        "/v1/schedule/$groupId?days=$days" + (from?.let { "&from=$it" } ?: ""),
+        "/v1/schedule/$groupId?days=$days&marks=1" + (from?.let { "&from=$it" } ?: ""),
     ).let(json::decodeFromString)
 
     fun teachers(): TeachersDto = get("/v1/teachers").let(json::decodeFromString)
 
     fun teacher(teacherId: String, from: java.time.LocalDate? = null, days: Int = 7):
         ScheduleDto = get(
-        "/v1/teacher/$teacherId?days=$days" + (from?.let { "&from=$it" } ?: ""),
+        "/v1/teacher/$teacherId?days=$days&marks=1" + (from?.let { "&from=$it" } ?: ""),
     ).let(json::decodeFromString)
 
     /**

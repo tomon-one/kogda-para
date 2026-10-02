@@ -155,9 +155,7 @@ internal fun dayIndex(days: List<DayDto>, date: String): Int {
  * Дыры заполняются только между первым и последним пришедшим днём и только
  * внутри `cov`: за краем листа расписания может и не быть.
  */
-internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> = withUnread(schedule, gaps(schedule))
-
-private fun gaps(schedule: ScheduleDto): List<DayDto> {
+internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
     val present = schedule.days
     if (present.size < 2) return present
     val cover = schedule.coverage
@@ -184,17 +182,36 @@ private fun gaps(schedule: ScheduleDto): List<DayDto> {
 }
 
 /**
- * Дни, которые сервер не прочитал: с прежними парами — [UnreadDay.KEPT]; без
- * них — вставляются пустыми, [UnreadDay.MISSING], чтобы было видно, что с ними.
+ * Пометки дня, который сервер не прочитал (unreadNotes в schedule.js сайта):
+ * своего — без имени, у преподавателя — с группами из `ug`, у других
+ * выбранных групп — с их именами.
  */
-private fun withUnread(schedule: ScheduleDto, days: List<DayDto>): List<DayDto> {
-    if (schedule.unread.isEmpty()) return days
-    val marked = schedule.unread.toMutableSet()
-    val out = days.map { day ->
-        if (!marked.remove(day.date)) day
-        else day.copy(unread = if (day.absent) UnreadDay.MISSING else UnreadDay.KEPT)
+internal fun unreadNotes(day: DayDto): List<String> {
+    val base = "Сервер не смог прочитать этот день"
+    val out = mutableListOf<String>()
+    val own = day.unread
+    if (own != null && day.unreadGroups.isNotEmpty()) {
+        val with = if (day.unreadGroups.size > 1) "ними" else "ней"
+        out += "$base у ${joinNames(day.unreadGroups)}: " +
+            if (own == UnreadDay.KEPT) "пары с $with — какими были до этого." else "пар с $with может не хватать."
+    } else if (own != null) {
+        out += base + if (own == UnreadDay.KEPT) " в таблице: пары — какими были до этого." else " в таблице."
     }
-    return (out + marked.map { DayDto(date = it, unread = UnreadDay.MISSING) }).sortedBy { it.date }
+    for (kind in listOf(UnreadDay.KEPT, UnreadDay.MISSING)) {
+        val names = day.unreadOthers.filter { it.kind == kind }.map { it.name }
+        if (names.isEmpty()) continue
+        val whose = if (names.size > 1) "их" else "её"
+        out += "$base у ${joinNames(names)}: " +
+            if (kind == UnreadDay.KEPT) "$whose пары — какими были до этого." else "$whose пар здесь нет."
+    }
+    return out
+}
+
+// Больше трёх групп (день без даты задевает все) — числом: список занял бы экран.
+private fun joinNames(names: List<String>): String {
+    val n = names.size
+    if (n > 3) return "$n " + if (n % 10 == 1 && n % 100 != 11) "группы" else "групп"
+    return if (n > 1) names.dropLast(1).joinToString(", ") + " и " + names.last() else names.first()
 }
 
 @Composable
@@ -230,18 +247,20 @@ private fun DayCard(
         Column {
             DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday, past)
 
-            if (day.unread != null) {
+            val notes = unreadNotes(day)
+            // Свой день не прочитан — «пар нет» тут было бы неправдой.
+            val unknown = day.unread == UnreadDay.MISSING
+            notes.forEachIndexed { index, note ->
                 Text(
-                    if (day.unread == UnreadDay.MISSING) "Сервер не смог прочитать этот день в таблице."
-                    else "Сервер не смог прочитать этот день в таблице: пары — какими были до этого.",
+                    note,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp,
-                        bottom = if (day.unread == UnreadDay.MISSING) 16.dp else 4.dp),
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = if (index == 0) 12.dp else 4.dp,
+                        bottom = if (index == notes.lastIndex && unknown && day.lessons.isEmpty()) 16.dp else 4.dp),
                 )
             }
-            if (day.unread == UnreadDay.MISSING) {
-                // Сказано выше; «пар нет» тут было бы неправдой.
+            if (unknown && day.lessons.isEmpty()) {
+                // Сказано выше.
             } else if (day.lessons.isEmpty()) {
                 Text(
                     if (day.absent) absentDay(day.date) else freeDay(day.date, teacher, nextFree, now, idle),
@@ -253,7 +272,7 @@ private fun DayCard(
                 // Своих пар нет, а у выбранных групп есть: «пар нет» — над их
                 // серыми строками, как пишет виджет, иначе беглый взгляд видит
                 // свои пары.
-                if (groups.isNotEmpty() && day.lessons.none { 0 in it.slots }) {
+                if (!unknown && groups.isNotEmpty() && day.lessons.none { 0 in it.slots }) {
                     Text(
                         freeDay(day.date, teacher, nextFree, now, idle),
                         style = MaterialTheme.typography.bodyMedium,

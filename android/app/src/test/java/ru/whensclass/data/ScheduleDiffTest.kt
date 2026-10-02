@@ -39,6 +39,14 @@ class ScheduleDiffTest {
     private fun texts(was: ScheduleDto, now: ScheduleDto) = ScheduleDiff.compare(was, now).map { it.text }
 
     @Test
+    fun `непрочитанный день без пар — не «убрали», прочитанный следом — не «добавилась»`() {
+        val read = schedule(lesson(2, "Физика"))
+        val unread = read.copy(days = listOf(DayDto(date = "2026-09-08", unreadMark = "missing")))
+        assertEquals(emptyList<String>(), texts(read, unread))
+        assertEquals(emptyList<String>(), texts(unread, read))
+    }
+
+    @Test
     fun `без изменений молчим`() {
         val same = schedule(lesson(3, "Численные методы", room = "272"))
         assertEquals(emptyList<ScheduleDiff.Change>(), ScheduleDiff.compare(same, same))

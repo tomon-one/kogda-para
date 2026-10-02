@@ -27,6 +27,9 @@ object ScheduleDiff {
 
         for (day in fresh.days) {
             val before = oldDays[day.date] ?: continue
+            // Непрочитанный день без пар — не «убрали», а «не знаем»;
+            // прочитанный следом — не «добавилась».
+            if (UnreadDay.MISSING in listOf(before.unread, day.unread)) continue
             val numbers = sortedSetOf<Int>().apply {
                 before.lessons.forEach { add(it.number) }
                 day.lessons.forEach { add(it.number) }
