@@ -200,6 +200,10 @@ def _compare_number(
 
     unmatched = list(was)
 
+    def kept_as_is(old: dict) -> bool:
+        return any(_replaces(x) is None and x["s"] == old["s"] and x.get("t") == old.get("t")
+                   and x.get("r") == old.get("r") for x in now)
+
     # Замена — одной строкой, сервер помечает её «вместо: X».
     replaced: list[dict] = []
     for lesson in now:
@@ -208,7 +212,12 @@ def _compare_number(
             continue
         if _cancelled(lesson) or any(x["s"] == lesson["s"] for x in was):
             continue
-        index = next((i for i, x in enumerate(unmatched) if x["s"] == instead), -1)
+        # Из двух пар с этим названием заменили ту, у которой в новом листе
+        # нет точной копии: другая половинка блока осталась как была.
+        index = next((i for i, x in enumerate(unmatched)
+                      if x["s"] == instead and not kept_as_is(x)), -1)
+        if index < 0:
+            index = next((i for i, x in enumerate(unmatched) if x["s"] == instead), -1)
         if index < 0:
             index = next((i for i, x in enumerate(unmatched) if same_subject(x["s"], instead)), -1)
         if index < 0:
@@ -220,8 +229,15 @@ def _compare_number(
     for lesson in now:
         if any(lesson is r for r in replaced):
             continue
-        index = next((i for i, x in enumerate(unmatched)
-                      if x["s"] == lesson["s"] and groups_of(x) == groups_of(lesson)), -1)
+        # Две пары одного названия на номере (подгруппы одного языка) —
+        # сначала та, что с тем же преподавателем и кабинетом, иначе по порядку
+        # выйдут «другой преподаватель» и «переехала» вместо «убрали».
+        ranked = sorted(
+            (x.get("t") != lesson.get("t"), x.get("r") != lesson.get("r"), i)
+            for i, x in enumerate(unmatched)
+            if x["s"] == lesson["s"] and groups_of(x) == groups_of(lesson)
+        )
+        index = ranked[0][2] if ranked else -1
         if index < 0:
             index = next((i for i, x in enumerate(unmatched)
                           if x["s"] == lesson["s"] and overlap(x, lesson)), -1)
@@ -290,8 +306,6 @@ def _compare_number(
             say(f"у {number} пары{tag} сменилась ссылка")
 
     for gone in unmatched:
-        if any(x["s"] == gone["s"] for x in now):
-            continue
         if teacher and gone.get("gr"):
             # Все её группы на номере остались при той же паре — запись просто
             # склеилась с другой. При другом предмете у тех же групп это
@@ -335,8 +349,9 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
     own = None if teacher else payload.get("gn")
     out: list[dict] = []
     busy_until: dt.datetime | None = None
-    # Блок пополам — две пары одного номера в разных кабинетах: какая из них
-    # своя, неизвестно, и напоминание называет обе.
+    # Две пары одного номера — подгруппы в разных кабинетах (какая своя,
+    # неизвестно) или у преподавателя одна пара в двух залах: напоминание одно
+    # и называет все места.
     by_number: dict[int, list[dict]] = {}
     for lesson in today["l"]:
         if not _cancelled(lesson):
@@ -353,7 +368,8 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
         busy_until = dt.datetime.combine(day, dt.time.fromisoformat(bells[1]))
         if during_previous:
             continue
-        subject = " / ".join(x["s"] for x in same)
+        names = _distinct(x["s"] for x in same)
+        subject = " / ".join(names)
         out.append({
             "at": fire,
             "start": start,
@@ -362,7 +378,7 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
             "title": f"{start:%H:%M} — {subject}",
             "subject": subject,
             "text": reminder_text(lesson, own) if len(same) == 1
-            else "\n".join(_pair_line(x, own) for x in same),
+            else "\n".join([_number_line(same)] + [_pair_line(x, own, len(names) > 1) for x in same]),
         })
     return out
 
@@ -398,7 +414,23 @@ def reminder_text(lesson: dict, own_group: str | None) -> str:
     ])
 
 
-def _pair_line(lesson: dict, own_group: str | None) -> str:
-    """Строка одной из пар номера: место и предмет; номер и время — в заголовке."""
-    head = " — ".join(p for p in (_place(lesson), lesson["s"]) if p)
+def _distinct(subjects) -> list[str]:
+    """Названия без повторов: «Физическая культура» и «Физическая культура.» — одно."""
+    seen: dict[str, str] = {}
+    for subject in subjects:
+        seen.setdefault(subject.strip(" .").casefold(), subject.strip(" ."))
+    return list(seen.values())
+
+
+def _number_line(lessons: list[dict]) -> str:
+    """«3 пара, практика» — тип, если он у всех пар номера один."""
+    kinds = {kind_name(x.get("k")) for x in lessons}
+    kind = kinds.pop() if len(kinds) == 1 else None
+    return f"{lessons[0]['n']} пара" + (f", {kind.lower()}" if kind else "")
+
+
+def _pair_line(lesson: dict, own_group: str | None, with_subject: bool) -> str:
+    """Строка одной из пар номера: место, предмет (если предметы разные),
+    преподаватель, группы; номер — строкой выше, время — в заголовке."""
+    head = " — ".join(p for p in (_place(lesson), lesson["s"] if with_subject else None) if p)
     return _sentences([head, (lesson.get("t") or [None])[0], _groups(lesson, own_group)])
