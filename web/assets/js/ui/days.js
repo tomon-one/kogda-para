@@ -44,6 +44,14 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
     'data-day': day.d,
   }, h('h3', { class: 'day-title' }, dayTitle(day.d, now.date)));
 
+  if (day.unread === 'missing') {
+    card.appendChild(h('p', { class: 'day-note' }, 'Сервер не смог прочитать этот день в таблице.'));
+    return card;
+  }
+  if (day.unread) {
+    card.appendChild(h('p', { class: 'day-note' },
+      'Сервер не смог прочитать этот день в таблице: пары — какими были до этого.'));
+  }
   if (!lessons.length) {
     card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
     return card;
@@ -53,10 +61,11 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   if (groups.length && lessons.every(function (l) { return isForeign(l, groups); })) {
     card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
   }
-  lessons.forEach(function (lesson) {
+  lessons.forEach(function (lesson, index) {
     // Пара только у других групп — не «идёт сейчас»: человек на ней не сидит.
     var foreign = isForeign(lesson, groups);
-    var key = day.d + ':' + lesson.n + ':' + (lesson.gr || (lesson.slots || []).join('-'));
+    // С порядком: у одного номера бывают две пары — подгруппы в разных кабинетах.
+    var key = day.d + ':' + lesson.n + ':' + (lesson.gr || (lesson.slots || []).join('-')) + ':' + index;
     card.appendChild(lessonRow(lesson, bells, lesson.n === current && !isCancelled(lesson) && !foreign, key, groups, byName));
   });
   // Считаются только свои пары.

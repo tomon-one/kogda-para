@@ -145,6 +145,21 @@ test('окно и пропущенные дни', () => {
   assert.equal(dayIndex(days, '2026-09-01'), 0);
 });
 
+test('непрочитанные дни: прежние пары с пометкой, без прежних — пустой день с пометкой', () => {
+  const schedule = {
+    cov: ['2026-09-28', '2026-09-29'],
+    unread: ['2026-09-29', '2026-09-30'],
+    days: [{ d: '2026-09-28', l: [] }, { d: '2026-09-29', l: [{ n: 1, s: 'Физика' }] }],
+  };
+  const days = daysWithGaps(schedule);
+  assert.deepEqual(days.map((d) => [d.d, d.unread]), [
+    ['2026-09-28', undefined], ['2026-09-29', 'kept'], ['2026-09-30', 'missing'],
+  ]);
+  // У выбранной вместе группы день не прочитан — пометка на общем дне.
+  const merged = combineGroups({ gn: 'А', days: schedule.days }, [['Б', { unread: ['2026-09-28'], days: [] }]]);
+  assert.deepEqual(merged.unread, ['2026-09-28']);
+});
+
 test('свободный день', () => {
   assert.equal(freeDay({ d: '2026-10-04', l: [] }), 'Выходной');
   assert.equal(freeDay({ d: '2026-10-05', l: [], absent: true }), 'Выходной');
