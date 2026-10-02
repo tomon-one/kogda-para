@@ -97,29 +97,58 @@ def _short(name: str) -> bool:
     return len(words) >= 2 and all(len(w) == 1 for w in words[1:])
 
 
+def _one_letter_apart(a: str, b: str) -> bool:
+    """Одна вставка, удаление или замена буквы: «Данил» и «Даниил»,
+    «Паловна» и «Павловна». «Анна» и «Алла» — две буквы, разные люди."""
+    a, b = (x.casefold().replace("ё", "е") for x in (a, b))
+    if len(a) > len(b):
+        a, b = b, a
+    if len(b) - len(a) > 1:
+        return False
+    i = 0
+    while i < len(a) and a[i] == b[i]:
+        i += 1
+    if len(a) == len(b):
+        return a[i + 1:] == b[i + 1:]
+    return a[i:] == b[i + 1:]
+
+
 def _full_names(snapshot: Snapshot) -> dict[str, str]:
-    """Краткая запись -> полное имя, если полное с теми же инициалами одно.
+    """Другое написание того же человека -> имя, под которым он в списке.
 
     В одном листе «Филатова Л.А.» и «Филатова Лариса Андреевна» — два id, и
-    пары поделены между ними: выбравший один увидит половину. Книга
-    переименований тут не поможет: оба написания живут в листе одновременно.
+    пары поделены между ними: выбравший один увидит половину. Так же и
+    опечатка в полном имени, которую колледж исправил не во всех клетках:
+    «Данил» и «Даниил» с той же фамилией и отчеством. Книга переименований
+    тут не поможет: оба написания живут в листе одновременно.
+
+    Полные имена сводятся, если у них та же фамилия, те же инициалы и
+    разница в одну букву; в списке — то, у которого больше пар. Краткая
+    запись — к полному, если человек с такими инициалами один.
     """
-    names = {
-        name.strip()
-        for by_date in snapshot.schedule.values()
-        for lessons in by_date.values()
-        for lesson in lessons
-        for name in lesson.teachers
-        if name.strip()
-    }
+    count: dict[str, int] = {}
+    for by_date in snapshot.schedule.values():
+        for lessons in by_date.values():
+            for lesson in lessons:
+                for name in lesson.teachers:
+                    if name.strip():
+                        count[name.strip()] = count.get(name.strip(), 0) + 1
     full: dict[tuple[str, str], list[str]] = {}
-    for name in names:
+    for name in sorted(count, key=lambda n: (-count[n], n)):
         if not _short(name):
             full.setdefault(_surname_initials(name), []).append(name)
     out = {}
-    for name in names:
+    people: dict[tuple[str, str], list[str]] = {}
+    for key, names in full.items():
+        for name in names:
+            main = next((p for p in people.get(key, []) if _one_letter_apart(p, name)), None)
+            if main is None:
+                people.setdefault(key, []).append(name)
+            else:
+                out[name] = main
+    for name in count:
         if _short(name):
-            candidates = full.get(_surname_initials(name), [])
+            candidates = people.get(_surname_initials(name), [])
             if len(candidates) == 1:
                 out[name] = candidates[0]
     return out
