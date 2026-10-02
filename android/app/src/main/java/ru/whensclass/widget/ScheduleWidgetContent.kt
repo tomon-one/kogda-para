@@ -34,6 +34,7 @@ import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import ru.whensclass.R
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.UnreadDay
 import ru.whensclass.data.sheetLink
 import ru.whensclass.ui.MainActivity
 
@@ -91,6 +92,8 @@ fun ScheduleWidgetContent(
             failed,
             serverBroken,
             gone,
+            // Пары дня прежние: сервер его не прочитал.
+            schedule?.days?.firstOrNull { it.date == day.toString() }?.unread == UnreadDay.KEPT,
             fit,
             colors,
         )
@@ -116,6 +119,10 @@ fun ScheduleWidgetContent(
                     open = if (missing.off) actionStartActivity(openDay(context, day)) else null,
                 )
             }
+            // Сервер день не прочитал, прежних пар нет — это не «пар нет».
+            today.lessons.isEmpty() && today.unread != null -> MissingHint(
+                "Сервер не прочитал этот день в таблице", colors, sheetLink(schedule, day, sourceUrl),
+            )
             // Свободный день: «нажмите, чтобы обновить» читалось бы как «не
             // загрузилось», поэтому нажатие ведёт в приложение.
             today.lessons.isEmpty() -> MissingHint(
@@ -169,6 +176,7 @@ private fun Header(
     failed: Boolean,
     serverBroken: Boolean,
     gone: Boolean,
+    kept: Boolean,
     fit: Fit,
     colors: Palette,
 ) {
@@ -196,18 +204,29 @@ private fun Header(
         }
 
         Column(modifier = GlanceModifier.defaultWeight()) {
-            Text(
-                formatDayTitleShort(day).replaceFirstChar { it.uppercase() },
-                maxLines = 1,
-                style = TextStyle(
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.text,
-                ),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 // Нажатие на шапку открывает приложение: там неделя целиком
                 // и настройки.
                 modifier = GlanceModifier.fillMaxWidth().clickable(openApp),
-            )
+            ) {
+                Text(
+                    formatDayTitleShort(day).replaceFirstChar { it.uppercase() },
+                    maxLines = 1,
+                    style = TextStyle(
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.text,
+                    ),
+                )
+                if (kept) {
+                    Text(
+                        " · не прочитан",
+                        maxLines = 1,
+                        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                    )
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     // ФИО целиком не влезает рядом со временем проверки.

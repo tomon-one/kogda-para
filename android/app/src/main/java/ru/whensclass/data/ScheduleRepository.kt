@@ -432,6 +432,7 @@ class ScheduleRepository(
         // Снимок сборок до 0.1.4 лежит склеенным с парами соседки: сравнить
         // его со своими парами значило бы объявить её пары отменёнными.
         store.migrateGroups()
+        store.migrateFormat()
         val asked = subject()
         val teacherMode = asked.teacher
         val subject = asked.id

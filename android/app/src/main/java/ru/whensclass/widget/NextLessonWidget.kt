@@ -33,6 +33,7 @@ import java.time.LocalDateTime
 import ru.whensclass.AppContainer
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.UnreadDay
 import ru.whensclass.data.isKnownWebinar
 import ru.whensclass.ui.MainActivity
 
@@ -148,6 +149,9 @@ class NextLessonWidget : GlanceAppWidget() {
                 val status = when {
                     gone -> "нет в таблице · "
                     broken -> "сбой · "
+                    next.unreadOn == next.day -> "не прочитан · "
+                    next.unreadOn != null -> formatDayTitleShort(next.unreadOn).substringBefore(",") +
+                        " не прочитан · "
                     else -> ""
                 }
                 // В низкой клетке при крупном шрифте три строки не влезают:
@@ -221,7 +225,16 @@ class NextLessonWidget : GlanceAppWidget() {
  * Пара и день, на который она приходится. [also] — другие пары того же номера:
  * блок пополам, две пары в разных кабинетах, и какая из них его, неизвестно.
  */
-data class NextLesson(val day: LocalDate, val lesson: LessonDto, val also: List<LessonDto> = emptyList()) {
+data class NextLesson(
+    val day: LocalDate,
+    val lesson: LessonDto,
+    val also: List<LessonDto> = emptyList(),
+    /**
+     * Ближайший день до этой пары включительно, который сервер не прочитал:
+     * у её дня пары прежние, у дня раньше — пар может не хватать.
+     */
+    val unreadOn: LocalDate? = null,
+) {
     val lessons: List<LessonDto> get() = listOf(lesson) + also
 }
 
@@ -230,7 +243,16 @@ data class NextLesson(val day: LocalDate, val lesson: LessonDto, val also: List<
  * таких нет — первая пара следующего учебного дня.
  */
 fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
-    if (schedule == null) return null
+    val next = findNext(schedule ?: return null, now) ?: return null
+    val today = now.toLocalDate()
+    val unreadOn = schedule.days.filter { it.unread != null }
+        .mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+        .filter { !it.isBefore(today) && !it.isAfter(next.day) }
+        .minOrNull()
+    return next.copy(unreadOn = unreadOn)
+}
+
+private fun findNext(schedule: ScheduleDto, now: LocalDateTime): NextLesson? {
     val bells = schedule.bells
     val today = now.toLocalDate()
     // Только свои и не отменённые: иначе ближайшей оказалась бы отменённая
@@ -279,6 +301,11 @@ internal fun noNextLesson(
     if (groupName == null) return "Откройте приложение и выберите группу или себя"
     if (schedule == null) return "Расписание не загружено"
     if (broken) return "Сбой: расписание не обновляется"
+    // Пар впереди нет, но день сервер не прочитал — это не «пар нет».
+    schedule.days.firstOrNull { day ->
+        day.unread == UnreadDay.MISSING &&
+            runCatching { !LocalDate.parse(day.date).isBefore(today) }.getOrDefault(false)
+    }?.let { return "Сервер не прочитал день: " + formatDayTitleShort(LocalDate.parse(it.date)) }
     val end = schedule.coverage.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
     if (end == null || end.isBefore(today.plusDays(6))) {
         return if (checked) "Дальше расписание ещё не опубликовано" else "Дальше расписание не загружено"

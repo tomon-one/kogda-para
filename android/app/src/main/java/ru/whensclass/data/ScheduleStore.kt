@@ -543,6 +543,19 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
+    /**
+     * Расписание, сохранённое прежней версией без нынешних полей (пометки
+     * непрочитанного дня), перезапрашивается один раз: иначе до правки
+     * таблицы gen тот же, и пометок не было бы.
+     */
+    suspend fun migrateFormat() {
+        context.dataStore.edit { prefs ->
+            if (prefs[KEY_FORMAT] == FORMAT) return@edit
+            prefs.remove(KEY_GENERATED_AT)
+            prefs[KEY_FORMAT] = FORMAT
+        }
+    }
+
     private fun readExtras(prefs: Preferences): List<ExtraGroup> =
         prefs[KEY_EXTRA_GROUPS]
             ?.let { body -> runCatching { json.decodeFromString<List<ExtraGroup>>(body) }.getOrNull() }
@@ -714,6 +727,8 @@ class ScheduleStore(private val context: Context) {
         val KEY_TEACHERS = stringPreferencesKey("teachers_json")
         val KEY_FETCHED_AT = stringPreferencesKey("fetched_at")
         val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
+        val KEY_FORMAT = stringPreferencesKey("format")
+        const val FORMAT = "2"
         val KEY_THEME = stringPreferencesKey("theme")
         val KEY_WIDGET_DAY = stringPreferencesKey("widget_day")
         val KEY_WELCOME = stringPreferencesKey("welcome_seen")

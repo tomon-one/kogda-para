@@ -24,11 +24,6 @@ data class ScheduleDto(
     /** «teacher» у расписания преподавателя: там подпись группы у каждой пары. */
     @SerialName("kind") val kind: String? = null,
     /**
-     * Дни окна, которые сервер не прочитал в таблице: пары такого дня —
-     * прежние, а если дня нет в [days] — прежних у сервера нет.
-     */
-    @SerialName("unread") val unread: List<String> = emptyList(),
-    /**
      * Только для экрана: имена выбранных групп по порядку, первая — своя
      * ([combineGroups]). Номер значка у пары — место в этом списке плюс один.
      * Пусто — группа одна, значков нет.
@@ -72,17 +67,31 @@ data class DayDto(
      * не «колледж выложил день пустым».
      */
     @kotlinx.serialization.Transient val absent: Boolean = false,
-    /** Сервер этот день не прочитал ([ScheduleDto.unread]); ставит [ru.whensclass.ui.daysWithGaps]. */
-    @kotlinx.serialization.Transient val unread: UnreadDay? = null,
-)
+    /** Сервер не прочитал этот день в таблице: «kept» или «missing» ([unread]). */
+    @SerialName("un") val unreadMark: String? = null,
+    /** У преподавателя — группы, из-за которых пометка. */
+    @SerialName("ug") val unreadGroups: List<String> = emptyList(),
+    /** Только для экрана: другие выбранные группы, чей этот день не прочитан ([combineGroups]). */
+    @kotlinx.serialization.Transient val unreadOthers: List<UnreadOther> = emptyList(),
+) {
+    val unread: UnreadDay?
+        get() = when (unreadMark) {
+            "kept" -> UnreadDay.KEPT
+            "missing" -> UnreadDay.MISSING
+            else -> null
+        }
+}
 
 enum class UnreadDay {
-    /** В ответе — прежние пары дня. */
+    /** Пары дня — прежние, из последнего прочитанного снимка. */
     KEPT,
 
-    /** Прежних нет: день вставлен пустым, чтобы было видно, что с ним. */
+    /** Прежних нет: день пустой, но это не «пар нет». */
     MISSING,
 }
+
+/** Непрочитанный день другой выбранной группы — с её именем. */
+data class UnreadOther(val name: String, val kind: UnreadDay)
 
 @Serializable
 data class LessonDto(

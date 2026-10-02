@@ -70,7 +70,7 @@ internal fun Week(
                 Column(modifier = GlanceModifier.fillMaxWidth()) {
                     DayTitle(day, colors)
                     if (day.lessons.isEmpty()) {
-                        EmptyLine(day.date, colors, day.absent, day.unread)
+                        EmptyLine(day.date, colors, day.absent, day.unread != null)
                     } else {
                         // Заголовок дня уже занял одного ребёнка. С другими
                         // группами пар в дне бывает больше девяти — тогда
@@ -181,12 +181,14 @@ private fun DaySummary(day: WeekDay, bells: Map<String, List<String>>, colors: P
         Text(
             if (day.lessons.isEmpty()) {
                 when {
-                    day.unread -> "  не прочитан"
+                    day.unread != null -> "  не прочитан"
                     day.absent -> "  выходной"
                     else -> "  пар нет"
                 }
             } else {
-                "  " + pairsCount(numbers(day.lessons)) + (span(day, bells)?.let { " · $it" } ?: "")
+                // Пары прежние: сервер этот день не прочитал.
+                "  " + pairsCount(numbers(day.lessons)) + (span(day, bells)?.let { " · $it" } ?: "") +
+                    (if (day.unread != null) " · не прочитан" else "")
             },
             maxLines = 1,
             style = TextStyle(fontSize = 11.sp, color = colors.textDim),
