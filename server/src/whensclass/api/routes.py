@@ -68,6 +68,20 @@ def _state(request: Request):
     return request.app.state.store, request.app.state.refresher
 
 
+def _too_old(request: Request) -> Response | None:
+    """426, если сборка приложения ниже `min_build`: её форматы служба уже не
+    держит. /v1/app и /download/ этим не закрываются — по ним и обновляются."""
+    raw = request.headers.get("X-App-Build", "")
+    if settings.min_build <= 0 or not raw.isdigit() or int(raw) >= settings.min_build:
+        return None
+    return Response(
+        status_code=426,
+        content=json.dumps({"error": "версия приложения больше не поддерживается",
+                            "min": settings.min_build}, ensure_ascii=False),
+        media_type=JSON,
+    )
+
+
 # Дальше года от сегодняшнего дня спрашивать незачем: приложение просит неделю
 # от понедельника. Без границы ?from=9999-12-31 падает на переполнении даты с
 # 500 и длинной трассировкой — любой прохожий забил бы journald соседям.
@@ -184,6 +198,8 @@ def app_release(request: Request) -> Response:
 
 @router.api_route("/v1/meta", methods=["GET", "HEAD"])
 def meta(request: Request) -> Response:
+    if refused := _too_old(request):
+        return refused
     store, refresher = _state(request)
     if store.snapshot is None:
         return _not_loaded()
@@ -196,6 +212,8 @@ def meta(request: Request) -> Response:
 
 @router.api_route("/v1/groups", methods=["GET", "HEAD"])
 def groups(request: Request) -> Response:
+    if refused := _too_old(request):
+        return refused
     store, _ = _state(request)
     if store.snapshot is None:
         return _not_loaded()
@@ -205,6 +223,8 @@ def groups(request: Request) -> Response:
 @router.api_route("/v1/teachers", methods=["GET", "HEAD"])
 def teachers(request: Request) -> Response:
     """Список преподавателей — собирается из расписания групп."""
+    if refused := _too_old(request):
+        return refused
     store, _ = _state(request)
     if store.snapshot is None or store.teachers is None:
         return _not_loaded()
@@ -218,6 +238,8 @@ def teacher(
     start: dt.date | None = Query(None, alias="from"),
     days: int = Query(settings.default_days, ge=1, le=14),
 ) -> Response:
+    if refused := _too_old(request):
+        return refused
     store, refresher = _state(request)
     if (bad := _bad_from(start)) is not None:
         return bad
@@ -241,6 +263,8 @@ def schedule(
     start: dt.date | None = Query(None, alias="from"),
     days: int = Query(settings.default_days, ge=1, le=14),
 ) -> Response:
+    if refused := _too_old(request):
+        return refused
     store, refresher = _state(request)
     if (bad := _bad_from(start)) is not None:
         return bad
