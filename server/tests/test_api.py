@@ -357,3 +357,25 @@ def test_broken_snapshot_on_disk_falls_back_to_the_previous(tmp_path, fixture_cs
     (tmp_path / "snapshot.json").write_text("{обрыв записи", "utf-8")
     again = SnapshotStore(tmp_path)
     assert again.load() is True and again.generated == generated
+
+
+def test_build_below_the_minimum_is_told_to_update(client, monkeypatch):
+    """Сборка ниже min_build — 426 на расписание; /v1/app отвечает, по нему и
+    обновляются; без заголовка (прежние сборки, сайт) — как всегда."""
+    from whensclass.api import routes
+    from whensclass.config import settings
+
+    monkeypatch.setattr(routes, "latest_release", lambda _, channel="main": {
+        "versionCode": 9, "versionName": "r-Тест.1.2.0", "file": "kogda-para-9.apk"})
+    monkeypatch.setattr(settings, "min_build", 8)
+    old, new = {"X-App-Build": "7"}, {"X-App-Build": "8"}
+    for path in ("/v1/meta", "/v1/groups", "/v1/teachers", "/v1/schedule/isp-924-2"):
+        answer = client.get(path, headers=old)
+        assert answer.status_code == 426 and answer.json()["min"] == 8, path
+        assert client.get(path, headers=new).status_code == 200, path
+        assert client.get(path).status_code == 200, path
+    assert client.get("/v1/app", headers=old).json()["versionCode"] == 9
+    assert client.get("/v1/meta", headers=new).json()["min"] == 8
+    monkeypatch.setattr(settings, "min_build", 0)
+    assert "min" not in client.get("/v1/meta").json()
+    assert client.get("/v1/meta", headers=old).status_code == 200

@@ -442,6 +442,10 @@ def meta_payload(
         out["cov"] = cov
     if checked:
         out["checked"] = _iso(checked)
+    if settings.min_build > 0:
+        # Сборки ниже этой служба не обслуживает (426): приложение скажет
+        # «обновите», не дожидаясь отказа.
+        out["min"] = settings.min_build
     if status != "ok":
         # С какого часа и почему: двое суток stale не должны выглядеть как
         # минута. Текст ошибки уже без адресов — его чистит refresher.
