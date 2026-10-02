@@ -89,3 +89,9 @@ const val UNREACHABLE_BROKEN_AFTER_MILLIS = 30L * 60 * 1000
 
 /** Состояние, которое телефон ставит сам, когда сервер не отвечает. */
 const val STATUS_UNREACHABLE = "unreachable"
+
+/**
+ * Сервер больше не обслуживает эту сборку (426 или `min` в /v1/meta выше её
+ * номера): расписание не обновится, пока приложение не обновят.
+ */
+const val STATUS_UNSUPPORTED = "unsupported"

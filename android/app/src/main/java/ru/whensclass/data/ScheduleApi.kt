@@ -14,6 +14,13 @@ import ru.whensclass.BuildConfig
  */
 class HttpFailure(val code: Int, path: String) : IOException("сервер ответил $code на $path")
 
+/**
+ * Номер сборки в основном счёте: у tested — номер основной, к которой она идёт
+ * (versionCode × 100 + попытка, build.gradle.kts).
+ */
+internal fun appBuild(versionCode: Int, channel: String): Int =
+    if (channel == "main") versionCode else versionCode / 100
+
 /** Файл обновления оказался больше объявленного — загрузка остановлена. */
 class TooLarge(limit: Long) : IOException("файл больше объявленных $limit байт")
 
@@ -136,7 +143,11 @@ class ScheduleApi(
     }
 
     private fun get(path: String): String {
-        val request = Request.Builder().url(baseUrl.trimEnd('/') + path).build()
+        // Номер сборки — чтобы сервер мог сказать «обновите», когда эта
+        // перестанет его понимать (docs/api.md, README «Что уходит на сервер»).
+        val request = Request.Builder().url(baseUrl.trimEnd('/') + path)
+            .header("X-App-Build", appBuild(BuildConfig.VERSION_CODE, channel).toString())
+            .build()
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {

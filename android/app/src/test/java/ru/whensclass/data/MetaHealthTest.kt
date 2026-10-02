@@ -19,4 +19,11 @@ class MetaHealthTest {
         // Сервер до этих полей.
         assertEquals("stale", json.decodeFromString<MetaDto>("""{"gen":"G","status":"stale"}""").health)
     }
+
+    @Test
+    fun `номер сборки — в основном счёте, у tested — номер основной`() {
+        assertEquals(7, appBuild(7, "main"))
+        assertEquals(7, appBuild(704, "tested"))
+        assertEquals(8, json.decodeFromString<MetaDto>("""{"gen":"G","min":8}""").minBuild)
+    }
 }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import ru.whensclass.BuildConfig
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.notify.Notifications
 import ru.whensclass.widget.NextLessonWidget
@@ -455,6 +456,16 @@ class ScheduleRepository(
             // 429 — сервер ответил, он просто занят (лимит nginx на адрес
             // оператора): это не «не отвечает».
             val busy = (metaAnswer.exceptionOrNull() as? HttpFailure)?.code == 429
+            val tooOld = (metaAnswer.exceptionOrNull() as? HttpFailure)?.code == 426 ||
+                (meta?.minBuild ?: 0) > appBuild(BuildConfig.VERSION_CODE, BuildConfig.CHANNEL)
+            if (tooOld) {
+                // Расписание сервер этой сборке уже не отдаст: на экране —
+                // «обновите», а не сбой сервера и не попытка за попыткой.
+                store.clearUnreachable()
+                store.putServerState(STATUS_UNSUPPORTED, meta?.sourceUrl, null)
+                updateWidgets()
+                return@withContext RefreshResult.Failed(HttpFailure(426, "/v1/meta"))
+            }
             if (meta != null) {
                 store.clearUnreachable()
                 store.putServerState(meta.health, meta.sourceUrl, meta.since)
