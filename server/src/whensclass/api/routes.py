@@ -82,6 +82,12 @@ def _too_old(request: Request) -> Response | None:
     )
 
 
+def _marks(request: Request) -> bool:
+    """Клиент знает пометку непрочитанного дня (`?marks=1`): прежним версиям
+    пустой непрочитанный день читался бы как «пар нет» и «убрали»."""
+    return request.query_params.get("marks") == "1"
+
+
 # Дальше года от сегодняшнего дня спрашивать незачем: приложение просит неделю
 # от понедельника. Без границы ?from=9999-12-31 падает на переполнении даты с
 # 500 и длинной трассировкой — любой прохожий забил бы journald соседям.
@@ -248,7 +254,7 @@ def teacher(
 
     body = teacher_answer(
         store.snapshot, store.teachers, store.known_teacher, teacher_id, start or _today(),
-        days, store.generated, bells=BELLS, today=_today(),
+        days, store.generated, bells=BELLS, today=_today(), marks=_marks(request),
     )
     if body is None:
         return Response(status_code=404, content='{"error":"преподаватель не найден"}',
@@ -280,6 +286,7 @@ def schedule(
             store.generated,
             bells=BELLS,
             today=_today(),
+            marks=_marks(request),
         )
 
     body = build(group_id)

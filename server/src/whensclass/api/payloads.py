@@ -92,7 +92,9 @@ def filled_until(snapshot: Snapshot) -> date | None:
     return next((d for d in reversed(dates) if busy[d] >= FILLED_SHARE * fullest), None)
 
 
-def _group_edge(snapshot: Snapshot, group_id: str, sheet: list[date]) -> date | None:
+def _group_edge(
+    snapshot: Snapshot, group_id: str, sheet: list[date], marks: bool = True
+) -> date | None:
     """Последний день, который колледж выложил группе; None — ни одного.
 
     Колледж дописывает колонку группы сразу на месяц и группу за группой
@@ -109,14 +111,20 @@ def _group_edge(snapshot: Snapshot, group_id: str, sheet: list[date]) -> date | 
     2026 таких в дописанных неделях 0–3 из 189.
     """
     by_date = snapshot.schedule.get(group_id, {})
-    last = max((day for day, lessons in by_date.items() if lessons), default=None)
+    unread = snapshot.unread.get(group_id, {})
+    written = {day for day, lessons in by_date.items() if lessons}
+    if marks:
+        # Непрочитанный день — тоже запись колледжа в колонке группы: он в
+        # покрытии со своей пометкой, а не «ещё не опубликовано».
+        written |= set(unread)
+    last = max(written, default=None)
     if last is not None and sheet:
         week_end = last + timedelta(days=6 - last.weekday())
         last = max(last, min(week_end, sheet[-1]))
-    # Непрочитанный день, которого прежний снимок не знал, и всё за ним — ещё
-    # не опубликовано: «пар нет» там было бы неправдой.
-    unknown = [day for day, kept in snapshot.unread.get(group_id, {}).items() if not kept]
-    if unknown and last is not None:
+    unknown = [day for day, kept in unread.items() if not kept]
+    if not marks and unknown and last is not None:
+        # Версии без пометок показали бы пустой день как «пар нет» и
+        # «убрали»: им край — перед ним, вместе с общим stale.
         last = min(last, min(unknown) - timedelta(days=1))
     return last
 
@@ -125,16 +133,19 @@ def _upto(snapshot: Snapshot, edge: date | None) -> list[date]:
     return [day for day in sorted(snapshot.dates) if edge is not None and day <= edge]
 
 
-def group_published(snapshot: Snapshot, group_id: str, today: date | None) -> list[date]:
+def group_published(
+    snapshot: Snapshot, group_id: str, today: date | None, marks: bool = True
+) -> list[date]:
     """Дни листа, которые колледж уже выложил этой группе (`cov` группы)."""
     sheet = published(snapshot, today)
     if today is None:
         return sheet
-    return _upto(snapshot, _group_edge(snapshot, group_id, sheet))
+    return _upto(snapshot, _group_edge(snapshot, group_id, sheet, marks))
 
 
 def teacher_published(
-    snapshot: Snapshot, index: TeacherIndex, teacher_id: str, today: date | None
+    snapshot: Snapshot, index: TeacherIndex, teacher_id: str, today: date | None,
+    marks: bool = True,
 ) -> list[date]:
     """Дни, выложенные преподавателю: дописаны все его нынешние группы.
 
@@ -156,7 +167,7 @@ def teacher_published(
         return sheet
     monday = today - timedelta(days=today.weekday())
     current = [g for g in sorted(groups) if _alive_since(snapshot, g, monday)]
-    edges = [_group_edge(snapshot, group, sheet) for group in current or sorted(groups)]
+    edges = [_group_edge(snapshot, group, sheet, marks) for group in current or sorted(groups)]
     edge = min(today, sheet[-1])
     if None not in edges:
         edge = max(edge, min(edges))
@@ -168,15 +179,48 @@ def _alive_since(snapshot: Snapshot, group: str, since: date) -> bool:
     return any(lessons for day, lessons in snapshot.schedule.get(group, {}).items() if day >= since)
 
 
-def _unread(snapshot: Snapshot, group_ids, start: date, days: int) -> list[str]:
-    """Непрочитанные дни этих групп в окне — пометка для новых версий."""
-    end = start + timedelta(days=days)
-    return sorted({
-        day.isoformat()
-        for gid in group_ids
-        for day in snapshot.unread.get(gid, {})
-        if start <= day < end
-    })
+def _unread_mark(kept: bool) -> str:
+    """`un` у дня: пары прежние (`kept`) или их нет вовсе (`missing`)."""
+    return "kept" if kept else "missing"
+
+
+def _teacher_unread(
+    snapshot: Snapshot, index: TeacherIndex, teacher_id: str, day: date
+) -> tuple[str, list[str]] | None:
+    """Пометка дня преподавателя и группы, из-за которых она стоит.
+
+    Прежние пары — если среди его пар этого дня есть пары такой группы.
+    Не прочитан — если он ведёт у этой группы на той же неделе: был ли он
+    в её непрочитанном дне, неизвестно. Остальные его группы листа ни при чём.
+    """
+    names = {g.id: g.name for g in snapshot.groups}
+    today_groups = {
+        part
+        for entry in index.days(teacher_id).get(day, [])
+        for part in entry.group_name.split(", ")
+    }
+    monday = day - timedelta(days=day.weekday())
+    week_groups = {
+        part
+        for offset in range(7)
+        for entry in index.days(teacher_id).get(monday + timedelta(days=offset), [])
+        for part in entry.group_name.split(", ")
+    }
+    kept, missing = [], []
+    for gid in sorted(index.groups.get(teacher_id, ())):
+        mark = snapshot.unread.get(gid, {}).get(day)
+        name = names.get(gid)
+        if mark is None or name is None:
+            continue
+        if mark and name in today_groups:
+            kept.append(name)
+        elif not mark and name in week_groups:
+            missing.append(name)
+    if missing:
+        return "missing", missing
+    if kept:
+        return "kept", kept
+    return None
 
 
 def _cov(dates: list[date]) -> list[str] | None:
@@ -244,6 +288,7 @@ def teacher_answer(
     generated: datetime,
     bells: dict[str, list[str]] | None = None,
     today: date | None = None,
+    marks: bool = True,
 ) -> dict | None:
     """Ответ /v1/teacher. None — такого преподавателя нет.
 
@@ -256,7 +301,7 @@ def teacher_answer(
     """
     def build(tid: str, known_name: str | None = None) -> dict | None:
         return teacher_payload(snapshot, index, tid, start, days, generated,
-                               bells=bells, known_name=known_name, today=today)
+                               bells=bells, known_name=known_name, today=today, marks=marks)
 
     body = build(teacher_id)
     if body is None and (full := index.aliases.get(teacher_id)):
@@ -279,18 +324,20 @@ def teacher_payload(
     bells: dict[str, list[str]] | None = None,
     known_name: str | None = None,
     today: date | None = None,
+    marks: bool = True,
 ) -> dict | None:
     """Расписание преподавателя. None, если такого в таблице нет.
 
     `known_name` — имя преподавателя, которого в этом снимке нет, но который
-    был в прошлых: ему отвечаем днями без пар, а не 404.
+    был в прошлых: ему отвечаем днями без пар, а не 404. `marks` — клиент
+    знает пометку непрочитанного дня (`un`, `ug`).
     """
     name = index.names.get(teacher_id) or known_name
     if name is None:
         return None
 
     by_date = index.days(teacher_id)
-    shown = teacher_published(snapshot, index, teacher_id, today)
+    shown = teacher_published(snapshot, index, teacher_id, today, marks)
     covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
 
@@ -315,6 +362,8 @@ def teacher_payload(
         out_day = {"d": day.isoformat(), "l": lessons}
         if day in placed:
             out_day["row"] = placed[day].row
+        if marks and (mark := _teacher_unread(snapshot, index, teacher_id, day)):
+            out_day["un"], out_day["ug"] = mark
         out_days.append(out_day)
 
     payload = {
@@ -332,8 +381,6 @@ def teacher_payload(
         payload["cov"] = cov
     if bells:
         payload["bells"] = bells
-    if unread := _unread(snapshot, index.groups.get(teacher_id, ()), start, days):
-        payload["unread"] = unread
     return payload
 
 
@@ -353,6 +400,7 @@ def schedule_payload(
     generated: datetime,
     bells: dict[str, list[str]] | None = None,
     today: date | None = None,
+    marks: bool = True,
 ) -> dict | None:
     """Тело для виджета. None, если такой группы в листе нет.
 
@@ -364,7 +412,8 @@ def schedule_payload(
         return None
 
     by_date = snapshot.schedule.get(group_id, {})
-    shown = group_published(snapshot, group_id, today)
+    unread = snapshot.unread.get(group_id, {})
+    shown = group_published(snapshot, group_id, today, marks)
     covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
 
@@ -373,8 +422,8 @@ def schedule_payload(
         day = start + timedelta(days=offset)
         if day not in covered:
             # Дня нет в ответе вовсе — виджет отличит «пар нет» от
-            # «расписание ещё не опубликовано». Дни с парами группы в
-            # покрытие входят всегда, так что пропасть они тут не могут.
+            # «расписание ещё не опубликовано». Дни с парами группы и её
+            # непрочитанные в покрытие входят всегда.
             continue
         out_day = {
             "d": day.isoformat(),
@@ -382,6 +431,8 @@ def schedule_payload(
         }
         if day in placed:
             out_day["row"] = placed[day].row
+        if marks and (kept := unread.get(day)) is not None:
+            out_day["un"] = _unread_mark(kept)
         out_days.append(out_day)
 
     payload = {
@@ -405,8 +456,6 @@ def schedule_payload(
         payload["cov"] = cov
     if bells:
         payload["bells"] = bells
-    if unread := _unread(snapshot, [group_id], start, days):
-        payload["unread"] = unread
     return payload
 
 
