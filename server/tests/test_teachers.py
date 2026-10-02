@@ -141,18 +141,18 @@ def test_spelling_twin_is_the_same_surname_and_initials():
 
     index = TeacherIndex(
         names={
-            "truhachev-daniil": "Трухачев Даниил Дмитриевич",
-            "misyurova": "Мисюрова Евгения Сергеевна",
-            "kovalev-a": "Ковалев Алексей Петрович",
+            "nechaev-daniil": "Нечаев Даниил Сергеевич",
+            "filatova": "Филатова Лариса Андреевна",
+            "zaharov-h": "Захаров Харитон Радионович",
         },
-        schedule={"truhachev-daniil": {1: [1]}, "misyurova": {1: [1]}, "kovalev-a": {1: [1]}},
+        schedule={"nechaev-daniil": {1: [1]}, "filatova": {1: [1]}, "zaharov-h": {1: [1]}},
     )
-    assert spelling_twin(index, "Трухачев Данил Дмитриевич") == "truhachev-daniil"
-    assert spelling_twin(index, "Мисюрова Е.С.") == "misyurova"
-    assert spelling_twin(index, "Ковалев Иван Петрович") is None
-    assert spelling_twin(index, "Трухачев Даниил Дмитриевич") is None, "сам себе не двойник"
-    index.schedule.pop("truhachev-daniil")
-    assert spelling_twin(index, "Трухачев Данил Дмитриевич") is None, "без пар — не замена"
+    assert spelling_twin(index, "Нечаев Данил Сергеевич") == "nechaev-daniil"
+    assert spelling_twin(index, "Филатова Л.А.") == "filatova"
+    assert spelling_twin(index, "Захаров Иван Радионович") is None
+    assert spelling_twin(index, "Нечаев Даниил Сергеевич") is None, "сам себе не двойник"
+    index.schedule.pop("nechaev-daniil")
+    assert spelling_twin(index, "Нечаев Данил Сергеевич") is None, "без пар — не замена"
 
 
 def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_days():
@@ -192,14 +192,14 @@ def test_names_without_surname_do_not_become_teachers():
     snap = Snapshot(sheet_title="л", groups=[group], dates=[day])
     snap.schedule = {"a-1": {day: [Lesson(
         number=4, subject="Кураторский час",
-        teachers=("Щетинкин Артем Сергеевич", "Анастасия Дмитриевна", "СПТ"),
+        teachers=("Банкрофт Лоуренс Игоревич", "Мириам Олеговна", "СПТ"),
     )]}}
-    assert list(build_index(snap).names.values()) == ["Щетинкин Артем Сергеевич"]
+    assert list(build_index(snap).names.values()) == ["Банкрофт Лоуренс Игоревич"]
 
 
 def test_initials_are_merged_into_the_single_full_name():
-    """«Мисюрова Е.С.» и «Мисюрова Евгения
-    Сергеевна» — один человек, а не пары, поделённые между двумя id. Краткая
+    """«Филатова Л.А.» и «Филатова Лариса
+    Андреевна» — один человек, а не пары, поделённые между двумя id. Краткая
     запись сводится к полной, а её id отвечает полной (новый g перепишет выбор)."""
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
 
@@ -207,12 +207,12 @@ def test_initials_are_merged_into_the_single_full_name():
     snap = Snapshot(sheet_title="л", groups=[GroupRef(name="А-1", id="a-1", column=2)],
                     dates=[d1, d2])
     snap.schedule = {"a-1": {
-        d1: [Lesson(number=1, subject="Х", teachers=("Мисюрова Е.С.",))],
-        d2: [Lesson(number=1, subject="Х", teachers=("Мисюрова Евгения Сергеевна",)),
-             Lesson(number=2, subject="У", teachers=("Мисин А. Б.",))],
+        d1: [Lesson(number=1, subject="Х", teachers=("Филатова Л.А.",))],
+        d2: [Lesson(number=1, subject="Х", teachers=("Филатова Лариса Андреевна",)),
+             Lesson(number=2, subject="У", teachers=("Филин А. Б.",))],
     }}
     index = build_index(snap)
-    full = teacher_id("Мисюрова Евгения Сергеевна")
-    assert set(index.names) == {full, teacher_id("Мисин А. Б.")}
+    full = teacher_id("Филатова Лариса Андреевна")
+    assert set(index.names) == {full, teacher_id("Филин А. Б.")}
     assert set(index.days(full)) == {d1, d2}
-    assert index.aliases == {teacher_id("Мисюрова Е.С."): full}
+    assert index.aliases == {teacher_id("Филатова Л.А."): full}

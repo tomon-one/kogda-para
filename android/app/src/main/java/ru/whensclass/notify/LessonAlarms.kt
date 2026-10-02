@@ -247,7 +247,7 @@ object LessonAlarms {
     private fun groupsOf(lesson: LessonDto, ownGroup: String?): String? =
         lesson.groups?.trim()?.takeIf { it.isNotEmpty() && it != ownGroup }
 
-    // «Трухачев Д. Д.» уже кончается точкой — вторую не ставить.
+    // «Нечаев С. А.» уже кончается точкой — вторую не ставить.
     private fun sentences(parts: List<String>): String =
         parts.reduce { acc, part -> acc + (if (acc.endsWith(".")) " " else ". ") + part }
 
