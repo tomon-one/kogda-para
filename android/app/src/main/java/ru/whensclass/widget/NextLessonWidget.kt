@@ -162,8 +162,10 @@ class NextLessonWidget : GlanceAppWidget() {
                 // тогда место пары переезжает в шапку.
                 val scale = fontScale()
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
+                // Группы всех пар номера: у преподавателя одна пара в двух залах.
+                val groups = next.lessons.mapNotNull { it.groups }.distinct().joinToString(", ").ifEmpty { null }
                 val head = status + nextLessonHead(
-                    time, when_, ongoing, lesson.groups,
+                    time, when_, ongoing, groups,
                     // Без «⧉»: нажатие на шапку открывает приложение, а не копирует.
                     place = if (tight) places(next) else null,
                 )
@@ -180,7 +182,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     ),
                 )
                 Text(
-                    distinctSubjects(next.lessons).joinToString(" / "),
+                    joinSubjects(distinctSubjects(next.lessons)),
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 14.sp,

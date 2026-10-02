@@ -18,6 +18,7 @@ import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.distinctSubjects
+import ru.whensclass.widget.joinSubjects
 import ru.whensclass.widget.kindName
 import ru.whensclass.widget.roomLabel
 
@@ -150,7 +151,7 @@ object LessonAlarms {
         val lessons: List<LessonDto> get() = listOf(lesson) + also
 
         /** Для заголовка: «Немецкий / Английский»; одинаковые — один раз. */
-        val subject: String get() = distinctSubjects(lessons).joinToString(" / ")
+        val subject: String get() = joinSubjects(distinctSubjects(lessons))
     }
 
     private fun schedule(context: Context, index: Int, alarm: Alarm) {

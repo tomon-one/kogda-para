@@ -314,3 +314,12 @@ def test_same_subscription_is_compared_when_the_main_spelling_changes():
     new = {**old, "g": "bezuhov-daniil", "days": [{"d": TUE, "l": [_l(1, "Х", r="102", gr="А-1")]}]}
     assert changes.compare(old, new) == []
     assert [text for _, text in changes.compare(old, new, same=True)] == ["1 пара (А-1) переехала в каб. 102"]
+
+
+def test_reminder_title_names_the_shared_part_once():
+    """«Иностранный язык, немецкий / Иностранный язык, английский» в одну строку
+    не влезает — общая часть один раз (joinSubjects в приложении)."""
+    payload = _group({TUE: [_l(4, "Иностранный язык, немецкий", r="55/1"),
+                            _l(4, "Иностранный язык, английский", r="467")]})
+    plan = changes.reminders(payload, 15, dt.date(2026, 9, 29))
+    assert plan[0]["subject"] == "Иностранный язык: немецкий / английский"

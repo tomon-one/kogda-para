@@ -440,7 +440,7 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
         if during_previous:
             continue
         names = _distinct(x["s"] for x in same)
-        subject = " / ".join(names)
+        subject = _join_subjects(names)
         differ = len(_distinct(x["s"] for x in same + off)) > 1
         out.append({
             "at": fire,
@@ -485,6 +485,15 @@ def reminder_text(lesson: dict, own_group: str | None) -> str:
         (lesson.get("t") or [None])[0],
         _groups(lesson, own_group),
     ])
+
+
+def _join_subjects(names: list[str]) -> str:
+    """«Иностранный язык: немецкий / английский» — общая часть один раз, иначе
+    однострочный заголовок теряет второе название (joinSubjects в DayFormat.kt)."""
+    head = names[0].split(", ", 1)[0] if names and ", " in names[0] else ""
+    if len(names) > 1 and head and all(n.startswith(head + ", ") for n in names):
+        return head + ": " + " / ".join(n[len(head) + 2:] for n in names)
+    return " / ".join(names)
 
 
 def _distinct(subjects) -> list[str]:

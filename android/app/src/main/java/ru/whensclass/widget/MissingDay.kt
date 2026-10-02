@@ -114,6 +114,21 @@ internal fun windowStart(
     return minOf(index, maxOf(0, lessons.size - fits))
 }
 
+/**
+ * Окно [start, start + fits) без разреза номера: две пары одного номера
+ * (подгруппы в разных кабинетах) показываются обе или прячутся обе, иначе
+ * половина пропала бы без слова. Край, режущий номер, сдвигается внутрь окна;
+ * не остаётся ничего — окно как было.
+ */
+internal fun windowRange(lessons: List<LessonDto>, start: Int, fits: Int): IntRange {
+    val end = minOf(lessons.size, start + fits)
+    var from = start
+    var to = end
+    while (from in 1 until to && lessons[from].number == lessons[from - 1].number) from++
+    while (to in (from + 1) until lessons.size && lessons[to].number == lessons[to - 1].number) to--
+    return if (from < to) from until to else start until end
+}
+
 
 /**
  * Надпись вместо пар. [open] — нажатие открывает приложение, а не обновляет:
