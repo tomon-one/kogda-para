@@ -6,6 +6,7 @@ test_push_changes.py, рассылка — test_push_delivery.py.
 
 import dataclasses
 import datetime as dt
+import threading
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -313,6 +314,27 @@ def test_shift_of_two_neighbours_is_not_sent_to_them(tmp_path, snapshots, monkey
     assert push.sent == [] and said == ["push-shift"]
 
 
+def test_vertical_shift_of_a_column_is_not_sent_to_it(tmp_path, snapshots, monkeypatch):
+    """Пары колонки съехали по вертикали (номера под вопросом), а лист принят:
+    её подписчикам — ничего, владельцу — тревога (vertical_groups в _suspects)."""
+    before, bt, after, at, day, first = snapshots
+    import copy
+
+    gid = "isp-924-2"
+    shifted = copy.deepcopy(before)
+    for d, lessons in before.schedule[gid].items():
+        shifted.schedule[gid][d] = [dataclasses.replace(x, number=x.number + 1) for x in lessons]
+    said = []
+    monkeypatch.setattr(service.alerts, "notify", lambda kind, text, **k: said.append(kind))
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(subscription.parse_subscription(_body(id=gid)), day)
+    push.sent.clear()
+    from whensclass.domain.teachers import build_index
+
+    push.after_refresh(before, bt, shifted, build_index(shifted), day)
+    assert push.sent == [] and said == ["push-shift"]
+
+
 # --- API ----------------------------------------------------------------------------
 
 
@@ -371,3 +393,33 @@ def test_browser_moved_subscription_keeps_the_choice(api):
     assert client.post("/v1/push/move", json={**body, "old": "https://web.push.apple.com/none"}
                        ).status_code == 404
     assert list(push._subs) == ["https://web.push.apple.com/new"]
+
+
+def test_service_wires_push_to_the_store_and_the_refresher(tmp_path):
+    """Рассылка знает прежних преподавателей (почасовику без пар — «убрали»)
+    и зовётся после каждого нового снимка."""
+    from whensclass.main import build_state
+
+    store, refresher, push = build_state(tmp_path)
+    assert push.known_teacher == store.known_teacher
+    assert refresher.on_update == push.after_refresh
+
+
+def test_each_push_service_has_its_own_queue(tmp_path, monkeypatch):
+    """Медленная или лежащая служба рассылки не держит доставку остальных."""
+    from whensclass.push.delivery import family
+
+    seen = {}
+    done = threading.Event()
+
+    def send(self, job, attempt=0):
+        seen[family(job.sub["endpoint"])] = threading.current_thread().name
+        if len(seen) == 2:
+            done.set()
+
+    monkeypatch.setattr(service.Push, "_send", send)
+    push = service.Push(tmp_path, _vapid())
+    for endpoint in ("https://web.push.apple.com/a", "https://fcm.googleapis.com/fcm/send/b"):
+        push._dispatch([service.Job({"endpoint": endpoint}, {}, 60)])
+    assert done.wait(5)
+    assert seen["apple"].startswith("push-apple") and seen["google"].startswith("push-google")
