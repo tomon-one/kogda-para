@@ -31,7 +31,7 @@ class DayFormatTest {
     @Test
     fun `фамилия остаётся, имя и отчество сокращаются`() {
         assertEquals("Нечаев С. А.", shortenName("Нечаев Сергей Алексеевич"))
-        assertEquals("Кушинада Л. А.", shortenName("Кушинада Люси Андреевна"))
+        assertEquals("Кушинада Л. Т.", shortenName("Кушинада Люцина Такесиевна"))
     }
 
     @Test
