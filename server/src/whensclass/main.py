@@ -41,6 +41,21 @@ def before_each_lesson(minutes: int) -> list[tuple[str, tuple[int, int]]]:
     return out
 
 
+def build_state(directory) -> tuple[SnapshotStore, Refresher, Push]:
+    """Снимок, обновление и рассылка, связанные между собой.
+
+    Рассылке нужна память о прежних преподавателях: без неё почасовик, у
+    которого пару отдали замене, не получит «убрали» — на сайте, в отличие от
+    приложения, — а обновление зовёт рассылку после каждого нового снимка.
+    """
+    store = SnapshotStore(directory)
+    refresher = Refresher(store, directory)
+    push = Push(directory, load_vapid())
+    push.known_teacher = store.known_teacher
+    refresher.on_update = push.after_refresh
+    return store, refresher, push
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.basicConfig(
@@ -60,11 +75,7 @@ async def lifespan(app: FastAPI):
             "через exit работать не будет", settings.exit_ssh,
         )
 
-    store = SnapshotStore(directory)
-    refresher = Refresher(store, directory)
-    push = Push(directory, load_vapid())
-    push.known_teacher = store.known_teacher
-    refresher.on_update = push.after_refresh
+    store, refresher, push = build_state(directory)
     app.state.store = store
     app.state.refresher = refresher
     app.state.push = push

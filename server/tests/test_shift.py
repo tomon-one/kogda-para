@@ -331,3 +331,19 @@ def test_vertical_shift_names_every_group_of_its_column():
             dataclasses.replace(x, number=x.number + 1) for x in honest.schedule["g-1"][day]
         ]
     assert vertical_groups(moved, honest) == {"g-1", "g-1b"}
+
+
+@pytest.mark.parametrize("text, head", [
+    ("Дисциплина Преподаватель ИСП-924/1", (True, "ИСП-924/1")),
+    # Опечатка, другая форма, латинская «a» — та же шапка: иначе группа молча
+    # уходит из снимка при ok.
+    ("Дисциплна Преподаватель ИСП-924/1", (True, "ИСП-924/1")),
+    ("Дисциплины Преподаватели ИСП-924/1", (True, "ИСП-924/1")),
+    ("Дисциплинa Преподаватель ИСП-924/1", (True, "ИСП-924/1")),
+    ("Дисциплина", (True, None)),
+    ("Физика Преподаватель ИСП-924/1", (False, None)),
+])
+def test_block_head_survives_a_typo_in_its_words(text, head):
+    from whensclass.parser.groups import _block_head
+
+    assert _block_head(text) == head

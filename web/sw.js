@@ -243,8 +243,9 @@ function ours(client) {
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var data = event.notification.data || {};
-  // «Выберите заново»: служба уже ждала час — страница не ждёт своего (main.js).
-  var gone = data.t === 'gone';
+  // «Выберите заново»: служба уже ждала час — страница не ждёт своего
+  // (main.js). Вид сообщения — в теге уведомления (show).
+  var gone = event.notification.tag === 'gone';
   var url = (data.url || self.registration.scope) + (gone ? '?gone=1' : '');
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
     for (var i = 0; i < list.length; i++) {
