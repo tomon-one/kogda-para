@@ -1,9 +1,9 @@
 """Непрочитанный день группы: запись, которую разбор не знает, в одном-двух блоках.
 
-Лист принимается всем остальным; у задетых групп этот день — прежними парами,
-а если прежний снимок его не знал — «ещё не опубликовано». Наружу — stale для
-старых версий и `refresh`/`unread` для новых. Сдвиг по многим блокам — отказ,
-как и был.
+Лист принимается всем остальным; у задетых групп этот день — прежними парами
+(`un: kept`), а если прежних пар нет — пустым с пометкой (`un: missing`).
+Остальные дни группы — как обычно. Наружу — stale для старых версий и
+`refresh`/`unread` для новых. Сдвиг по многим блокам — отказ, как и был.
 """
 
 import csv
@@ -13,9 +13,11 @@ import io
 import pytest
 
 from whensclass.api import routes
-from whensclass.api.payloads import meta_payload, schedule_payload
+from whensclass.api.payloads import meta_payload, schedule_payload, teacher_payload
 from whensclass.domain.models import SourceFormatChanged
+from whensclass.domain.teachers import build_index
 from whensclass.parser.csv_schedule import FIXTURE
+from whensclass.push.changes import compare
 from whensclass.parser.export import parse_csv, read_csv
 from whensclass.service.refresher import Refresher, _hold_unread
 from whensclass.storage.snapshot_store import SnapshotStore
@@ -88,8 +90,9 @@ def test_unread_day_keeps_previous_lessons_and_says_so(tmp_path, sheet, sent, fi
     assert meta["status"] == "stale" and meta["refresh"] == "ok"
     assert meta["unread"] == ["2026-09-02"]
     body = schedule_payload(store.snapshot, "bp-1126", DAY, 7, store.generated, today=TODAY)
-    assert body["unread"] == ["2026-09-02"]
     assert body["days"][0]["d"] == "2026-09-02" and body["days"][0]["l"]
+    assert body["days"][0]["un"] == "kept"
+    assert not any("un" in day for day in body["days"][1:])
 
     # Перезапуск помнит, что день не прочитан.
     again = SnapshotStore(tmp_path)
@@ -103,11 +106,110 @@ def test_unread_day_keeps_previous_lessons_and_says_so(tmp_path, sheet, sent, fi
     assert any("снова прочитаны" in b["message"] for b in sent)
 
 
-def test_unread_day_the_previous_snapshot_did_not_know_is_not_published(fixture_csv):
+GEN = dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
+
+
+def _days(body: dict) -> dict[str, dict]:
+    return {day["d"]: day for day in body["days"]}
+
+
+def test_unread_day_without_previous_lessons_is_marked_and_the_week_stays(fixture_csv):
+    """Прежних пар нет — день пустой с пометкой, а прочитанные дни после него
+    на месте, и когда он уже прошёл: «сегодня» у группы не пропадает."""
+    honest = parse_csv(fixture_csv, "ф", FIXTURE)
     snapshot = parse_csv(spilled(fixture_csv, BP), "ф", FIXTURE)
     _hold_unread(snapshot, None)
     assert snapshot.unread == {"bp-1126": {DAY: False}}
-    body = schedule_payload(snapshot, "bp-1126", DAY, 7, dt.datetime(2026, 9, 2), today=DAY)
-    assert body["days"] == [] and body["unread"] == ["2026-09-02"]
-    other = schedule_payload(snapshot, "bp-926-1", DAY, 7, dt.datetime(2026, 9, 2), today=DAY)
-    assert other["days"] and "unread" not in other
+    days = _days(schedule_payload(snapshot, "bp-1126", DAY, 7, GEN, today=TODAY))
+    assert days["2026-09-02"]["l"] == [] and days["2026-09-02"]["un"] == "missing"
+    for day in ("2026-09-03", "2026-09-04", "2026-09-05"):
+        assert len(days[day]["l"]) == len(honest.schedule["bp-1126"][dt.date.fromisoformat(day)])
+        assert "un" not in days[day]
+    other = schedule_payload(snapshot, "bp-926-1", DAY, 7, GEN, today=TODAY)
+    assert other["days"] and not any("un" in day for day in other["days"])
+
+
+def test_day_that_was_free_is_not_kept_empty(fixture_csv):
+    """Прежний снимок знал дату, но пар у группы в ней не было (неделю
+    вписывают впервые): не «пары какими были… Пар нет», а «не прочитан»."""
+    before = parse_csv(fixture_csv, "ф", FIXTURE)
+    before.schedule["bp-1126"].pop(DAY)
+    snapshot = parse_csv(spilled(fixture_csv, BP), "ф", FIXTURE)
+    _hold_unread(snapshot, before)
+    assert snapshot.unread == {"bp-1126": {DAY: False}}
+    assert _days(schedule_payload(snapshot, "bp-1126", DAY, 1, GEN, today=TODAY))["2026-09-02"]["un"] == "missing"
+
+
+def _teacher_of(index, group_name: str, day: dt.date, number: int | None = None) -> str:
+    return next(
+        tid for tid, by_date in index.schedule.items()
+        for entry in by_date.get(day, [])
+        if number in (None, entry.lesson.number) and group_name in entry.group_name.split(", ")
+    )
+
+
+def test_teacher_mark_names_the_group_and_only_his(fixture_csv):
+    """У преподавателя пометка — по группе, чьи пары у него в этот день
+    (прежние) или на этой неделе (не прочитан), с её именем. Другие его
+    группы и чужие преподаватели — без пометки."""
+    before = parse_csv(fixture_csv, "ф", FIXTURE)
+    tid = _teacher_of(build_index(before), "БП-1126", DAY, 2)
+
+    kept = parse_csv(spilled(fixture_csv, BP), "ф", FIXTURE)
+    _hold_unread(kept, before)
+    index = build_index(kept)
+    day = _days(teacher_payload(kept, index, tid, DAY, 1, GEN, today=TODAY))["2026-09-02"]
+    assert (day["un"], day["ug"]) == ("kept", ["БП-1126"])
+    stranger = next(t for t, groups in index.groups.items() if "bp-1126" not in groups)
+    assert not any("un" in d for d in teacher_payload(kept, index, stranger, DAY, 7, GEN, today=TODAY)["days"])
+
+    missing = parse_csv(spilled(fixture_csv, BP), "ф", FIXTURE)
+    _hold_unread(missing, None)
+    index = build_index(missing)
+    # Ведёт у группы назавтра — значит, мог быть и в непрочитанном дне.
+    weekly = _teacher_of(index, "БП-1126", DAY + dt.timedelta(days=1))
+    day = _days(teacher_payload(missing, index, weekly, DAY, 1, GEN, today=TODAY))["2026-09-02"]
+    assert (day["un"], day["ug"]) == ("missing", ["БП-1126"])
+
+
+def test_changes_are_not_counted_on_an_unread_day():
+    """День без пар «не прочитан» — не «убрали»; прочитанный следом — не
+    «добавилась»."""
+    read = {"g": "a-1", "gn": "А-1", "days": [{"d": "2026-09-02", "l": [{"n": 2, "s": "Х"}]}]}
+    unread = {"g": "a-1", "gn": "А-1", "days": [{"d": "2026-09-02", "l": [], "un": "missing"}]}
+    assert compare(read, unread) == []
+    assert compare(unread, read) == []
+
+
+def test_versions_without_marks_get_the_cut_as_before(fixture_csv):
+    """Прежние версии пометок не знают: пустой непрочитанный день прочли бы как
+    «пар нет» и прислали бы «убрали». Им край — перед ним, без `un`; новые
+    просят пометки `?marks=1`."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    snapshot = parse_csv(spilled(fixture_csv, BP), "ф", FIXTURE)
+    _hold_unread(snapshot, None)
+    old = schedule_payload(snapshot, "bp-1126", DAY, 7, GEN, today=TODAY, marks=False)
+    # 02.09 — первый день листа: перед ним у группы ничего, cov нет вовсе.
+    assert old["days"] == [] and "cov" not in old
+
+    class Store:
+        teachers = build_index(snapshot)
+        generated = GEN
+
+        def known_teacher(self, _):
+            return None
+
+    Store.snapshot = snapshot
+    app = FastAPI()
+    app.include_router(routes.router)
+    app.state.store, app.state.refresher = Store(), None
+    client = TestClient(app)
+    url = "/v1/schedule/bp-1126?from=2026-09-02&days=3"
+    assert client.get(url).json()["days"] == []
+    assert client.get(url + "&marks=1").json()["days"][0]["un"] == "missing"
+    teacher = _teacher_of(Store.teachers, "БП-1126", DAY + dt.timedelta(days=1))
+    url = f"/v1/teacher/{teacher}?from=2026-09-02&days=1"
+    assert not any("un" in d for d in client.get(url).json()["days"])
+    assert client.get(url + "&marks=1").json()["days"][0]["un"] == "missing"

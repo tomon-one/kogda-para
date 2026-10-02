@@ -149,7 +149,9 @@ def compare(old: dict | None, fresh: dict) -> list[tuple[str, str]]:
     changes: list[tuple[str, str]] = []
     for day in fresh.get("days", []):
         before = old_days.get(day["d"])
-        if before is None:
+        # Непрочитанный день без пар — не «убрали», а «не знаем»; прочитанный
+        # следом — не «добавилась».
+        if before is None or "missing" in (before.get("un"), day.get("un")):
             continue
         numbers = sorted({x["n"] for x in before["l"]} | {x["n"] for x in day["l"]})
         for number in numbers:
