@@ -134,7 +134,7 @@ def test_teacher_names_in_place_of_subjects_are_a_row_shift():
     three = copy.deepcopy(two)
     first, *rest = three.schedule[honest.groups[2].id][day]
     three.schedule[honest.groups[2].id][day] = [
-        dataclasses.replace(first, subject="Пейдж М. И."), *rest
+        dataclasses.replace(first, subject="Пейдж М. Р."), *rest
     ]
     with pytest.raises(SourceFormatChanged, match="вместо названия ФИО"):
         check_shift(three)
