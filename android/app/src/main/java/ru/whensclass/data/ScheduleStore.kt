@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import ru.whensclass.BuildConfig
 
 // Испорченный файл настроек — начать с пустого: без обработчика каждый старт
 // падал на CorruptionException, и помогала только «Очистить данные».
@@ -79,6 +80,23 @@ class ScheduleStore(private val context: Context) {
             sourceUrl?.let { url -> it[KEY_SOURCE_URL] = url }
             if (status == "ok" || since == null) it.remove(KEY_SERVER_SINCE)
             else it[KEY_SERVER_SINCE] = since
+            // Отказ относится к этой сборке: после обновления его надо забыть.
+            if (status == STATUS_UNSUPPORTED) it[KEY_UNSUPPORTED_BUILD] = BuildConfig.VERSION_CODE.toString()
+        }
+    }
+
+    /**
+     * Сервер отказал прежней сборке (426), а приложение с тех пор обновили:
+     * отказ к нынешней не относится, и до первого ответа сервера на экране и в
+     * виджетах не должно висеть «обновите приложение».
+     */
+    suspend fun forgetUnsupportedAfterUpdate() {
+        context.dataStore.edit {
+            if (it[KEY_SERVER_STATUS] != STATUS_UNSUPPORTED) return@edit
+            if (it[KEY_UNSUPPORTED_BUILD] == BuildConfig.VERSION_CODE.toString()) return@edit
+            it[KEY_SERVER_STATUS] = "ok"
+            it.remove(KEY_SERVER_SINCE)
+            it.remove(KEY_UNSUPPORTED_BUILD)
         }
     }
 
@@ -377,6 +395,7 @@ class ScheduleStore(private val context: Context) {
             groupName = if (teacher) prefs[KEY_TEACHER_NAME] else prefs[KEY_GROUP_NAME],
             scheduleJson = prefs[KEY_SCHEDULE],
             serverBroken = (prefs[KEY_SERVER_STATUS] ?: "ok") != "ok",
+            unsupported = prefs[KEY_SERVER_STATUS] == STATUS_UNSUPPORTED,
             sourceUrl = prefs[KEY_SOURCE_URL],
             gone = prefs[KEY_GONE] == "1",
             fetchedAt = prefs[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L,
@@ -687,6 +706,8 @@ class ScheduleStore(private val context: Context) {
         val sourceUrl: String? = null,
         /** Группы в таблице больше нет — пора выбрать заново. */
         val gone: Boolean = false,
+        /** Сервер эту сборку больше не обслуживает — нужно обновить приложение. */
+        val unsupported: Boolean = false,
         val fetchedAt: Long,
         val theme: String,
     )
@@ -728,6 +749,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_FETCHED_AT = stringPreferencesKey("fetched_at")
         val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
         val KEY_FORMAT = stringPreferencesKey("format")
+        val KEY_UNSUPPORTED_BUILD = stringPreferencesKey("unsupported_build")
         const val FORMAT = "2"
         val KEY_THEME = stringPreferencesKey("theme")
         val KEY_WIDGET_DAY = stringPreferencesKey("widget_day")

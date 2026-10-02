@@ -49,6 +49,8 @@ fun GroupPickerScreen(
     onBack: () -> Unit = {},
     onTeacherMode: (() -> Unit)? = null,
     loadDiagnostics: (suspend () -> String)? = null,
+    /** Сервер эту сборку не обслуживает (426): вместо «проверьте интернет» — к обновлению. */
+    onUpdate: (() -> Unit)? = null,
 ) {
     // Набранное переживает поворот.
     var query by rememberSaveable { mutableStateOf("") }
@@ -98,6 +100,8 @@ fun GroupPickerScreen(
                 ) {
                     CircularProgressIndicator()
                 }
+
+                list.isEmpty() && onUpdate != null -> Unsupported(onUpdate, "Сервер больше не поддерживает эту версию: список не загрузится, пока приложение не обновят.")
 
                 list.isEmpty() -> LoadFailed("Список групп", loadDiagnostics, onRetry)
 

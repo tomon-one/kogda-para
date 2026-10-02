@@ -26,7 +26,12 @@ import ru.whensclass.data.ScheduleDto
  * и говорится только тогда, когда другие объяснения (выходной, сбой, не то
  * окно на телефоне) исключены.
  */
-internal data class Missing(val text: String, val toSource: Boolean = false, val off: Boolean = false)
+internal data class Missing(
+    val text: String,
+    val toSource: Boolean = false,
+    /** Обновлять нечего: нажатие ведёт в приложение («выходной», «обновите приложение»). */
+    val toApp: Boolean = false,
+)
 
 /**
  * Проверял ли телефон сервер с начала сегодняшнего дня. Нет — «ещё не
@@ -44,6 +49,8 @@ internal fun missingDay(
     week: Boolean = false,
     /** Телефон проверял сервер сегодня ([checkedToday]). */
     checked: Boolean = true,
+    /** Сервер эту сборку не обслуживает (426). */
+    unsupported: Boolean = false,
 ): Missing {
     val covered = schedule.coverage.size == 2 && runCatching {
         !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
@@ -53,12 +60,13 @@ internal fun missingDay(
     // cov относится ко всему листу, а не к окну на телефоне.
     val dates = schedule.days.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
     val inWindow = dates.isNotEmpty() && !day.isBefore(dates.min()) && !day.isAfter(dates.max())
-    val off = Missing("Выходной", off = true)
+    val off = Missing("Выходной", toApp = true)
     return when {
         // Воскресений в листах не бывает: это выходной всегда. Но не для
         // недели: пустая неделя в воскресенье — это «следующая не выложена».
         day.dayOfWeek == java.time.DayOfWeek.SUNDAY && !week -> off
         covered && inWindow -> off
+        unsupported -> Missing("Нужно обновить приложение", toApp = true)
         // Сбой — раньше несвежести: данные при сбое всегда стареют, а
         // обновление тут не поможет.
         serverBroken -> Missing("Сбой: расписание не обновляется", toSource = true)

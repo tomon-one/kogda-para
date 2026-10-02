@@ -90,6 +90,7 @@ class WeekWidget : GlanceAppWidget() {
                     currentState(ScheduleWidget.KEY_FAILED) == true,
                     state?.serverBroken == true,
                     state?.gone == true,
+                    state?.unsupported == true,
                     colors,
                 )
                 Spacer(GlanceModifier.height(6.dp))
@@ -109,11 +110,12 @@ class WeekWidget : GlanceAppWidget() {
                         val missing = missingDay(
                             schedule, today, state?.serverBroken == true, week = true,
                             checked = checkedToday(state?.fetchedAt ?: 0L, today),
+                            unsupported = state?.unsupported == true,
                         )
                         MissingHint(
                             missing.text, colors,
                             if (missing.toSource) sheetLink(schedule, today, state?.sourceUrl) else null,
-                            open = if (missing.off) actionStartActivity(openDay(context, today)) else null,
+                            open = if (missing.toApp) actionStartActivity(openDay(context, today)) else null,
                         )
                     }
                     // Долю высоты список получает здесь, из Column: без неё в
@@ -143,6 +145,7 @@ private fun Header(
     failed: Boolean,
     serverBroken: Boolean,
     gone: Boolean,
+    unsupported: Boolean,
     colors: Palette,
 ) {
     val context = LocalContext.current
@@ -189,6 +192,7 @@ private fun Header(
                         failed -> " · не обновилось"
                         // Пропажа и сбой — как в дневном виджете.
                         gone -> " · нет в таблице"
+                        unsupported -> " · обновите приложение"
                         serverBroken -> " · сбой"
                         done -> " · обновлено"
                         else -> " · " + formatFetchedShort(fetchedAt, nowMillis)
@@ -197,14 +201,14 @@ private fun Header(
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || serverBroken || gone -> colors.error
+                            failed || serverBroken || gone || unsupported -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },
                     ),
                     // Группы нет в таблице — в приложение, к «выбрать заново».
                     modifier = GlanceModifier.clickable(
-                        if (gone) openApp else actionRunCallback<RefreshAction>(),
+                        if (gone || unsupported) openApp else actionRunCallback<RefreshAction>(),
                     ),
                 )
                 // Всегда: пропадая, значок менял бы ширину строки.

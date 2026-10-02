@@ -56,6 +56,8 @@ fun SelfPickerScreen(
     onBack: () -> Unit = {},
     onStudentMode: () -> Unit = {},
     loadDiagnostics: (suspend () -> String)? = null,
+    /** Сервер эту сборку не обслуживает (426): вместо «проверьте интернет» — к обновлению. */
+    onUpdate: (() -> Unit)? = null,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
 
@@ -103,6 +105,8 @@ fun SelfPickerScreen(
 
                 // До настроек отсюда не дойти: себя ещё не выбрали — адрес
                 // и отчёт здесь же.
+                teachers.isEmpty() && onUpdate != null -> Unsupported(onUpdate, "Сервер больше не поддерживает эту версию: список не загрузится, пока приложение не обновят.")
+
                 teachers.isEmpty() -> LoadFailed("Список преподавателей", loadDiagnostics, onRetry)
 
                 else -> {
