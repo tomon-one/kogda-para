@@ -17,6 +17,7 @@ import ru.whensclass.AppContainer
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.widget.ScheduleWidget
+import ru.whensclass.widget.distinctSubjects
 import ru.whensclass.widget.kindName
 import ru.whensclass.widget.roomLabel
 
@@ -130,7 +131,10 @@ object LessonAlarms {
         val end: LocalDateTime? = null,
         /** Своя группа студента: её имя в напоминании не пишется. */
         val ownGroup: String? = null,
-        /** Другие пары того же номера (блок пополам). */
+        /**
+         * Другие пары того же номера: подгруппы в разных кабинетах или у
+         * преподавателя одна пара в двух залах.
+         */
         val also: List<LessonDto> = emptyList(),
     ) {
         /** Когда пара начнётся: будильник стоит настолько же раньше. */
@@ -138,8 +142,8 @@ object LessonAlarms {
 
         val lessons: List<LessonDto> get() = listOf(lesson) + also
 
-        /** Для заголовка: «Немецкий / Английский». */
-        val subject: String get() = lessons.joinToString(" / ") { it.subject }
+        /** Для заголовка: «Немецкий / Английский»; одинаковые — один раз. */
+        val subject: String get() = distinctSubjects(lessons).joinToString(" / ")
     }
 
     private fun schedule(context: Context, index: Int, alarm: Alarm) {
@@ -214,16 +218,23 @@ object LessonAlarms {
      */
     fun text(alarm: Alarm): String {
         if (alarm.also.isNotEmpty()) {
-            // Строка на пару, место — первым; номер и время — в заголовке.
-            return alarm.lessons.joinToString("\n") { lesson ->
+            // Номер — первой строкой, дальше строка на пару, место — первым;
+            // предмет — только если они разные: время и предмет — в заголовке.
+            val lessons = alarm.lessons
+            val kinds = lessons.map { kindName(it.kind) }.distinct()
+            val number = "${alarm.lesson.number} пара" +
+                (kinds.singleOrNull()?.let { ", ${it.lowercase()}" } ?: "")
+            val withSubject = distinctSubjects(lessons).size > 1
+            return (listOf(number) + lessons.map { lesson ->
                 sentences(
                     listOfNotNull(
-                        listOfNotNull(place(lesson), lesson.subject).joinToString(" — "),
+                        listOfNotNull(place(lesson), lesson.subject.takeIf { withSubject })
+                            .joinToString(" — ").takeIf { it.isNotEmpty() },
                         lesson.teachers.firstOrNull(),
                         groupsOf(lesson, alarm.ownGroup),
                     ),
                 )
-            }
+            }).joinToString("\n")
         }
         val lesson = alarm.lesson
         return sentences(
@@ -249,7 +260,9 @@ object LessonAlarms {
 
     // «Нечаев С. А.» уже кончается точкой — вторую не ставить.
     private fun sentences(parts: List<String>): String =
-        parts.reduce { acc, part -> acc + (if (acc.endsWith(".")) " " else ". ") + part }
+        parts.fold("") { acc, part ->
+            if (acc.isEmpty()) part else acc + (if (acc.endsWith(".")) " " else ". ") + part
+        }
 
     const val EXTRA_SUBJECT = "subject"
     const val EXTRA_KEY = "key"

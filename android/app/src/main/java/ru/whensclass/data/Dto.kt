@@ -24,6 +24,11 @@ data class ScheduleDto(
     /** «teacher» у расписания преподавателя: там подпись группы у каждой пары. */
     @SerialName("kind") val kind: String? = null,
     /**
+     * Дни окна, которые сервер не прочитал в таблице: пары такого дня —
+     * прежние, а если дня нет в [days] — прежних у сервера нет.
+     */
+    @SerialName("unread") val unread: List<String> = emptyList(),
+    /**
      * Только для экрана: имена выбранных групп по порядку, первая — своя
      * ([combineGroups]). Номер значка у пары — место в этом списке плюс один.
      * Пусто — группа одна, значков нет.
@@ -67,7 +72,17 @@ data class DayDto(
      * не «колледж выложил день пустым».
      */
     @kotlinx.serialization.Transient val absent: Boolean = false,
+    /** Сервер этот день не прочитал ([ScheduleDto.unread]); ставит [ru.whensclass.ui.daysWithGaps]. */
+    @kotlinx.serialization.Transient val unread: UnreadDay? = null,
 )
+
+enum class UnreadDay {
+    /** В ответе — прежние пары дня. */
+    KEPT,
+
+    /** Прежних нет: день вставлен пустым, чтобы было видно, что с ним. */
+    MISSING,
+}
 
 @Serializable
 data class LessonDto(
@@ -135,6 +150,14 @@ data class MetaDto(
     @SerialName("src_url") val sourceUrl: String? = null,
     /** С какого момента сервер не обновляется — только при `status` не `ok`. */
     @SerialName("since") val since: String? = null,
+    /**
+     * Состояние обновления без непрочитанных дней одной-двух групп. Прежним
+     * версиям сервер отдаёт такие дни общим `stale`, этой — пометкой у дня.
+     */
+    @SerialName("refresh") val refresh: String? = null,
     // `err` (почему — словами разборщика) приложение не читает: человеку
     // «формат таблицы изменился» ничего не даёт.
-)
+) {
+    /** Обновляется ли сервер: непрочитанные дни — не общий сбой. */
+    val health: String get() = refresh ?: status
+}

@@ -457,8 +457,8 @@ class ScheduleRepository(
             val busy = (metaAnswer.exceptionOrNull() as? HttpFailure)?.code == 429
             if (meta != null) {
                 store.clearUnreachable()
-                store.putServerState(meta.status, meta.sourceUrl, meta.since)
-                announceStale(meta.status, meta.since)
+                store.putServerState(meta.health, meta.sourceUrl, meta.since)
+                announceStale(meta.health, meta.since)
             } else if (!busy && networkUp()) {
                 val now = java.time.Instant.now()
                 val down = store.noteUnreachable(now)
@@ -482,7 +482,7 @@ class ScheduleRepository(
             coroutineScope {
                 // Другие группы — вместе со своей, а не после неё: иначе своё
                 // ждало бы лишний круг сети и терялось при отмене захода.
-                val extrasAsked = async { fetchExtras(extraGroups, serverOk = meta?.status == "ok", from = from) }
+                val extrasAsked = async { fetchExtras(extraGroups, serverOk = meta?.health == "ok", from = from) }
                 val fresh = try {
                     if (teacherMode) {
                         api.teacher(subject, from = from, days = DAYS)
@@ -494,7 +494,7 @@ class ScheduleRepository(
                     // 404 при здоровом сервере — группы в таблице больше нет:
                     // переименовали, разделили, убрали. Молчать прежним
                     // расписанием — врать, но и не с первого раза ([ScheduleStore.gone]).
-                    if (error.code == 404 && meta?.status == "ok") {
+                    if (error.code == 404 && meta?.health == "ok") {
                         val confirmed = store.noteNotFound(System.currentTimeMillis())
                         if (confirmed) {
                             updateWidgets()

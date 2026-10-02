@@ -70,7 +70,7 @@ internal fun Week(
                 Column(modifier = GlanceModifier.fillMaxWidth()) {
                     DayTitle(day, colors)
                     if (day.lessons.isEmpty()) {
-                        EmptyLine(day.date, colors, day.absent)
+                        EmptyLine(day.date, colors, day.absent, day.unread)
                     } else {
                         // Заголовок дня уже занял одного ребёнка. С другими
                         // группами пар в дне бывает больше девяти — тогда
@@ -180,7 +180,11 @@ private fun DaySummary(day: WeekDay, bells: Map<String, List<String>>, colors: P
         )
         Text(
             if (day.lessons.isEmpty()) {
-                if (day.absent) "  выходной" else "  пар нет"
+                when {
+                    day.unread -> "  не прочитан"
+                    day.absent -> "  выходной"
+                    else -> "  пар нет"
+                }
             } else {
                 "  " + pairsCount(numbers(day.lessons)) + (span(day, bells)?.let { " · $it" } ?: "")
             },
@@ -201,10 +205,15 @@ private fun span(day: WeekDay, bells: Map<String, List<String>>): String? {
 }
 
 @Composable
-private fun EmptyLine(date: LocalDate, colors: Palette, absent: Boolean = false) {
+private fun EmptyLine(date: LocalDate, colors: Palette, absent: Boolean = false, unread: Boolean = false) {
     val context = LocalContext.current
     Text(
-        if (absent) "выходной" else "пар нет",
+        // «Не прочитан» — сервер не понял этот день в таблице; подробнее — в приложении.
+        when {
+            unread -> "сервер не прочитал день"
+            absent -> "выходной"
+            else -> "пар нет"
+        },
         maxLines = 1,
         style = TextStyle(fontSize = 11.sp, color = colors.textDim),
         // Свой день, а не сегодняшний.

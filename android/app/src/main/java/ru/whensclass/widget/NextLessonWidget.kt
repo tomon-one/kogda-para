@@ -172,7 +172,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     ),
                 )
                 Text(
-                    next.lessons.joinToString(" / ") { it.subject },
+                    distinctSubjects(next.lessons).joinToString(" / "),
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 14.sp,
