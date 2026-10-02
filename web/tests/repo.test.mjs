@@ -57,7 +57,7 @@ test('первый заход качает, второй с тем же gen — 
   server = healthy('G1', [['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]]]);
   repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
   assert.equal((await repo.refresh(false)).kind, 'updated');
-  assert.ok(requests.includes('/v1/schedule/isp-1?from=2026-09-28&days=14'));
+  assert.ok(requests.includes('/v1/schedule/isp-1?from=2026-09-28&days=14&marks=1'));
   assert.equal(store.get('window'), '2026-09-28/14');
   assert.equal(repo.saved().gn, 'ИСП-1');
 
@@ -83,7 +83,7 @@ test('новая неделя — перезапрос при том же gen', 
   clock += 7 * 24 * HOUR;
   requests = [];
   assert.equal((await repo.refresh(false)).kind, 'updated');
-  assert.ok(requests.includes('/v1/schedule/isp-1?from=2026-10-05&days=14'));
+  assert.ok(requests.includes('/v1/schedule/isp-1?from=2026-10-05&days=14&marks=1'));
 });
 
 test('404 — пропажа только повтором через час и при здоровом сервере', async () => {
@@ -473,16 +473,35 @@ test('неудача вечером и утром через ночь — не �
 test('непрочитанные дни: прежним версиям stale, сайту — пометка у дня, без плашки сбоя', async () => {
   reset();
   const meta = { gen: 'G1', status: 'stale', refresh: 'ok', unread: ['2026-09-29'], since: '2026-09-28T01:00:00Z' };
-  const body = schedule('isp-1', 'ИСП-1', 'G1', { unread: ['2026-09-29', 'не дата'] });
+  const body = schedule('isp-1', 'ИСП-1', 'G1', {
+    days: [{ d: '2026-09-28', l: [{ n: 1, s: 'Физика', r: '101' }], un: 'kept' }],
+  });
   server = (url) => url === '/v1/meta' ? [200, meta] : [200, body];
   repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
   await repo.refresh(true);
   assert.equal(repo.serverBroken(), false);
   assert.equal(repo.serverState().since, undefined);
-  assert.deepEqual(repo.saved().unread, ['2026-09-29']);
+  assert.equal(repo.saved().days[0].un, 'kept');
   // Само обновление стоит — это сбой, как и был.
   meta.refresh = 'stale';
   await repo.refresh(true);
   assert.equal(repo.serverBroken(), true);
   assert.equal(repo.serverState().since, '2026-09-28T01:00:00Z');
+});
+
+test('расписание, сохранённое прежней версией, перезапрашивается один раз', async () => {
+  reset();
+  store.remove('format');
+  const meta = { gen: 'G1', status: 'ok' };
+  server = (url) => url === '/v1/meta' ? [200, meta] : [200, schedule('isp-1', 'ИСП-1', 'G1')];
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  await repo.refresh(false);
+  // Как оставила прежняя версия: окно и gen те же, отметки формата нет.
+  store.remove('format');
+  requests = [];
+  await repo.refresh(false);
+  assert.ok(requests.some((url) => url.startsWith('/v1/schedule')));
+  requests = [];
+  await repo.refresh(false);
+  assert.ok(!requests.some((url) => url.startsWith('/v1/schedule')));
 });

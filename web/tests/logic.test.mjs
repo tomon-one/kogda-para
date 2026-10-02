@@ -11,7 +11,8 @@ import {
   shiftColumn, shortenName, tileLabel,
 } from '../assets/js/format.js';
 import {
-  combineGroups, currentLessonNumber, dayIndex, daysWithGaps, freeDay, lessonTime, ownOnly, shortLabels, subgroupsOf, windowMark,
+  cleanSchedule, combineGroups, currentLessonNumber, dayIndex, daysWithGaps, freeDay, freeOwnDay, lessonTime, ownOnly,
+  shortLabels, subgroupsOf, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
 import { letterOf, lettered, matchesQuery } from '../assets/js/search.js';
 
@@ -145,19 +146,38 @@ test('окно и пропущенные дни', () => {
   assert.equal(dayIndex(days, '2026-09-01'), 0);
 });
 
-test('непрочитанные дни: прежние пары с пометкой, без прежних — пустой день с пометкой', () => {
-  const schedule = {
-    cov: ['2026-09-28', '2026-09-29'],
-    unread: ['2026-09-29', '2026-09-30'],
-    days: [{ d: '2026-09-28', l: [] }, { d: '2026-09-29', l: [{ n: 1, s: 'Физика' }] }],
-  };
-  const days = daysWithGaps(schedule);
-  assert.deepEqual(days.map((d) => [d.d, d.unread]), [
-    ['2026-09-28', undefined], ['2026-09-29', 'kept'], ['2026-09-30', 'missing'],
+test('непрочитанные дни: пометка — у дня, с именем группы, если она не своя', () => {
+  const body = cleanSchedule({
+    g: 'a', gn: 'А', cov: ['2026-09-28', '2026-09-30'],
+    days: [
+      { d: '2026-09-28', l: [] },
+      { d: '2026-09-29', l: [{ n: 1, s: 'Физика' }], un: 'kept' },
+      { d: '2026-09-30', l: [], un: 'missing' },
+      { d: '2026-10-01', l: [], un: 'вздор' },
+    ],
+  });
+  assert.deepEqual(body.days.map((d) => [d.d, d.un]), [
+    ['2026-09-28', undefined], ['2026-09-29', 'kept'], ['2026-09-30', 'missing'], ['2026-10-01', undefined],
   ]);
-  // У выбранной вместе группы день не прочитан — пометка на общем дне.
-  const merged = combineGroups({ gn: 'А', days: schedule.days }, [['Б', { unread: ['2026-09-28'], days: [] }]]);
-  assert.deepEqual(merged.unread, ['2026-09-28']);
+  assert.deepEqual(unreadNotes(body.days[1]), ['Сервер не смог прочитать этот день в таблице: пары — какими были до этого.']);
+  assert.deepEqual(unreadNotes(body.days[2]), ['Сервер не смог прочитать этот день в таблице.']);
+  // Непрочитанный будний — не «повезло дважды» накануне.
+  assert.equal(freeOwnDay(body.days[2], []), false);
+  // Преподавателю — по группам, из-за которых пометка.
+  assert.deepEqual(unreadNotes({ d: '2026-09-30', l: [], un: 'missing', ug: ['ПХД-923/1'] }),
+    ['Сервер не смог прочитать этот день у ПХД-923/1: пар с ней может не хватать.']);
+  assert.deepEqual(unreadNotes({ d: '2026-09-29', l: [], un: 'kept', ug: ['А-1', 'Б-1', 'В-1'] }),
+    ['Сервер не смог прочитать этот день у А-1, Б-1 и В-1: пары с ними — какими были до этого.']);
+  const many = Array.from({ length: 21 }, (_, i) => 'Г-' + i);
+  assert.deepEqual(unreadNotes({ d: '2026-09-30', l: [], un: 'missing', ug: many }),
+    ['Сервер не смог прочитать этот день у 21 группы: пар с ними может не хватать.']);
+  // Другая выбранная группа: свой день без пометки, её — с её именем; за краем
+  // своего окна её дни не добавляются.
+  const merged = combineGroups({ gn: 'А', days: [{ d: '2026-09-28', l: [] }] },
+    [['Б', { days: [{ d: '2026-09-28', l: [], un: 'missing' }, { d: '2026-10-02', l: [], un: 'missing' }] }]]);
+  assert.deepEqual(merged.days.map((d) => d.d), ['2026-09-28']);
+  assert.equal(merged.days[0].un, undefined);
+  assert.deepEqual(unreadNotes(merged.days[0]), ['Сервер не смог прочитать этот день у Б: её пар здесь нет.']);
 });
 
 test('свободный день', () => {
