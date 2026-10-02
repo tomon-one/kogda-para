@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -115,6 +116,10 @@ fun TodayScreen(
     var tab by rememberSaveable(teacherMode) {
         mutableStateOf(if (teacherMode) Tab.TEACHERS else Tab.STUDENTS)
     }
+    // Вкладка помнит своё: открытого преподавателя или группу, поиск и
+    // прокрутку. Без этого её экран уходит из композиции при переключении, и
+    // вернувшийся снова ищет в списке (как и на сайте: state.opened в today.js).
+    val tabStates = rememberSaveableStateHolder()
     // Нажали на день в виджете по живому экрану — к своему расписанию, а не к
     // открытой чужой вкладке.
     LaunchedEffect(startKey) {
@@ -251,21 +256,23 @@ fun TodayScreen(
                     Tab.STUDENTS -> if (teacherMode) {
                         // У преподавателя своей группы нет: раздел студентов —
                         // это список групп, чьё расписание можно посмотреть.
-                        TeacherScreen(
-                            teachers = groups,
-                            loadSchedule = loadGroupSchedule,
-                            pinned = pinnedGroups,
-                            onTogglePin = onTogglePinnedGroup,
-                            reloadKey = reloadKey,
-                            searchLabel = "Поиск по названию группы",
-                            listName = "Список групп",
-                            othersTitle = "Другие группы",
-                            endNote = { n ->
-                                "Всё. " +
-                                    plural(n, "группа", "группы", "групп") +
-                                    "."
-                            },
-                        )
+                        tabStates.SaveableStateProvider("groups") {
+                            TeacherScreen(
+                                teachers = groups,
+                                loadSchedule = loadGroupSchedule,
+                                pinned = pinnedGroups,
+                                onTogglePin = onTogglePinnedGroup,
+                                reloadKey = reloadKey,
+                                searchLabel = "Поиск по названию группы",
+                                listName = "Список групп",
+                                othersTitle = "Другие группы",
+                                endNote = { n ->
+                                    "Всё. " +
+                                        plural(n, "группа", "группы", "групп") +
+                                        "."
+                                },
+                            )
+                        }
                         return@ScheduleTabs
                     }
 
@@ -275,21 +282,24 @@ fun TodayScreen(
                         if (teacherMode && explainMissing(schedule, today, sourceUrl, loading = refreshing)) {
                             return@ScheduleTabs
                         }
-                        TeacherScreen(
-                            teachers = teachers,
-                            loadSchedule = loadTeacherSchedule,
-                            pinned = pinnedTeachers,
-                            onTogglePin = onTogglePinnedTeacher,
-                            reloadKey = reloadKey,
-                            // В роли преподавателя своё расписание уже загружено.
-                            ownSchedule = if (teacherMode) schedule else null,
-                            // День, на который нажали в виджете.
-                            startDay = if (teacherMode) startDay else null,
-                            startKey = startKey,
-                            // Себя отмечаем, только когда человек и правда
-                            // преподаватель: у студента это просто чужая фамилия.
-                            selfId = if (teacherMode) selfTeacherId else null,
-                        )
+                        // С ролью — своя память: у преподавателя это его вкладка.
+                        tabStates.SaveableStateProvider("teachers:$teacherMode") {
+                            TeacherScreen(
+                                teachers = teachers,
+                                loadSchedule = loadTeacherSchedule,
+                                pinned = pinnedTeachers,
+                                onTogglePin = onTogglePinnedTeacher,
+                                reloadKey = reloadKey,
+                                // В роли преподавателя своё расписание уже загружено.
+                                ownSchedule = if (teacherMode) schedule else null,
+                                // День, на который нажали в виджете.
+                                startDay = if (teacherMode) startDay else null,
+                                startKey = startKey,
+                                // Себя отмечаем, только когда человек и правда
+                                // преподаватель: у студента это просто чужая фамилия.
+                                selfId = if (teacherMode) selfTeacherId else null,
+                            )
+                        }
                         return@ScheduleTabs
                     }
 
