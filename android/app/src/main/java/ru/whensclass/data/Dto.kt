@@ -124,9 +124,13 @@ data class LessonDto(
      */
     val isOnline: Boolean get() = online != 0 || (url != null && room == null)
 
-    /** Какую пару эта заменила — из примечания сервера «вместо: X»; null — не замена. */
+    /**
+     * Какую пару эта заменила — из примечания сервера «вместо: X»; null — не
+     * замена. Сервер дописывает его через «; » к причине или к тексту у ссылки.
+     */
     val replaces: String?
-        get() = note?.takeIf { it.startsWith(INSTEAD) }?.removePrefix(INSTEAD)?.trim()?.ifEmpty { null }
+        get() = note?.split(";")?.map { it.trim() }?.firstOrNull { it.startsWith(INSTEAD) }
+            ?.removePrefix(INSTEAD)?.trim()?.ifEmpty { null }
 
     private companion object {
         const val INSTEAD = "вместо: "

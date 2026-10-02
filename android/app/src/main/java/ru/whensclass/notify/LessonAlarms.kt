@@ -115,6 +115,11 @@ object LessonAlarms {
                         fireAt, lesson, minutes, date.toString(), busyUntil,
                         ownGroup = schedule.groupName.takeUnless { schedule.isTeacher },
                         also = same.drop(1),
+                        // Отменённая половинка — строкой «Отменена»: её подгруппа
+                        // иначе пошла бы на чужую пару, приняв её за свою.
+                        off = day.lessons.filter {
+                            it.number == lesson.number && it.isCancelled && !schedule.isNeighbours(it)
+                        },
                     ),
                 )
             }
@@ -136,6 +141,8 @@ object LessonAlarms {
          * преподавателя одна пара в двух залах.
          */
         val also: List<LessonDto> = emptyList(),
+        /** Отменённые пары того же номера — половинка блока, которую сняли. */
+        val off: List<LessonDto> = emptyList(),
     ) {
         /** Когда пара начнётся: будильник стоит настолько же раньше. */
         val start: LocalDateTime get() = at.plusMinutes(minutes.toLong())
@@ -217,19 +224,27 @@ object LessonAlarms {
      * главное в нём — куда идти.
      */
     fun text(alarm: Alarm): String {
-        if (alarm.also.isNotEmpty()) {
+        if (alarm.also.isNotEmpty() || alarm.off.isNotEmpty()) {
             // Номер — первой строкой, дальше строка на пару, место — первым;
             // предмет — только если они разные: время и предмет — в заголовке.
             val lessons = alarm.lessons
             val kinds = lessons.map { kindName(it.kind) }.distinct()
             val number = "${alarm.lesson.number} пара" +
                 (kinds.singleOrNull()?.let { ", ${it.lowercase()}" } ?: "")
-            val withSubject = distinctSubjects(lessons).size > 1
+            val withSubject = distinctSubjects(lessons + alarm.off).size > 1
             return (listOf(number) + lessons.map { lesson ->
                 sentences(
                     listOfNotNull(
                         listOfNotNull(place(lesson), lesson.subject.takeIf { withSubject })
                             .joinToString(" — ").takeIf { it.isNotEmpty() },
+                        lesson.teachers.firstOrNull(),
+                        groupsOf(lesson, alarm.ownGroup),
+                    ),
+                )
+            } + alarm.off.map { lesson ->
+                sentences(
+                    listOfNotNull(
+                        "Отменена" + (if (withSubject) " — ${lesson.subject}" else ""),
                         lesson.teachers.firstOrNull(),
                         groupsOf(lesson, alarm.ownGroup),
                     ),

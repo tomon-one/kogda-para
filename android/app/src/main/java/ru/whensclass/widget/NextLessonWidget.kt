@@ -196,7 +196,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
                 // Две пары одного номера — оба места, без копирования ссылки:
                 // нажатие открывает день, где у каждой пары своя.
-                val pair = next.also.isNotEmpty()
+                val pair = next.also.isNotEmpty() || next.off.isNotEmpty()
                 if (!tight) Text(
                     when {
                         pair -> places(next)
@@ -233,6 +233,8 @@ data class NextLesson(
     val day: LocalDate,
     val lesson: LessonDto,
     val also: List<LessonDto> = emptyList(),
+    /** Отменённые пары того же номера — половинка блока, которую сняли. */
+    val off: List<LessonDto> = emptyList(),
     /**
      * Ближайший день до этой пары включительно, который сервер не прочитал:
      * у её дня пары прежние, у дня раньше — пар может не хватать.
@@ -265,8 +267,12 @@ private fun findNext(schedule: ScheduleDto, now: LocalDateTime): NextLesson? {
     val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }
         ?.lessons.orEmpty().filter(::mine)
 
-    fun found(date: LocalDate, lesson: LessonDto, day: List<LessonDto>) =
-        NextLesson(date, lesson, day.filter { it !== lesson && it.number == lesson.number })
+    fun found(date: LocalDate, lesson: LessonDto, day: List<LessonDto>): NextLesson {
+        // Отменённая половинка того же номера — её подгруппе эта пара не своя.
+        val off = schedule.days.firstOrNull { it.date == date.toString() }?.lessons.orEmpty()
+            .filter { it.number == lesson.number && it.isCancelled && !schedule.isNeighbours(it) }
+        return NextLesson(date, lesson, day.filter { it !== lesson && it.number == lesson.number }, off = off)
+    }
 
     currentLessonNumber(bells, today, now)
         ?.let { number -> todayLessons.firstOrNull { it.number == number } }
@@ -355,7 +361,8 @@ private const val TIGHT_HEIGHT_SP = 52
 
 /** Места всех пар номера без вида: «каб. 55/1 / каб. 467». */
 internal fun places(next: NextLesson): String =
-    next.lessons.joinToString(" / ") { place(it, withKind = false).removeSuffix("  ⧉") }
+    next.lessons.joinToString(" / ") { place(it, withKind = false).removeSuffix("  ⧉") } +
+        next.off.joinToString("") { " · отменена: " + it.subject }
 
 private fun place(lesson: LessonDto, withKind: Boolean = true): String = buildString {
     // Замена — первым словом: другой предмет без пометки похож на ошибку виджета.

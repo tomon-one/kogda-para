@@ -35,17 +35,49 @@ object ScheduleDiff {
                 day.lessons.forEach { add(it.number) }
             }
             for (number in numbers) {
-                compareNumber(
-                    day = day.date,
-                    number = number,
-                    was = before.lessons.filter { it.number == number },
-                    now = day.lessons.filter { it.number == number },
-                    fresh = fresh,
-                    changes = changes,
-                )
+                val was = before.lessons.filter { it.number == number }
+                val now = day.lessons.filter { it.number == number }
+                if (!fresh.isTeacher) {
+                    compareNumber(day.date, number, was, now, fresh, changes)
+                    continue
+                }
+                // У преподавателя запись склеена из групп, и меняется обычно
+                // одна: её убрали, отменили, перевели в онлайн. Сравниваем по
+                // группам, а одинаковые строки потом склеиваем обратно
+                // (_per_group и _merge_groups в push/changes.py).
+                val lines = mutableListOf<Change>()
+                compareNumber(day.date, number, perGroup(was), perGroup(now), fresh, lines)
+                changes += mergeGroups(lines)
             }
         }
         return changes
+    }
+
+    private fun perGroup(lessons: List<LessonDto>): List<LessonDto> = lessons.flatMap { lesson ->
+        val groups = lesson.groups.orEmpty().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (groups.isEmpty()) listOf(lesson) else groups.map { lesson.copy(groups = it) }
+    }
+
+    private val GROUP_TAG = Regex(""" \(([^()]+)\)""")
+
+    // Место групп в склеиваемой строке: такого знака в тексте пары не бывает.
+    private const val SLOT = "\u0000"
+
+    /** «отменили 5 пару (А)» и «отменили 5 пару (Б)» → «… (А, Б)». */
+    private fun mergeGroups(lines: List<Change>): List<Change> {
+        val merged = LinkedHashMap<Pair<String, String>, MutableList<String>>()
+        for (line in lines) {
+            val found = GROUP_TAG.find(line.text)
+            if (found == null) {
+                merged.getOrPut(line.day to line.text) { mutableListOf() }
+                continue
+            }
+            val key = line.text.replaceRange(found.range, " ($SLOT)")
+            merged.getOrPut(line.day to key) { mutableListOf() } += found.groupValues[1]
+        }
+        return merged.map { (key, groups) ->
+            Change(key.first, if (groups.isEmpty()) key.second else key.second.replace(SLOT, groups.joinToString(", ")))
+        }
     }
 
     /**
@@ -112,6 +144,20 @@ object ScheduleDiff {
             else -> " (${lesson.groups})"
         }
         fun say(text: String) = changes.add(Change(day, text))
+        fun own(lesson: LessonDto) =
+            !fresh.isTeacher && (lesson.groups == null || lesson.groups == fresh.groupName)
+        // Две свои пары на номере (блок пополам) — какая из них, говорит
+        // предмет, а при одинаковом — ещё и преподаватель: иначе подгруппа, у
+        // которой ничего не менялось, пойдёт в чужой кабинет.
+        val several = was.count(::own) > 1 || now.count(::own) > 1
+        // Название пары в строке; у половинки с тем же названием — и преподаватель.
+        fun named(lesson: LessonDto): String {
+            val twins = several && lesson.teachers.isNotEmpty() &&
+                (was + now).any { it.subject == lesson.subject && it.teachers != lesson.teachers }
+            return if (twins) "${lesson.subject}, ${lesson.teachers.first()}" else lesson.subject
+        }
+        // Чья пара — для строк без названия («переехала», «стала онлайн»).
+        fun label(lesson: LessonDto) = if (several && own(lesson)) " (${named(lesson)})" else whose(lesson)
         fun groups(lesson: LessonDto) = groupsOf(lesson, fresh)
         fun overlap(a: LessonDto, b: LessonDto) = (groups(a) intersect groups(b)).isNotEmpty()
         // Только эти группы записи — в её порядке.
@@ -143,10 +189,10 @@ object ScheduleDiff {
             if (index < 0) index = unmatched.indexOfFirst { it.subject == instead }
             if (index < 0) index = unmatched.indexOfFirst { sameSubject(it.subject, instead) }
             if (index < 0) continue
-            unmatched.removeAt(index)
+            val old = unmatched.removeAt(index)
             replaced += lesson
             // Стрелкой, а не «вместо»: названия предметов не склоняются сами.
-            say("замена $number пары${whose(lesson)}: $instead → ${lesson.subject}")
+            say("замена $number пары${whose(lesson)}: ${named(old)} → ${lesson.subject}")
         }
 
         for (lesson in now) {
@@ -166,7 +212,8 @@ object ScheduleDiff {
             if (index < 0) index = unmatched.indexOfFirst {
                 it.subject == lesson.subject && overlap(it, lesson)
             }
-            if (index < 0) index = unmatched.indexOfFirst { it.subject == lesson.subject }
+            // У преподавателя записи разложены по группам: чужая группа — не та пара.
+            if (index < 0 && !fresh.isTeacher) index = unmatched.indexOfFirst { it.subject == lesson.subject }
             // Та же пара под чуть другим названием — у тех же групп (у
             // преподавателя — пересекающихся) и с тем же преподавателем.
             if (index < 0) index = unmatched.indexOfFirst {
@@ -177,7 +224,7 @@ object ScheduleDiff {
                 // отменили или вернули — у преподавателя «ИСП-924/1,
                 // ИСП-924/2» распалась, и одну из групп сняли.
                 val source = was.firstOrNull { it.subject == lesson.subject && overlap(it, lesson) }
-                    ?: was.firstOrNull { it.subject == lesson.subject }
+                    ?: was.firstOrNull { it.subject == lesson.subject }?.takeIf { !fresh.isTeacher }
                 when {
                     source != null && !source.isCancelled && lesson.isCancelled ->
                         say("отменили $number пару${whose(lesson)}: ${lesson.subject}")
@@ -193,7 +240,7 @@ object ScheduleDiff {
                 continue
             }
             val previous = unmatched.removeAt(index)
-            val tag = whose(lesson)
+            val tag = label(lesson)
             if (fresh.isTeacher) {
                 val added = groups(lesson) - beforeGroups
                 if (added.isNotEmpty()) say("добавилась $number пара (${listed(lesson, added)}): ${lesson.subject}")
@@ -246,9 +293,6 @@ object ScheduleDiff {
         }
 
         unmatched.forEach { gone ->
-            // Та же пара слилась с записью других групп — не новость. С
-            // записью тех же групп (половинка блока одного языка) — убрали.
-            if (now.any { it.subject == gone.subject && groups(it) != groups(gone) }) return@forEach
             if (fresh.isTeacher && gone.groups != null) {
                 // Все её группы на номере остались при той же паре — запись
                 // просто склеилась с другой. При другом предмете у тех же групп
@@ -258,7 +302,10 @@ object ScheduleDiff {
                 if (left.isNotEmpty()) say("убрали $number пару (${listed(gone, left)}): ${gone.subject}")
                 return@forEach
             }
-            say("убрали $number пару${whose(gone)}: ${gone.subject}")
+            // Та же пара слилась с записью других групп — не новость. С
+            // записью тех же групп (половинка блока одного языка) — убрали.
+            if (now.any { it.subject == gone.subject && groups(it) != groups(gone) }) return@forEach
+            say("убрали $number пару${whose(gone)}: ${named(gone)}")
         }
     }
 }

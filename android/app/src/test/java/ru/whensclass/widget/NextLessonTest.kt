@@ -123,5 +123,11 @@ class NextLessonTest {
         assertEquals("каб. 55/1 / каб. 467", now?.let(::places))
         assertEquals(2, nextLesson(s, tuesday.atTime(19, 0))?.lessons?.size)
         assertEquals(1, nextLesson(s, tuesday.atTime(8, 0))?.lessons?.size)
+
+        // Немецкую половинку отменили — английская названа, и отмена тоже.
+        val off = schedule(tuesday to listOf(german.copy(cancelled = 1), english))
+        val left = nextLesson(off, tuesday.atTime(8, 0))
+        assertEquals(listOf("Английский"), left?.lessons?.map { it.subject })
+        assertEquals("каб. 467 · отменена: Немецкий", left?.let(::places))
     }
 }
