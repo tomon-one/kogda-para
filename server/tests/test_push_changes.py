@@ -304,3 +304,13 @@ def test_reminder_names_the_cancelled_half():
     assert plan[0]["text"] == "4 пара\nКаб. 467 — Английский. Уэллс Д. Р.\nОтменена — Немецкий. Миллер Д. Х."
     both = _group({TUE: [_l(4, "Немецкий", x=1), _l(4, "Английский", x=1)]})
     assert changes.reminders(both, 15, dt.date(2026, 9, 29)) == []
+
+
+def test_same_subscription_is_compared_when_the_main_spelling_changes():
+    """Основное написание имени преподавателя сменилось между снимками: id в
+    ответах разный, но подписка та же — изменения не теряются."""
+    old = {"g": "bezuhov-danil", "gn": "Безухов Данил", "kind": "teacher",
+           "days": [{"d": TUE, "l": [_l(1, "Х", r="101", gr="А-1")]}]}
+    new = {**old, "g": "bezuhov-daniil", "days": [{"d": TUE, "l": [_l(1, "Х", r="102", gr="А-1")]}]}
+    assert changes.compare(old, new) == []
+    assert [text for _, text in changes.compare(old, new, same=True)] == ["1 пара (А-1) переехала в каб. 102"]

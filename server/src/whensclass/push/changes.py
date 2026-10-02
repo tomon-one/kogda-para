@@ -143,9 +143,13 @@ def kind_name(kind: str | None) -> str | None:
     return KINDS.get(key, kind)
 
 
-def compare(old: dict | None, fresh: dict) -> list[tuple[str, str]]:
-    """(день, что изменилось) — ScheduleDiff.compare для одного и того же субъекта."""
-    if old is None or old.get("g") != fresh.get("g"):
+def compare(old: dict | None, fresh: dict, same: bool = False) -> list[tuple[str, str]]:
+    """(день, что изменилось) — ScheduleDiff.compare для одного и того же субъекта.
+
+    `same` — оба ответа об одной подписке, даже если id в них разный: у
+    преподавателя основное написание имени бывает другим от снимка к снимку.
+    """
+    if old is None or (not same and old.get("g") != fresh.get("g")):
         return []
     teacher = fresh.get("kind") == "teacher"
     name = fresh.get("gn")
@@ -383,7 +387,7 @@ def _compare_number(
         say(f"убрали {number} пару{whose(gone)}: {named(gone)}")
 
 
-def change_lines(old: dict | None, fresh: dict, today: dt.date) -> list[list[str]]:
+def change_lines(old: dict | None, fresh: dict, today: dt.date, same: bool = False) -> list[list[str]]:
     """Строки уведомления: только сегодня и завтра, «вт, 29 сентября: …».
 
     День — словами и датой, а не «Завтра»: уведомление висит, и наутро
@@ -391,7 +395,7 @@ def change_lines(old: dict | None, fresh: dict, today: dt.date) -> list[list[str
     """
     soon = {today.isoformat(), (today + dt.timedelta(days=1)).isoformat()}
     out: list[list[str]] = []
-    for day, text in compare(old, fresh):
+    for day, text in compare(old, fresh, same):
         if day in soon:
             out.append([day, f"{day_label(dt.date.fromisoformat(day))}: {text}"])
     # Строки идут по дням, сначала сегодня: обрезка внутри одной правки
