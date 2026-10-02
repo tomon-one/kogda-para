@@ -248,9 +248,24 @@ function noteUnreachable(now) {
   return chain;
 }
 
+/**
+ * Пришло уведомление «выберите заново»: служба уже ждала свой час, и
+ * следующее 404 своего — подтверждённое, без второго часа. Подсказка живёт
+ * сутки: вернулась группа — не повод сразу верить будущему 404.
+ */
+export function expectGone() {
+  store.set('goneHint', Date.now());
+}
+
 /** Отметить 404; true — подтверждено повтором через час. */
 function noteNotFound(key, now) {
   var g = store.get(key);
+  var hint = key === 'gone' ? store.get('goneHint') : null;
+  if (hint != null) store.remove('goneHint');
+  if (hint != null && now - hint < 24 * 60 * 60 * 1000) {
+    store.set(key, { since: g ? g.since : now, confirmed: true });
+    return true;
+  }
   if (!g) {
     store.set(key, { since: now, confirmed: false });
     return false;

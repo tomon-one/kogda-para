@@ -6,7 +6,7 @@
 import * as repo from './repo.js';
 import * as store from './store.js';
 import * as push from './push.js';
-import { snackbar } from './ui/dom.js';
+import { fitLabels, snackbar } from './ui/dom.js';
 import { collegeNow, parseIso } from './time.js';
 import { currentLessonNumber, parseTime } from './schedule.js';
 import { showReport } from './ui/report.js';
@@ -101,6 +101,7 @@ Object.assign(app, {
   pushBlocker: push.blocker,
   pushBehind: function () { return push.behind(pushSubject()); },
   pushChoice: push.choice,
+  pushIntended: push.intended,
   pushEnabled: push.enabled,
   /** Включить, поменять или выключить уведомления; ответ — снаружи, строкой внизу. */
   setPush: function (next) {
@@ -251,6 +252,17 @@ document.addEventListener('visibilitychange', function () {
   if (push.behind(pushSubject())) syncPush(true);
 });
 
+// Поворот, увеличение текста в браузере — надписи кнопок подгоняются заново.
+var fitPending = false;
+window.addEventListener('resize', function () {
+  if (fitPending) return;
+  fitPending = true;
+  window.requestAnimationFrame(function () {
+    fitPending = false;
+    fitLabels(document.body);
+  });
+});
+
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
   installEvent = e;
@@ -259,6 +271,11 @@ window.addEventListener('beforeinstallprompt', function (e) {
 // ——— запуск ———
 
 window.__whensclassStarted = true;
+// Открыли по уведомлению «выберите заново» (sw.js, notificationclick).
+if (/[?&]gone=1(&|$)/.test(location.search)) {
+  repo.expectGone();
+  history.replaceState(history.state, '', location.pathname + location.hash);
+}
 // Снимок до веб-0.2.0 склеен с парами соседней подгруппы — до первого показа.
 repo.migrateGroups();
 applyTheme();
@@ -282,6 +299,10 @@ if ('serviceWorker' in navigator) {
     if (event.data && event.data.t === 'own' && repo.chosen()) {
       state.wanted = collegeNow().date;
       home();
+      if (event.data.gone) {
+        repo.expectGone();
+        refresh(true, false);
+      }
     }
   });
 }

@@ -37,7 +37,7 @@ function schedule(id, name, gen, extra) {
 
 function reset() {
   ['role', 'group', 'teacher', 'second', 'schedule', 'gen', 'fetchedAt', 'window', 'partial', 'server',
-    'unreachable', 'gone', 'secondGone', 'lastOk', 'extras', 'extraSchedules'].forEach(store.remove);
+    'unreachable', 'gone', 'goneHint', 'secondGone', 'lastOk', 'extras', 'extraSchedules'].forEach(store.remove);
   clock = MONDAY_NOON;
   requests = [];
 }
@@ -101,6 +101,18 @@ test('404 — пропажа только повтором через час и 
   // Новый выбор снимает отметку.
   repo.selectGroup({ id: 'new', name: 'Новая' });
   assert.equal(repo.gone(), false);
+});
+
+test('по уведомлению «выберите заново» пропажа — с первого 404, служба уже ждала час', async () => {
+  reset();
+  server = healthy('G1', []);
+  repo.selectGroup({ id: 'old', name: 'Старая' });
+  repo.expectGone();
+  assert.equal((await repo.refresh(true)).kind, 'gone');
+  assert.equal(repo.gone(), true);
+  // Подсказка — один раз: следующая группа снова ждёт час.
+  repo.selectGroup({ id: 'other', name: 'Другая' });
+  assert.equal((await repo.refresh(true)).kind, 'failed');
 });
 
 test('сервер молчит — сбой через полчаса цепочки', async () => {

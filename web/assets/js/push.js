@@ -181,13 +181,29 @@ function serial(work) {
   return run;
 }
 
+// Выбор, который ещё идёт к службе: второй выключатель, нажатый до ответа,
+// собирается из него, а не из сохранённого — иначе затёр бы первый.
+var wanted = null;
+
+/** Что человек выбрал последним, даже если служба ещё не ответила. */
+export function intended() {
+  return wanted || choice();
+}
+
+function settle(next, run) {
+  wanted = next;
+  function done() { if (wanted === next) wanted = null; }
+  run.then(done, done);
+  return run;
+}
+
 /** Включить или поменять. `who` — {kind: 'group'|'teacher', id}. */
 export function update(next, who) {
-  if (!next.changes && !(next.remind > 0)) return disable();
+  if (!next.changes && !(next.remind > 0)) return settle({ changes: false, remind: 0 }, disable());
   // Вопрос о разрешении — в этом же нажатии, до очереди: айфон спрашивает
   // только по нажатию.
   var permission = askPermission();
-  return serial(function () { return subscribe(next, who, permission); });
+  return settle(next, serial(function () { return subscribe(next, who, permission); }));
 }
 
 function subscribe(next, who, permission) {

@@ -1,6 +1,6 @@
 // Расписание: окно дней, пропущенные дни, другие выбранные группы, идущая пара.
 // Правила — как в приложении (ScheduleRepository.kt, ScheduleMerge.kt,
-// TodayScreen.kt, DayFormat.kt).
+// DayList.kt, DayFormat.kt).
 
 import { addDays, dayOfYear, isDate, weekday } from './time.js';
 import { isCancelled, isOnline } from './format.js';
@@ -234,7 +234,7 @@ var FREE = [
 var FREE_STUDENT = ['Пар нет. Можно одичать'];
 
 /**
- * Что написать в день без пар (freeDay в TodayScreen.kt — правила одни).
+ * Что написать в день без пар (freeDay в DayList.kt — правила одни).
  * Строка выбирается по дате. Воскресенье и день, которого в ответе нет, —
  * «Выходной». Студенту: следующий будний тоже пуст — «повезло дважды»,
  * сегодня до полудня — про шторы; преподавателю — только прежние фразы.

@@ -14,7 +14,7 @@ from ..domain.models import SourceFormatChanged
 
 # Дату пишут руками, поэтому берём и «2.09.2026 среда», и «02.09.2026, среда»,
 # и «07/09/2026», и «понедельник 07.09.2026», и запись без дня недели. День
-# недели всё равно только сверяем, доверяя числу.
+# недели — сверка числа: не совпал — отказ (_parse_date).
 _DATE_RE = re.compile(r"(\d{1,2})[./](\d{1,2})[./](\d{2,4})")
 
 _WEEKDAYS = (
@@ -24,7 +24,7 @@ _WEEKDAYS = (
 
 
 def _parse_date(cell: str) -> date | None:
-    """'02.09.2026 среда' -> date. День недели служит только сверкой."""
+    """'02.09.2026 среда' -> date. День недели — сверка: не тот — отказ листа."""
     text = (cell or "").replace("\xa0", " ").strip()
     m = _DATE_RE.search(text)
     if not m:
@@ -44,7 +44,7 @@ def _parse_date(cell: str) -> date | None:
         # что имелось в виду: пусть обход решает, что формат поехал.
         return None
     if weekday is None:
-        # День недели пишут не всегда. Он всё равно только сверка.
+        # День недели пишут не всегда: без него сверять нечем.
         return value
     expected = _WEEKDAYS[value.weekday()]
     if weekday.lower() != expected:

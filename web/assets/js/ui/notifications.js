@@ -1,5 +1,5 @@
 // Раздел «Уведомления» в настройках и окно выбора минут напоминания
-// (SettingsScreen.kt, ReminderDialog.kt). Подписку ведёт push.js.
+// (SettingsSections.kt, ReminderDialog.kt). Подписку ведёт push.js.
 
 import { h, actionButton, isIos, isIpad, isAndroid, isChrome, dialog, closeDialog, section } from './dom.js';
 import { durationShort, tileLabel } from '../format.js';
@@ -15,9 +15,9 @@ function switchRow(label, on, onChange, key) {
 }
 
 /**
- * Уведомления: считает и шлёт их служба (push.js). На айфоне — beta, на
- * остальных — альфа-тест: там они идут через серверы Google (у Firefox —
- * Mozilla), а до Google с сервера достаётся не всегда. Каждое
+ * Уведомления: считает и шлёт их служба (push.js). Везде — beta: не на
+ * айфоне они идут через серверы Google (у Firefox — Mozilla), а до Google с
+ * сервера достаётся не всегда. Каждое
  * ограничение, которое не обойти, — строкой-предупреждением рядом.
  */
 export function notifications(app, teacherMode) {
@@ -25,7 +25,7 @@ export function notifications(app, teacherMode) {
   // На айпаде — про айпад: формы «на …е», «…а», «…».
   var pad = isIpad();
   var device = pad ? ['айпаде', 'айпада', 'айпад'] : ['айфоне', 'айфона', 'айфон'];
-  var title = [h('span', null, 'Уведомления'), ' ', h('span', { class: 'badge' }, ios ? 'beta' : 'альфа-тест')];
+  var title = [h('span', null, 'Уведомления'), ' ', h('span', { class: 'badge' }, 'beta')];
   var why = app.pushBlocker();
   if (why === 'home') {
     // У значка своё хранилище: выбор из Safari туда не переезжает (WebKit
@@ -92,12 +92,16 @@ export function notifications(app, teacherMode) {
       'Сервер ещё не знает о новом выборе: уведомления пока о прежнем расписании.') : null,
     // Как в приложении: о других группах уведомлений нет.
     teacherMode ? null : h('p', { class: 'muted small' }, 'Только о вашей группе, не о других.'),
+    // Второе нажатие до ответа службы — от выбора первого, а не от того, что
+    // было при отрисовке (app.pushIntended).
     switchRow('Сообщать об изменениях', now.changes, function (on) {
-      change({ changes: on, remind: now.remind });
+      var cur = lost ? now : app.pushIntended();
+      change({ changes: on, remind: cur.remind });
     }, 'push-changes'),
     h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра.'),
     switchRow('Напоминать о паре', now.remind > 0, function (on) {
-      change({ changes: now.changes, remind: on ? (now.remind || lastRemind()) : 0 });
+      var cur = lost ? now : app.pushIntended();
+      change({ changes: cur.changes, remind: on ? (cur.remind || lastRemind()) : 0 });
     }, 'push-remind'),
   ];
   if (now.remind > 0) {
@@ -105,7 +109,7 @@ export function notifications(app, teacherMode) {
     // выглядит чужим, и своего времени в нём не задать.
     body.push(h('div', { class: 'value-row' }, h('span', null, 'За сколько предупредить'),
       actionButton(durationShort(now.remind), function () {
-        remindDialog(now.remind, function (m) { app.setPush({ changes: now.changes, remind: m }); });
+        remindDialog(now.remind, function (m) { app.setPush({ changes: app.pushIntended().changes, remind: m }); });
       }, 'fixed', 'remind-minutes', 'За сколько предупредить: ' + durationShort(now.remind) + '. Изменить')));
     body.push(h('p', { class: 'muted small' }, 'Напоминание о первой паре дня или между парами.'));
     body.push(h('p', { class: 'warning small' }, ios
@@ -116,7 +120,7 @@ export function notifications(app, teacherMode) {
   if (!ios) {
     // Служба рассылки — по адресу подписки, до неё — по браузеру: у Safari на
     // Mac это Apple, у Edge — Microsoft, а не Google.
-    body.push(h('p', { class: 'warning small' }, 'Альфа-тест: уведомления идут через серверы ' +
+    body.push(h('p', { class: 'warning small' }, 'Уведомления идут через серверы ' +
       service() + ' и могут не дойти.'));
   }
   if (isAndroid() && isChrome()) {

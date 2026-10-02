@@ -108,6 +108,26 @@ function setBackground(hidden) {
   else app.removeAttribute('aria-hidden');
 }
 
+// Надпись кнопки — в одну строку (кнопки одной высоты и ширины), а не
+// влезла — мельчает, но не ниже 10 px: многоточие прятало бы смысл («Си… /
+// Тё…»). Как FIT у кнопок приложения (Controls.kt).
+var FIT = '.action, .segment, .primary-button, .text-button';
+var FIT_MIN_PX = 10;
+
+export function fitLabels(container) {
+  var nodes = container.querySelectorAll(FIT);
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    el.style.fontSize = '';
+    if (el.scrollWidth <= el.clientWidth) continue;
+    var size = parseFloat(window.getComputedStyle(el).fontSize);
+    while (size > FIT_MIN_PX && el.scrollWidth > el.clientWidth) {
+      size -= 1;
+      el.style.fontSize = size + 'px';
+    }
+  }
+}
+
 export function closeDialog() {
   if (!openDialog) return;
   var d = openDialog;
@@ -175,6 +195,7 @@ export function dialog(title, body, buttons, opts) {
   var from = document.activeElement;
   openDialog = { el: overlay, onKey: onKey, restore: from, restoreKey: from && from.getAttribute && from.getAttribute('data-key') };
   document.body.appendChild(overlay);
+  fitLabels(overlay);
   document.body.classList.add('dialog-open');
   setBackground(true);
   var first = card.querySelector('button');

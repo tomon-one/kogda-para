@@ -105,7 +105,7 @@ function failText(result) {
 
 /**
  * Своё пришло, другие группы — не все. Про прежние пары — только если они
- * есть: у только что добавленной группы их нет (partialText в MainActivity.kt).
+ * есть: у только что добавленной группы их нет (partialText в App.kt).
  */
 function partialText(missed, fresh) {
   var one = missed.length === 1;
