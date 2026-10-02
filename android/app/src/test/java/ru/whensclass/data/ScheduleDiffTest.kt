@@ -351,12 +351,49 @@ class ScheduleDiffTest {
         val left = lesson(4, "Иностранный язык", room = "55/1", teachers = listOf("Миллер Д. Х."))
         val right = lesson(4, "Иностранный язык", room = "467", teachers = listOf("Уэллс Д. Р."))
         val was = schedule(left, right)
-        // Левую подгруппу сняли — «убрали», а не «другой преподаватель» и «переехала».
-        assertEquals(listOf("убрали 4 пару: Иностранный язык"), texts(was, schedule(right)))
+        // Левую подгруппу сняли — «убрали», а не «другой преподаватель» и
+        // «переехала»; какую из одинаковых — по преподавателю.
+        assertEquals(listOf("убрали 4 пару: Иностранный язык, Миллер Д. Х."), texts(was, schedule(right)))
         // Половинки поменялись местами — у каждой всё прежнее.
         assertEquals(emptyList<String>(), texts(was, schedule(right, left)))
         // Заменили правую — замена только у неё.
         val math = lesson(4, "Математика", room = "467", teachers = listOf("Сильверхенд Д."), note = "вместо: Иностранный язык")
-        assertEquals(listOf("замена 4 пары: Иностранный язык → Математика"), texts(was, schedule(left, math)))
+        assertEquals(listOf("замена 4 пары: Иностранный язык, Уэллс Д. Р. → Математика"), texts(was, schedule(left, math)))
+    }
+
+    @Test
+    fun `две пары одного номера — в строке названо, какая переехала`() {
+        val was = schedule(lesson(4, "Немецкий"), lesson(4, "Английский", room = "257"))
+        val now = schedule(lesson(4, "Немецкий", room = "55/1"), lesson(4, "Английский", room = "257"))
+        assertEquals(listOf("4 пара (Немецкий) переехала в каб. 55/1"), texts(was, now))
+    }
+
+    @Test
+    fun `у преподавателя изменения — по группам, одинаковые склеены`() {
+        fun t(vararg lessons: LessonDto) = schedule(*lessons, kind = "teacher")
+        assertEquals(
+            listOf("убрали 3 пару (ИСП-924/1): Физ"),
+            texts(t(lesson(3, "Физ", room = "Спортзал 1", groups = "ИСП-924/1"), lesson(3, "Физ", room = "Спортзал 2", groups = "ИСП-924/2")),
+                t(lesson(3, "Физ", room = "Спортзал 2", groups = "ИСП-924/2"))),
+        )
+        assertEquals(
+            listOf("добавилась 3 пара (ИСП-924/1): Физ"),
+            texts(t(lesson(3, "Физ", room = "Спортзал 2", groups = "ИСП-924/2")),
+                t(lesson(3, "Физ", room = "Спортзал 1", groups = "ИСП-924/1"), lesson(3, "Физ", room = "Спортзал 2", groups = "ИСП-924/2"))),
+        )
+        assertEquals(
+            listOf("отменили 5 пару (ПХД-924/3, ПХД-924/4): Право"),
+            texts(t(lesson(5, "Право", cancelled = true, groups = "ПД-1125"), lesson(5, "Право", room = "301", groups = "ПХД-924/3, ПХД-924/4")),
+                t(lesson(5, "Право", cancelled = true, groups = "ПД-1125, ПХД-924/3, ПХД-924/4"))),
+        )
+    }
+
+    @Test
+    fun `замена найдена и после причины в приписке`() {
+        assertEquals(
+            listOf("замена 4 пары: Иностранный язык → Кураторский час"),
+            texts(schedule(lesson(4, "Иностранный язык")),
+                schedule(lesson(4, "Кураторский час", note = "Преподаватель заболел; вместо: Иностранный язык"))),
+        )
     }
 }

@@ -170,4 +170,14 @@ class LessonPlanTest {
         assertEquals(true, LessonAlarms.stillOn(day(german.copy(cancelled = 1), english), key))
         assertEquals(false, LessonAlarms.stillOn(day(german.copy(cancelled = 1), english.copy(cancelled = 1)), key))
     }
+
+    @Test
+    fun `отменённая половинка названа в напоминании о другой`() {
+        val german = LessonDto(number = 4, subject = "Немецкий", room = "55/1", teachers = listOf("Миллер Д. Х."), cancelled = 1)
+        val english = LessonDto(number = 4, subject = "Английский", room = "467", teachers = listOf("Уэллс Д. Р."))
+        val alarm = LessonAlarms.plan(day(german, english), minutes = 15, now = night).single()
+
+        assertEquals("Английский", alarm.subject)
+        assertEquals("4 пара\nКаб. 467 — Английский. Уэллс Д. Р.\nОтменена — Немецкий. Миллер Д. Х.", LessonAlarms.text(alarm))
+    }
 }
