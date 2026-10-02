@@ -131,6 +131,9 @@ def parse_sheet(
     first_row: dict[date, str] = {}
     # День каждой строки: лишний текст в блоке помечает этот день группы.
     row_date: dict[int, date] = {}
+    # День без даты: (какой день по соседям, где начался, что в ячейке даты).
+    dateless: tuple[date, str, str] | None = None
+    unread_days: list[tuple[date, str, str]] = []
 
     for i, row in enumerate(rows):
         if i in skip:
@@ -152,6 +155,13 @@ def parse_sheet(
                 raise SourceFormatChanged(f"дата {found:%d.%m.%Y} в {where(i)} — воскресенье")
             if around is not None and found > around + timedelta(days=limits.max_days_ahead):
                 far.setdefault(found, where(i))
+            if dateless is not None:
+                # День без даты признаём, только если следующая дата встала
+                # ровно за ним: иначе его место в листе не угадать.
+                if found != _school_day_after(dateless[0]):
+                    raise _no_date(*dateless, current)
+                unread_days.append(dateless)
+                dateless = None
             if found != current:
                 if found in first_row:
                     # Копия блока вместе с датой: отказ называет обе строки.
@@ -188,13 +198,20 @@ def parse_sheet(
             )
         if number == 1 and found is None and numbers_by_date.get(current):
             # С первой пары начинается новый день, а даты у него нет: иначе
-            # день допишется к предыдущему, и отказ придёт окольно, через
-            # номера пар соседнего дня. 20 сентября 2026 вместо
-            # «21.09.2026 понедельник» в листе стояла запятая.
-            raise SourceFormatChanged(
-                f"в {where(i)} начинается новый день (1-я пара), а даты нет: "
-                f"{cell.strip()!r} — после {current}"
-            )
+            # день допишется к предыдущему. 20 сентября 2026 вместо
+            # «21.09.2026 понедельник» в листе стояла запятая. Это следующий
+            # учебный день, если следующая дата это подтвердит; его пары не
+            # читаются — день не прочитан у всех групп.
+            if dateless is not None:
+                raise _no_date(*dateless, current)
+            guess = _school_day_after(current)
+            dateless = (guess, where(i), cell.strip())
+            current = guess
+            first_row[guess] = where(i)
+            date_order.append(guess)
+            date_where.append(where(i))
+            seen_dates.append(guess)
+            row_date[i] = guess
         expected = len(numbers_by_date.setdefault(current, [])) + 1
         if number != expected:
             raise SourceFormatChanged(
@@ -227,7 +244,17 @@ def parse_sheet(
             if _cell(row, col).strip():
                 unnamed[col] += 1
 
+    if dateless is not None:
+        raise _no_date(*dateless, None)
     _mark_unread(snapshot, spill, row_date, where)
+    for day, place, cell in unread_days:
+        for group in snapshot.groups:
+            snapshot.schedule.get(group.id, {}).pop(day, None)
+            snapshot.unread.setdefault(group.id, {})[day] = False
+        snapshot.unread_why.append(
+            f"все группы {day:%d.%m}: в {place} начинается день без даты ({cell!r}), "
+            "дата — по соседним дням"
+        )
     for by_date in snapshot.schedule.values():
         for day, lessons in by_date.items():
             lessons.sort(key=lambda x: x.number)
@@ -238,6 +265,20 @@ def parse_sheet(
     snapshot.unnamed = {col: n for col, n in unnamed.items() if n}
     _validate(snapshot, date_order, limits, date_where)
     return snapshot
+
+
+def _school_day_after(day: date) -> date:
+    """Следующий учебный день: воскресений в листе нет."""
+    after = day + timedelta(days=1)
+    return after + timedelta(days=1) if after.weekday() == 6 else after
+
+
+def _no_date(guess: date, place: str, cell: str, then: date | None) -> SourceFormatChanged:
+    after = "лист кончился" if then is None else f"следующая дата — {then}"
+    return SourceFormatChanged(
+        f"в {place} начинается новый день (1-я пара), а даты нет: {cell!r} — "
+        f"ждал {guess}, но {after}"
+    )
 
 
 def _halves(row: list[str], col: int, teacher_row: list[str]) -> bool:

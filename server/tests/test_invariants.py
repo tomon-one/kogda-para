@@ -391,11 +391,31 @@ def test_subgroups_sharing_lessons_are_not_a_shift():
     check_shift(honest)
 
 
-def test_new_day_without_a_date_is_named_as_such(fixture_csv):
-    """Запятая вместо даты (20 сентября 2026): отказ называет новый день без
-    даты, а не номера пар соседнего дня."""
+def test_new_day_without_a_date_between_its_neighbours_is_unread(fixture_csv):
+    """Запятая вместо даты (20 сентября 2026): следующая дата встала ровно за
+    ним — это следующий учебный день, и он не прочитан у всех групп, а лист
+    принят."""
+    honest = parse_sheet(rows_of(fixture_csv), "фикстура", FIXTURE)
     rows = rows_of(fixture_csv)
     rows[date_rows(rows)[1]][0] = ","
+    snapshot = parse_sheet(rows, "фикстура", FIXTURE)
+    day = honest.dates[1]
+    assert snapshot.dates == honest.dates
+    assert all(snapshot.unread[g.id] == {day: False} for g in honest.groups)
+    assert all(day not in snapshot.schedule[g.id] for g in honest.groups)
+    assert snapshot.schedule == {
+        gid: {d: x for d, x in by.items() if d != day} for gid, by in honest.schedule.items()
+    }
+
+
+@pytest.mark.parametrize("blank", [[1, 2], [-1]])
+def test_new_day_without_a_date_and_no_neighbour_to_confirm_it_is_rejected(fixture_csv, blank):
+    """Два дня подряд без даты или последний день листа — чей это день, не
+    угадать: отказ, и он называет новый день без даты."""
+    rows = rows_of(fixture_csv)
+    dated = date_rows(rows)
+    for k in blank:
+        rows[dated[k]][0] = ","
     with pytest.raises(SourceFormatChanged, match="начинается новый день"):
         parse_sheet(rows, "фикстура", FIXTURE)
 

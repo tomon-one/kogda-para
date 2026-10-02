@@ -451,11 +451,9 @@ def meta_payload(
             out["err"] = error
     if snapshot.unread:
         out["refresh"] = refresh or status
-        out["unread"] = [
-            {"g": gid, "d": day.isoformat()}
-            for gid, days in sorted(snapshot.unread.items())
-            for day in sorted(days)
-        ]
+        # Только даты: у какой группы — в её расписании. День без даты в
+        # листе задевает все 190 групп, а /v1/meta спрашивают чаще всего.
+        out["unread"] = sorted({day.isoformat() for days in snapshot.unread.values() for day in days})
     return out
 
 

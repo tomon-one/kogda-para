@@ -86,7 +86,7 @@ def test_unread_day_keeps_previous_lessons_and_says_so(tmp_path, sheet, sent, fi
     meta = meta_payload(store.snapshot, store.generated, status, r.checked_at,
                         today=TODAY, failing_since=since, error=error, refresh=r.status)
     assert meta["status"] == "stale" and meta["refresh"] == "ok"
-    assert meta["unread"] == [{"g": "bp-1126", "d": "2026-09-02"}]
+    assert meta["unread"] == ["2026-09-02"]
     body = schedule_payload(store.snapshot, "bp-1126", DAY, 7, store.generated, today=TODAY)
     assert body["unread"] == ["2026-09-02"]
     assert body["days"][0]["d"] == "2026-09-02" and body["days"][0]["l"]
