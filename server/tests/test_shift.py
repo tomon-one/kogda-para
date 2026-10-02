@@ -164,7 +164,7 @@ def test_halved_block_is_two_lessons_not_a_shift(fixture_csv):
     for i in lesson_rows[:6]:
         rows[i][2:6] = ["Иностранный язык, немецкий (Пр)", "55/1",
                         "Иностранный язык, английский (Пр)", "467"]
-        rows[i + 1][2:6] = ["Пикулина Л. Е.", "", "Здорик И. Р.", ""]
+        rows[i + 1][2:6] = ["Миллер Д. Х.", "", "Уэллс Д. Р.", ""]
     snapshot = parse_sheet(rows, "фикстура", FIXTURE)
     halves = [
         sorted((l.room, l.teachers) for l in lessons if l.number == 1)
@@ -172,7 +172,7 @@ def test_halved_block_is_two_lessons_not_a_shift(fixture_csv):
         for lessons in by_date.values()
         if any(l.room == "55/1" for l in lessons)
     ]
-    assert halves and halves[0] == [("467", ("Здорик И. Р.",)), ("55/1", ("Пикулина Л. Е.",))]
+    assert halves and halves[0] == [("467", ("Уэллс Д. Р.",)), ("55/1", ("Миллер Д. Х.",))]
 
 
 @pytest.mark.parametrize("cells, teacher, halved", [

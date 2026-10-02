@@ -29,12 +29,12 @@ class LessonTextTest {
                     subject = "Физика",
                     kind = "Пр",
                     room = "272",
-                    teachers = listOf("Трухачев Д. Д."),
+                    teachers = listOf("Нечаев С. А."),
                 ),
             ),
         )
 
-        assertEquals("Каб. 272. 3 пара, практика. Трухачев Д. Д.", text)
+        assertEquals("Каб. 272. 3 пара, практика. Нечаев С. А.", text)
     }
 
     @Test
@@ -48,12 +48,12 @@ class LessonTextTest {
                     subject = "Английский",
                     room = "12",
                     online = 1,
-                    teachers = listOf("Старостина Е. А."),
+                    teachers = listOf("Кушинада Л. А."),
                 ),
             ),
         )
 
-        assertEquals("Онлайн, комната 12. 2 пара. Старостина Е. А.", text)
+        assertEquals("Онлайн, комната 12. 2 пара. Кушинада Л. А.", text)
 
         // Просто «онлайн», без номера — и текст без комнаты.
         val bare = LessonAlarms.text(
@@ -91,14 +91,14 @@ class LessonTextTest {
     fun `своя группа не подписывается, точка после инициалов не удваивается`() {
         val own = LessonAlarms.Alarm(
             at = LocalDateTime.of(2026, 9, 9, 8, 40),
-            lesson = LessonDto(number = 4, subject = "Физика", teachers = listOf("Трухачев Д. Д."), groups = "ИСП-924/1"),
+            lesson = LessonDto(number = 4, subject = "Физика", teachers = listOf("Нечаев С. А."), groups = "ИСП-924/1"),
             minutes = 20,
             day = "2026-09-09",
             ownGroup = "ИСП-924/1",
         )
-        assertEquals("4 пара. Трухачев Д. Д.", LessonAlarms.text(own))
+        assertEquals("4 пара. Нечаев С. А.", LessonAlarms.text(own))
         val theirs = own.copy(lesson = own.lesson.copy(groups = "ИСП-924/2"))
-        assertEquals("4 пара. Трухачев Д. Д. ИСП-924/2", LessonAlarms.text(theirs))
+        assertEquals("4 пара. Нечаев С. А. ИСП-924/2", LessonAlarms.text(theirs))
     }
 
     @Test
@@ -114,13 +114,13 @@ class LessonTextTest {
         val text = LessonAlarms.text(
             LessonAlarms.Alarm(
                 at = LocalDateTime.of(2026, 10, 5, 14, 5),
-                lesson = LessonDto(number = 4, subject = "Немецкий", room = "55/1", teachers = listOf("Пикулина Л. Е.")),
+                lesson = LessonDto(number = 4, subject = "Немецкий", room = "55/1", teachers = listOf("Миллер Д. Х.")),
                 minutes = 15,
                 day = "2026-10-05",
-                also = listOf(LessonDto(number = 4, subject = "Английский", room = "467", teachers = listOf("Здорик И. Р."))),
+                also = listOf(LessonDto(number = 4, subject = "Английский", room = "467", teachers = listOf("Уэллс Д. Р."))),
             ),
         )
 
-        assertEquals("Каб. 55/1 — Немецкий. Пикулина Л. Е.\nКаб. 467 — Английский. Здорик И. Р.", text)
+        assertEquals("Каб. 55/1 — Немецкий. Миллер Д. Х.\nКаб. 467 — Английский. Уэллс Д. Р.", text)
     }
 }

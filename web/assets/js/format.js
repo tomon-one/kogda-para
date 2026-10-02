@@ -48,7 +48,7 @@ export function roomLabel(room) {
   return text.length <= 8 && ROOM_CHARS.test(text) ? 'каб. ' + text : text;
 }
 
-/** «Трухачев Даниил Дмитриевич» → «Трухачев Д. Д.». */
+/** «Нечаев Сергей Алексеевич» → «Нечаев С. А.». */
 export function shortenName(fullName) {
   var parts = fullName.trim().split(' ').filter(function (p) { return p; });
   if (parts.length < 2) return fullName;

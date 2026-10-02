@@ -18,7 +18,7 @@ class MergeSameTest {
         subject: String = "Физика",
         kind: String? = "Пр",
         room: String? = "272",
-        teachers: List<String> = listOf("Трухачев Д. Д."),
+        teachers: List<String> = listOf("Нечаев С. А."),
     ) = LessonDto(
         number = number,
         subject = subject,
@@ -60,8 +60,8 @@ class MergeSameTest {
         // занятие, а расхождение в фамилии обычно значит, что в одной колонке
         // её просто не дописали.
         val both = merged(
-            listOf(lesson(teachers = listOf("Трухачев Д. Д."))),
-            listOf(lesson(teachers = listOf("Одарюк И. А."))),
+            listOf(lesson(teachers = listOf("Нечаев С. А."))),
+            listOf(lesson(teachers = listOf("Захаров Х. Р."))),
         )
 
         assertEquals(1, both.size)

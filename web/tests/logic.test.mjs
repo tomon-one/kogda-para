@@ -78,8 +78,8 @@ test('подписи пары', () => {
   assert.equal(roomLabel(''), null);
   assert.equal(onlineLabel({ r: '12' }), 'онлайн · 12');
   assert.equal(onlineLabel({}), 'онлайн');
-  assert.equal(shortenName('Трухачев Даниил Дмитриевич'), 'Трухачев Д. Д.');
-  assert.equal(shortenName('Трухачев'), 'Трухачев');
+  assert.equal(shortenName('Нечаев Сергей Алексеевич'), 'Нечаев С. А.');
+  assert.equal(shortenName('Нечаев'), 'Нечаев');
 });
 
 test('онлайн', () => {
@@ -244,10 +244,10 @@ test('другие группы: склейка, значки, подгрупп�
 test('поиск и буквы', () => {
   assert.equal(matchesQuery('ИСП-924/1', 'исп924'), true);
   assert.equal(matchesQuery('ИСП-924/1', 'исп 924'), true);
-  assert.equal(matchesQuery('Чернышёва Анна', 'чернышева'), true);
+  assert.equal(matchesQuery('Королёва Анна', 'королева'), true);
   assert.equal(matchesQuery('ИСП-924/1', 'дп'), false);
   assert.equal(matchesQuery('что угодно', '  '), true);
-  assert.equal(letterOf('Ёлкина'), 'Е');
+  assert.equal(letterOf('Ёринобу'), 'Е');
   assert.equal(letterOf('01-26.РКИ'), '0–9');
   assert.equal(letterOf('«Кавычки»'), '#');
   assert.deepEqual(lettered([{ name: 'Б1' }, { name: 'А1' }, { name: 'Б2' }], (x) => x.name)

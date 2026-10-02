@@ -211,13 +211,13 @@ fun roomLabel(room: String?): String? {
 }
 
 /**
- * «Трухачев Даниил Дмитриевич» -> «Трухачев»: для строки, где место на исходе.
+ * «Нечаев Сергей Алексеевич» -> «Нечаев»: для строки, где место на исходе.
  * Однофамильцев в колледже нет, а целая фамилия лучше обрезанной с инициалами.
  */
 fun surnameOnly(fullName: String): String =
     fullName.trim().split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: fullName
 
-/** «Трухачев Даниил Дмитриевич» -> «Трухачев Д. Д.»: иначе не влезает в строку. */
+/** «Нечаев Сергей Алексеевич» -> «Нечаев С. А.»: иначе не влезает в строку. */
 fun shortenName(fullName: String): String {
     val parts = fullName.trim().split(" ").filter { it.isNotEmpty() }
     if (parts.size < 2) return fullName

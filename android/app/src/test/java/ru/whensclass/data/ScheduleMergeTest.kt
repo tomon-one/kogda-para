@@ -114,7 +114,7 @@ class ScheduleMergeTest {
 
     @Test
     fun `у преподавателя групп не бывает`() {
-        val teacher = schedule("Трухачев Д. Д.", lesson(1, "Физика")).copy(kind = "teacher")
+        val teacher = schedule("Нечаев С. А.", lesson(1, "Физика")).copy(kind = "teacher")
         assertSame(teacher, combine(teacher, schedule("ИСП-924/2", lesson(2, "Химия"))))
     }
 
