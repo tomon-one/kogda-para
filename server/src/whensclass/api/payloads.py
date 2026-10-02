@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from ..config import settings
 from ..domain.models import Lesson, SheetPlace, Snapshot, a1_column
-from ..domain.teachers import TeacherIndex, spelling_twin
+from ..domain.teachers import TeacherIndex, same_person, spelling_twin
 
 API_VERSION = 1
 
@@ -309,7 +309,11 @@ def teacher_answer(
     if body is not None:
         return body
     name = known_teacher(teacher_id)
-    if not name or spelling_twin(index, name):
+    if not name:
+        return None
+    if same := same_person(index, name):
+        return build(same)
+    if spelling_twin(index, name):
         return None
     return build(teacher_id, known_name=name)
 

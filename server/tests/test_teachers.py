@@ -244,3 +244,33 @@ def test_full_name_with_a_typo_is_the_same_teacher():
     body = teacher_answer(snap, index, lambda _tid: None, typo, days[0], 3,
                           dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc))
     assert body["g"] == main and body["gn"] == "Безухов Даниил Кириллович"
+
+
+def test_old_id_of_a_corrected_name_answers_with_the_corrected_one():
+    """Колледж исправил опечатку везде: прежнего id в листе нет. Он отвечает
+    расписанием исправленного, а не 404 и «вас больше нет»; однофамилец с
+    другим именем — по-прежнему 404, а не чужие пары."""
+    from whensclass.api.payloads import teacher_answer
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+    from whensclass.domain.teachers import same_person
+
+    day = dt.date(2026, 9, 7)
+    snap = Snapshot(sheet_title="л", groups=[GroupRef(name="А-1", id="a-1", column=2)], dates=[day])
+    snap.schedule = {"a-1": {day: [
+        Lesson(number=1, subject="Х", teachers=("Безухов Даниил Кириллович",)),
+        Lesson(number=2, subject="У", teachers=("Каренина Анна Аркадьевна",)),
+    ]}}
+    index = build_index(snap)
+    main = teacher_id("Безухов Даниил Кириллович")
+    known = {
+        teacher_id("Безухов Данил Кириллович"): "Безухов Данил Кириллович",
+        teacher_id("Безухов Д. К."): "Безухов Д. К.",
+        teacher_id("Каренина Алла Аркадьевна"): "Каренина Алла Аркадьевна",
+    }
+    assert same_person(index, "Безухов Данил Кириллович") == main
+    assert same_person(index, "Каренина Алла Аркадьевна") is None
+    generated = dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc)
+    for old in (teacher_id("Безухов Данил Кириллович"), teacher_id("Безухов Д. К.")):
+        body = teacher_answer(snap, index, known.get, old, day, 1, generated)
+        assert body["g"] == main
+    assert teacher_answer(snap, index, known.get, teacher_id("Каренина Алла Аркадьевна"), day, 1, generated) is None

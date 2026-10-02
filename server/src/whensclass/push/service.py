@@ -131,6 +131,10 @@ class Push(Delivery):
             # мусором и под потолком уходит раньше свежего мусора.
             if old is not None and old.get("ok"):
                 record["ok"] = old["ok"]
+            # И отметка «нет в таблице» о том же выборе: иначе «выберите
+            # заново» приходило бы после каждой пересылки.
+            if old is not None and old.get("gone") and (old["kind"], old["id"]) == (sub["kind"], sub["id"]):
+                record["gone"] = old["gone"]
             self._subs[sub["endpoint"]] = record
             self._save()
         # В журнал — служба рассылки и выбор, без адреса и группы: по ним
@@ -260,7 +264,7 @@ class Push(Delivery):
                 new = _payload(snapshot, teachers, key, today, self.known_teacher)
                 if old is None or new is None:
                     continue
-                lines = changes.change_lines(old, new, today)
+                lines = changes.change_lines(old, new, today, same=True)
             except Exception:  # noqa: BLE001
                 # Сбой одного не глушит остальных.
                 log.exception("изменения для %s не посчитались", key[0])

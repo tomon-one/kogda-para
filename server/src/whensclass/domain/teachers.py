@@ -91,6 +91,29 @@ def spelling_twin(index: TeacherIndex | None, name: str) -> str | None:
     return None
 
 
+def same_person(index: TeacherIndex | None, name: str) -> str | None:
+    """Id того же человека под нынешним написанием, если он ведёт пары.
+
+    То же правило, что сводит имена в одном листе (`_full_names`): полное имя
+    с разницей в одну букву при тех же фамилии и инициалах, а краткое — к
+    единственному полному с теми же инициалами. Колледж исправил опечатку, и
+    прежний id отвечает расписанием исправленного, а не «вас больше нет».
+    """
+    if index is None:
+        return None
+    key = _surname_initials(name)
+    if not key[0] or not key[1]:
+        return None
+    candidates = [
+        tid for tid, other in index.names.items()
+        if other != name and _surname_initials(other) == key and index.schedule.get(tid)
+    ]
+    if _short(name):
+        full = [tid for tid in candidates if not _short(index.names[tid])]
+        return full[0] if len(full) == 1 else None
+    return next((tid for tid in candidates if _one_letter_apart(index.names[tid], name)), None)
+
+
 def _short(name: str) -> bool:
     """«Филатова Л.А.», «Сеченов Д. С.» — фамилия и одни инициалы."""
     words = [w for w in re.split(r"[\s.]+", name) if w]

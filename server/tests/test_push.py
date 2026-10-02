@@ -225,7 +225,7 @@ def test_one_failing_subject_does_not_silence_the_rest(tmp_path, snapshots, monk
     push.sent.clear()
     real = changes.change_lines
 
-    def flaky(old, new, today):
+    def flaky(old, new, today, same=False):
         if new.get("g") == "isp-924-1":
             raise ValueError("Invalid IPv6 URL")
         return real(old, new, today)
@@ -253,6 +253,12 @@ def test_gone_group_gets_one_notice_then_is_dropped(tmp_path, snapshots, monkeyp
     clock[0] += service.CHECK_EVERY
     push._check(after, at, day, fresh=True)
     assert len(push.sent) == 1, "одно уведомление, не каждые десять минут"
+    # Страница пересылает подписку раз в сутки — отметка о пропаже остаётся,
+    # и «выберите заново» не приходит снова.
+    push.subscribe(subscription.parse_subscription(_body(id="isp-924-9", remind=20)), day)
+    clock[0] += service.CHECK_EVERY
+    push._check(after, at, day, fresh=True)
+    assert len(push.sent) == 1, "пересылка не повторяет «выберите заново»"
     clock[0] += service.CHECK_EVERY
     push._check(after, at, day + dt.timedelta(days=service.GONE_DROP_DAYS), fresh=True)
     assert push.count() == 0
