@@ -83,6 +83,8 @@ internal class WeekDay(
     val isToday: Boolean,
     val lessons: List<LessonDto>,
     val absent: Boolean = false,
+    /** Сервер день не прочитал, и прежних пар нет. */
+    val unread: Boolean = false,
 )
 
 internal fun weekDays(days: List<DayDto>, today: LocalDate): List<WeekDay> {
@@ -92,6 +94,7 @@ internal fun weekDays(days: List<DayDto>, today: LocalDate): List<WeekDay> {
         if (date.isBefore(today)) return@mapNotNull null
         // И не дальше недели вперёд: на телефоне две недели, а виджет — «Неделя».
         if (date.isAfter(today.plusDays(WEEK_AHEAD))) return@mapNotNull null
-        WeekDay(date, formatWeekDay(date), date == today, day.lessons, day.absent)
+        WeekDay(date, formatWeekDay(date), date == today, day.lessons, day.absent,
+            unread = day.unread == ru.whensclass.data.UnreadDay.MISSING)
     }
 }

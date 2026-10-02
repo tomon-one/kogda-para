@@ -5,6 +5,8 @@ import org.junit.Test
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.UnreadDay
+import ru.whensclass.data.combineGroups
 
 /**
  * Дни, которых в ответе нет, а по листу колледжа они есть: воскресений в листе
@@ -91,5 +93,19 @@ class DaysWithGapsTest {
             listOf("2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"),
             dates(daysWithGaps(week)),
         )
+    }
+
+    @Test
+    fun `непрочитанный день помечен, а без прежних пар вставлен пустым`() {
+        val week = schedule(listOf("2026-09-07", "2026-09-08"), "2026-09-07", "2026-09-08")
+            .copy(unread = listOf("2026-09-08", "2026-09-09"))
+
+        val days = daysWithGaps(week)
+
+        assertEquals(listOf(null, UnreadDay.KEPT, UnreadDay.MISSING), days.map { it.unread })
+        assertEquals(listOf("2026-09-07", "2026-09-08", "2026-09-09"), dates(days))
+        // У выбранной вместе группы день не прочитан — пометка на общем дне.
+        val other = schedule(listOf("2026-09-07", "2026-09-08")).copy(unread = listOf("2026-09-07"))
+        assertEquals(listOf("2026-09-07"), combineGroups(schedule(listOf()), listOf("ИСП-924/2" to other)).unread)
     }
 }

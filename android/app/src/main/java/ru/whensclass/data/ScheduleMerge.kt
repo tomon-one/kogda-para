@@ -56,6 +56,8 @@ fun combineGroups(main: ScheduleDto, extras: List<Pair<String, ScheduleDto?>>): 
     val days = (main.days + extraDates.map { DayDto(date = it) }).sortedBy { it.date }
     return main.copy(
         groupNames = names,
+        // Непрочитанный день любой из групп — пометка на дне: часть пар в нём прежняя.
+        unread = (main.unread + extras.flatMap { it.second?.unread.orEmpty() }).distinct().sorted(),
         days = days.map { day ->
             val rows = day.lessons.map { it.copy(slots = listOf(0)) }.toMutableList()
             theirs.forEachIndexed { index, byDate ->

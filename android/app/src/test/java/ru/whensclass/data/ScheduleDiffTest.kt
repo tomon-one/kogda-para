@@ -14,9 +14,13 @@ class ScheduleDiffTest {
         online: Boolean = false,
         cancelled: Boolean = false,
         groups: String? = null,
+        teachers: List<String> = emptyList(),
+        note: String? = null,
     ) = LessonDto(
         number = number,
         subject = subject,
+        teachers = teachers,
+        note = note,
         room = room,
         url = url,
         online = if (online) 1 else 0,
@@ -332,5 +336,19 @@ class ScheduleDiffTest {
             schedule(lesson(1, "Право", online = true, url = "https://evil.com\\my.mts-link.ru/j/1")),
         )
         assertEquals(listOf("у 1 пары появилась ссылка — чужой адрес: evil.com"), now)
+    }
+
+    @Test
+    fun `половинки одного предмета сопоставляются по преподавателю и кабинету`() {
+        val left = lesson(4, "Иностранный язык", room = "55/1", teachers = listOf("Миллер Д. Х."))
+        val right = lesson(4, "Иностранный язык", room = "467", teachers = listOf("Уэллс Д. Р."))
+        val was = schedule(left, right)
+        // Левую подгруппу сняли — «убрали», а не «другой преподаватель» и «переехала».
+        assertEquals(listOf("убрали 4 пару: Иностранный язык"), texts(was, schedule(right)))
+        // Половинки поменялись местами — у каждой всё прежнее.
+        assertEquals(emptyList<String>(), texts(was, schedule(right, left)))
+        // Заменили правую — замена только у неё.
+        val math = lesson(4, "Математика", room = "467", teachers = listOf("Сильверхенд Д."), note = "вместо: Иностранный язык")
+        assertEquals(listOf("замена 4 пары: Иностранный язык → Математика"), texts(was, schedule(left, math)))
     }
 }

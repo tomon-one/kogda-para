@@ -40,6 +40,7 @@ import java.time.LocalDateTime
 import kotlinx.coroutines.delay
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.UnreadDay
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
 
@@ -154,7 +155,9 @@ internal fun dayIndex(days: List<DayDto>, date: String): Int {
  * Дыры заполняются только между первым и последним пришедшим днём и только
  * внутри `cov`: за краем листа расписания может и не быть.
  */
-internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
+internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> = withUnread(schedule, gaps(schedule))
+
+private fun gaps(schedule: ScheduleDto): List<DayDto> {
     val present = schedule.days
     if (present.size < 2) return present
     val cover = schedule.coverage
@@ -178,6 +181,20 @@ internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
         day = day.plusDays(1)
     }
     return out
+}
+
+/**
+ * Дни, которые сервер не прочитал: с прежними парами — [UnreadDay.KEPT]; без
+ * них — вставляются пустыми, [UnreadDay.MISSING], чтобы было видно, что с ними.
+ */
+private fun withUnread(schedule: ScheduleDto, days: List<DayDto>): List<DayDto> {
+    if (schedule.unread.isEmpty()) return days
+    val marked = schedule.unread.toMutableSet()
+    val out = days.map { day ->
+        if (!marked.remove(day.date)) day
+        else day.copy(unread = if (day.absent) UnreadDay.MISSING else UnreadDay.KEPT)
+    }
+    return (out + marked.map { DayDto(date = it, unread = UnreadDay.MISSING) }).sortedBy { it.date }
 }
 
 @Composable
@@ -213,7 +230,19 @@ private fun DayCard(
         Column {
             DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday, past)
 
-            if (day.lessons.isEmpty()) {
+            if (day.unread != null) {
+                Text(
+                    if (day.unread == UnreadDay.MISSING) "Сервер не смог прочитать этот день в таблице."
+                    else "Сервер не смог прочитать этот день в таблице: пары — какими были до этого.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp,
+                        bottom = if (day.unread == UnreadDay.MISSING) 16.dp else 4.dp),
+                )
+            }
+            if (day.unread == UnreadDay.MISSING) {
+                // Сказано выше; «пар нет» тут было бы неправдой.
+            } else if (day.lessons.isEmpty()) {
                 Text(
                     if (day.absent) absentDay(day.date) else freeDay(day.date, teacher, nextFree, now, idle),
                     style = MaterialTheme.typography.bodyMedium,
@@ -294,7 +323,7 @@ internal fun freeDay(
 /** День будний, пришёл с сервера и без своих пар — для «повезло дважды». */
 internal fun freeOwnDay(day: DayDto, groups: List<String>): Boolean {
     val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: return false
-    if (day.absent || date.dayOfWeek == DayOfWeek.SUNDAY) return false
+    if (day.absent || day.unread == UnreadDay.MISSING || date.dayOfWeek == DayOfWeek.SUNDAY) return false
     return if (groups.isEmpty()) day.lessons.isEmpty() else day.lessons.none { 0 in it.slots }
 }
 

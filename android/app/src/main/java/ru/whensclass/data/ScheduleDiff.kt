@@ -122,6 +122,10 @@ object ScheduleDiff {
 
         // Что от прежнего набора ещё не нашло себе пару в новом.
         val unmatched = was.toMutableList()
+        // Прежняя пара осталась в новом листе как была (не замена).
+        fun keptAsIs(old: LessonDto) = now.any {
+            it.replaces == null && it.subject == old.subject && it.teachers == old.teachers && it.room == old.room
+        }
 
         // Замена — одной строкой: «добавилась» первой строкой свёрнутого
         // уведомления читалась бы как лишняя пара. Сервер помечает замену
@@ -130,7 +134,10 @@ object ScheduleDiff {
         for (lesson in now) {
             val instead = lesson.replaces ?: continue
             if (lesson.isCancelled || was.any { it.subject == lesson.subject }) continue
-            var index = unmatched.indexOfFirst { it.subject == instead }
+            // Из двух пар с этим названием заменили ту, у которой в новом
+            // листе нет точной копии: другая половинка блока осталась как была.
+            var index = unmatched.indexOfFirst { it.subject == instead && !keptAsIs(it) }
+            if (index < 0) index = unmatched.indexOfFirst { it.subject == instead }
             if (index < 0) index = unmatched.indexOfFirst { sameSubject(it.subject, instead) }
             if (index < 0) continue
             unmatched.removeAt(index)
@@ -144,10 +151,15 @@ object ScheduleDiff {
             // Сначала — тот же предмет у тех же групп, потом у пересекающихся
             // (у преподавателя «ИСП-924/1, ИСП-924/2» распалась на две записи),
             // потом просто тот же предмет: иначе слияние записей объявлялось
-            // бы «убрали» при паре на месте.
-            var index = unmatched.indexOfFirst {
-                it.subject == lesson.subject && groups(it) == groups(lesson)
-            }
+            // бы «убрали» при паре на месте. У тех же групп две пары одного
+            // названия (подгруппы одного языка) — сначала та, что с тем же
+            // преподавателем и кабинетом: по порядку вышли бы «другой
+            // преподаватель» и «переехала» вместо «убрали».
+            var index = unmatched.withIndex()
+                .filter { (_, it) -> it.subject == lesson.subject && groups(it) == groups(lesson) }
+                .minWithOrNull(
+                    compareBy({ it.value.teachers != lesson.teachers }, { it.value.room != lesson.room }, { it.index }),
+                )?.index ?: -1
             if (index < 0) index = unmatched.indexOfFirst {
                 it.subject == lesson.subject && overlap(it, lesson)
             }
@@ -231,8 +243,9 @@ object ScheduleDiff {
         }
 
         unmatched.forEach { gone ->
-            // Та же пара слилась из нескольких записей в одну — не новость.
-            if (now.any { it.subject == gone.subject }) return@forEach
+            // Та же пара слилась с записью других групп — не новость. С
+            // записью тех же групп (половинка блока одного языка) — убрали.
+            if (now.any { it.subject == gone.subject && groups(it) != groups(gone) }) return@forEach
             if (fresh.isTeacher && gone.groups != null) {
                 // Все её группы на номере остались при той же паре — запись
                 // просто склеилась с другой. При другом предмете у тех же групп

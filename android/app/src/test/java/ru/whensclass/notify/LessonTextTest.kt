@@ -121,6 +121,22 @@ class LessonTextTest {
             ),
         )
 
-        assertEquals("Каб. 55/1 — Немецкий. Миллер Д. Х.\nКаб. 467 — Английский. Уэллс Д. Р.", text)
+        assertEquals("4 пара\nКаб. 55/1 — Немецкий. Миллер Д. Х.\nКаб. 467 — Английский. Уэллс Д. Р.", text)
+    }
+
+    @Test
+    fun `одна пара в двух залах — предмет один раз, номер с типом первой строкой`() {
+        val alarm = LessonAlarms.Alarm(
+            at = LocalDateTime.of(2026, 9, 30, 12, 15),
+            lesson = LessonDto(number = 3, subject = "Физическая культура", kind = "Пр", room = "Спортзал 2", groups = "БП-1126"),
+            minutes = 15,
+            day = "2026-09-30",
+            also = listOf(
+                LessonDto(number = 3, subject = "Физическая культура.", kind = "Пр", room = "Спортзал 3", groups = "Т-925/3"),
+            ),
+        )
+
+        assertEquals("Физическая культура", alarm.subject)
+        assertEquals("3 пара, практика\nСпортзал 2. БП-1126\nСпортзал 3. Т-925/3", LessonAlarms.text(alarm))
     }
 }

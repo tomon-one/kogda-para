@@ -173,6 +173,13 @@ fun lessonTime(bells: Map<String, List<String>>, number: Int): String? {
 }
 
 /**
+ * Названия пар одного номера без повторов: у преподавателя одна пара в двух
+ * залах — две записи, «Физическая культура» и «Физическая культура.» — одно.
+ */
+fun distinctSubjects(lessons: List<LessonDto>): List<String> =
+    lessons.map { it.subject.trim(' ', '.') }.distinctBy { it.lowercase() }
+
+/**
  * Расшифровка сокращений типа занятия из таблицы колледжа. Незнакомое
  * оставляем как есть: колледж может завести новое, и непонятное лучше, чем
  * ничего.
