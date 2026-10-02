@@ -220,6 +220,15 @@ export function shown() {
   return combineGroups(main, list.map(function (g) { return [g.name, g.gone ? null : schedules[g.id] || null]; }));
 }
 
+/**
+ * Состояние обновления. Непрочитанные дни одной-двух групп служба отдаёт
+ * общим `stale` для прежних версий, а `refresh` — без них: их пометка — у
+ * самих дней (`unread` в расписании), не плашкой сбоя на всех.
+ */
+export function health(meta) {
+  return meta.refresh || meta.status;
+}
+
 function putServerState(status, srcUrl, since) {
   var old = serverState();
   var next = { status: status || 'ok' };
@@ -361,7 +370,8 @@ function refreshOnce(force) {
       if (meta) {
         store.remove('unreachable');
         store.set('lastOk', now);
-        putServerState(meta.status, meta.src_url, meta.since);
+        var state = health(meta);
+        putServerState(state, meta.src_url, state === 'ok' ? null : meta.since);
       } else if (online() && !busy) {
         // Мерило — последний ответ сервера, а не цепочка неудач: сайт
         // открывают редко, и цепочки при редких заходах не видно. Молчит
@@ -394,7 +404,7 @@ function refreshOnce(force) {
         return { group: g, request: r };
       });
       return request.then(null, function (error) {
-        if (isNotFound(error) && meta && meta.status === 'ok' && noteNotFound('gone', Date.now())) {
+        if (isNotFound(error) && meta && health(meta) === 'ok' && noteNotFound('gone', Date.now())) {
           return 'gone';
         }
         throw error;
@@ -405,7 +415,7 @@ function refreshOnce(force) {
         store.set('lastOk', Date.now());
         // Расписание пришло — сервер отвечает, даже если meta сорвался.
         if (serverState().status === STATUS_UNREACHABLE) putServerState('ok', null, null);
-        return collectExtras(extraRequests, !!meta && meta.status === 'ok').then(function (answers) {
+        return collectExtras(extraRequests, !!meta && health(meta) === 'ok').then(function (answers) {
           // Пока шёл запрос, человек мог сменить выбор: ответ уже чужой.
           if (subject() !== asked) return { kind: 'fresh' };
           // Ответ под другим id — группу или преподавателя переименовали.

@@ -92,7 +92,13 @@ export function combineGroups(main, extras) {
   });
   var days = (main.days || []).concat(Object.keys(added).map(function (date) { return { d: date, l: [] }; }))
     .sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
+  // Непрочитанный день любой из групп — пометка на дне: часть пар в нём прежняя.
+  var unread = {};
+  [main].concat(extras.map(function (pair) { return pair[1]; })).forEach(function (s) {
+    ((s && s.unread) || []).forEach(function (date) { unread[date] = true; });
+  });
   return copy(main, {
+    unread: Object.keys(unread).sort(),
     groupNames: [main.gn].concat(extras.map(function (pair) { return pair[0]; })),
     days: days.map(function (day) {
       var rows = (day.l || []).map(function (l) { return copy(l, { slots: [0] }); });
@@ -151,6 +157,10 @@ export function subgroupsOf(name, groups) {
  * `cov`: выдумывать дни за краем листа нельзя. У вставленного `absent`.
  */
 export function daysWithGaps(schedule) {
+  return withUnread(schedule, gaps(schedule));
+}
+
+function gaps(schedule) {
   var present = schedule.days || [];
   if (present.length < 2) return present;
   var cov = schedule.cov || [];
@@ -165,6 +175,25 @@ export function daysWithGaps(schedule) {
     else if (day >= cov[0] && day <= cov[1]) out.push({ d: day, l: [], absent: true });
   }
   return out;
+}
+
+/**
+ * Дни, которые служба не прочитала (`unread`): `kept` — в ответе прежние пары
+ * дня, `missing` — прежних у службы нет, и день вставляется пустым, чтобы было
+ * видно, что он есть и что с ним.
+ */
+function withUnread(schedule, days) {
+  var unread = schedule.unread || [];
+  if (!unread.length) return days;
+  var marked = {};
+  unread.forEach(function (date) { marked[date] = true; });
+  var out = days.map(function (day) {
+    if (!marked[day.d]) return day;
+    delete marked[day.d];
+    return copy(day, { unread: day.absent ? 'missing' : 'kept' });
+  });
+  Object.keys(marked).forEach(function (date) { out.push({ d: date, l: [], unread: 'missing' }); });
+  return out.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
 }
 
 /** Первый день не раньше `date`; все раньше — последний. */
@@ -281,6 +310,10 @@ export function cleanSchedule(body) {
       var range = body.bells[n];
       if (Array.isArray(range)) out.bells[n] = range.filter(function (t) { return typeof t === 'string'; });
     });
+  }
+  if (Array.isArray(body.unread)) {
+    var unread = body.unread.filter(isDate);
+    if (unread.length) out.unread = unread;
   }
   body.days.forEach(function (day) {
     if (!day || typeof day.d !== 'string') return;

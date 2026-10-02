@@ -469,3 +469,20 @@ test('неудача вечером и утром через ночь — не �
   await repo.refresh(false);
   assert.equal(repo.serverState().status, repo.STATUS_UNREACHABLE);
 });
+
+test('непрочитанные дни: прежним версиям stale, сайту — пометка у дня, без плашки сбоя', async () => {
+  reset();
+  const meta = { gen: 'G1', status: 'stale', refresh: 'ok', unread: ['2026-09-29'], since: '2026-09-28T01:00:00Z' };
+  const body = schedule('isp-1', 'ИСП-1', 'G1', { unread: ['2026-09-29', 'не дата'] });
+  server = (url) => url === '/v1/meta' ? [200, meta] : [200, body];
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  await repo.refresh(true);
+  assert.equal(repo.serverBroken(), false);
+  assert.equal(repo.serverState().since, undefined);
+  assert.deepEqual(repo.saved().unread, ['2026-09-29']);
+  // Само обновление стоит — это сбой, как и был.
+  meta.refresh = 'stale';
+  await repo.refresh(true);
+  assert.equal(repo.serverBroken(), true);
+  assert.equal(repo.serverState().since, '2026-09-28T01:00:00Z');
+});
