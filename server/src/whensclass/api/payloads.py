@@ -93,7 +93,7 @@ def filled_until(snapshot: Snapshot) -> date | None:
 
 
 def _group_edge(
-    snapshot: Snapshot, group_id: str, sheet: list[date], marks: bool = True
+    snapshot: Snapshot, group_id: str, sheet: list[date], today: date, marks: bool = True
 ) -> date | None:
     """Последний день, который колледж выложил группе; None — ни одного.
 
@@ -113,18 +113,24 @@ def _group_edge(
     by_date = snapshot.schedule.get(group_id, {})
     unread = snapshot.unread.get(group_id, {})
     written = {day for day, lessons in by_date.items() if lessons}
-    if marks:
-        # Непрочитанный день — тоже запись колледжа в колонке группы: он в
-        # покрытии со своей пометкой, а не «ещё не опубликовано».
-        written |= set(unread)
     last = max(written, default=None)
     if last is not None and sheet:
         week_end = last + timedelta(days=6 - last.weekday())
         last = max(last, min(week_end, sheet[-1]))
-    unknown = [day for day, kept in unread.items() if not kept]
+    if marks and last is not None:
+        # Непрочитанный день — тоже запись колледжа в колонке группы: он в
+        # покрытии со своей пометкой, а не «ещё не опубликовано». Только
+        # вплотную к выложенному и без остатка недели после него: `cov` —
+        # сплошной отрезок, а колонку недели колледж мог ещё не дописать.
+        for day in sorted(unread):
+            if last < day <= last + timedelta(days=1) and (not sheet or day <= sheet[-1]):
+                last = day
+    # Версии без пометок показали бы день, которого прежний снимок не знал,
+    # как «пар нет»: им край — перед ним, вместе с общим stale. Знакомый день
+    # им — как прежде, прежними парами или пустым; прошедший не режет
+    # сегодняшний.
+    unknown = [day for day, known in unread.items() if not known and day >= today]
     if not marks and unknown and last is not None:
-        # Версии без пометок показали бы пустой день как «пар нет» и
-        # «убрали»: им край — перед ним, вместе с общим stale.
         last = min(last, min(unknown) - timedelta(days=1))
     return last
 
@@ -140,7 +146,7 @@ def group_published(
     sheet = published(snapshot, today)
     if today is None:
         return sheet
-    return _upto(snapshot, _group_edge(snapshot, group_id, sheet, marks))
+    return _upto(snapshot, _group_edge(snapshot, group_id, sheet, today, marks))
 
 
 def teacher_published(
@@ -167,7 +173,7 @@ def teacher_published(
         return sheet
     monday = today - timedelta(days=today.weekday())
     current = [g for g in sorted(groups) if _alive_since(snapshot, g, monday)]
-    edges = [_group_edge(snapshot, group, sheet, marks) for group in current or sorted(groups)]
+    edges = [_group_edge(snapshot, group, sheet, today, marks) for group in current or sorted(groups)]
     edge = min(today, sheet[-1])
     if None not in edges:
         edge = max(edge, min(edges))
@@ -179,47 +185,60 @@ def _alive_since(snapshot: Snapshot, group: str, since: date) -> bool:
     return any(lessons for day, lessons in snapshot.schedule.get(group, {}).items() if day >= since)
 
 
-def _unread_mark(kept: bool) -> str:
-    """`un` у дня: пары прежние (`kept`) или их нет вовсе (`missing`)."""
-    return "kept" if kept else "missing"
+def _unread_mark(snapshot: Snapshot, group_id: str, day: date) -> str | None:
+    """`un` у дня группы: пары прежние (`kept`) или их нет вовсе (`missing`).
+
+    Прежний снимок знал день, но пар в нём у группы не было — тоже `missing`:
+    «пар нет» тут было бы неправдой, колледж мог в этот день что-то вписать.
+    """
+    known = snapshot.unread.get(group_id, {}).get(day)
+    if known is None:
+        return None
+    return "kept" if known and snapshot.schedule.get(group_id, {}).get(day) else "missing"
 
 
 def _teacher_unread(
     snapshot: Snapshot, index: TeacherIndex, teacher_id: str, day: date
-) -> tuple[str, list[str]] | None:
-    """Пометка дня преподавателя и группы, из-за которых она стоит.
+) -> tuple[str, list[str], list[str]] | None:
+    """Пометка дня преподавателя, группы, из-за которых она стоит, и группы с
+    прежними парами, если пометка — `missing`.
 
     Прежние пары — если среди его пар этого дня есть пары такой группы.
-    Не прочитан — если он ведёт у этой группы на той же неделе: был ли он
-    в её непрочитанном дне, неизвестно. Остальные его группы листа ни при чём.
+    Не прочитан — если он ведёт у этой группы на той же неделе или в тот же
+    день недели в другие недели листа: был ли он в её непрочитанном дне,
+    неизвестно, а пара раз в неделю обычно в один и тот же день. Остальные
+    его группы листа ни при чём. Обе пометки в одном дне бывают: `missing`
+    главнее, но и прежние пары других групп называются.
     """
     names = {g.id: g.name for g in snapshot.groups}
-    today_groups = {
-        part
-        for entry in index.days(teacher_id).get(day, [])
-        for part in entry.group_name.split(", ")
-    }
+    by_date = index.days(teacher_id)
+
+    def groups_on(days: list[date]) -> set[str]:
+        return {
+            part
+            for d in days
+            for entry in by_date.get(d, [])
+            for part in entry.group_name.split(", ")
+        }
+
+    today_groups = groups_on([day])
     monday = day - timedelta(days=day.weekday())
-    week_groups = {
-        part
-        for offset in range(7)
-        for entry in index.days(teacher_id).get(monday + timedelta(days=offset), [])
-        for part in entry.group_name.split(", ")
-    }
+    week = [monday + timedelta(days=offset) for offset in range(7)]
+    likely = groups_on(week + [d for d in by_date if d.weekday() == day.weekday()])
     kept, missing = [], []
     for gid in sorted(index.groups.get(teacher_id, ())):
-        mark = snapshot.unread.get(gid, {}).get(day)
+        mark = _unread_mark(snapshot, gid, day)
         name = names.get(gid)
         if mark is None or name is None:
             continue
-        if mark and name in today_groups:
+        if mark == "kept" and name in today_groups:
             kept.append(name)
-        elif not mark and name in week_groups:
+        elif mark == "missing" and name in likely:
             missing.append(name)
     if missing:
-        return "missing", missing
+        return "missing", missing, kept
     if kept:
-        return "kept", kept
+        return "kept", kept, []
     return None
 
 
@@ -367,7 +386,9 @@ def teacher_payload(
         if day in placed:
             out_day["row"] = placed[day].row
         if marks and (mark := _teacher_unread(snapshot, index, teacher_id, day)):
-            out_day["un"], out_day["ug"] = mark
+            out_day["un"], out_day["ug"], kept = mark
+            if kept:
+                out_day["uk"] = kept
         out_days.append(out_day)
 
     payload = {
@@ -416,7 +437,6 @@ def schedule_payload(
         return None
 
     by_date = snapshot.schedule.get(group_id, {})
-    unread = snapshot.unread.get(group_id, {})
     shown = group_published(snapshot, group_id, today, marks)
     covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
@@ -435,8 +455,8 @@ def schedule_payload(
         }
         if day in placed:
             out_day["row"] = placed[day].row
-        if marks and (kept := unread.get(day)) is not None:
-            out_day["un"] = _unread_mark(kept)
+        if marks and (mark := _unread_mark(snapshot, group_id, day)):
+            out_day["un"] = mark
         out_days.append(out_day)
 
     payload = {

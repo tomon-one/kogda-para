@@ -459,18 +459,22 @@ ACCEPT_NEXT_TTL = dt.timedelta(hours=2)
 
 
 def _hold_unread(snapshot, before) -> None:
-    """Непрочитанные дни групп — прежними парами, если они у группы были.
+    """Непрочитанные дни групп — прежними парами, если прежний снимок их знал.
 
-    Пар в прежнем снимке нет (неделю вписывают впервые, или день был пуст и
-    теперь в нём что-то записано) — день остаётся пустым с пометкой «не
-    прочитан»: прежнее «пар нет» тут было бы неправдой.
+    Знал без пар — день пустой, но знакомый: прежние версии клиентов получат
+    его как раньше, новые — с пометкой «не прочитан» (`_unread_mark`). Не знал
+    (неделя пришла впервые) — прежним версиям край встаёт перед ним.
     """
     for gid, days in snapshot.unread.items():
         for day in days:
-            lessons = before.schedule.get(gid, {}).get(day) if before is not None else None
+            known = (
+                before is not None and day in before.dates and gid in before.schedule
+                and before.unread.get(gid, {}).get(day, True)
+            )
+            lessons = before.schedule.get(gid, {}).get(day) if known else None
             if lessons:
                 snapshot.schedule.setdefault(gid, {})[day] = list(lessons)
-            days[day] = bool(lessons)
+            days[day] = bool(known)
 
 
 def _limits() -> Limits:
