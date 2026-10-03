@@ -1,7 +1,7 @@
 // Сведения для отчёта (Diagnostics.kt, Report.kt). Никуда сами не уходят:
 // человек смотрит, копирует и отправляет сам.
 
-import { h, dialog, closeDialog, copyText, snackbar, standalone } from './dom.js';
+import { h, dialog, closeDialog, copyText, snackbar, standalone, externalLink } from './dom.js';
 import { VERSION, build } from '../version.js';
 import { CHANNEL, persistent } from '../store.js';
 import { browserZone, formatShort, parseIso } from '../time.js';
@@ -65,8 +65,8 @@ function pushLine(app) {
 export function showReport(app) {
   var text = reportText(app);
   dialog('Сведения для отчёта', [
-    h('p', null, 'Пришлите это автору в Telegram: @toomonn — вместе с жалобой. ' +
-      'Всё, что уйдёт, — ниже: посмотрите перед отправкой.'),
+    h('p', null, 'Пришлите это автору в Telegram: ', externalLink('@toomonn', 'https://t.me/toomonn'),
+      ' — вместе с жалобой. Всё, что уйдёт, — ниже: посмотрите перед отправкой.'),
     h('pre', { class: 'report' }, text),
   ], [
     {

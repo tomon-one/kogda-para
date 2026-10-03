@@ -20,7 +20,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 
 /**
@@ -72,11 +78,21 @@ private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
         text = {
             // На маленьком экране с заголовком и кнопками список упирается в край.
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                val link = MaterialTheme.colorScheme.primary
                 Text(
                     // Что уходит — видно ниже целиком, без обещаний «личного нет»:
                     // в отчёте модель телефона, пояс и у преподавателя — ФИО.
-                    "Пришлите это автору в Telegram: @toomonn — вместе с жалобой. Всё, что уйдёт, — " +
-                        "ниже: посмотрите перед отправкой.",
+                    // Имя автора — ссылкой: отсюда как раз и идут писать.
+                    buildAnnotatedString {
+                        append("Пришлите это автору в Telegram: ")
+                        withLink(
+                            LinkAnnotation.Url(
+                                "https://t.me/toomonn",
+                                TextLinkStyles(SpanStyle(color = link, fontWeight = FontWeight.SemiBold)),
+                            ),
+                        ) { append("@toomonn") }
+                        append(" — вместе с жалобой. Всё, что уйдёт, — ниже: посмотрите перед отправкой.")
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
