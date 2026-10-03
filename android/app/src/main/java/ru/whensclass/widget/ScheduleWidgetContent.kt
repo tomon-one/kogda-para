@@ -34,7 +34,6 @@ import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import ru.whensclass.R
 import ru.whensclass.data.ScheduleDto
-import ru.whensclass.data.UnreadDay
 import ru.whensclass.data.sheetLink
 import ru.whensclass.ui.MainActivity
 
@@ -94,8 +93,10 @@ fun ScheduleWidgetContent(
             serverBroken,
             gone,
             unsupported,
-            // Пары дня прежние: сервер его не прочитал.
-            schedule?.days?.firstOrNull { it.date == day.toString() }?.unread == UnreadDay.KEPT,
+            // Пары дня прежние или неполные: сервер его не прочитал. Пустой
+            // такой день говорит это строкой ниже.
+            schedule?.days?.firstOrNull { it.date == day.toString() }
+                ?.let { it.unread != null && it.lessons.isNotEmpty() } == true,
             fit,
             colors,
         )
@@ -180,7 +181,7 @@ private fun Header(
     serverBroken: Boolean,
     gone: Boolean,
     unsupported: Boolean,
-    kept: Boolean,
+    unread: Boolean,
     fit: Fit,
     colors: Palette,
 ) {
@@ -223,7 +224,7 @@ private fun Header(
                         color = colors.text,
                     ),
                 )
-                if (kept) {
+                if (unread) {
                     Text(
                         " · не прочитан",
                         maxLines = 1,

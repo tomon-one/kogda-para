@@ -129,6 +129,21 @@ internal fun windowRange(lessons: List<LessonDto>, start: Int, fits: Int): IntRa
     return if (from < to) from until to else start until end
 }
 
+/**
+ * Сколько номеров спрятано над окном и под ним: сверху — прожитое, снизу —
+ * предстоящее. Номер, видный целиком, не считается; разрезанный (в окно
+ * влезла одна пара номера из двух) — считается: вторая половина пропала бы
+ * без слова.
+ */
+internal fun hiddenNumbers(lessons: List<LessonDto>, window: IntRange): Pair<Int, Int> {
+    val shown = lessons.subList(window.first, window.last + 1)
+    val whole = shown.map { it.number }.filter { n ->
+        lessons.count { it.number == n } == shown.count { it.number == n }
+    }.toSet()
+    return numbers(lessons.subList(0, window.first).filter { it.number !in whole }) to
+        numbers(lessons.subList(window.last + 1, lessons.size).filter { it.number !in whole })
+}
+
 
 /**
  * Надпись вместо пар. [open] — нажатие открывает приложение, а не обновляет:

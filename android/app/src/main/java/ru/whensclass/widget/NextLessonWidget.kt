@@ -361,10 +361,17 @@ internal fun nextLessonHead(
 /** Три строки маленького виджета — в sp, без отступов. */
 private const val TIGHT_HEIGHT_SP = 52
 
-/** Места всех пар номера без вида: «каб. 55/1 / каб. 467». */
+/**
+ * Места всех пар номера без вида: «каб. 55/1 / каб. 467». Отменённая
+ * половинка с тем же названием, что у оставшейся, — с преподавателем: иначе
+ * не понять, чью сняли.
+ */
 internal fun places(next: NextLesson): String =
     next.lessons.joinToString(" / ") { place(it, withKind = false).removeSuffix("  ⧉") } +
-        next.off.joinToString("") { " · отменена: " + it.subject }
+        next.off.joinToString("") { off ->
+            val who = off.teachers.firstOrNull()?.takeIf { next.lessons.any { it.subject == off.subject } }
+            " · отменена: " + off.subject + (who?.let { ", $it" } ?: "")
+        }
 
 private fun place(lesson: LessonDto, withKind: Boolean = true): String = buildString {
     // Замена — первым словом: другой предмет без пометки похож на ошибку виджета.

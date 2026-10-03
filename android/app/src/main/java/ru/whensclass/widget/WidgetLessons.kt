@@ -76,11 +76,7 @@ internal fun Lessons(
 
     val window = windowRange(lessons, start, fits)
     val shown = lessons.subList(window.first, window.last + 1)
-    // Два разных числа: сверху прячется прожитое, снизу — предстоящее. Номер,
-    // который виден хотя бы одной парой, в них не считается.
-    val visible = shown.map { it.number }.toSet()
-    val passed = numbers(lessons.subList(0, window.first).filter { it.number !in visible })
-    val ahead = numbers(lessons.subList(window.last + 1, lessons.size).filter { it.number !in visible })
+    val (passed, ahead) = hiddenNumbers(lessons, window)
 
     Column(modifier = modifier) {
         // Прожитое называем сверху — там, где оно исчезло.

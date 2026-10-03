@@ -112,6 +112,10 @@ class WindowStartTest {
         org.junit.Assert.assertEquals(5 until 6, windowRange(day, 4, 2))
         // Влезает одна строка, а номер из двух — окно как было.
         org.junit.Assert.assertEquals(3 until 4, windowRange(day, 3, 1))
+        // …и вторая половина 4-й — в «ещё»: снизу 4-я и 5-я, сверху 1–3.
+        org.junit.Assert.assertEquals(3 to 2, hiddenNumbers(day, 3 until 4))
+        // Номер, видный целиком, не считается.
+        org.junit.Assert.assertEquals(1 to 2, hiddenNumbers(day, 1 until 3))
     }
 }
 

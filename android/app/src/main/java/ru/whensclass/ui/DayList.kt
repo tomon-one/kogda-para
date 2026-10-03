@@ -183,8 +183,8 @@ internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
 
 /**
  * Пометки дня, который сервер не прочитал (unreadNotes в schedule.js сайта):
- * своего — без имени, у преподавателя — с группами из `ug`, у других
- * выбранных групп — с их именами.
+ * своего — без имени, у преподавателя — с группами из `ug` (и `uk`, где пары
+ * прежние), у других выбранных групп — с их именами.
  */
 internal fun unreadNotes(day: DayDto): List<String> {
     val base = "Сервер не смог прочитать этот день"
@@ -194,6 +194,10 @@ internal fun unreadNotes(day: DayDto): List<String> {
         val with = if (day.unreadGroups.size > 1) "ними" else "ней"
         out += "$base у ${joinNames(day.unreadGroups)}: " +
             if (own == UnreadDay.KEPT) "пары с $with — какими были до этого." else "пар с $with может не хватать."
+        if (own == UnreadDay.MISSING && day.unreadKept.isNotEmpty()) {
+            val kept = if (day.unreadKept.size > 1) "ними" else "ней"
+            out += "$base у ${joinNames(day.unreadKept)}: пары с $kept — какими были до этого."
+        }
     } else if (own != null) {
         out += base + if (own == UnreadDay.KEPT) " в таблице: пары — какими были до этого." else " в таблице."
     }
