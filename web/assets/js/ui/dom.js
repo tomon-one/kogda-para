@@ -110,22 +110,52 @@ function setBackground(hidden) {
 
 // Надпись кнопки — в одну строку (кнопки одной высоты и ширины), а не
 // влезла — мельчает, но не ниже 10 px: многоточие прятало бы смысл («Си… /
-// Тё…»). Как FIT у кнопок приложения (Controls.kt).
-var FIT = '.action, .segment, .primary-button, .text-button';
+// Тё…»). Как FIT у кнопок приложения (Controls.kt). Тесно и в 10 px (текст
+// 200 % на узком экране) — кнопка в две строки, переключатель — столбиком,
+// у вкладки — узкие поля.
+var FIT = '.action, .segment, .primary-button, .text-button, .tab-label';
 var FIT_MIN_PX = 10;
 
 export function fitLabels(container) {
+  var squeezed = container.querySelectorAll('.fit-stack, .fit-tight');
+  for (var j = 0; j < squeezed.length; j++) squeezed[j].classList.remove('fit-stack', 'fit-tight');
   var nodes = container.querySelectorAll(FIT);
   for (var i = 0; i < nodes.length; i++) {
-    var el = nodes[i];
-    el.style.fontSize = '';
-    if (el.scrollWidth <= el.clientWidth) continue;
-    var size = parseFloat(window.getComputedStyle(el).fontSize);
-    while (size > FIT_MIN_PX && el.scrollWidth > el.clientWidth) {
-      size -= 1;
-      el.style.fontSize = size + 'px';
-    }
+    nodes[i].style.fontSize = '';
+    nodes[i].classList.remove('fit-wrap');
   }
+  for (i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    if (shrink(el)) continue;
+    var row = el.classList.contains('segment') ? el.parentNode : null;
+    if (row && !row.classList.contains('fit-stack')) {
+      // Столбиком сегменты шире ряда — подогнать заново весь ряд.
+      row.classList.add('fit-stack');
+      var segments = row.querySelectorAll('.segment');
+      for (var k = 0; k < segments.length; k++) {
+        segments[k].style.fontSize = '';
+        shrink(segments[k]);
+      }
+      continue;
+    }
+    var tab = el.classList.contains('tab-label') ? el.parentNode : null;
+    if (tab) {
+      tab.classList.add('fit-tight');
+      if (shrink(el)) continue;
+    }
+    el.classList.add('fit-wrap');
+  }
+}
+
+/** Мельчит надпись до FIT_MIN_PX; true — влезла. */
+function shrink(el) {
+  if (el.scrollWidth <= el.clientWidth) return true;
+  var size = parseFloat(window.getComputedStyle(el).fontSize);
+  while (size > FIT_MIN_PX && el.scrollWidth > el.clientWidth) {
+    size -= 1;
+    el.style.fontSize = size + 'px';
+  }
+  return el.scrollWidth <= el.clientWidth;
 }
 
 export function closeDialog() {

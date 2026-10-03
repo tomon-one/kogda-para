@@ -262,6 +262,10 @@
 
 .segment.on { background: var(--selected-bg); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary); }
 
+/* Переключателю тесно и в 10 px (fitLabels) — столбиком. */
+.segmented.fit-stack { flex-direction: column; height: auto; }
+.segmented.fit-stack .segment { flex: none; width: 100%; }
+
 .signature { margin-top: 12px; font-size: 13px; color: var(--muted); }
 
 /* ——— приветствие ——— */

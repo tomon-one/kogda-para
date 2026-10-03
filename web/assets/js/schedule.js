@@ -254,8 +254,9 @@ export function freeDay(day, teacher, nextFree, now) {
 
 /**
  * Пометки дня, который служба не прочитала (unreadNotes в DayList.kt):
- * своего — без имени, у преподавателя — с группами из `ug`, у других
- * выбранных групп — с их именами. `kept` — пары прежние, `missing` — их нет.
+ * своего — без имени, у преподавателя — с группами из `ug` (и `uk`, где пары
+ * прежние), у других выбранных групп — с их именами. `kept` — пары прежние,
+ * `missing` — их нет.
  */
 export function unreadNotes(day) {
   var out = [];
@@ -265,6 +266,10 @@ export function unreadNotes(day) {
     out.push(base + ' у ' + joinNames(day.ug) + ': ' + (day.un === 'kept'
       ? 'пары с ' + (many ? 'ними' : 'ней') + ' — какими были до этого.'
       : 'пар с ' + (many ? 'ними' : 'ней') + ' может не хватать.'));
+    if (day.un === 'missing' && day.uk && day.uk.length) {
+      out.push(base + ' у ' + joinNames(day.uk) + ': пары с ' + (day.uk.length > 1 ? 'ними' : 'ней')
+        + ' — какими были до этого.');
+    }
   } else if (day.un) {
     out.push(base + (day.un === 'kept' ? ' в таблице: пары — какими были до этого.' : ' в таблице.'));
   }
@@ -338,6 +343,8 @@ export function cleanSchedule(body) {
       clean.un = day.un;
       var ug = Array.isArray(day.ug) ? day.ug.filter(function (g) { return typeof g === 'string'; }) : [];
       if (ug.length) clean.ug = ug;
+      var uk = Array.isArray(day.uk) ? day.uk.filter(function (g) { return typeof g === 'string'; }) : [];
+      if (uk.length) clean.uk = uk;
     }
     (Array.isArray(day.l) ? day.l : []).forEach(function (l) {
       if (!l || typeof l.n !== 'number') return;

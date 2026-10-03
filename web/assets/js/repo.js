@@ -72,8 +72,10 @@ function dropSchedule() {
   store.remove('fetchedAt');
 }
 
+// Ответ своего или новый выбор: и пропажи нет, и подсказки уведомления о ней.
 function clearGone() {
   store.remove('gone');
+  store.remove('goneHint');
 }
 
 /** Студент выбрал группу — это и значит, что он студент. */
@@ -251,7 +253,8 @@ function noteUnreachable(now) {
 /**
  * Пришло уведомление «выберите заново»: служба уже ждала свой час, и
  * следующее 404 своего — подтверждённое, без второго часа. Подсказка живёт
- * сутки: вернулась группа — не повод сразу верить будущему 404.
+ * сутки и снимается первым же ответом своего и новым выбором: вернулась
+ * группа — не повод сразу верить будущему 404.
  */
 export function expectGone() {
   store.set('goneHint', Date.now());
@@ -363,6 +366,11 @@ var FORMAT = 2;
 function migrateFormat() {
   if (store.get('format') === FORMAT) return;
   store.remove('gen');
+  // Снимки остальных групп — того же прежнего формата. Без gen их приносят
+  // заново, пока не дойдут (extrasMissing), а до тех пор они на экране как были.
+  var schedules = store.get('extraSchedules') || {};
+  Object.keys(schedules).forEach(function (id) { delete schedules[id].gen; });
+  store.set('extraSchedules', schedules);
   store.set('format', FORMAT);
 }
 

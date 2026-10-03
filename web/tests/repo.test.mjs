@@ -115,6 +115,27 @@ test('по уведомлению «выберите заново» пропаж
   assert.equal((await repo.refresh(true)).kind, 'failed');
 });
 
+test('подсказка уведомления снимается ответом своего и новым выбором', async () => {
+  reset();
+  server = healthy('G1', [['/v1/schedule/isp-1?', [200, schedule('isp-1', 'ИСП-1', 'G1')]]]);
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  repo.expectGone();
+  // Опечатку исправили, пока уведомление висело: группа ответила.
+  assert.equal((await repo.refresh(true)).kind, 'updated');
+  // Новая короткая пропажа через пять часов — снова час ожидания.
+  clock += 5 * HOUR;
+  server = healthy('G1', []);
+  assert.equal((await repo.refresh(true)).kind, 'failed');
+  assert.equal(repo.gone(), false);
+  // Нажали, но выбрали заново ещё до запроса — новой группе подсказка не достаётся.
+  reset();
+  server = healthy('G1', []);
+  repo.selectGroup({ id: 'old', name: 'Старая' });
+  repo.expectGone();
+  repo.selectGroup({ id: 'new', name: 'Новая' });
+  assert.equal((await repo.refresh(true)).kind, 'failed');
+});
+
 test('сервер молчит — сбой через полчаса цепочки', async () => {
   reset();
   server = () => 'down';
@@ -516,4 +537,28 @@ test('расписание, сохранённое прежней версией
   requests = [];
   await repo.refresh(false);
   assert.ok(!requests.some((url) => url.startsWith('/v1/schedule')));
+});
+
+test('другая группа, не ответившая при переводе формата, приносится следующим заходом', async () => {
+  reset();
+  store.remove('format');
+  let theirs = 'down';
+  server = (url) => {
+    if (url === '/v1/meta') return [200, { gen: 'G1', status: 'ok' }];
+    if (url.startsWith('/v1/schedule/isp-1?')) return [200, schedule('isp-1', 'ИСП-1', 'G1')];
+    return theirs;
+  };
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  theirs = [200, schedule('isp-2', 'ИСП-2', 'G1')];
+  repo.addExtras([{ id: 'isp-2', name: 'ИСП-2' }]);
+  await repo.refresh(false);
+  // Как оставила прежняя версия: оба снимка с тем же gen, отметки формата нет.
+  store.remove('format');
+  theirs = 'down';
+  await repo.refresh(false);
+  theirs = [200, schedule('isp-2', 'ИСП-2', 'G1', { days: [{ d: '2026-09-28', l: [], un: 'missing' }] })];
+  requests = [];
+  await repo.refresh(false);
+  assert.ok(requests.some((url) => url.startsWith('/v1/schedule/isp-2?')));
+  assert.equal(store.get('extraSchedules')['isp-2'].days[0].un, 'missing');
 });
