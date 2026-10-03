@@ -248,6 +248,9 @@ p a, .point a { text-decoration: underline; }
   position: relative;
 }
 
+/* Подписи тесно и в 10 px (fitLabels) — поля вкладки уже. */
+.tab.fit-tight { padding-left: 0; padding-right: 0; }
+
 /* Многоточие — у подписи, а не у кнопки: полоска под вкладкой переезжает к
    соседней и не должна обрезаться её краем. */
 .tab-label {
@@ -336,6 +339,16 @@ p a, .point a { text-decoration: underline; }
 .card > .action, .setting-actions .action, .plate .action, .explanation .action, .load-failed .action {
   display: block;
   width: 100%;
+}
+
+/* Тесно и в 10 px (fitLabels) — в две строки: смысл важнее ровного ряда. */
+.action.fit-wrap, .primary-button.fit-wrap, .text-button.fit-wrap {
+  height: auto;
+  min-height: 44px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 .text-button {
