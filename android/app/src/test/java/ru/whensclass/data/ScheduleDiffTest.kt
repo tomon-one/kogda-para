@@ -359,6 +359,21 @@ class ScheduleDiffTest {
         // Заменили правую — замена только у неё.
         val math = lesson(4, "Математика", room = "467", teachers = listOf("Сильверхенд Д."), note = "вместо: Иностранный язык")
         assertEquals(listOf("замена 4 пары: Иностранный язык, Уэллс Д. Р. → Математика"), texts(was, schedule(left, math)))
+        // Миллера заменили и перенесли — половинку называет прежний
+        // преподаватель: нового подгруппа ещё не знает.
+        val holm = lesson(4, "Иностранный язык", room = "310", teachers = listOf("Хольм К. К."))
+        assertEquals(
+            listOf(
+                "у 4 пары (Иностранный язык, Миллер Д. Х.) другой преподаватель: Хольм К. К.",
+                "4 пара (Иностранный язык, Миллер Д. Х.) переехала в каб. 310",
+            ),
+            texts(was, schedule(holm, right)),
+        )
+        // Отменили одну — название и преподаватель один раз.
+        assertEquals(
+            listOf("отменили 4 пару: Иностранный язык, Миллер Д. Х."),
+            texts(was, schedule(left.copy(cancelled = 1), right)),
+        )
     }
 
     @Test
@@ -366,6 +381,24 @@ class ScheduleDiffTest {
         val was = schedule(lesson(4, "Немецкий"), lesson(4, "Английский", room = "257"))
         val now = schedule(lesson(4, "Немецкий", room = "55/1"), lesson(4, "Английский", room = "257"))
         assertEquals(listOf("4 пара (Немецкий) переехала в каб. 55/1"), texts(was, now))
+        // «отменили» и «вернули» называют пару и так — второй раз в скобках не нужно.
+        val off = schedule(lesson(4, "Немецкий", cancelled = true), lesson(4, "Английский", room = "257"))
+        assertEquals(listOf("отменили 4 пару: Немецкий"), texts(was, off))
+        assertEquals(listOf("вернули 4 пару: Немецкий"), texts(off, was))
+    }
+
+    @Test
+    fun `у преподавателя день без одной группы — остальные сравниваются`() {
+        fun t(vararg lessons: LessonDto, unread: Boolean = false) = schedule(*lessons, kind = "teacher").let { s ->
+            if (!unread) s else s.copy(days = s.days.map { it.copy(unreadMark = "missing", unreadGroups = listOf("ПХД-923/1")) })
+        }
+        val was = lesson(2, "Физика", room = "101", groups = "ИСП-924/1")
+        val off = lesson(2, "Физика", room = "101", cancelled = true, groups = "ИСП-924/1")
+        val other = lesson(3, "Право", room = "205", groups = "ПХД-923/1")
+        // Её пары — ни «убрали», ни «добавилась»; отмена у другой группы —
+        // и пока пометка висит, и когда день прочитали.
+        assertEquals(listOf("отменили 2 пару (ИСП-924/1): Физика"), texts(t(was, unread = true), t(off, other)))
+        assertEquals(listOf("отменили 2 пару (ИСП-924/1): Физика"), texts(t(was), t(off, unread = true)))
     }
 
     @Test
@@ -385,6 +418,12 @@ class ScheduleDiffTest {
             listOf("отменили 5 пару (ПХД-924/3, ПХД-924/4): Право"),
             texts(t(lesson(5, "Право", cancelled = true, groups = "ПД-1125"), lesson(5, "Право", room = "301", groups = "ПХД-924/3, ПХД-924/4")),
                 t(lesson(5, "Право", cancelled = true, groups = "ПД-1125, ПХД-924/3, ПХД-924/4"))),
+        )
+        // Скобки в имени группы склейке не мешают.
+        assertEquals(
+            listOf("1 пара (СИС(а)-926/1, СИС(а)-926/2) переехала в каб. 255"),
+            texts(t(lesson(1, "Сети", room = "254", groups = "СИС(а)-926/1, СИС(а)-926/2")),
+                t(lesson(1, "Сети", room = "255", groups = "СИС(а)-926/1, СИС(а)-926/2"))),
         )
     }
 
