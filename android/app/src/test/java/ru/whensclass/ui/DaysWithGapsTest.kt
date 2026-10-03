@@ -117,6 +117,15 @@ class DaysWithGapsTest {
             unreadNotes(DayDto(date = "2026-09-08", unreadMark = "kept", unreadGroups = listOf("А-1", "Б-1", "В-1"))))
         assertEquals(listOf("Сервер не смог прочитать этот день у 26 групп: пар с ними может не хватать."),
             unreadNotes(DayDto(date = "2026-09-09", unreadMark = "missing", unreadGroups = List(26) { "Г-$it" })))
+        // Не прочитан у одной группы, у других пары прежние — обе строки.
+        assertEquals(
+            listOf(
+                "Сервер не смог прочитать этот день у Э-1125: пар с ней может не хватать.",
+                "Сервер не смог прочитать этот день у МФ-926/1 и СКД-926: пары с ними — какими были до этого.",
+            ),
+            unreadNotes(DayDto(date = "2026-09-21", unreadMark = "missing", unreadGroups = listOf("Э-1125"),
+                unreadKept = listOf("МФ-926/1", "СКД-926"))),
+        )
         // Другая выбранная группа: свой день без пометки, её — с её именем; за
         // краем своего окна её дни не добавляются.
         val other = ScheduleDto(

@@ -129,5 +129,13 @@ class NextLessonTest {
         val left = nextLesson(off, tuesday.atTime(8, 0))
         assertEquals(listOf("Английский"), left?.lessons?.map { it.subject })
         assertEquals("каб. 467 · отменена: Немецкий", left?.let(::places))
+
+        // Половинки одного названия: какую сняли — по преподавателю.
+        val anderson = LessonDto(number = 2, subject = "Иностранный язык", room = "201",
+            teachers = listOf("Андерсон Т. А."), cancelled = 1)
+        val bergman = LessonDto(number = 2, subject = "Иностранный язык", room = "305",
+            teachers = listOf("Бергман И. И."))
+        val twins = nextLesson(schedule(tuesday to listOf(anderson, bergman)), tuesday.atTime(8, 0))
+        assertEquals("каб. 305 · отменена: Иностранный язык, Андерсон Т. А.", twins?.let(::places))
     }
 }

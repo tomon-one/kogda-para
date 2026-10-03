@@ -142,20 +142,33 @@ private fun MoreLine(date: LocalDate, rest: Int, colors: Palette) {
 @Composable
 private fun DayTitle(day: WeekDay, colors: Palette) {
     val context = LocalContext.current
-    Text(
-        day.title,
-        maxLines = 1,
-        style = TextStyle(
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            // Сегодняшний день выделен цветом.
-            color = if (day.isToday) colors.accent else colors.text,
-        ),
+    Row(
         modifier = GlanceModifier
             .fillMaxWidth()
             .padding(top = 3.dp, bottom = 1.dp)
             .clickable(actionStartActivity(openDay(context, day.date))),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            day.title,
+            maxLines = 1,
+            style = TextStyle(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                // Сегодняшний день выделен цветом.
+                color = if (day.isToday) colors.accent else colors.text,
+            ),
+        )
+        // Пары прежние или неполные: сервер этот день не прочитал. Пустой
+        // такой день говорит это своей строкой.
+        if (day.unread != null && day.lessons.isNotEmpty()) {
+            Text(
+                "  не прочитан",
+                maxLines = 1,
+                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+            )
+        }
+    }
 }
 
 /** День, на пары которого не хватило высоты: сколько их и с какого по какое. */

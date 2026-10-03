@@ -312,7 +312,9 @@ internal fun App(
     val chosenName = if (teacherMode) teacherName else groupName
     val current = when {
         !welcomeSeen -> Screen.WELCOME
-        chosenName == null -> Screen.GROUPS
+        // К обновлению — и без выбора: сборку, которую сервер не обслуживает,
+        // список групп не получит, и выбрать будет нечего.
+        chosenName == null && screen != Screen.SETTINGS -> Screen.GROUPS
         else -> screen
     }
 

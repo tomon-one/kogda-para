@@ -71,6 +71,8 @@ data class DayDto(
     @SerialName("un") val unreadMark: String? = null,
     /** У преподавателя — группы, из-за которых пометка. */
     @SerialName("ug") val unreadGroups: List<String> = emptyList(),
+    /** У преподавателя при «missing» — группы, чьи пары этого дня прежние. */
+    @SerialName("uk") val unreadKept: List<String> = emptyList(),
     /** Только для экрана: другие выбранные группы, чей этот день не прочитан ([combineGroups]). */
     @kotlinx.serialization.Transient val unreadOthers: List<UnreadOther> = emptyList(),
 ) {
