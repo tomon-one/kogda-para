@@ -267,6 +267,7 @@
 .segmented.fit-stack .segment { flex: none; width: 100%; }
 
 .signature { margin-top: 12px; font-size: 13px; color: var(--muted); }
+.signature + .signature { margin-top: 2px; }
 
 /* ——— приветствие ——— */
 
