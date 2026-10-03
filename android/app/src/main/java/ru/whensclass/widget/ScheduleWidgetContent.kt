@@ -224,13 +224,6 @@ private fun Header(
                         color = colors.text,
                     ),
                 )
-                if (unread) {
-                    Text(
-                        " · не прочитан",
-                        maxLines = 1,
-                        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                    )
-                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -242,6 +235,16 @@ private fun Header(
                     // узком виджете они режутся.
                     modifier = GlanceModifier.defaultWeight().clickable(openApp),
                 )
+                // Пометка дня — здесь, а не у даты: рядом со стрелками ей не
+                // хватало места.
+                if (unread) {
+                    Text(
+                        " · не прочитан",
+                        maxLines = 1,
+                        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                        modifier = GlanceModifier.clickable(openApp),
+                    )
+                }
                 // Время последней проверки — служебная мелочь, поэтому тем же
                 // приглушённым цветом; краснеет, только когда данные протухли.
                 Text(
