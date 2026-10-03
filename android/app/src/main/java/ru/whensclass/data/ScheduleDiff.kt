@@ -28,8 +28,10 @@ object ScheduleDiff {
         for (day in fresh.days) {
             val before = oldDays[day.date] ?: continue
             // Непрочитанный день без пар — не «убрали», а «не знаем»;
-            // прочитанный следом — не «добавилась».
-            if (UnreadDay.MISSING in listOf(before.unread, day.unread)) continue
+            // прочитанный следом — не «добавилась». У преподавателя пометка —
+            // о группах из `ug`: пары остальных его групп в этот день
+            // сравниваются как обычно.
+            val unknown = unknownGroups(listOf(before, day), fresh.isTeacher) ?: continue
             val numbers = sortedSetOf<Int>().apply {
                 before.lessons.forEach { add(it.number) }
                 day.lessons.forEach { add(it.number) }
@@ -46,11 +48,24 @@ object ScheduleDiff {
                 // группам, а одинаковые строки потом склеиваем обратно
                 // (_per_group и _merge_groups в push/changes.py).
                 val lines = mutableListOf<Change>()
-                compareNumber(day.date, number, perGroup(was), perGroup(now), fresh, lines)
-                changes += mergeGroups(lines)
+                val wasOf = perGroup(was).filter { it.groups !in unknown }
+                val nowOf = perGroup(now).filter { it.groups !in unknown }
+                compareNumber(day.date, number, wasOf, nowOf, fresh, lines)
+                changes += mergeGroups(lines, (wasOf + nowOf).mapNotNull { it.groups }.toSet())
             }
         }
         return changes
+    }
+
+    /** Группы, чьих пар в этом дне не знаем; null — не знаем весь день. */
+    private fun unknownGroups(days: List<DayDto>, teacher: Boolean): Set<String>? {
+        val out = mutableSetOf<String>()
+        for (day in days) {
+            if (day.unread != UnreadDay.MISSING) continue
+            if (!teacher || day.unreadGroups.isEmpty()) return null
+            out += day.unreadGroups
+        }
+        return out
     }
 
     private fun perGroup(lessons: List<LessonDto>): List<LessonDto> = lessons.flatMap { lesson ->
@@ -58,22 +73,25 @@ object ScheduleDiff {
         if (groups.isEmpty()) listOf(lesson) else groups.map { lesson.copy(groups = it) }
     }
 
-    private val GROUP_TAG = Regex(""" \(([^()]+)\)""")
-
     // Место групп в склеиваемой строке: такого знака в тексте пары не бывает.
     private const val SLOT = "\u0000"
 
-    /** «отменили 5 пару (А)» и «отменили 5 пару (Б)» → «… (А, Б)». */
-    private fun mergeGroups(lines: List<Change>): List<Change> {
+    /**
+     * «отменили 5 пару (А)» и «отменили 5 пару (Б)» → «… (А, Б)». Группу
+     * строки ищем среди групп номера, а не по скобкам: в имени группы бывают
+     * свои — «ФД(1)-926», «СИС(а)-926/1».
+     */
+    private fun mergeGroups(lines: List<Change>, groups: Set<String>): List<Change> {
         val merged = LinkedHashMap<Pair<String, String>, MutableList<String>>()
+        val longestFirst = groups.sortedByDescending { it.length }
         for (line in lines) {
-            val found = GROUP_TAG.find(line.text)
+            val found = longestFirst.firstOrNull { " ($it)" in line.text }
             if (found == null) {
                 merged.getOrPut(line.day to line.text) { mutableListOf() }
                 continue
             }
-            val key = line.text.replaceRange(found.range, " ($SLOT)")
-            merged.getOrPut(line.day to key) { mutableListOf() } += found.groupValues[1]
+            val key = line.text.replaceFirst(" ($found)", " ($SLOT)")
+            merged.getOrPut(line.day to key) { mutableListOf() } += found
         }
         return merged.map { (key, groups) ->
             Change(key.first, if (groups.isEmpty()) key.second else key.second.replace(SLOT, groups.joinToString(", ")))
@@ -240,7 +258,9 @@ object ScheduleDiff {
                 continue
             }
             val previous = unmatched.removeAt(index)
-            val tag = label(lesson)
+            // Половинку называет прежняя запись: нового преподавателя
+            // подгруппа ещё не знает.
+            val tag = label(previous)
             if (fresh.isTeacher) {
                 val added = groups(lesson) - beforeGroups
                 if (added.isNotEmpty()) say("добавилась $number пара (${listed(lesson, added)}): ${lesson.subject}")
@@ -249,10 +269,10 @@ object ScheduleDiff {
             }
             when {
                 !previous.isCancelled && lesson.isCancelled ->
-                    say("отменили $number пару$tag: ${lesson.subject}")
+                    say("отменили $number пару${whose(lesson)}: ${named(previous)}")
 
                 previous.isCancelled && !lesson.isCancelled ->
-                    say("вернули $number пару$tag: ${lesson.subject}")
+                    say("вернули $number пару${whose(lesson)}: ${named(previous)}")
 
                 // Онлайн — состояние пары, а не наличие ссылки: ссылку к
                 // онлайновой паре часто дописывают позже.
