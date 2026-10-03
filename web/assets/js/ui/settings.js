@@ -220,5 +220,6 @@ export function settingsScreen(app) {
         h('p', null, h('button', { type: 'button', class: 'text-link', 'data-key': 'share', onclick: share }, 'Поделиться')),
         h('p', { class: 'muted small' }, 'Версия ' + VERSION + (CHANNEL === 'tested' ? ' tested' : '') + ', сборка ' + build()),
         h('p', { class: 'signature' }, 'Создано Tomon'),
+        h('p', { class: 'signature' }, 'Собрано задолго до рассвета'),
       ])));
 }
