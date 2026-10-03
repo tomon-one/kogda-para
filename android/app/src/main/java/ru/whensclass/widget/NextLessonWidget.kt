@@ -153,10 +153,15 @@ class NextLessonWidget : GlanceAppWidget() {
                     gone -> "нет в таблице · "
                     unsupported -> "обновите приложение · "
                     broken -> "сбой · "
-                    next.unreadOn == next.day -> "не прочитан · "
-                    next.unreadOn != null -> formatDayTitleShort(next.unreadOn).substringBefore(",") +
-                        " не прочитан · "
                     else -> ""
+                }
+                // Непрочитанный день — после времени: в узкой клетке
+                // многоточие съест пометку, а не время пары (она есть и в
+                // «Неделе», «Дне» и приложении).
+                val unread = when {
+                    next.unreadOn == null -> null
+                    next.unreadOn == next.day -> "не прочитан"
+                    else -> formatDayTitleShort(next.unreadOn).substringBefore(",") + " не прочитан"
                 }
                 // В низкой клетке при крупном шрифте три строки не влезают:
                 // тогда место пары переезжает в шапку.
@@ -165,7 +170,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 // Группы всех пар номера: у преподавателя одна пара в двух залах.
                 val groups = next.lessons.mapNotNull { it.groups }.distinct().joinToString(", ").ifEmpty { null }
                 val head = status + nextLessonHead(
-                    time, when_, ongoing, groups,
+                    time, when_, ongoing, groups, unread = unread,
                     // Без «⧉»: нажатие на шапку открывает приложение, а не копирует.
                     place = if (tight) places(next) else null,
                 )
@@ -342,6 +347,7 @@ internal fun nextLessonHead(
     ongoing: Boolean,
     groups: String?,
     place: String? = null,
+    unread: String? = null,
 ): String {
     // [place] — только в тесной клетке, где третьей строки нет: место сразу
     // за временем, «сегодня» не пишется; у идущей пары — «идёт» и место:
@@ -352,10 +358,10 @@ internal fun nextLessonHead(
         } else {
             listOfNotNull(time, place, whenWord.takeUnless { it == "сегодня" })
         }
-        return (parts + listOfNotNull(groups)).joinToString(" · ")
+        return (parts + listOfNotNull(unread, groups)).joinToString(" · ")
     }
     val core = if (ongoing) "$whenWord · $time" else "$time · $whenWord"
-    return listOfNotNull(core, groups).joinToString(" · ")
+    return listOfNotNull(core, unread, groups).joinToString(" · ")
 }
 
 /** Три строки маленького виджета — в sp, без отступов. */

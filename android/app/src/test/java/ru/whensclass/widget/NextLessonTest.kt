@@ -97,6 +97,9 @@ class NextLessonTest {
         assertEquals("14:20 · пн, 28 сентября", nextLessonHead("14:20", "пн, 28 сентября", false, null))
         assertEquals("идёт сейчас · 14:20", nextLessonHead("14:20", "идёт сейчас", true, null))
         assertEquals("09:00 · завтра · ИСП-924/2", nextLessonHead("09:00", "завтра", false, "ИСП-924/2"))
+        // Непрочитанный день — после времени: многоточие съест пометку, а не время.
+        assertEquals("09:00 · пн, 5 октября · сегодня не прочитан",
+            nextLessonHead("09:00", "пн, 5 октября", false, null, unread = "сегодня не прочитан"))
     }
 
     @Test
