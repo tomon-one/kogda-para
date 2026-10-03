@@ -286,6 +286,29 @@ def test_teacher_without_lessons_now_still_gets_changes(tmp_path, snapshots):
     assert new is not None and all(not d["l"] for d in new["days"])
 
 
+def test_teacher_subscription_follows_a_corrected_spelling(tmp_path, snapshots):
+    """Колледж исправил опечатку в имени в том же обновлении, где отменил
+    пару: подписка по прежнему id получает отмену, хотя ответ пришёл под
+    другим id."""
+    before, bt, after, at, day, first = snapshots
+    name = first.teachers[0]
+    fixed = name[:-1] + ("а" if name[-1] != "а" else "о")
+    for by_date in after.schedule.values():
+        for d, lessons in by_date.items():
+            by_date[d] = [dataclasses.replace(x, teachers=tuple(fixed if t == name else t for t in x.teachers))
+                          for x in lessons]
+    from whensclass.domain.teachers import build_index
+
+    tid = next(t for t, n in bt.names.items() if n == name)
+    push = Recorder(tmp_path, _vapid())
+    push.known_teacher = {tid: name}.get
+    push.subscribe(subscription.parse_subscription(_body(kind="teacher", id=tid)), day)
+    push.sent.clear()
+    push.after_refresh(before, bt, after, build_index(after), day)
+    assert [j.message["notification"]["data"]["t"] for j in push.sent] == ["changes"]
+    assert f"отменили {first.number} пару" in push.sent[0].message["notification"]["body"]
+
+
 def test_shift_of_two_neighbours_is_not_sent_to_them(tmp_path, snapshots, monkeypatch):
     """Сдвиг у двух соседних групп отказом не ловится (порог — три): им —
     ничего, а не уведомление с парами соседа, владельцу — тревога; остальным

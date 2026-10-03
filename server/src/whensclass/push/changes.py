@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import re
 import urllib.parse
 
 from ..service.bells import BELLS
@@ -157,9 +156,13 @@ def compare(old: dict | None, fresh: dict, same: bool = False) -> list[tuple[str
     changes: list[tuple[str, str]] = []
     for day in fresh.get("days", []):
         before = old_days.get(day["d"])
+        if before is None:
+            continue
         # Непрочитанный день без пар — не «убрали», а «не знаем»; прочитанный
-        # следом — не «добавилась».
-        if before is None or "missing" in (before.get("un"), day.get("un")):
+        # следом — не «добавилась». У преподавателя пометка — о группах из
+        # `ug`: пары остальных его групп в этот день сравниваются как обычно.
+        unknown = _unknown_groups([before, day], teacher)
+        if unknown is None:
             continue
         numbers = sorted({x["n"] for x in before["l"]} | {x["n"] for x in day["l"]})
         for number in numbers:
@@ -172,9 +175,23 @@ def compare(old: dict | None, fresh: dict, same: bool = False) -> list[tuple[str
             # её убрали, отменили, перевели в онлайн. Сравниваем по группам, а
             # одинаковые строки потом склеиваем обратно.
             lines: list[tuple[str, str]] = []
-            _compare_number(day["d"], number, _per_group(was), _per_group(now), teacher, name, lines)
-            changes.extend(_merge_groups(lines))
+            was = [x for x in _per_group(was) if x.get("gr") not in unknown]
+            now = [x for x in _per_group(now) if x.get("gr") not in unknown]
+            _compare_number(day["d"], number, was, now, teacher, name, lines)
+            changes.extend(_merge_groups(lines, {x["gr"] for x in was + now if x.get("gr")}))
     return changes
+
+
+def _unknown_groups(days: list[dict], teacher: bool) -> set[str] | None:
+    """Группы, чьих пар в этом дне не знаем; None — не знаем весь день."""
+    out: set[str] = set()
+    for day in days:
+        if day.get("un") != "missing":
+            continue
+        if not teacher or not day.get("ug"):
+            return None
+        out |= set(day["ug"])
+    return out
 
 
 def _per_group(lessons: list[dict]) -> list[dict]:
@@ -185,21 +202,25 @@ def _per_group(lessons: list[dict]) -> list[dict]:
     return out
 
 
-_GROUP_TAG = re.compile(r" \(([^()]+)\)")
 # Место групп в склеиваемой строке: такого знака в тексте пары не бывает.
 _SLOT = "\x00"
 
 
-def _merge_groups(lines: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """«отменили 5 пару (А)» и «отменили 5 пару (Б)» → «… (А, Б)»."""
+def _merge_groups(lines: list[tuple[str, str]], groups: set[str]) -> list[tuple[str, str]]:
+    """«отменили 5 пару (А)» и «отменили 5 пару (Б)» → «… (А, Б)».
+
+    Группу строки ищем среди групп номера, а не по скобкам: в имени группы
+    бывают свои — «ФД(1)-926», «СИС(а)-926/1».
+    """
     merged: dict[tuple[str, str], list[str]] = {}
+    longest_first = sorted(groups, key=len, reverse=True)
     for day, text in lines:
-        found = _GROUP_TAG.search(text)
+        found = next((g for g in longest_first if f" ({g})" in text), None)
         if found is None:
             merged.setdefault((day, text), [])
             continue
-        key = (day, text[:found.start()] + " (" + _SLOT + ")" + text[found.end():])
-        merged.setdefault(key, []).append(found.group(1))
+        key = (day, text.replace(f" ({found})", f" ({_SLOT})", 1))
+        merged.setdefault(key, []).append(found)
     return [(day, text.replace(_SLOT, ", ".join(groups)) if groups else text)
             for (day, text), groups in merged.items()]
 
@@ -328,7 +349,9 @@ def _compare_number(
             continue
 
         previous = unmatched.pop(index)
-        label = tag(lesson)
+        # Половинку называет прежняя запись: нового преподавателя подгруппа
+        # ещё не знает.
+        label = tag(previous)
         if teacher:
             added = groups_of(lesson) - before_groups
             if added:
@@ -338,9 +361,9 @@ def _compare_number(
                 say(f"убрали {number} пару ({listed(previous, left)}): {previous['s']}")
         teachers = lesson.get("t") or []
         if not _cancelled(previous) and _cancelled(lesson):
-            say(f"отменили {number} пару{label}: {lesson['s']}")
+            say(f"отменили {number} пару{whose(lesson)}: {named(previous)}")
         elif _cancelled(previous) and not _cancelled(lesson):
-            say(f"вернули {number} пару{label}: {lesson['s']}")
+            say(f"вернули {number} пару{whose(lesson)}: {named(previous)}")
         elif not _online(previous) and _online(lesson):
             say(f"{number} пара{label} стала онлайн")
         elif _online(previous) and not _online(lesson):
