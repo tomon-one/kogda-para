@@ -26,6 +26,7 @@ from ..sources import gsheets, sheet_index
 from ..sources.sheet_memory import SheetIndex
 from ..storage import history
 from . import alerts
+from .bells import own_bells
 from .clock import _today
 from .failing import CRASHES_TO_ALERT, Failing
 from .gates import _check_days_emptied, _check_group_drop, _check_lost_names, _check_today_kept
@@ -297,6 +298,7 @@ class Refresher(Failing, SheetWatch):
             self.status = "ok"
             self._recovered()
             self._tell_unread(old, snapshot)
+            self._tell_bells(old, snapshot)
             self._announce(before, snapshot, teachers, today)
             return True
         if self._disk_alerted:
@@ -312,6 +314,7 @@ class Refresher(Failing, SheetWatch):
         self.status = "ok"
         self._recovered()
         self._tell_unread(old, snapshot)
+        self._tell_bells(old, snapshot)
         self._announce(before, snapshot, teachers, today)
         if self._next_rejected:
             name, exc = self._next_rejected
@@ -351,6 +354,27 @@ class Refresher(Failing, SheetWatch):
         elif was:
             alerts.forget("unread")
             alerts.notify("unread-ok", "Все дни листа снова прочитаны.", force=True, good=True)
+
+    def _tell_bells(self, old, snapshot) -> None:
+        """День со своими звонками — владельцу, когда такой появился или изменился."""
+        def own(snap) -> dict:
+            return {
+                day: grid for day in (snap.bells if snap else {})
+                if (grid := own_bells(snap, day))
+            }
+
+        was, now = own(old), own(snapshot)
+        fresh = sorted(day for day, grid in now.items() if was.get(day) != grid)
+        if fresh:
+            day = fresh[0]
+            spans = ", ".join(f"{n} — {a}–{b}" for n, (a, b) in sorted(now[day].items()))
+            more = f" и ещё {len(fresh) - 1} дн." if len(fresh) > 1 else ""
+            alerts.notify(
+                "bells",
+                f"В листе у {day:%d.%m} свои звонки: {spans}{more}. Отдаются у этого дня "
+                "вместо обычных.",
+                force=True, quiet=True,
+            )
 
     def _announce(self, before, snapshot, teachers, today: dt.date) -> None:
         """Сказать подписчикам об изменениях; их поломка — не поломка обновления."""

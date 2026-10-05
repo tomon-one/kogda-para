@@ -11,7 +11,8 @@ import {
   shiftColumn, shortenName, tileLabel,
 } from '../assets/js/format.js';
 import {
-  cleanSchedule, combineGroups, currentLessonNumber, dayIndex, daysWithGaps, freeDay, freeOwnDay, lessonTime, ownOnly,
+  bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daysWithGaps, freeDay, freeOwnDay,
+  lessonTime, ownOnly,
   shortLabels, subgroupsOf, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
 import { letterOf, lettered, matchesQuery } from '../assets/js/search.js';
@@ -289,4 +290,32 @@ test('плитки выбора минут — как в приложении (t
     ['10', 'мин'], ['15', 'мин'], ['20', 'мин'], ['30', 'мин'], ['45', 'мин'],
     ['1', 'час'], ['1,5', 'часа'], ['2', 'часа'], ['3', 'часа'], ['4', 'часа'],
   ]);
+});
+
+test('свои звонки дня заменяют обычные, и только у этого дня', () => {
+  const short = { 1: ['09:00', '10:00'], 2: ['10:10', '11:10'] };
+  const body = cleanSchedule({
+    g: 'a', gn: 'А', bells: { 1: ['09:00', '10:30'], 2: ['10:40', '12:10'], 3: ['12:30', '14:00'] },
+    days: [
+      { d: '2026-10-05', l: [{ n: 1, s: 'Физика' }], bl: { ...short, 3: 'мусор', 4: ['12:40', 7] } },
+      { d: '2026-10-06', l: [{ n: 1, s: 'Физика' }], bl: 'мусор' },
+    ],
+  });
+  assert.deepEqual(body.days[0].bl, { ...short, 4: ['12:40'] });
+  assert.equal('bl' in body.days[1], false);
+  assert.equal(lessonTime(dayBells(body, body.days[0]), 2), '10:10–11:10');
+  // Свои — целиком: пары, которой в них нет, во времени дня нет.
+  assert.equal(lessonTime(dayBells(body, body.days[0]), 3), null);
+  assert.equal(lessonTime(dayBells(body, body.days[1]), 2), '10:40–12:10');
+  const at = (h, m) => ({ date: '2026-10-05', sec: h * 3600 + m * 60 });
+  assert.equal(currentLessonNumber(bellsOn(body, '2026-10-05'), '2026-10-05', at(10, 20)), 2);
+  assert.equal(currentLessonNumber(body.bells, '2026-10-05', at(10, 20)), 1);
+  assert.deepEqual(bellsOn(body, '2026-10-07'), body.bells);
+  assert.deepEqual(bellsOn(null, '2026-10-07'), {});
+
+  // День, которого у своей группы нет, приходит от другой — со своими звонками.
+  const mine = { g: 'a', gn: 'А', bells: body.bells, days: [{ d: '2026-10-03', l: [] }, { d: '2026-10-06', l: [] }] };
+  const merged = combineGroups(mine, [['Б', body]]);
+  assert.deepEqual(merged.days.map((d) => [d.d, !!d.bl]),
+    [['2026-10-03', false], ['2026-10-05', true], ['2026-10-06', false]]);
 });

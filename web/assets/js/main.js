@@ -8,7 +8,7 @@ import * as store from './store.js';
 import * as push from './push.js';
 import { fitLabels, snackbar } from './ui/dom.js';
 import { collegeNow, parseIso } from './time.js';
-import { currentLessonNumber, parseTime } from './schedule.js';
+import { bellsOn, currentLessonNumber, parseTime } from './schedule.js';
 import { showReport } from './ui/report.js';
 import { state, app } from './state.js';
 import { render, focusKey } from './render.js';
@@ -192,7 +192,7 @@ function clockKey() {
 function clockKeyOf() {
   var now = collegeNow();
   var schedule = repo.saved();
-  var bells = (schedule && schedule.bells) || (state.other && state.other.schedule && state.other.schedule.bells) || {};
+  var bells = bellsOn(schedule || (state.other && state.other.schedule), now.date);
   var passed = 0;
   Object.keys(bells).forEach(function (n) {
     (bells[n] || []).forEach(function (t) {

@@ -135,7 +135,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     return@Column
                 }
 
-                val bells = schedule?.bells.orEmpty()
+                val bells = schedule?.bellsOn(next.day).orEmpty()
                 val ongoing = next.day == today && currentLessonNumber(bells, today, now) == lesson.number
                 val time = lessonStart(bells, lesson.number) ?: "${lesson.number} пара"
                 // Про завтрашнюю пару тоже говорим: «пар больше нет» легко
@@ -266,8 +266,8 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
 }
 
 private fun findNext(schedule: ScheduleDto, now: LocalDateTime): NextLesson? {
-    val bells = schedule.bells
     val today = now.toLocalDate()
+    val bells = schedule.bellsOn(today)
     // Только свои и не отменённые: иначе ближайшей оказалась бы отменённая
     // пара или пара соседней подгруппы. У преподавателя свои все.
     fun mine(lesson: LessonDto) = !lesson.isCancelled && !schedule.isNeighbours(lesson)

@@ -74,10 +74,12 @@ object LessonAlarms {
         val subjects = key.substringAfter('|').split(KEY_SEPARATOR).toSet()
         val date = start.take(10)
         val time = start.drop(11).take(5)
-        return schedule.days.firstOrNull { it.date == date }?.lessons?.any { lesson ->
+        val day = schedule.days.firstOrNull { it.date == date } ?: return false
+        val bells = schedule.bellsOf(day)
+        return day.lessons.any { lesson ->
             !lesson.isCancelled && lesson.subject in subjects &&
-                schedule.bells[lesson.number.toString()]?.getOrNull(0) == time
-        } == true
+                bells[lesson.number.toString()]?.getOrNull(0) == time
+        }
     }
 
     /** Что и когда напомнить. Вынесено отдельно, чтобы можно было проверить. */
@@ -96,7 +98,7 @@ object LessonAlarms {
             // из них его, приложение не знает, и напоминание называет обе.
             for ((_, same) in own.groupBy { it.number }.toSortedMap()) {
                 val lesson = same.first()
-                val bells = schedule.bells[lesson.number.toString()]
+                val bells = schedule.bellsOf(day)[lesson.number.toString()]
                 val start = bells?.getOrNull(0)
                     ?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: continue
                 val fireAt = LocalDateTime.of(date, start).minusMinutes(minutes.toLong())

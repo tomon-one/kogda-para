@@ -118,6 +118,9 @@ class Snapshot:
     # Почему не прочитаны — словами для владельца; и с какого момента.
     unread_why: list[str] = field(default_factory=list)
     unread_since: datetime | None = None
+    # Звонки дня, как они стоят в листе: дата -> номер пары -> начало и конец.
+    # Дня нет — время в листе не прочиталось или снимок записан до появления поля.
+    bells: dict[date, dict[str, list[str]]] = field(default_factory=dict)
 
     def column_of(
         self, group: GroupRef, day: date | None = None, gid: str | None = None
@@ -164,6 +167,7 @@ class Snapshot:
         combined.unread_why = self.unread_why + other.unread_why
         combined.dates = sorted(set(self.dates) | set(other.dates))
         combined.places = {**other.places, **self.places}
+        combined.bells = {**other.bells, **self.bells}
         combined.sheet_columns = {**other.sheet_columns, **self.sheet_columns}
         return combined
 

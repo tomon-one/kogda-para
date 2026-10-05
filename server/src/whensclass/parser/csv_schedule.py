@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 _LOOKS_LIKE_DATE = re.compile(r"\d{1,2}\s*[.,/-]\s*\d{1,2}")
 _LESSON_NO_RE = re.compile(r"^([1-9])$")
 # Строка под парой несёт время звонка в колонке номера: «9-00-10.30».
-_TIME_RE = re.compile(r"^\d{1,2}[.:-]\d{2}\s*[-–]\s*\d{1,2}[.:-]\d{2}$")
+_TIME_RE = re.compile(r"^(\d{1,2})[.:-](\d{2})\s*[-–]\s*(\d{1,2})[.:-](\d{2})$")
 # Сдвиг не на целый блок («вставить 1–3 ячейки»): колонки +1 и +2 блока,
 # всегда пустые, получают текст. Сдвиг строки задевает каждый блок правее
 # вставки — у сдвига хоть на один день таких ячеек от 70. Текст в одном-двух
@@ -134,6 +134,8 @@ def parse_sheet(
     # День без даты: (какой день по соседям, где начался, что в ячейке даты).
     dateless: tuple[date, str, str] | None = None
     unread_days: list[tuple[date, str, str]] = []
+    # Время звонков, как оно стоит в листе: день -> номер пары -> ячейки.
+    times: dict[date, dict[int, list[str]]] = {}
 
     for i, row in enumerate(rows):
         if i in skip:
@@ -187,6 +189,10 @@ def parse_sheet(
                 raise SourceFormatChanged(
                     f"в колонке номеров пар в {where(i)} стоит {number_cell!r}"
                 )
+            if number_cell and current is not None and numbers_by_date.get(current):
+                times.setdefault(current, {}).setdefault(
+                    numbers_by_date[current][-1], []
+                ).append(number_cell)
             continue
         if current is None:
             raise SourceFormatChanged(f"пара в {where(i)} раньше первой даты")
@@ -262,9 +268,58 @@ def parse_sheet(
     _cut_far_skeleton(snapshot, far, seen_dates, limits, around)
 
     snapshot.dates = sorted(seen_dates)
+    for day in snapshot.dates:
+        if grid := _day_bells(day, numbers_by_date.get(day, []), times.get(day, {})):
+            snapshot.bells[day] = grid
     snapshot.unnamed = {col: n for col, n in unnamed.items() if n}
     _validate(snapshot, date_order, limits, date_where)
     return snapshot
+
+
+def _day_bells(
+    day: date, numbers: list[int], cells: dict[int, list[str]]
+) -> dict[str, list[str]] | None:
+    """Звонки дня из листа: номер пары -> начало и конец. None — им верить нельзя.
+
+    Верим только целой сетке: время есть у каждой пары дня, пары идут одна за
+    другой и не накладываются. Иначе день остаётся на обычной сетке: половина
+    дня по одной сетке и половина по другой — время, которого нет нигде.
+    """
+    grid: dict[str, list[str]] = {}
+    last_end = -1
+    for number in numbers:
+        spans = {_span(cell) for cell in cells.get(number, [])}
+        if len(spans) != 1 or None in spans:
+            if cells:
+                _warn_once(
+                    ("звонки", day, number),
+                    "время %d-й пары %s в листе не читается (%s) — у дня обычные звонки",
+                    number, f"{day:%d.%m.%Y}", cells.get(number), logger=log,
+                )
+            return None
+        start, end = spans.pop()
+        if start < last_end:
+            _warn_once(
+                ("звонки", day, number),
+                "%d-я пара %s в листе начинается раньше конца предыдущей — у дня "
+                "обычные звонки", number, f"{day:%d.%m.%Y}", logger=log,
+            )
+            return None
+        last_end = end
+        grid[str(number)] = [f"{start // 60:02d}:{start % 60:02d}", f"{end // 60:02d}:{end % 60:02d}"]
+    return grid or None
+
+
+def _span(cell: str) -> tuple[int, int] | None:
+    """«9-00-10.30» -> минуты начала и конца. None — не время суток или конец не позже начала."""
+    m = _TIME_RE.match(cell)
+    if not m:
+        return None
+    h1, m1, h2, m2 = (int(x) for x in m.groups())
+    if h1 > 23 or h2 > 23 or m1 > 59 or m2 > 59:
+        return None
+    start, end = h1 * 60 + m1, h2 * 60 + m2
+    return (start, end) if start < end else None
 
 
 def _school_day_after(day: date) -> date:
