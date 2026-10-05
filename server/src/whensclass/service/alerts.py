@@ -81,7 +81,8 @@ def notify(
         "title": "Когда пара?",
         "message": text,
         "priority": 2 if quiet else 3 if good else 4,
-        "tags": ["white_check_mark"] if good else ["rotating_light"],
+        # Сирена — только беде: сведение с ней выглядит как тревога.
+        "tags": ["white_check_mark"] if good else ["information_source"] if quiet else ["rotating_light"],
     }
     try:
         with httpx.Client(timeout=_TIMEOUT, headers={"User-Agent": settings.user_agent}) as client:
