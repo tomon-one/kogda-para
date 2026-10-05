@@ -130,3 +130,11 @@ def test_network_blip_is_silent_until_half_an_hour(tmp_path, sent, fixture_csv):
     # Починилось без тревоги — и «починилось» не шлём; с тревогой — шлём.
     refresher._recovered()
     assert len(sent.bodies) == 2
+
+
+def test_only_trouble_gets_the_siren(sent):
+    alerts.notify("a", "беда")
+    alerts.notify("b", "сведение", quiet=True)
+    alerts.notify("c", "починилось", good=True)
+    assert [m["tags"] for _, m in sent.bodies] == [["rotating_light"], ["information_source"], ["white_check_mark"]]
+    assert [m["message"].startswith("в нас проблема") for _, m in sent.bodies] == [True, False, False]
