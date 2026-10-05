@@ -29,13 +29,14 @@ import ru.whensclass.widget.WeekWidget
 object MidnightUpdater {
 
     /**
-     * Ближайший момент, когда виджет должен перерисоваться: звонок по сетке из
-     * сохранённого расписания или, без сетки, полночь.
+     * Ближайший момент, когда виджет должен перерисоваться: звонок по сетке
+     * сегодняшнего дня из сохранённого расписания или, без сетки, полночь.
      */
     suspend fun nextMoment(context: Context): LocalDateTime {
         val state = runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()
-        val bells = state?.let { ScheduleWidget.parse(it.scheduleJson)?.bells }.orEmpty()
-        return ru.whensclass.widget.nextTick(bells, ru.whensclass.widget.collegeNow())
+        val now = ru.whensclass.widget.collegeNow()
+        val bells = state?.let { ScheduleWidget.parse(it.scheduleJson)?.bellsOn(now.toLocalDate()) }.orEmpty()
+        return ru.whensclass.widget.nextTick(bells, now)
     }
 
     suspend fun schedule(context: Context) {

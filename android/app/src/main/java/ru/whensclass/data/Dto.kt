@@ -33,6 +33,16 @@ data class ScheduleDto(
     val isTeacher: Boolean get() = kind == "teacher"
 
     /**
+     * Звонки дня: свои, если колледж записал их этому дню в таблице
+     * (сокращённые пары), иначе обычные. Свои заменяют обычные целиком.
+     */
+    fun bellsOf(day: DayDto?): Map<String, List<String>> = day?.ownBells?.takeIf { it.isNotEmpty() } ?: bells
+
+    /** Звонки дня по дате: дня в расписании нет — обычные. */
+    fun bellsOn(date: java.time.LocalDate): Map<String, List<String>> =
+        bellsOf(date.toString().let { iso -> days.firstOrNull { it.date == iso } })
+
+    /**
      * Пара пришла из соседней подгруппы — в снимке сборок до 0.1.4, где
      * склейка хранилась вместе со своими парами. Склейка подписывала своим
      * именем и свою пару, поэтому «есть подпись» ещё не значит «чужая»; у
@@ -61,6 +71,8 @@ data class DayDto(
     @SerialName("l") val lessons: List<LessonDto> = emptyList(),
     /** Строка листа, где стоит дата этого дня, — чтобы ссылка подвела к ней. */
     @SerialName("row") val row: Int? = null,
+    /** Свои звонки дня: номер пары → начало и конец. Пусто — обычные ([ScheduleDto.bellsOf]). */
+    @SerialName("bl") val ownBells: Map<String, List<String>> = emptyMap(),
     /**
      * Дня нет в ответе, а по листу он есть — воскресенье или будень без
      * строки: его вставляет [ru.whensclass.ui.daysWithGaps]. Это «выходной», а

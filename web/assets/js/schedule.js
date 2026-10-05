@@ -96,7 +96,15 @@ export function combineGroups(main, extras) {
       if (first && date >= first && date <= last && !have[date]) added[date] = true;
     });
   });
-  var days = (main.days || []).concat(Object.keys(added).map(function (date) { return { d: date, l: [] }; }))
+  // Свои звонки дня — одни на весь колледж: дню, которого у своей группы нет,
+  // они приходят от другой.
+  var bells = {};
+  extras.forEach(function (pair) {
+    ((pair[1] && pair[1].days) || []).forEach(function (d) { if (d.bl) bells[d.d] = d.bl; });
+  });
+  var days = (main.days || []).concat(Object.keys(added).map(function (date) {
+    return bells[date] ? { d: date, l: [], bl: bells[date] } : { d: date, l: [] };
+  }))
     .sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
   return copy(main, {
     groupNames: [main.gn].concat(extras.map(function (pair) { return pair[0]; })),
@@ -217,6 +225,21 @@ export function currentLessonNumber(bells, day, now) {
   return null;
 }
 
+/**
+ * Звонки дня: свои, если колледж записал их этому дню в таблице (сокращённые
+ * пары), иначе обычные. Свои заменяют обычные целиком.
+ */
+export function dayBells(schedule, day) {
+  return (day && day.bl) || (schedule && schedule.bells) || {};
+}
+
+/** Звонки дня по дате: дня в расписании нет — обычные. */
+export function bellsOn(schedule, date) {
+  var days = (schedule && schedule.days) || [];
+  for (var i = 0; i < days.length; i++) if (days[i].d === date) return dayBells(schedule, days[i]);
+  return dayBells(schedule, null);
+}
+
 /** «09:00–10:30»; одно начало, если конца нет; null — пары нет в сетке. */
 export function lessonTime(bells, number) {
   var range = bells && bells[String(number)];
@@ -316,6 +339,17 @@ function text(value) {
  * после починки службы. Не похоже на расписание вовсе — исключение:
  * обновление не удалось, прежнее остаётся.
  */
+function cleanBells(raw) {
+  var out = {};
+  if (raw && typeof raw === 'object') {
+    Object.keys(raw).forEach(function (n) {
+      var range = raw[n];
+      if (Array.isArray(range)) out[n] = range.filter(function (t) { return typeof t === 'string'; });
+    });
+  }
+  return out;
+}
+
 export function cleanSchedule(body) {
   if (!body || typeof body !== 'object' || typeof body.g !== 'string' || !Array.isArray(body.days)) {
     throw new Error('ответ службы не похож на расписание');
@@ -329,16 +363,13 @@ export function cleanSchedule(body) {
   if (Array.isArray(cov) && cov.length === 2 && typeof cov[0] === 'string' && typeof cov[1] === 'string') {
     out.cov = [cov[0], cov[1]];
   }
-  if (body.bells && typeof body.bells === 'object') {
-    Object.keys(body.bells).forEach(function (n) {
-      var range = body.bells[n];
-      if (Array.isArray(range)) out.bells[n] = range.filter(function (t) { return typeof t === 'string'; });
-    });
-  }
+  out.bells = cleanBells(body.bells);
   body.days.forEach(function (day) {
     if (!day || typeof day.d !== 'string') return;
     var clean = { d: day.d, l: [] };
     if (typeof day.row === 'number') clean.row = day.row;
+    var own = cleanBells(day.bl);
+    if (Object.keys(own).length) clean.bl = own;
     if (day.un === 'kept' || day.un === 'missing') {
       clean.un = day.un;
       var ug = Array.isArray(day.ug) ? day.ug.filter(function (g) { return typeof g === 'string'; }) : [];

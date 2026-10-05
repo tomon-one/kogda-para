@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 from ..config import settings
 from ..domain.models import Lesson, SheetPlace, Snapshot, a1_column
 from ..domain.teachers import TeacherIndex, same_person, spelling_twin
+from ..service.bells import own_bells
 
 API_VERSION = 1
 
@@ -385,6 +386,8 @@ def teacher_payload(
         out_day = {"d": day.isoformat(), "l": lessons}
         if day in placed:
             out_day["row"] = placed[day].row
+        if bells and (own := own_bells(snapshot, day, bells)):
+            out_day["bl"] = own
         if marks and (mark := _teacher_unread(snapshot, index, teacher_id, day)):
             out_day["un"], out_day["ug"], kept = mark
             if kept:
@@ -455,6 +458,8 @@ def schedule_payload(
         }
         if day in placed:
             out_day["row"] = placed[day].row
+        if bells and (own := own_bells(snapshot, day, bells)):
+            out_day["bl"] = own
         if marks and (mark := _unread_mark(snapshot, group_id, day)):
             out_day["un"] = mark
         out_days.append(out_day)

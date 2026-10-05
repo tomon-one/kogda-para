@@ -41,6 +41,7 @@ import kotlinx.coroutines.delay
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.UnreadDay
+import ru.whensclass.widget.collegeToday
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
 
@@ -60,7 +61,7 @@ fun ScheduleDays(
     /** Подписи выбранных групп у пар: названиями или номерами. */
     groupsByName: Boolean = true,
 ) {
-    val now = rememberNow(schedule.bells)
+    val now = rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
     val shift = if (header != null) 1 else 0
 
@@ -131,7 +132,7 @@ fun ScheduleDays(
         header?.let { item(key = "header") { it() } }
         itemsIndexed(days, key = { _, day -> day.date }) { index, day ->
             DayCard(
-                day, schedule.bells, now, teacher = schedule.isTeacher,
+                day, schedule.bellsOf(day), now, teacher = schedule.isTeacher,
                 groups = schedule.groupNames, groupsByName = groupsByName,
                 nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
                 idle = idle,

@@ -134,7 +134,7 @@ fun ScheduleWidgetContent(
             )
             else -> Lessons(
                 today.lessons,
-                schedule.bells,
+                schedule.bellsOf(today),
                 day,
                 now,
                 fit,

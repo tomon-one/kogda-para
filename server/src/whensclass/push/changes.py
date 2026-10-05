@@ -453,7 +453,7 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
         if not same:
             continue
         lesson = same[0]
-        bells = BELLS.get(str(number))
+        bells = (today.get("bl") or BELLS).get(str(number))
         if not bells:
             continue
         start = dt.datetime.combine(day, dt.time.fromisoformat(bells[0]))

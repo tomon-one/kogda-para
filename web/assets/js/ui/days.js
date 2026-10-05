@@ -3,7 +3,7 @@
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
 import { dayTitle, capitalize } from '../time.js';
-import { currentLessonNumber, daysWithGaps, freeDay, freeOwnDay, lessonTime, shortLabels, unreadNotes } from '../schedule.js';
+import { currentLessonNumber, dayBells, daysWithGaps, freeDay, freeOwnDay, lessonTime, shortLabels, unreadNotes } from '../schedule.js';
 import {
   isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
@@ -25,7 +25,7 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
       placed = true;
     }
     var nextFree = freeOwnDay(days[i + 1], schedule.groupNames || []);
-    list.appendChild(dayCard(day, schedule.bells || {}, now, teacher, schedule.groupNames || [], byName !== false, nextFree));
+    list.appendChild(dayCard(day, dayBells(schedule, day), now, teacher, schedule.groupNames || [], byName !== false, nextFree));
   });
   if (before && !placed) {
     if (days.length && beforeDay && days[days.length - 1].d < beforeDay) list.appendChild(before);

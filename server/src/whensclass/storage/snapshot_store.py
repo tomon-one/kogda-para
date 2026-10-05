@@ -154,6 +154,7 @@ def _to_dict(snapshot: Snapshot) -> dict:
         },
         "unread_why": snapshot.unread_why,
         "unread_since": snapshot.unread_since.isoformat() if snapshot.unread_since else None,
+        "bells": {day.isoformat(): grid for day, grid in snapshot.bells.items()},
     }
 
 
@@ -215,4 +216,8 @@ def _from_dict(data: dict) -> Snapshot:
     snapshot.unread_why = list(data.get("unread_why", []))
     if data.get("unread_since"):
         snapshot.unread_since = dt.datetime.fromisoformat(data["unread_since"])
+    snapshot.bells = {
+        dt.date.fromisoformat(day): {str(n): [str(t) for t in span] for n, span in grid.items()}
+        for day, grid in data.get("bells", {}).items()
+    }
     return snapshot

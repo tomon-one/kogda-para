@@ -46,7 +46,9 @@ internal fun Week(
     // Ключ и по дате: через полночь тот же список дней делится на прожитые
     // и предстоящие заново.
     val all = remember(days, today) { weekDays(days, today) }
-    val current = currentLessonNumber(bells, today, now)
+    val current = currentLessonNumber(
+        all.firstOrNull { it.isToday }?.ownBells?.takeIf { it.isNotEmpty() } ?: bells, today, now,
+    )
     val height = LocalSize.current.height
     val scale = fontScale()
     // Даже строки-сводки помещаются не всегда (семь дней, крупный шрифт):
@@ -81,7 +83,7 @@ internal fun Week(
                             LessonLine(
                                 day.date,
                                 it,
-                                bells,
+                                day.ownBells.ifEmpty { bells },
                                 colors,
                                 // Отменённая — не идущая.
                                 isNow = day.isToday && it.number == current && !it.isCancelled,
@@ -92,7 +94,7 @@ internal fun Week(
                     }
                 }
             } else {
-                DaySummary(day, bells, colors)
+                DaySummary(day, day.ownBells.ifEmpty { bells }, colors)
             }
         }
         folded.firstOrNull()?.let { first -> MoreDays(first.date, folded.size, colors) }

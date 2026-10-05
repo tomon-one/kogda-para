@@ -55,6 +55,7 @@ import ru.whensclass.data.GroupDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.ScheduleStore
 import ru.whensclass.data.sheetLink
+import ru.whensclass.widget.collegeToday
 import ru.whensclass.widget.formatFetchedAt
 import ru.whensclass.widget.plural
 
@@ -108,7 +109,7 @@ fun TodayScreen(
     groupsByName: Boolean = true,
 ) {
     // Часы со звонками: «сегодня» и давность сбоя на плашке пересчитываются сами.
-    val now = rememberNow(schedule?.bells.orEmpty())
+    val now = rememberNow(schedule?.bellsOn(collegeToday()).orEmpty())
     val today = now.toLocalDate()
 
     // Преподаватель открывает приложение на своём разделе. Вкладка переживает

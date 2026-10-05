@@ -57,7 +57,12 @@ fun combineGroups(main: ScheduleDto, extras: List<Pair<String, ScheduleDto?>>): 
         .filter { first != null && last != null && it >= first && it <= last }
         .filterNot { date -> main.days.any { it.date == date } }
         .toSortedSet()
-    val days = (main.days + extraDates.map { DayDto(date = it) }).sortedBy { it.date }
+    // Свои звонки дня — одни на весь колледж: дню, которого у своей группы
+    // нет, они приходят от другой.
+    val bells = extras.flatMap { it.second?.days.orEmpty() }
+        .filter { it.ownBells.isNotEmpty() }.associate { it.date to it.ownBells }
+    val days = (main.days + extraDates.map { DayDto(date = it, ownBells = bells[it].orEmpty()) })
+        .sortedBy { it.date }
     return main.copy(
         groupNames = names,
         days = days.map { day ->
