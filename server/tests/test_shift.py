@@ -175,6 +175,24 @@ def test_halved_block_is_two_lessons_not_a_shift(fixture_csv):
     assert halves and halves[0] == [("467", ("Уэллс Д. Р.",)), ("55/1", ("Миллер Д. Х.",))]
 
 
+def test_left_half_alone_is_one_lesson_with_its_room(fixture_csv):
+    """Подгруппа одного языка без второй: название в +0, аудитория в +1."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    lesson_rows = [i for i, r in enumerate(rows) if len(r) > 1 and r[1].strip().isdigit()]
+    for i in lesson_rows[:6]:
+        rows[i][2:6] = ["Иностранный язык, немецкий (Пр)", "55/1", "", ""]
+        rows[i + 1][2:6] = ["Миллер Д. Х.", "", "", ""]
+    snapshot = parse_sheet(rows, "фикстура", FIXTURE)
+    assert snapshot.unread == {}
+    found = [
+        [(l.subject, l.room, l.teachers) for l in lessons if l.number == 1]
+        for by_date in snapshot.schedule.values()
+        for lessons in by_date.values()
+        if any(l.room == "55/1" for l in lessons)
+    ]
+    assert found and found[0] == [("Иностранный язык, немецкий", "55/1", ("Миллер Д. Х.",))]
+
+
 @pytest.mark.parametrize("cells, teacher, halved", [
     # Аудитория справа есть — половинки, даже без ФИО и без левой половины.
     (["Немецкий (Пр)", "55/1", "Английский (Пр)", "467"], ["", "", "", ""], True),
@@ -189,6 +207,16 @@ def test_halved_block_is_two_lessons_not_a_shift(fixture_csv):
     (["Немецкий (Пр)", "", "467", "55"], ["Миллер Д. Х.", "", "", ""], False),
     # В +0 кабинет — колонка предмета съехала.
     (["467", "", "Английский (Пр)", "55"], ["", "", "Уэллс Д. Р.", ""], False),
+    # Одна левая половинка: название и аудитория рядом, справа пусто.
+    (["Немецкий (Пр)", "55/1", "", ""], ["Миллер Д. Х.", "", "", ""], True),
+    (["Немецкий (Пр)", "55/1", "", ""], ["", "", "", ""], True),
+    # Справа под пустым названием ФИО или аудитория — запись незнакомая.
+    (["Немецкий (Пр)", "55/1", "", ""], ["Миллер Д. Х.", "", "Уэллс Д. Р.", ""], False),
+    (["Немецкий (Пр)", "55/1", "", "467"], ["Миллер Д. Х.", "", "", ""], False),
+    # В +1 не аудитория, а название — так выглядит вставка на одну ячейку.
+    (["Спортзал", "Немецкий (Пр)", "", ""], ["", "Миллер Д. Х.", "", ""], False),
+    (["269", "Немецкий (Пр)", "", ""], ["", "Миллер Д. Х.", "", ""], False),
+    (["", "55/1", "", ""], ["", "", "", ""], False),
 ])
 def test_each_condition_of_a_halved_block(cells, teacher, halved):
     from whensclass.parser.csv_schedule import _halves

@@ -345,10 +345,23 @@ def _halves(row: list[str], col: int, teacher_row: list[str]) -> bool:
     и в +3 есть аудитория: вставка на две ячейки оставляет там пусто. Аудитории
     справа ещё может не быть — тогда половинки узнаются по названию слева и
     ФИО под правым: у вставки +0 пуст.
+
+    Половинка бывает и одна: правая (слева пусто) или левая — название в +0,
+    аудитория в +1, справа пусто и в строке преподавателей тоже. У вставки на
+    одну ячейку наоборот: в +0 аудитория соседа, название — в +1.
     """
     left = _cell(row, col).strip()
     right = _cell(row, col + 2).strip()
-    if not right or not _HAS_LETTER.search(right) or _ROOM_RE.match(right) or _ROOM_RE.match(left):
+    if _ROOM_RE.match(left):
+        return False
+    if not right:
+        return bool(
+            _HAS_LETTER.search(left)
+            and _ROOM_RE.match(_cell(row, col + 1).strip())
+            and not _cell(row, col + 3).strip()
+            and not _cell(teacher_row, col + 2).strip()
+        )
+    if not _HAS_LETTER.search(right) or _ROOM_RE.match(right):
         return False
     if _cell(row, col + 3).strip():
         return True
