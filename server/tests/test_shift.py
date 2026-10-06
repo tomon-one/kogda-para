@@ -375,3 +375,29 @@ def test_block_head_survives_a_typo_in_its_words(text, head):
     from whensclass.parser.groups import _block_head
 
     assert _block_head(text) == head
+
+
+def test_bare_practice_on_neighbours_is_not_a_shift(fixture_csv):
+    """«Учебная практика» без преподавателя и аудитории колледж пишет одинаково
+    группам подряд: совпадение с соседом — не сдвиг, ни для отказа, ни для рассылки."""
+    from whensclass.domain.models import Lesson
+    from whensclass.parser.export import parse_csv
+    from whensclass.parser.shift import neighbour_runs
+
+    before = parse_csv(fixture_csv, "ф", FIXTURE)
+    after = parse_csv(fixture_csv, "ф", FIXTURE)
+    day = after.dates[2]
+    groups = [g.id for g in after.groups][:4]
+    for gid in groups:
+        after.schedule[gid][day] = [Lesson(number=1, subject="Учебная практика")]
+        before.schedule[gid][day] = []
+    assert neighbour_runs(after, before, day) == set()
+
+    # Пары с преподавателем и аудиторией, съехавшие на соседа, — по-прежнему сдвиг.
+    def lesson(i):
+        return Lesson(number=1, subject=f"Предмет {i}", teachers=(f"Иванов {i}",), room=str(270 + i))
+
+    for i, gid in enumerate(groups):
+        before.schedule[gid][day] = [lesson(i)]
+        after.schedule[gid][day] = [lesson(i - 1)] if i else []
+    assert set(groups[1:]) <= neighbour_runs(after, before, day)
