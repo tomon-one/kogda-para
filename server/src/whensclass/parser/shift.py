@@ -182,6 +182,15 @@ def _slots(snapshot: Snapshot, gid: str, day: date) -> dict[int, Lesson]:
     return {x.number: x for x in snapshot.schedule.get(gid, {}).get(day, [])}
 
 
+def _telling(lessons: dict[int, Lesson]):
+    """Пары, по которым можно узнать чужую: с преподавателем, аудиторией или ссылкой.
+
+    «Учебная практика» без них колледж пишет одинаково всем группам подряд, и
+    совпадение с соседом ничего не говорит о сдвиге.
+    """
+    return ((n, x) for n, x in lessons.items() if x.teachers or x.room or x.url)
+
+
 def _judge_against_previous(
     snapshot: Snapshot, previous: Snapshot, order: list[str], names: dict[str, str]
 ) -> None:
@@ -193,7 +202,7 @@ def _judge_against_previous(
 
         def score(gid: str, neighbour: str) -> tuple[int, int]:
             mine, theirs = old[gid], old[neighbour]
-            lessons = new[gid].items()
+            lessons = list(_telling(new[gid]))
             return (
                 sum(1 for n, x in lessons if theirs.get(n) == x and mine.get(n) != x),
                 sum(1 for n, x in lessons if mine.get(n) == x and theirs.get(n) != x),
@@ -235,7 +244,7 @@ def neighbour_runs(snapshot: Snapshot, previous: Snapshot, since: date, min_run:
                 if not 0 <= j < len(order):
                     continue
                 mine, theirs = old[gid], old[order[j]]
-                lessons = new[gid].items()
+                lessons = list(_telling(new[gid]))
                 t = sum(1 for n, x in lessons if theirs.get(n) == x and mine.get(n) != x)
                 o = sum(1 for n, x in lessons if mine.get(n) == x and theirs.get(n) != x)
                 if t > o:
