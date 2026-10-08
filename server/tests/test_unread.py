@@ -286,3 +286,23 @@ def test_versions_without_marks_get_the_cut_as_before(fixture_csv, monkeypatch):
     url = f"/v1/teacher/{teacher}?from=2026-09-02&days=1"
     assert not any("un" in d for d in client.get(url).json()["days"])
     assert client.get(url + "&marks=1").json()["days"][0]["un"] == "missing"
+
+
+def test_same_unread_days_remind_once_a_day_new_ones_at_once(tmp_path, sheet, sent, fixture_csv, monkeypatch):
+    """О тех же непрочитанных днях — раз в сутки, о новых — сразу."""
+    from whensclass.service import alerts
+
+    store = SnapshotStore(tmp_path)
+    refresher = Refresher(store, tmp_path)
+    sheet["text"] = spilled(fixture_csv, BP)
+    assert refresher.refresh(force=True)
+    assert len(sent) == 1
+    clock = {"now": alerts.time.monotonic()}
+    monkeypatch.setattr(alerts.time, "monotonic", lambda: clock["now"])
+    alerts._last_sent["unread"] = clock["now"]
+    clock["now"] += 7 * 3600
+    assert refresher.refresh(force=True) and len(sent) == 1
+    clock["now"] += 18 * 3600
+    assert refresher.refresh(force=True) and len(sent) == 2
+    sheet["text"] = spilled(fixture_csv, BP, GD)
+    assert refresher.refresh(force=True) and len(sent) == 3
