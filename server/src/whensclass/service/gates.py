@@ -70,7 +70,12 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
     for day in sorted(set(previous.dates) & set(current.dates)):
         if day < today:
             continue
-        had = [g.id for g in previous.groups if previous.schedule.get(g.id, {}).get(day)]
+        # День, который прежний снимок не прочитал, держался на парах ещё более
+        # раннего: это не то, что стояло в листе, и сверять с ним нечего.
+        had = [
+            g.id for g in previous.groups
+            if previous.schedule.get(g.id, {}).get(day) and day not in previous.unread.get(g.id, {})
+        ]
         if len(had) < DAY_EMPTIED_MIN_GROUPS:
             continue
         # Следующий лист выпал из окна, а в текущем на его даты — пустой

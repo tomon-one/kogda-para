@@ -489,3 +489,56 @@ def test_block_with_erased_head_is_still_a_block():
     # Колонка «Ауд.» внутри блока — не блок.
     assert 3 not in header_blocks([row], min_groups=2)
 
+
+
+def _week_from_another_template(fixture_csv, days: int):
+    """Лист, где под повторным заголовком первые `days` дней вставлены из шаблона
+    без БП-926/1: заголовок и эти дни — на блок левее, дальше всё на местах.
+
+    Дни под заголовком повторяют дни над ним: предметы у групп те же, что уже
+    были, — как в настоящем листе, где недель много. Возвращает честный разбор
+    того же листа без сдвига, сдвинутые строки и даты под заголовком.
+    """
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    header = _columnar_header(rows)[0]
+    above = [i for i, r in enumerate(rows) if i < header and _parse_date(r[0]) is not None]
+    starts = [i for i, r in enumerate(rows) if i > header and _parse_date(r[0]) is not None]
+    for k, start in enumerate(starts):
+        source = above[k % len(above)]
+        for step in range(12):
+            rows[start + step][2:] = list(rows[source + step][2:])
+    honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+    end = starts[days] if days < len(starts) else len(rows)
+    for row in rows[header:end]:
+        row += [""] * (22 - len(row))
+        del row[6:10]
+        row += [""] * 4
+    return honest, rows, [_parse_date(rows[i][0]) for i in starts]
+
+
+def test_week_pasted_without_one_group_is_read_by_its_own_header(fixture_csv, monkeypatch):
+    """Запасной способ: главный заголовок и повторный спорят — день читается тем,
+    при котором группы получают свои предметы. Сдвинутые дни — по повторному,
+    дни после них — по главному; группа, которой в повторном нет, не прочитана."""
+    from whensclass.parser import csv_schedule
+
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    honest, rows, below = _week_from_another_template(fixture_csv, days=2)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+
+    assert snap.unread == {"bp-926-1": {below[0]: False, below[1]: False}}
+    assert "БП-926/1" in snap.unread_why[0] and "группы нет в повторном" in snap.unread_why[0]
+    for group in honest.groups:
+        want = dict(honest.schedule[group.id])
+        if group.id == "bp-926-1":
+            want.pop(below[0], None), want.pop(below[1], None)
+        assert snap.schedule[group.id] == want, group.name
+
+
+def test_too_little_to_judge_leaves_the_days_unread(fixture_csv):
+    """На горстке пар содержимое ничего не доказывает: дни не прочитаны."""
+    _, rows, below = _week_from_another_template(fixture_csv, days=2)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    assert set(snap.unread) >= {"bp-926-1", "gd-1125", "dp-923", "isp-924-2"}
+    assert all(set(days) == set(below) for days in snap.unread.values())
+    assert "повторный заголовок" in snap.unread_why[0]
