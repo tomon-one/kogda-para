@@ -237,6 +237,10 @@ def test_published_day_emptied_for_many_groups_is_rejected():
     gates._check_days_emptied(before, sheet(0, empty_past=30), day)
     with pytest.raises(ChangedAgainstPrevious, match="у 12 групп из 30 пропали все пары"):
         gates._check_days_emptied(before, sheet(12), day)
+    # День, который прежний снимок не прочитал, держался на парах до него:
+    # прочитался пустым — не «вырезан».
+    before.unread = {g.id: {day: True} for g in groups[:12]}
+    gates._check_days_emptied(before, sheet(12), day)
 
 
 def test_dropped_next_sheet_over_an_empty_date_frame_is_not_a_cut_day():

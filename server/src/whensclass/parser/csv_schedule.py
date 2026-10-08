@@ -13,7 +13,7 @@ import dataclasses
 import logging
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from ..domain.ids import group_id
@@ -32,6 +32,7 @@ from .groups import (
     build_column_map,
     find_header_rows,
     header_blocks,
+    split_group_names,
 )
 from .subgroups import split_subgroups
 
@@ -144,14 +145,16 @@ def parse_sheet(
     # группы иначе, чем главный, и чьи пары под ним, неизвестно. Дни таких
     # групп не прочитаны, остальные читаются.
     moved: set[int] = set()
-    moved_why = ""
-    moved_days: dict[str, set[date]] = {}
+    # Такие дни читаются запасным способом: день разбирается дважды — по
+    # главному заголовку и по повторному, — а какой из разборов верен, решает
+    # содержимое (`_settle_moved`).
+    doubt: dict[date, _Doubt] = {}
+    section: tuple[dict[str, int], str] = ({}, "")
 
     for i, row in enumerate(rows):
         if i in distrust:
-            moved, moved_why = distrust[i]
-            if moved:
-                snapshot.unread_why.append(moved_why)
+            moved, why = distrust[i]
+            section = (_section_columns(rows, i, groups) if moved else {}, why)
         if i in skip:
             continue
 
@@ -245,24 +248,18 @@ def parse_sheet(
         for group in groups:
             col = group.column
             if col in moved:
-                moved_days.setdefault(group.id, set()).add(current)
-                continue
-            # Половинки — две пары с одним номером: каждая со своей аудиторией.
-            halved = _halves(row, col, teacher_row)
-            parts = [(col, col + 1), (col + 2, col + 3)] if halved else [(col, col + 3)]
-            for subject_col, room_col in parts:
-                cells = (
-                    _cell(row, subject_col),
-                    _cell(row, room_col),
-                    _cell(teacher_row, subject_col) if teacher_row else "",
+                day = doubt.setdefault(current, _Doubt(section[0], section[1]))
+                day.by_main.setdefault(group.id, []).extend(
+                    _lessons_at(row, teacher_row, col, number)
                 )
-                for subject_raw, room_raw, teacher_raw in split_subgroups(*cells) or [cells]:
-                    lesson = parse_lesson(
-                        number=number, subject_raw=subject_raw, room_raw=room_raw,
-                        teacher_raw=teacher_raw,
+                if group.id in day.columns:
+                    day.by_section.setdefault(group.id, []).extend(
+                        _lessons_at(row, teacher_row, day.columns[group.id], number)
                     )
-                    if lesson is not None:
-                        snapshot.schedule[group.id].setdefault(current, []).append(lesson)
+                continue
+            found_here = _lessons_at(row, teacher_row, col, number)
+            if found_here:
+                snapshot.schedule[group.id].setdefault(current, []).extend(found_here)
         for col in unnamed:
             if _cell(row, col).strip():
                 unnamed[col] += 1
@@ -270,10 +267,7 @@ def parse_sheet(
     if dateless is not None:
         raise _no_date(*dateless, None)
     _mark_unread(snapshot, spill, row_date, where)
-    for gid, days in moved_days.items():
-        for day in days:
-            snapshot.schedule[gid].pop(day, None)
-            snapshot.unread.setdefault(gid, {})[day] = False
+    _settle_moved(snapshot, doubt)
     for day, place, cell in unread_days:
         for group in snapshot.groups:
             snapshot.schedule.get(group.id, {}).pop(day, None)
@@ -295,6 +289,156 @@ def parse_sheet(
     snapshot.unnamed = {col: n for col, n in unnamed.items() if n}
     _validate(snapshot, date_order, limits, date_where)
     return snapshot
+
+
+def _lessons_at(row: list[str], teacher_row: list[str], col: int, number: int) -> list[Lesson]:
+    """Пары блока, который начинается в колонке `col`."""
+    out: list[Lesson] = []
+    # Половинки — две пары с одним номером: каждая со своей аудиторией.
+    halved = _halves(row, col, teacher_row)
+    parts = [(col, col + 1), (col + 2, col + 3)] if halved else [(col, col + 3)]
+    for subject_col, room_col in parts:
+        cells = (
+            _cell(row, subject_col),
+            _cell(row, room_col),
+            _cell(teacher_row, subject_col) if teacher_row else "",
+        )
+        for subject_raw, room_raw, teacher_raw in split_subgroups(*cells) or [cells]:
+            lesson = parse_lesson(
+                number=number, subject_raw=subject_raw, room_raw=room_raw,
+                teacher_raw=teacher_raw,
+            )
+            if lesson is not None:
+                out.append(lesson)
+    return out
+
+
+@dataclass
+class _Doubt:
+    """День под повторным заголовком, который расставил группы иначе, чем главный."""
+
+    # Группа -> её колонка по повторному заголовку; группы там нет — нет и здесь.
+    columns: dict[str, int]
+    why: str
+    by_main: dict[str, list[Lesson]] = field(default_factory=dict)
+    by_section: dict[str, list[Lesson]] = field(default_factory=dict)
+
+
+def _section_columns(rows: list[list[str]], i: int, groups: list[GroupRef]) -> dict[str, int]:
+    """Где какая группа по повторному заголовку в строке `i` (имена — в `i + 2`).
+
+    Имя, которого главный заголовок не знает («СИС(а)-926/1» у «СИС-926/1»), —
+    прежнее имя группы: её место видно по соседям. Если слева и справа группы
+    стоят с одним и тем же шагом от своих колонок, с тем же шагом стоит и она.
+    """
+    names_row = rows[i + 2] if i + 2 < len(rows) else []
+    main_col = {g.id: g.column for g in groups}
+    at_main: dict[int, list[str]] = {}
+    for g in groups:
+        at_main.setdefault(g.column, []).append(g.id)
+    heads = sorted(c for c, v in enumerate(rows[i]) if (v or "").strip() == "Дисциплина")
+    placed: dict[str, int] = {}
+    step: dict[int, int] = {}
+    unknown: list[int] = []
+    for col in heads:
+        ids = [group_id(name) for name in split_group_names(_cell(names_row, col))]
+        known = [gid for gid in ids if gid in main_col]
+        if known:
+            for gid in known:
+                placed.setdefault(gid, col)
+            step[col] = col - main_col[known[0]]
+        elif ids:
+            unknown.append(col)
+    for col in unknown:
+        left = next((step[c] for c in reversed(heads[: heads.index(col)]) if c in step), None)
+        right = next((step[c] for c in heads[heads.index(col) + 1:] if c in step), None)
+        if left is None or left != right:
+            continue
+        for gid in at_main.get(col - left, []):
+            placed.setdefault(gid, col)
+    return placed
+
+
+# Запасной способ верит разбору дня, только если предметы почти все знакомы
+# группам (по дням выше заголовка), а у другого разбора — заметно реже.
+SETTLE_MIN_LESSONS = 40
+SETTLE_KNOWN = 0.9
+SETTLE_GAP = 0.2
+
+
+def _settle_moved(snapshot: Snapshot, doubt: dict[date, _Doubt]) -> None:
+    """Дни под повторным заголовком с другой раскладкой: чьи в них пары.
+
+    Основной способ — главный заголовок — здесь не годится: повторный с ним
+    спорит. Запасной: день разобран обоими способами, и верен тот, где группы
+    получили свои предметы — те, что у них были в днях выше заголовка. Сдвиг
+    блока даёт группе предметы соседа, и на сотне групп разница видна сразу.
+    Неделя, вставленная со сдвигом, кончается без заголовка: дальше дни снова
+    стоят по главному. Поэтому решение — по каждому дню, а после первого дня
+    по главному заголовку повторному больше не верим. Не решилось — день не
+    прочитан, как и у группы, которой в повторном заголовке нет.
+    """
+    if not doubt:
+        return
+    known: dict[str, set[str]] = {}
+    for gid, by_date in snapshot.schedule.items():
+        known[gid] = {_topic(x.subject) for lessons in by_date.values() for x in lessons}
+
+    def share(parsed: dict[str, list[Lesson]]) -> tuple[int, float]:
+        total = sum(len(lessons) for lessons in parsed.values())
+        hits = sum(
+            1 for gid, lessons in parsed.items() for x in lessons
+            if _topic(x.subject) in known.get(gid, ())
+        )
+        return total, (hits / total if total else 0.0)
+
+    back_to_main = False
+    read: dict[str, list[date]] = {"section": [], "main": [], "": []}
+    whys: dict[str, None] = {}
+    absent: dict[tuple[str, str], list[date]] = {}
+    names = {g.id: g.name for g in snapshot.groups}
+    for day in sorted(doubt):
+        d = doubt[day]
+        n_main, main = share(d.by_main)
+        n_sect, sect = share(d.by_section)
+        verdict = ""
+        if n_main >= SETTLE_MIN_LESSONS and main >= SETTLE_KNOWN and main - sect >= SETTLE_GAP:
+            verdict = "main"
+        elif (
+            n_sect >= SETTLE_MIN_LESSONS and sect >= SETTLE_KNOWN and sect - main >= SETTLE_GAP
+            and not back_to_main
+        ):
+            verdict = "section"
+        back_to_main = back_to_main or verdict == "main"
+        read[verdict].append(day)
+        parsed = {"main": d.by_main, "section": d.by_section}.get(verdict, {})
+        for gid in d.by_main:
+            snapshot.schedule[gid].pop(day, None)
+            if verdict == "main" or (verdict == "section" and gid in d.columns):
+                if parsed.get(gid):
+                    snapshot.schedule[gid][day] = list(parsed[gid])
+            else:
+                snapshot.unread.setdefault(gid, {})[day] = False
+                if verdict == "section":
+                    absent.setdefault((gid, d.why), []).append(day)
+                else:
+                    whys[d.why] = None
+    for (gid, why), days in absent.items():
+        snapshot.unread_why.append(
+            f"{names.get(gid, gid)} {days[0]:%d.%m}–{days[-1]:%d.%m}: группы нет в повторном "
+            f"заголовке, по которому прочитаны эти дни ({why})"
+        )
+    snapshot.unread_why.extend(whys)
+
+    def span(days: list[date]) -> str:
+        return f"{days[0]:%d.%m}–{days[-1]:%d.%m} ({len(days)})" if days else "нет"
+
+    _warn_once(
+        ("запасной", tuple(sorted(doubt)), tuple(read["section"]), tuple(read["main"])),
+        "повторный заголовок спорит с главным: по повторному прочитаны дни %s, по главному — "
+        "%s, не прочитаны — %s", span(read["section"]), span(read["main"]), span(read[""]),
+        logger=log,
+    )
 
 
 def _day_bells(
