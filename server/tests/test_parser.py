@@ -191,11 +191,12 @@ def _columnar_header(rows):
     return None
 
 
-def test_repeated_header_with_shifted_columns_stops_the_parse(fixture_csv):
+def test_repeated_header_with_shifted_columns_leaves_the_days_below_unread(fixture_csv):
     """Сдвиг колонок после повторного заголовка — худшее, что может случиться.
 
     Без сверки каждая группа молча получила бы расписание соседа: ошибки нет,
-    статус «ok», заметить нельзя.
+    статус «ok», заметить нельзя. Дни ниже такого заголовка у задетых групп не
+    прочитаны; выше него и у остальных групп лист читается.
     """
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
@@ -208,11 +209,32 @@ def test_repeated_header_with_shifted_columns_stops_the_parse(fixture_csv):
     # Сдвиг блока переставляет все имена правее вставки: в каждой колонке
     # оказывается имя соседа слева.
     ordered = sorted(c for c in columns if c in by_column and c < len(names_row))
+    honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
     for left, right in zip(ordered, ordered[1:]):
         names_row[right] = by_column[left]
 
-    with pytest.raises(SourceFormatChanged, match="повторный заголовок"):
-        parse_sheet(rows, "фикстура", FIXTURE)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    _assert_unread_below(snap, honest, rows, header[0], set(ordered))
+    assert "повторный заголовок" in snap.unread_why[0]
+
+
+def _assert_unread_below(snap, honest, rows, header_row, columns):
+    """Группы колонок `columns` ниже заголовка не прочитаны, выше — как были;
+    остальные группы — как были целиком."""
+    below = {
+        d for d in (_parse_date(r[0]) for r in rows[header_row:]) if d is not None
+    }
+    assert below and below < set(honest.dates)
+    moved = {g.id for g in honest.groups if g.column in columns}
+    assert set(snap.unread) == moved
+    for group in honest.groups:
+        if group.id not in moved:
+            assert snap.schedule[group.id] == honest.schedule[group.id]
+            continue
+        assert set(snap.unread[group.id]) == below
+        assert not below & set(snap.schedule[group.id])
+        kept = {d: l for d, l in honest.schedule[group.id].items() if d not in below}
+        assert snap.schedule[group.id] == kept
 
 
 def test_single_neighbour_name_in_repeated_header_is_a_typo(fixture_csv, caplog):
@@ -396,8 +418,12 @@ def test_two_neighbour_names_in_repeated_header_are_a_shift(fixture_csv):
     ordered = sorted(c for c in columns if c in by_column and c < len(names_row))
     names_row[ordered[1]] = by_column[ordered[0]]
     names_row[ordered[2]] = by_column[ordered[1]]
-    with pytest.raises(SourceFormatChanged, match="таких колонок 2"):
-        parse_sheet(rows, "фикстура", FIXTURE)
+    honest = parse_sheet([list(r) for r in collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)],
+                         "фикстура", FIXTURE)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    # Не прочитаны и колонки с чужим именем, и та, откуда имя ушло.
+    _assert_unread_below(snap, honest, rows, _columnar_header(rows)[0], set(ordered[:3]))
+    assert "таких колонок 2" in snap.unread_why[0]
 
 
 def test_neighbour_name_in_the_main_header_is_resolved_by_the_repeated_one(fixture_csv):

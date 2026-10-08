@@ -104,7 +104,10 @@ def parse_sheet(
 
     groups = build_column_map(rows, limits.min_groups)
     adopt: dict[int, list[str]] = {}
-    skip = find_header_rows(rows, groups, limits.min_groups, where=where, adopt=adopt)
+    distrust: dict[int, tuple[set[int], str]] = {}
+    skip = find_header_rows(
+        rows, groups, limits.min_groups, where=where, adopt=adopt, distrust=distrust
+    )
     groups, unnamed = _adopt_names(rows, groups, adopt, limits.min_groups)
     spill = _spill(rows, groups, skip, where)
 
@@ -137,7 +140,18 @@ def parse_sheet(
     # Время звонков, как оно стоит в листе: день -> номер пары -> ячейки.
     times: dict[date, dict[int, list[str]]] = {}
 
+    # Колонки, которым ниже повторного заголовка верить нельзя: он расставил
+    # группы иначе, чем главный, и чьи пары под ним, неизвестно. Дни таких
+    # групп не прочитаны, остальные читаются.
+    moved: set[int] = set()
+    moved_why = ""
+    moved_days: dict[str, set[date]] = {}
+
     for i, row in enumerate(rows):
+        if i in distrust:
+            moved, moved_why = distrust[i]
+            if moved:
+                snapshot.unread_why.append(moved_why)
         if i in skip:
             continue
 
@@ -230,6 +244,9 @@ def parse_sheet(
 
         for group in groups:
             col = group.column
+            if col in moved:
+                moved_days.setdefault(group.id, set()).add(current)
+                continue
             # Половинки — две пары с одним номером: каждая со своей аудиторией.
             halved = _halves(row, col, teacher_row)
             parts = [(col, col + 1), (col + 2, col + 3)] if halved else [(col, col + 3)]
@@ -253,6 +270,10 @@ def parse_sheet(
     if dateless is not None:
         raise _no_date(*dateless, None)
     _mark_unread(snapshot, spill, row_date, where)
+    for gid, days in moved_days.items():
+        for day in days:
+            snapshot.schedule[gid].pop(day, None)
+            snapshot.unread.setdefault(gid, {})[day] = False
     for day, place, cell in unread_days:
         for group in snapshot.groups:
             snapshot.schedule.get(group.id, {}).pop(day, None)
