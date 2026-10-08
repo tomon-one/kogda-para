@@ -197,6 +197,7 @@ def find_header_rows(
     min_groups: int = MIN_GROUPS,
     where: Callable[[int], str] = lambda i: f"строке {i}",
     adopt: dict[int, list[str]] | None = None,
+    distrust: dict[int, tuple[set[int], str]] | None = None,
 ) -> set[int]:
     """Индексы строк, которые надо пропустить при обходе.
 
@@ -204,6 +205,11 @@ def find_header_rows(
     трёхстрочные — по ячейке ровно «Дисциплина» с «Преподаватель» под ней.
     Если повторный заголовок объявляет другую раскладку колонок, считаем
     формат изменившимся: показать чужое расписание хуже, чем упасть.
+
+    В `distrust` — по строке каждого трёхстрочного заголовка: колонки, которым
+    ниже него верить нельзя (он расставляет имена иначе, чем главный), и почему.
+    Заголовок, согласный с главным, даёт пустой набор — ниже него всё снова на
+    местах. Без `distrust` расхождение — отказ листа.
 
     В `adopt` складываются имена, которые повторный заголовок даёт колонке,
     безымянной в главном: их подбирает `parse_sheet`.
@@ -240,9 +246,12 @@ def find_header_rows(
             if c < len(below)
         ):
             # Заголовок «столбиком»: Дисциплина / Преподаватель / имя группы.
-            _check_columnar(
-                where(i), cells, rows[i + 2] if i + 2 < len(rows) else [], groups, adopt
+            moved = _check_columnar(
+                where(i), cells, rows[i + 2] if i + 2 < len(rows) else [], groups, adopt,
+                reject=distrust is None,
             )
+            if distrust is not None:
+                distrust[i] = moved
             skip.update({i, i + 1, i + 2})
 
     return skip
@@ -272,8 +281,13 @@ def _check_columnar(
     names_row: list[str],
     groups: list[GroupRef],
     adopt: dict[int, list[str]] | None = None,
-) -> None:
+    reject: bool = True,
+) -> tuple[set[int], str]:
     """Сверяет колонки повторного заголовка с главным.
+
+    Возвращает колонки, чьи имена он ставит иначе, чем главный (и те, откуда
+    эти имена ушли), и объяснение; согласен — пустой набор. При `reject`
+    расхождение — отказ листа.
 
     Если ниже повторного заголовка добавить хоть одну группу, весь хвост листа
     съезжает на блок — и разбор проходит без единой ошибки, просто каждая
@@ -331,12 +345,20 @@ def _check_columnar(
     if len(strangers) >= COLUMNAR_STRANGERS_TO_REJECT:
         col, declared, gid, known = strangers[0]
         here = f"здесь же {sorted(known)}" if known else "здесь в главном заголовке пусто"
-        raise SourceFormatChanged(
+        message = (
             f"повторный заголовок в {where}: в колонке {a1_column(col)} стоит {declared}, "
             f"а по главному заголовку {gid!r} живёт в колонке {a1_column(column_of[gid])}, "
             f"{here}; "
             f"таких колонок {len(strangers)}"
         )
+        if reject:
+            raise SourceFormatChanged(message)
+        moved = {col for col, _, _, _ in strangers}
+        for _, declared, _, _ in strangers:
+            moved.update(
+                column_of[gid] for gid in map(group_id, declared) if gid in column_of
+            )
+        return moved, message
     for col, declared, gid, known in strangers:
         _warn_once(
             ("stranger", col, tuple(declared)),
@@ -344,3 +366,4 @@ def _check_columnar(
             "живёт в колонке %s — одно такое имя считаю опечаткой, не сдвигом",
             a1_column(col), declared, gid, a1_column(column_of[gid]),
         )
+    return set(), ""
