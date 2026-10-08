@@ -350,6 +350,9 @@ class Refresher(Failing, SheetWatch):
                 "старые версии приложения видят сбой. Присмотреться (руководство по "
                 "серверу, «Когда что-то не так»).",
                 force=bool(now - was),
+                # Те же дни остаются непрочитанными, пока колледж не поправит
+                # лист, — сутки, а не шесть часов.
+                window=UNREAD_REMIND_SECONDS,
             )
         elif was:
             alerts.forget("unread")
@@ -478,6 +481,9 @@ class SheetRejected(SourceFormatChanged):
         self.title = title
         self.against_previous = against_previous
 
+
+# Как часто напоминать о тех же непрочитанных днях; о новых — сразу.
+UNREAD_REMIND_SECONDS = 24 * 60 * 60
 
 ACCEPT_NEXT_TTL = dt.timedelta(hours=2)
 
