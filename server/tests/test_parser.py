@@ -8,7 +8,9 @@ from whensclass.domain.models import SourceFormatChanged
 from whensclass.parser.csv_schedule import FIXTURE, parse_sheet
 from whensclass.parser.dates import _parse_date
 from whensclass.parser.export import collapse_export, parse_csv, read_csv
-from whensclass.parser.groups import build_column_map, find_header_rows, split_group_names
+from whensclass.parser.groups import (
+    build_column_map, find_header_rows, group_id, split_group_names,
+)
 
 
 @pytest.fixture(scope="module")
@@ -533,6 +535,25 @@ def test_week_pasted_without_one_group_is_read_by_its_own_header(fixture_csv, mo
         if group.id == "bp-926-1":
             want.pop(below[0], None), want.pop(below[1], None)
         assert snap.schedule[group.id] == want, group.name
+
+
+def test_block_erased_under_a_shifted_header_is_unread_not_empty(fixture_csv, monkeypatch):
+    """Под сдвинутым заголовком стёрли блок вместе с именем: группа, чья это
+    колонка по главному, не прочитана — пустая неделя была бы молчаливой ложью."""
+    from whensclass.parser import csv_schedule
+
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    _, rows, below = _week_from_another_template(fixture_csv, days=2)
+    header = _columnar_header(rows)[0]
+    end = next(i for i, r in enumerate(rows) if _parse_date(r[0]) == below[2])
+    whose = split_group_names(rows[header + 2][6])
+    for row in rows[header + 2:end]:
+        row[6:10] = [""] * 4
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+
+    assert len(whose) == 1
+    days = {below[0]: False, below[1]: False}
+    assert snap.unread == {"bp-926-1": days, group_id(whose[0]): days}
 
 
 def test_too_little_to_judge_leaves_the_days_unread(fixture_csv):

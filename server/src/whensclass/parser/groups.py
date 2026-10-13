@@ -358,6 +358,12 @@ def _check_columnar(
             moved.update(
                 column_of[gid] for gid in map(group_id, declared) if gid in column_of
             )
+        # Колонка группы, над которой сдвинутый заголовок имени не написал:
+        # чьи под ней пары, он не говорит, а главному здесь уже не верим.
+        moved.update(
+            col for col in by_column
+            if not split_group_names((names_row[col] if col < len(names_row) else "") or "")
+        )
         return moved, message
     for col, declared, gid, known in strangers:
         _warn_once(
