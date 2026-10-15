@@ -126,6 +126,7 @@ class WeekWidget : GlanceAppWidget() {
                         now,
                         colors,
                         GlanceModifier.fillMaxWidth().defaultWeight(),
+                        teacher = schedule.isTeacher,
                     )
                 }
             }

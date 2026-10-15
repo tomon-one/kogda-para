@@ -128,9 +128,15 @@ fun ScheduleWidgetContent(
                 "Сервер не прочитал этот день в таблице", colors, sheetLink(schedule, day, sourceUrl),
             )
             // Свободный день: «нажмите, чтобы обновить» читалось бы как «не
-            // загрузилось», поэтому нажатие ведёт в приложение.
+            // загрузилось», поэтому нажатие ведёт в приложение. Фраза — та же,
+            // что на экране в этот день.
             today.lessons.isEmpty() -> MissingHint(
-                "Пар нет", colors, open = actionStartActivity(openDay(context, day)),
+                ru.whensclass.ui.freeDay(
+                    day.toString(), schedule.isTeacher,
+                    nextFree = schedule.days.firstOrNull { it.date == day.plusDays(1).toString() }
+                        ?.let { ru.whensclass.ui.freeOwnDay(it, schedule.groupNames) } == true,
+                ),
+                colors, open = actionStartActivity(openDay(context, day)),
             )
             else -> Lessons(
                 today.lessons,

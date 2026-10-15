@@ -41,6 +41,8 @@ internal fun Week(
     now: LocalDateTime,
     colors: Palette,
     modifier: GlanceModifier,
+    /** Расписание преподавателя: фразы пустого дня — только его прежние. */
+    teacher: Boolean = false,
 ) {
     val today = now.toLocalDate()
     // Ключ и по дате: через полночь тот же список дней делится на прожитые
@@ -72,7 +74,12 @@ internal fun Week(
                 Column(modifier = GlanceModifier.fillMaxWidth()) {
                     DayTitle(day, colors)
                     if (day.lessons.isEmpty()) {
-                        EmptyLine(day.date, colors, day.absent, day.unread != null)
+                        // Следующий — будний, пришёл с сервера и тоже пустой: «повезло дважды».
+                        val nextFree = all.getOrNull(all.indexOf(day) + 1)?.let {
+                            it.lessons.isEmpty() && !it.absent && it.unread == null &&
+                                it.date.dayOfWeek != java.time.DayOfWeek.SUNDAY && it.date == day.date.plusDays(1)
+                        } == true
+                        EmptyLine(day.date, colors, day.absent, day.unread != null, teacher, nextFree)
                     } else {
                         // Заголовок дня уже занял одного ребёнка. С другими
                         // группами пар в дне бывает больше девяти — тогда
@@ -222,14 +229,18 @@ private fun span(day: WeekDay, bells: Map<String, List<String>>): String? {
 }
 
 @Composable
-private fun EmptyLine(date: LocalDate, colors: Palette, absent: Boolean = false, unread: Boolean = false) {
+private fun EmptyLine(
+    date: LocalDate, colors: Palette, absent: Boolean = false, unread: Boolean = false,
+    teacher: Boolean = false, nextFree: Boolean = false,
+) {
     val context = LocalContext.current
     Text(
         // «Не прочитан» — сервер не понял этот день в таблице; подробнее — в приложении.
+        // Свободный будний — та же фраза, что на экране в этот день, строчными, как строки недели.
         when {
             unread -> "сервер не прочитал день"
             absent -> "выходной"
-            else -> "пар нет"
+            else -> ru.whensclass.ui.freeDay(date.toString(), teacher, nextFree).replaceFirstChar { it.lowercase() }
         },
         maxLines = 1,
         style = TextStyle(fontSize = 11.sp, color = colors.textDim),
