@@ -139,10 +139,12 @@ function unpack(raw) {
   return out;
 }
 
-function show(title, body, tag, extra) {
+function show(title, body, tag, extra, actions) {
   var data = { url: self.registration.scope };
   Object.keys(extra || {}).forEach(function (k) { data[k] = extra[k]; });
-  return self.registration.showNotification(title, { body: body || '', tag: tag, icon: ICON, data: data });
+  var options = { body: body || '', tag: tag, icon: ICON, data: data };
+  if (actions) options.actions = actions;
+  return self.registration.showNotification(title, options);
 }
 
 function showChanges(data) {
@@ -208,7 +210,11 @@ function showLesson(data) {
   return self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
     open.forEach(function (n) { n.close(); });
   }, function () { /* нечего закрывать */ }).then(function () {
-    return show(title || 'Скоро пара', data.body, 'lesson', { end: data.end });
+    // «Войти» — ссылка на вебинар, если она есть у пары (служба кладёт только
+    // известные площадки). Кнопки у уведомлений есть не везде — на айфоне,
+    // похоже, нет; тогда нажатие ведёт на сайт, как раньше.
+    return show(title || 'Скоро пара', data.body, 'lesson', { end: data.end, join: data.join || null },
+      data.join ? [{ action: 'join', title: 'Войти' }] : null);
   });
 }
 
@@ -244,6 +250,10 @@ function ours(client) {
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var data = event.notification.data || {};
+  if (event.action === 'join' && data.join && self.clients.openWindow) {
+    event.waitUntil(self.clients.openWindow(data.join));
+    return;
+  }
   // «Выберите заново»: служба уже ждала час — страница не ждёт своего
   // (main.js). Вид сообщения — в теге уведомления (show).
   var gone = event.notification.tag === 'gone';

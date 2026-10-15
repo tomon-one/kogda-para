@@ -157,6 +157,18 @@ class LessonPlanTest {
     }
 
     @Test
+    fun `кнопка «Войти» — только по ссылке известного сервиса вебинаров`() {
+        val online = LessonDto(number = 2, subject = "Пара 2", url = "https://my.mts-link.ru/j/1/2")
+        assertEquals("https://my.mts-link.ru/j/1/2", LessonAlarms.joinUrl(listOf(online)))
+        // Чужая ссылка в таблице — ошибка или подмена: одним касанием из шторки её не открываем.
+        assertEquals(null, LessonAlarms.joinUrl(listOf(online.copy(url = "https://example.com/x"))))
+        assertEquals(null, LessonAlarms.joinUrl(listOf(lesson(2))))
+        // Ссылку дописали после напоминания — пара находится по ключу, ссылка у неё уже есть.
+        val key = "2026-09-08T10:40|Пара 2"
+        assertEquals("https://my.mts-link.ru/j/1/2", LessonAlarms.joinUrl(LessonAlarms.lessonsOf(day(lesson(1), online), key)))
+    }
+
+    @Test
     fun `блок пополам — одно напоминание об обеих парах номера`() {
         val german = LessonDto(number = 4, subject = "Немецкий", room = "55/1")
         val english = LessonDto(number = 4, subject = "Английский", room = "467")

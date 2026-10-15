@@ -472,6 +472,9 @@ def reminders(payload: dict, minutes: int, day: dt.date) -> list[dict]:
             "number": number,
             "title": f"{start:%H:%M} — {subject}",
             "subject": subject,
+            # Ссылка для «Войти» — только известной площадки: чужая в таблице
+            # бывает ошибкой или подменой, кнопка открыла бы её одним касанием.
+            "join": next((x["u"].strip() for x in same if x.get("u") and known_webinar(x["u"].strip())), None),
             "text": reminder_text(lesson, own) if len(same) == 1 and not off
             else "\n".join([_number_line(same)] + [_pair_line(x, own, differ) for x in same]
                            + [_off_line(x, own, differ) for x in off]),
