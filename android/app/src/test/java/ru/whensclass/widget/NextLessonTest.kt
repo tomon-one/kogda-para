@@ -93,6 +93,19 @@ class NextLessonTest {
     }
 
     @Test
+    fun `ночью не «завтра» и не «сегодня», а день недели или часть дня`() {
+        val fri = LocalDate.of(2026, 10, 16)
+        val sat = fri.plusDays(1)
+        // 01:47 пятницы: для не спавшего ещё четверг — «завтра» прочтут как пятницу.
+        assertEquals("сб, 17 октября", nextLessonWhen(sat, fri.atTime(1, 47), false, "09:00"))
+        assertEquals("утром", nextLessonWhen(fri, fri.atTime(1, 47), false, "09:00"))
+        assertEquals("днём", nextLessonWhen(fri, fri.atTime(1, 47), false, "14:20"))
+        // Днём — как всегда.
+        assertEquals("завтра", nextLessonWhen(sat, fri.atTime(13, 0), false, "09:00"))
+        assertEquals("сегодня", nextLessonWhen(fri, fri.atTime(8, 0), false, "09:00"))
+    }
+
+    @Test
     fun `в шапке время первым — многоточие съедает дату, а не время`() {
         assertEquals("14:20 · пн, 28 сентября", nextLessonHead("14:20", "пн, 28 сентября", false, null))
         assertEquals("идёт сейчас · 14:20", nextLessonHead("14:20", "идёт сейчас", true, null))

@@ -140,11 +140,15 @@ class NextLessonWidget : GlanceAppWidget() {
                 val time = lessonStart(bells, lesson.number) ?: "${lesson.number} пара"
                 // Про завтрашнюю пару тоже говорим: «пар больше нет» легко
                 // прочесть как «пар нет вообще».
-                val when_ = when {
-                    ongoing -> "идёт сейчас"
-                    next.day == today -> "сегодня"
-                    next.day == today.plusDays(1) -> "завтра"
-                    else -> formatDayTitleShort(next.day)
+                val when_ = nextLessonWhen(next.day, now, ongoing, time)
+                // Сегодня своих пар нет (или воскресенье), а виджет уже о
+                // следующей — сказать первым словом: иначе её легко принять за сегодняшнюю.
+                val todayDto = schedule?.days?.firstOrNull { it.date == today.toString() }
+                val freeToday = when {
+                    next.day == today || now.hour < NIGHT_END_HOUR -> null
+                    today.dayOfWeek == java.time.DayOfWeek.SUNDAY -> "выходной"
+                    todayDto != null && schedule != null && ru.whensclass.ui.freeOwnDay(todayDto, schedule.groupNames) -> "пар нет"
+                    else -> null
                 }
                 // Сбой и пропажа — красным и первым словом: в хвосте
                 // однострочной шапки причина ушла бы в многоточие. Старые данные
@@ -167,12 +171,20 @@ class NextLessonWidget : GlanceAppWidget() {
                 // тогда место пары переезжает в шапку.
                 val scale = fontScale()
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
+                // Длинное название (а короткие у колледжа редки) — в две строки.
+                // Хватает высоты на четыре строки — место под ним, как обычно; нет —
+                // место в шапку, как в тесной клетке.
+                val subject = joinSubjects(distinctSubjects(next.lessons))
+                val perLine = ((LocalSize.current.width.value - 20f) / (SUBJECT_SP * CHAR_EM * scale)).toInt()
+                val long = subject.length > perLine
+                val roomy = LocalSize.current.height >= (ROOMY_HEIGHT_SP * scale + 14).dp
+                val placeInHead = tight || (long && !roomy)
                 // Группы всех пар номера: у преподавателя одна пара в двух залах.
                 val groups = next.lessons.mapNotNull { it.groups }.distinct().joinToString(", ").ifEmpty { null }
-                val head = status + nextLessonHead(
+                val head = status + listOfNotNull(freeToday).joinToString("") { "$it · " } + nextLessonHead(
                     time, when_, ongoing, groups, unread = unread,
                     // Без «⧉»: нажатие на шапку открывает приложение, а не копирует.
-                    place = if (tight) places(next) else null,
+                    place = if (placeInHead) places(next) else null,
                 )
                 Text(
                     head,
@@ -187,10 +199,10 @@ class NextLessonWidget : GlanceAppWidget() {
                     ),
                 )
                 Text(
-                    joinSubjects(distinctSubjects(next.lessons)),
-                    maxLines = 1,
+                    subject,
+                    maxLines = if (long && !tight) 2 else 1,
                     style = TextStyle(
-                        fontSize = 14.sp,
+                        fontSize = SUBJECT_SP.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.text,
                         textDecoration =
@@ -204,7 +216,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 // Две пары одного номера — оба места, без копирования ссылки:
                 // нажатие открывает день, где у каждой пары своя.
                 val pair = next.also.isNotEmpty() || next.off.isNotEmpty()
-                if (!tight) Text(
+                if (!placeInHead) Text(
                     when {
                         pair -> places(next)
                         foreign -> "⚠ чужая ссылка · " + place(lesson).removeSuffix("  ⧉")
@@ -337,6 +349,32 @@ internal fun noNextLesson(
     return "Пар нет по ${formatWeekDay(last)}"
 }
 
+/** До этого часа ночью «сегодня» и «завтра» двусмысленны: для не спавшего человека ещё вчера. */
+internal const val NIGHT_END_HOUR = 5
+
+/**
+ * Когда следующая пара: «сегодня», «завтра», день недели. Ночью (до
+ * [NIGHT_END_HOUR]) — без них: пара этого же дня — «утром», «днём» или
+ * «вечером», остальные — днём недели. В 01:47 «завтра» читается как «в
+ * пятницу», а пара — в субботу. `start` — «09:00»; не время — «сегодня».
+ */
+internal fun nextLessonWhen(day: LocalDate, now: java.time.LocalDateTime, ongoing: Boolean, start: String = ""): String {
+    val today = now.toLocalDate()
+    val night = now.hour < NIGHT_END_HOUR
+    val hour = Regex("""^(\d{1,2}):""").find(start)?.groupValues?.get(1)?.toInt()
+    return when {
+        ongoing -> "идёт сейчас"
+        day == today && night && hour != null -> when {
+            hour < 12 -> "утром"
+            hour < 17 -> "днём"
+            else -> "вечером"
+        }
+        day == today -> "сегодня"
+        day == today.plusDays(1) && !night -> "завтра"
+        else -> day.format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMMM", java.util.Locale.forLanguageTag("ru")))
+    }
+}
+
 /**
  * Шапка маленького виджета: время — первым, потому что строка одна и режется
  * справа. «Идёт сейчас» — всё же первым: это главное.
@@ -366,6 +404,13 @@ internal fun nextLessonHead(
 
 /** Три строки маленького виджета — в sp, без отступов. */
 private const val TIGHT_HEIGHT_SP = 52
+
+/** Четыре строки (название в две) — в sp, без отступов. */
+private const val ROOMY_HEIGHT_SP = 69
+
+/** Кегль названия пары и средняя ширина жирной кириллической буквы в его долях. */
+private const val SUBJECT_SP = 13
+private const val CHAR_EM = 0.6f
 
 /**
  * Места всех пар номера без вида: «каб. 55/1 / каб. 467». Отменённая
