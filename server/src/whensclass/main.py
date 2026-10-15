@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI):
     app.state.store = store
     app.state.refresher = refresher
     app.state.push = push
-    retakes = RetakesSource(directory)
+    retakes = RetakesSource(directory, lambda: store.teachers)
     app.state.retakes = retakes
 
     if store.load():
