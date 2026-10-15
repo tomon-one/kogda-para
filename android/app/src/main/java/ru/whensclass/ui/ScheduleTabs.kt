@@ -193,8 +193,8 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boole
         selected = tab == current,
         onClick = { onPick(tab) },
         text = {
-            // Пересдачи идут — вкладка залита: о них должны узнать и те, кто её
-            // не открывал (как на сайте).
+            // Пересдачи идут — вкладка подсвечена, как сегодняшний день: о них
+            // должны узнать и те, кто её не открывал (как на сайте).
             if (live) {
                 Text(
                     "Пересдачи идут",
@@ -202,10 +202,10 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boole
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
                         .padding(horizontal = 14.dp, vertical = 3.dp),
                 )
                 return@Tab
