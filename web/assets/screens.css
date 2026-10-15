@@ -451,7 +451,7 @@
 .tab.live .tab-label {
   display: inline-block;
   max-width: 100%;
-  padding: 3px 10px;
+  padding: 3px 6px;
   border-radius: 999px;
   background: var(--today-bg);
   color: var(--primary);
@@ -460,7 +460,9 @@
 
 /* ——— аудитории ——— */
 
-.rooms .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+/* Промежутки — полями, не flex gap: его нет в старых Safari (app.css). */
+.rooms .chips { display: flex; flex-wrap: wrap; margin: 8px 0 2px; }
+.rooms .chips > * { margin: 0 6px 6px 0; }
 .rooms .chips.pairs .chip { min-width: 40px; text-align: center; }
 .room-when { margin: 2px 4px 4px; font-size: 14px; font-weight: 600; }
 .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--button-border); font-size: 14px; color: var(--fg); }
@@ -468,9 +470,10 @@
 .room-note { margin: 12px 4px 8px; font-size: 12px; color: var(--muted); }
 .room-card { margin-top: 8px; padding: 12px 16px; }
 .room-building { font-weight: 600; margin-bottom: 6px; }
-.room-floor { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; }
-.room-floor-label { flex: none; width: 56px; font-size: 13px; }
-.room-free { display: flex; flex-wrap: wrap; gap: 6px; }
+.room-floor { display: flex; align-items: baseline; margin-top: 6px; }
+.room-floor-label { flex: none; width: 56px; margin-right: 8px; font-size: 13px; }
+.room-free { display: flex; flex-wrap: wrap; margin-bottom: -6px; }
+.room-free .room-chip { margin: 0 6px 6px 0; }
 .room-chip { padding: 3px 10px; border-radius: 8px; background: var(--today-bg); color: var(--primary); font-weight: 600; font-size: 14px; }
 .room-busy { padding: 10px 16px; border-bottom: 1px solid var(--bg); font-size: 14px; }
 .room-use { margin-top: 2px; }

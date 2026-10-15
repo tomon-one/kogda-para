@@ -149,13 +149,23 @@ export function fitLabels(container) {
 
 /** Мельчит надпись до FIT_MIN_PX; true — влезла. */
 function shrink(el) {
-  if (el.scrollWidth <= el.clientWidth) return true;
+  if (fits(el)) return true;
   var size = parseFloat(window.getComputedStyle(el).fontSize);
-  while (size > FIT_MIN_PX && el.scrollWidth > el.clientWidth) {
+  while (size > FIT_MIN_PX && !fits(el)) {
     size -= 1;
     el.style.fontSize = size + 'px';
   }
-  return el.scrollWidth <= el.clientWidth;
+  return fits(el);
+}
+
+/** Ширины целые, а текст — нет: «впритык» по ним бывает на долю пикселя шире, и браузер ставит многоточие. */
+function fits(el) {
+  if (el.scrollWidth !== el.clientWidth) return el.scrollWidth < el.clientWidth;
+  var range = document.createRange();
+  range.selectNodeContents(el);
+  var style = window.getComputedStyle(el);
+  var room = el.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  return range.getBoundingClientRect().width <= room + 0.01;
 }
 
 export function closeDialog() {

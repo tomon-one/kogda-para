@@ -80,6 +80,28 @@ export function roomsView(app) {
   var date = st.date || now.date;
   var body = app.state.rooms[date];
 
+  function pick(change) {
+    change();
+    st.changedAt = Date.now();
+    app.render();
+  }
+
+  /** Ряд «День»: из этого дня или из любого уже загруженного — пока выбранный грузится или не пришёл. */
+  function dayChips(days, selected) {
+    return h('div', { class: 'chips' }, [h('span', { class: 'chips-label muted' }, 'День')].concat(days.map(function (d) {
+      var c = chip(dayLabel(d, now.date), d === selected, function () {
+        if (d === selected) return;
+        pick(function () { st.date = d; st.pair = null; });
+      }, 'room-day:' + d);
+      return d === selected && d === st.date && body && typeof body === 'object' ? chipEntering(c, st) : c;
+    })));
+  }
+
+  if (body === undefined || body === null || body === 'failed' || body === 'missing') {
+    var other = Object.keys(app.state.rooms).map(function (d) { return app.state.rooms[d]; })
+      .filter(function (b) { return b && typeof b === 'object' && b.days && b.days.length; })[0];
+    if (st.date && other) wrap.appendChild(dayChips(other.days.slice(0, DAYS_SHOWN), date));
+  }
   if (body === undefined || body === null) {
     app.loadRooms(date, false);
     wrap.appendChild(spinner());
@@ -111,19 +133,7 @@ export function roomsView(app) {
     }
   }
 
-  function pick(change) {
-    change();
-    st.changedAt = Date.now();
-    app.render();
-  }
-
-  wrap.appendChild(h('div', { class: 'chips' }, [h('span', { class: 'chips-label muted' }, 'День')].concat(days.map(function (d) {
-    var c = chip(dayLabel(d, now.date), d === body.date, function () {
-      if (d === body.date) return;
-      pick(function () { st.date = d; st.pair = null; });
-    }, 'room-day:' + d);
-    return d === body.date && d === st.date ? chipEntering(c, st) : c;
-  }))));
+  wrap.appendChild(dayChips(days, body.date));
 
   var pair = st.pair || defaultPair(body, now.date, now.sec);
   wrap.appendChild(h('div', { class: 'chips pairs' }, [h('span', { class: 'chips-label muted' }, 'Пара')].concat(numbers.map(function (n) {
@@ -169,7 +179,12 @@ export function roomsView(app) {
   var taken = Object.keys(busy).sort();
   if (taken.length) {
     var list = h('div', { class: 'list-card' }, taken.map(function (room) { return busyLine(room, busy[room]); }));
-    picked.appendChild(h('details', { class: 'room-taken' },
+    picked.appendChild(h('details', {
+      class: 'room-taken',
+      // Раскрытый список не сворачивается, когда экран перестраивается (обновление, звонок).
+      open: !!st.takenOpen,
+      ontoggle: function (e) { st.takenOpen = e.target.open; },
+    },
       h('summary', { class: 'section-title' }, 'Кто где занят — ' + plural(taken.length, 'кабинет', 'кабинета', 'кабинетов')),
       list));
   }
