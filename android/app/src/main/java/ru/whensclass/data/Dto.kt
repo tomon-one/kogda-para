@@ -169,6 +169,46 @@ data class TeachersDto(
     @SerialName("teachers") val teachers: List<GroupDto> = emptyList(),
 )
 
+/** Лист пересдач колледжа (docs/api.md, /v1/retakes): по преподавателям, без групп. */
+@Serializable
+data class RetakesDto(
+    @SerialName("title") val title: String? = null,
+    @SerialName("rows") val rows: List<RetakeDto> = emptyList(),
+    @SerialName("redirects") val redirects: List<RetakeRedirectDto> = emptyList(),
+) {
+    /**
+     * Пересдачи идут: в листе есть дни не раньше [today] — или даты, которые
+     * служба не разобрала: про них не знаем, что прошли.
+     */
+    fun activeOn(today: java.time.LocalDate): Boolean = rows.any { row ->
+        row.slots.isEmpty() || row.slots.any { it.to >= today.toString() }
+    }
+}
+
+@Serializable
+data class RetakeDto(
+    @SerialName("teacher") val teacher: String,
+    @SerialName("dates") val dates: String = "",
+    @SerialName("time") val time: String = "",
+    @SerialName("room") val room: String = "",
+    @SerialName("slots") val slots: List<RetakeSlotDto> = emptyList(),
+    @SerialName("teacher_id") val teacherId: String? = null,
+    @SerialName("subjects") val subjects: List<String> = emptyList(),
+)
+
+@Serializable
+data class RetakeSlotDto(
+    @SerialName("from") val from: String,
+    @SerialName("to") val to: String,
+    @SerialName("time") val time: String = "",
+)
+
+@Serializable
+data class RetakeRedirectDto(
+    @SerialName("to") val to: String,
+    @SerialName("teachers") val teachers: List<String> = emptyList(),
+)
+
 @Serializable
 data class MetaDto(
     @SerialName("gen") val generatedAt: String,

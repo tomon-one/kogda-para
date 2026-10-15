@@ -44,6 +44,7 @@ import ru.whensclass.data.sheetLink
 import ru.whensclass.data.AppUpdate
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
+import ru.whensclass.data.RetakesDto
 import ru.whensclass.data.MAX_GROUPS
 import ru.whensclass.data.subgroupsOf
 import ru.whensclass.data.RefreshResult
@@ -152,6 +153,12 @@ internal fun App(
     // каждое переключение; пока пусто — повтор при каждом заходе (метро,
     // спящий вайфай).
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
+    // Лист пересдач: при открытии расписания и не чаще раза в полчаса — служба
+    // и сама смотрит его раз в час.
+    var retakes by remember { mutableStateOf<RetakesDto?>(null) }
+    var retakesFailed by remember { mutableStateOf(false) }
+    var retakesAt by remember { mutableStateOf(0L) }
+    var retakesRetry by remember { mutableStateOf(0) }
     // Свежие списки за этот заход уже пришли — дальше хватит их.
     var listsFresh by remember { mutableStateOf(false) }
     // «Повторить» — в сеть, даже если сохранённые моложе 12 часов.
@@ -187,6 +194,19 @@ internal fun App(
             pickExtra = false
             pickTeacher = null
             screen = Screen.TODAY
+        }
+    }
+
+    LaunchedEffect(screen, retakesRetry, ScreenClock.resumes) {
+        if (screen != Screen.TODAY) return@LaunchedEffect
+        if (retakes != null && System.currentTimeMillis() - retakesAt < RETAKES_FRESH_MILLIS) return@LaunchedEffect
+        retakesFailed = false
+        val fresh = container.repository.retakes()
+        if (fresh != null) {
+            retakes = fresh
+            retakesAt = System.currentTimeMillis()
+        } else if (retakes == null) {
+            retakesFailed = true
         }
     }
 
@@ -540,6 +560,9 @@ internal fun App(
                     )
 
                     Screen.TODAY -> TodayScreen(
+                        retakes = retakes,
+                        retakesFailed = retakesFailed,
+                        onRetryRetakes = { retakesRetry++ },
                         startDay = startDay,
                         startKey = openSeq,
                         groupName = chosenName.orEmpty(),
@@ -636,3 +659,6 @@ internal fun refreshFailure(error: Throwable, teacher: Boolean = false): String 
     }
     else -> "Не удалось обновить: нет связи с сервером"
 }
+
+/** Лист пересдач перечитывается не чаще этого: он меняется редко. */
+internal const val RETAKES_FRESH_MILLIS = 30L * 60 * 1000

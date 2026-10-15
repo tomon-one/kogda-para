@@ -217,8 +217,8 @@ class NextLessonWidget : GlanceAppWidget() {
                         color = when {
                             pair -> colors.text
                             foreign -> colors.error
-                            lesson.isOnline -> colors.accent
-                            else -> colors.text
+                            // Место пары — кабинет или «онлайн» — одним цветом, как на экране.
+                            else -> colors.accent
                         },
                     ),
                     modifier = lesson.url?.takeUnless { foreign || pair }?.let { url ->

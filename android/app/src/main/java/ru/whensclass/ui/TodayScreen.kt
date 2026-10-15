@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.whensclass.data.GroupDto
+import ru.whensclass.data.RetakesDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.ScheduleStore
 import ru.whensclass.data.sheetLink
@@ -107,6 +108,10 @@ fun TodayScreen(
     onRepick: () -> Unit = {},
     /** Подписи выбранных групп у пар: названиями или номерами (настройки). */
     groupsByName: Boolean = true,
+    /** Лист пересдач; null — грузится или не загрузился ([retakesFailed]). */
+    retakes: RetakesDto? = null,
+    retakesFailed: Boolean = false,
+    onRetryRetakes: () -> Unit = {},
 ) {
     // Часы со звонками: «сегодня» и давность сбоя на плашке пересчитываются сами.
     val now = rememberNow(schedule?.bellsOn(collegeToday()).orEmpty())
@@ -244,6 +249,7 @@ fun TodayScreen(
             ScheduleTabs(
                 current = tab,
                 teacherMode = teacherMode,
+                live = retakes?.activeOn(today) == true,
                 onPick = { picked ->
                     if (picked.ready) {
                         tab = picked
@@ -300,6 +306,13 @@ fun TodayScreen(
                                 // преподаватель: у студента это просто чужая фамилия.
                                 selfId = if (teacherMode) selfTeacherId else null,
                             )
+                        }
+                        return@ScheduleTabs
+                    }
+
+                    Tab.RETAKES -> {
+                        tabStates.SaveableStateProvider("retakes") {
+                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes)
                         }
                         return@ScheduleTabs
                     }

@@ -209,8 +209,8 @@ private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
             fontWeight = FontWeight.Medium,
             color = when {
                 lesson.isCancelled || foreign -> colors.error
-                lesson.isOnline -> colors.accent
-                else -> colors.text
+                // Место пары — кабинет или «онлайн» — одним цветом, как на экране.
+                else -> colors.accent
             },
         ),
         modifier = when {

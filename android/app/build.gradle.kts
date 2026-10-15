@@ -21,8 +21,8 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт:
         // по нему приложение узнаёт о новой сборке на сервере.
-        versionCode = 8
-        versionName = "r-Байкал.1.1.1"
+        versionCode = 9
+        versionName = "r-Витим.1.2.0"
     }
     // Tested-сборка (docs/versions.md, «Tested»): отдельное приложение рядом с
     // основным, на нём автор проверяет новое до выкладки всем. Её номер —

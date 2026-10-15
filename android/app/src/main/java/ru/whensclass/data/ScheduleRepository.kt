@@ -325,6 +325,9 @@ class ScheduleRepository(
         return answer.getOrNull()
     }
 
+    /** Лист пересдач; null — сервер не ответил. */
+    suspend fun retakes(): RetakesDto? = withContext(Dispatchers.IO) { loadList { api.retakes() } }
+
     /** Свежий список групп; null — сервер не ответил. */
     suspend fun freshGroups(): List<GroupDto>? = withContext(Dispatchers.IO) {
         val fresh = loadList { api.groups() } ?: return@withContext null

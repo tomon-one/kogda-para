@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
 import ru.whensclass.data.ReleaseDto
@@ -150,6 +151,7 @@ internal fun NotificationsSection(
             Text(
                 "Напоминание о первой паре дня или между парами.",
                 style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Justify,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 10.dp),
             )
@@ -218,6 +220,7 @@ internal fun VersionSection(
                 Text(
                     update.notes,
                     style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Justify,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -231,6 +234,7 @@ internal fun VersionSection(
                         "приложений: так она ставит обновление самой себе. Другие " +
                         "приложения она не ставит.",
                     style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Justify,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
@@ -242,6 +246,7 @@ internal fun VersionSection(
                     "Samsung может не дать поставить: тогда выключите на время " +
                         "«Настройки» → «Безопасность и конфиденциальность» → «Автоблокировка».",
                     style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Justify,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
@@ -256,6 +261,7 @@ internal fun VersionSection(
                 Text(
                     "Не удалось: $why",
                     style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Justify,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
@@ -269,6 +275,7 @@ internal fun VersionSection(
                         "Установлена последняя версия"
                     },
                     style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Justify,
                     color = if (updateFailed) {
                         MaterialTheme.colorScheme.error
                     } else {
@@ -324,6 +331,7 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
                 "Сверяйтесь с таблицей, когда это важно.",
             // Тем же приглушённым, что и остальные пояснения.
             style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Justify,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -332,11 +340,12 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
         Text(
             "Неофициальное приложение для студентов и преподавателей НГОК.",
             style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Justify,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         // Ссылки — в том же порядке, что в «О сайте».
-        Link("Сайт для айфона и браузера", "https://kogda-para-nsk.ru")
+        Link("Сайт", "https://kogda-para-nsk.ru")
         Link("Нашли ошибку? Напишите автору в Telegram", "https://t.me/toomonn")
         ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth(), asLink = true)
         Link("Исходный код", "https://github.com/tomon-one/kogda-para")
@@ -345,12 +354,14 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
         Text(
             "Создано Tomon",
             style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Justify,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 12.dp),
         )
         Text(
             "Собрано задолго до рассвета",
             style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Justify,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

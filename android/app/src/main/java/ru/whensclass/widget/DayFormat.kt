@@ -77,6 +77,13 @@ fun formatWeekRange(from: LocalDate, to: LocalDate): String {
     }
 }
 
+/** Дни пересдачи: «16 октября, пятница», «12–23 октября», «28 октября – 3 ноября». */
+fun formatDayRange(from: LocalDate, to: LocalDate): String = when {
+    from == to -> from.format(DAY_FORMAT)
+    from.month == to.month -> "${from.dayOfMonth}–" + to.format(SHORT_DAY)
+    else -> from.format(SHORT_DAY) + " – " + to.format(SHORT_DAY)
+}
+
 fun formatDayTitle(day: LocalDate): String {
     val today = collegeToday()
     // «Послезавтра» человек и так посчитает по дате, а вот «вчера» помогает:

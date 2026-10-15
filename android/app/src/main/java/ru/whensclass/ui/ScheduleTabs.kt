@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TabRow
@@ -27,6 +28,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -45,10 +47,9 @@ import kotlin.math.roundToInt
 enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String = "") {
     STUDENTS("Студентам", true),
     TEACHERS("Преподавателям", true),
+    RETAKES("Пересдачи", true),
     // Говорим, какими будут, а не «пока пусто»: пустая вкладка без слов
-    // читается как недоделка. В листе пересдач колледжа только предмет и
-    // преподаватель, колонки группы нет — личных пересдач не будет.
-    RETAKES("Пересдачи", false, "Будут списком по предметам и преподавателям: групп в таблице колледжа нет"),
+    // читается как недоделка.
     EXAMS("Экзамены", false, "Появятся к сессии — колледж выкладывает их в декабре"),
 }
 
@@ -60,21 +61,22 @@ private fun topTabs(teacherMode: Boolean): List<Tab> =
  * Вкладки над разделом и сам раздел ([content]). Нижний ряд — пересдачи и
  * экзамены — уезжает вместе со списком и возвращается, когда список докручен до
  * верха, как на сайте: пока эти разделы пусты, он только отнимает место. Выбран
- * раздел из нижнего ряда — ряд стоит.
+ * раздел из нижнего ряда или идут пересдачи ([live]) — ряд стоит.
  */
 @Composable
 internal fun ScheduleTabs(
     current: Tab,
     teacherMode: Boolean,
     onPick: (Tab) -> Unit,
+    live: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val top = topTabs(teacherMode)
-    val pinned by rememberUpdatedState(current.ordinal >= 2)
+    val pinned by rememberUpdatedState(current.ordinal >= 2 || live)
     var rowHeight by remember { mutableIntStateOf(0) }
     // Насколько нижний ряд уехал вверх: от минус его высоты до нуля.
     var shift by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(current) { shift = 0f }
+    LaunchedEffect(current, live) { shift = 0f }
     val collapse = remember {
         object : NestedScrollConnection {
             fun move(dy: Float): Float {
@@ -139,7 +141,7 @@ internal fun ScheduleTabs(
                     }
                 },
             ) {
-                TabButton(Tab.RETAKES, current, onPick)
+                TabButton(Tab.RETAKES, current, onPick, live)
                 TabButton(Tab.EXAMS, current, onPick)
             }
         }
@@ -186,11 +188,28 @@ internal fun Explanation(title: String, text: String, sourceUrl: String? = null,
 }
 
 @Composable
-private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit) {
+private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boolean = false) {
     Tab(
         selected = tab == current,
         onClick = { onPick(tab) },
         text = {
+            // Пересдачи идут — вкладка залита: о них должны узнать и те, кто её
+            // не открывал (как на сайте).
+            if (live) {
+                Text(
+                    "Пересдачи идут",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 14.dp, vertical = 3.dp),
+                )
+                return@Tab
+            }
             Text(
                 tab.title,
                 style = MaterialTheme.typography.labelLarge,
