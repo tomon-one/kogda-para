@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import ru.whensclass.data.RoomUseDto
 import ru.whensclass.data.RoomsDto
@@ -98,6 +99,7 @@ internal fun RoomsScreen(
     LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp)) {
         item(key = "дни") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ChipsLabel("День")
                 days.forEach { d ->
                     val day = runCatching { LocalDate.parse(d) }.getOrNull()
                     val label = when (day) {
@@ -112,6 +114,7 @@ internal fun RoomsScreen(
         }
         item(key = "пары") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ChipsLabel("Пара")
                 numbers.forEach { n ->
                     val start = shown.bells[n.toString()]?.getOrNull(0)
                     FilterChip(selected = n == chosen, onClick = { pair = n }, label = { Text("$n") })
@@ -163,7 +166,10 @@ internal fun RoomsScreen(
         }
         if (clashes.isNotEmpty()) {
             item(key = "накладки") {
-                Section("Накладки — в одном кабинете разные пары")
+                // В таблице на одно время в кабинет поставлены разные пары —
+                // ошибка колледжа или перенос: кто-то из них будет в другом месте.
+                Section("Две пары в одном кабинете")
+                Note("По таблице здесь в одно время разные пары — уточните, где ваша.")
                 Card { clashes.forEachIndexed { i, c -> if (i > 0) Divider(); Uses(c.room, c.lessons) } }
             }
         }
@@ -171,7 +177,7 @@ internal fun RoomsScreen(
             item(key = "заняты") {
                 var open by rememberSaveable { mutableStateOf(false) }
                 Text(
-                    (if (open) "▾ " else "▸ ") + "Заняты — ${busy.size}",
+                    (if (open) "▾ " else "▸ ") + "Кто где занят — " + plural(busy.size, "кабинет", "кабинета", "кабинетов"),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 8.dp, top = 12.dp, bottom = 4.dp),
@@ -234,13 +240,29 @@ private fun RoomChip(room: String) = Text(
         .padding(horizontal = 10.dp, vertical = 3.dp),
 )
 
+/** Кабинет и кто в нём: каждая пара — своей строкой (группа, предмет, преподаватель). */
 @Composable
 private fun Uses(room: String, uses: List<RoomUseDto>) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Text(room, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(72.dp))
-        Text(
-            uses.joinToString("; ") { u -> u.group + " — " + u.subject + (u.teachers.firstOrNull()?.let { ", $it" } ?: "") },
-            style = MaterialTheme.typography.bodyMedium,
-        )
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(room.replace("Восход ", "Восход, "), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+        uses.forEach { u ->
+            Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Medium)) { append(u.group) }
+                    append(" " + u.subject + (u.teachers.firstOrNull()?.let { " · $it" } ?: ""))
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun androidx.compose.foundation.layout.FlowRowScope.ChipsLabel(text: String) = Text(
+    text,
+    style = MaterialTheme.typography.bodySmall,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    modifier = Modifier.width(40.dp).align(androidx.compose.ui.Alignment.CenterVertically),
+)
