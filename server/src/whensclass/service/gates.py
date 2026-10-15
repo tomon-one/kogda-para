@@ -91,6 +91,45 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
             )
 
 
+# Сколько учебных дней вперёд должна была держать группа, чтобы «всё пропало»
+# было событием, а не концом её недели.
+GROUP_EMPTIED_MIN_DAYS = 3
+
+
+def groups_emptied(previous, current, today: dt.date) -> list[tuple[str, dt.date, int]]:
+    """Группы, у которых пропали все пары на будущее: (имя, первый день, дней).
+
+    Одна группа — ниже порогов «день опустел», и лист принимается: так 15.10
+    колледж стёр колонку 01-26.РКИ.ОФ.9 с 26.10 до конца семестра, и группа
+    молча получила бы пустые недели. Отказывать из-за одной группы нельзя —
+    группу и правда могут расформировать, — поэтому это тревога, а не отказ.
+    Дни, которые прежний снимок не прочитал, не считаются: там держались
+    прежние пары, а не то, что стояло в листе.
+    """
+    if previous is None:
+        return []
+    days = sorted(d for d in set(previous.dates) & set(current.dates) if d >= today)
+    present = {g.id for g in current.groups}
+    out = []
+    for g in previous.groups:
+        if g.id not in present:
+            continue
+        had = [
+            d for d in days
+            if previous.schedule.get(g.id, {}).get(d) and d not in previous.unread.get(g.id, {})
+        ]
+        now = current.schedule.get(g.id, {})
+        # Пропавшее — хвост: дни после последнего, где пары ещё есть.
+        last = max((d for d in days if now.get(d)), default=None)
+        lost = [d for d in had if last is None or d > last]
+        if len(lost) < GROUP_EMPTIED_MIN_DAYS:
+            continue
+        if any(d in current.unread.get(g.id, {}) for d in lost):
+            continue
+        out.append((g.name, lost[0], len(lost)))
+    return out
+
+
 def _check_lost_names(previous, current, gid: str | None) -> None:
     """Отказ, если группа пропала, а её колонка на месте и с парами.
 

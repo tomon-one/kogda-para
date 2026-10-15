@@ -276,3 +276,29 @@ def test_forgotten_accept_next_lever_is_not_taken(tmp_path, sheet, sent, fixture
     sheet["text"] = _drop_two_groups(fixture_csv)
     assert r.refresh(today=TODAY, force=True) is False
     assert not lever.exists()
+
+
+def test_group_that_lost_all_future_lessons_is_reported_not_rejected():
+    """Одну группу стёрли до конца листа (так 15.10 с 01-26.РКИ.ОФ.9): лист
+    принимается, а владельцу — какая группа и с какого дня. Конец недели, уже
+    прошедшие дни и непрочитанные — не в счёт."""
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+
+    today = dt.date(2026, 10, 15)
+    days = [today + dt.timedelta(days=i) for i in range(6)]
+    groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(3)]
+    pair = [Lesson(number=1, subject="Физика")]
+
+    def snap(schedule, unread=None):
+        return Snapshot("лист", groups=groups, dates=days, schedule=schedule, unread=unread or {})
+
+    full = {g.id: {d: pair for d in days} for g in groups}
+    before = snap(full)
+    cut = {**full, "g-1": {days[0]: pair, days[1]: pair}}
+    assert gates.groups_emptied(before, snap(cut), today) == [("Г-1", days[2], 4)]
+    # Два дня в конце — не событие.
+    short = {**full, "g-1": {d: pair for d in days[:4]}}
+    assert gates.groups_emptied(before, snap(short), today) == []
+    # Не прочитаны — там держится прежнее, это не «пропали».
+    assert gates.groups_emptied(before, snap(cut, {"g-1": {days[2]: False}}), today) == []
+    assert gates.groups_emptied(None, snap(cut), today) == []

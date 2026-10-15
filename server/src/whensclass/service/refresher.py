@@ -29,7 +29,9 @@ from . import alerts
 from .bells import own_bells
 from .clock import _today
 from .failing import CRASHES_TO_ALERT, Failing
-from .gates import _check_days_emptied, _check_group_drop, _check_lost_names, _check_today_kept
+from .gates import (
+    _check_days_emptied, _check_group_drop, _check_lost_names, _check_today_kept, groups_emptied,
+)
 from .sheet_watch import SheetWatch
 from ..storage.snapshot_store import SnapshotStore
 
@@ -299,6 +301,7 @@ class Refresher(Failing, SheetWatch):
             self._recovered()
             self._tell_unread(old, snapshot)
             self._tell_bells(old, snapshot)
+            self._tell_emptied(old, snapshot, today)
             self._announce(before, snapshot, teachers, today)
             return True
         if self._disk_alerted:
@@ -315,6 +318,7 @@ class Refresher(Failing, SheetWatch):
         self._recovered()
         self._tell_unread(old, snapshot)
         self._tell_bells(old, snapshot)
+        self._tell_emptied(old, snapshot, today)
         self._announce(before, snapshot, teachers, today)
         if self._next_rejected:
             name, exc = self._next_rejected
@@ -357,6 +361,21 @@ class Refresher(Failing, SheetWatch):
         elif was:
             alerts.forget("unread")
             alerts.notify("unread-ok", "Все дни листа снова прочитаны.", force=True, good=True)
+
+    def _tell_emptied(self, old, snapshot, today) -> None:
+        """Группа потеряла все будущие пары — владельцу, сразу как появилась новая."""
+        emptied = groups_emptied(old, snapshot, today)
+        if not emptied:
+            return
+        names = ", ".join(f"{name} с {first:%d.%m} ({n} дн.)" for name, first, n in emptied[:3])
+        more = f" и ещё {len(emptied) - 3}" if len(emptied) > 3 else ""
+        alerts.notify(
+            "emptied",
+            f"Лист принят, но у групп пропали все пары на будущее: {names}{more}. Колонку "
+            "стёрли или группу убрали? Пока это так, у них пустые дни без пометки. "
+            "Присмотреться (руководство по серверу, «Когда что-то не так»).",
+            force=True,
+        )
 
     def _tell_bells(self, old, snapshot) -> None:
         """День со своими звонками — владельцу, когда такой появился или изменился."""
