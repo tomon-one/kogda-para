@@ -437,3 +437,23 @@
 .retake:last-child { border-bottom: 0; }
 .retake-name { font-weight: 500; }
 .retake-line { margin-top: 2px; font-size: 14px; }
+.retake-name.link { display: block; padding: 0; text-align: left; color: var(--primary); }
+.retake-slot { margin-top: 2px; font-size: 14px; }
+.retake-day { font-weight: 500; }
+.retake-time { margin-left: 8px; }
+.retake-past { margin-left: 8px; font-size: 12px; color: var(--muted); }
+.retake-slot.past .retake-day, .retake-slot.past .retake-time { color: var(--muted); text-decoration: line-through; }
+.retake-line.subjects { color: var(--muted); }
+.retake-memo { margin: 8px 0 4px; padding: 12px 16px; border-radius: 12px; background: var(--mark-bg); font-size: 14px; }
+.retake-memo p + p { margin-top: 6px; }
+
+/* Пересдачи идут: вкладка залита, чтобы её заметили и не открывая. */
+.tab.live .tab-label {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 14px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+}
