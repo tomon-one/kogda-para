@@ -56,12 +56,14 @@ var retakesLoading = false;
 var retakesAt = 0;
 /** Лист пересдач меняется редко, служба смотрит его раз в час. */
 var RETAKES_FRESH_MS = 30 * 60 * 1000;
+/** Не загрузилось — сама пробует снова не чаще этого: связь могла вернуться. */
+var RETRY_MS = 2 * 60 * 1000;
 
 /** Лист пересдач: при первом открытии вкладки и когда полежал полчаса. */
 export function loadRetakes(force) {
   if (retakesLoading) return;
   if (!force && state.retakes && state.retakes !== 'failed' && Date.now() - retakesAt < RETAKES_FRESH_MS) return;
-  if (!force && state.retakes === 'failed') return;
+  if (!force && state.retakes === 'failed' && Date.now() - retakesAt < RETRY_MS) return;
   retakesLoading = true;
   if (force && state.retakes === 'failed') {
     state.retakes = null;
@@ -90,7 +92,7 @@ export function loadRooms(date, force) {
   if (roomsLoading[date]) return;
   var have = state.rooms[date];
   if (!force && have && have !== 'failed' && Date.now() - (roomsAt[date] || 0) < ROOMS_FRESH_MS) return;
-  if (!force && have === 'failed') return;
+  if (!force && have === 'failed' && Date.now() - (roomsAt[date] || 0) < RETRY_MS) return;
   roomsLoading[date] = true;
   if (force && have === 'failed') {
     state.rooms[date] = null;
