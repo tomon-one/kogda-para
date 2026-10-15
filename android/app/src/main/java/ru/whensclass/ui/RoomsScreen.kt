@@ -1,5 +1,11 @@
 package ru.whensclass.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -74,26 +80,25 @@ internal fun RoomsScreen(
     }
 
     val numbers = shown.bells.keys.mapNotNull { it.toIntOrNull() }.sorted()
+    val days = shown.days.ifEmpty { listOf(shown.date) }.take(DAYS_SHOWN)
+    // Поздно вечером сегодняшние пары кончились — сразу к следующему дню.
+    val lastEnd = numbers.lastOrNull()?.let { clock(shown.bells[it.toString()]?.getOrNull(1)) }
+    if (date == null && shown.date == today.toString() && days.size > 1 && lastEnd != null && now >= lastEnd) {
+        LaunchedEffect(Unit) { date = days[1] }
+    }
     // Сегодня — идущая или следующая пара, иначе первая.
     val chosen = pair.takeIf { it in numbers } ?: run {
         if (shown.date != today.toString()) numbers.firstOrNull() ?: 1
-        else numbers.firstOrNull { n ->
-            shown.bells[n.toString()]?.getOrNull(1)?.let { runCatching { LocalTime.parse(it.padStart(5, '0')) }.getOrNull() }
-                ?.let { now < it } == true
-        } ?: numbers.lastOrNull() ?: 1
+        else numbers.firstOrNull { n -> clock(shown.bells[n.toString()]?.getOrNull(1))?.let { now < it } == true }
+            ?: numbers.lastOrNull() ?: 1
     }
     val busy = shown.busy[chosen.toString()].orEmpty()
     val clashes = shown.clashes.filter { it.number == chosen }
 
     LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp)) {
-        item(key = "заголовок") {
-            Text("Аудитории", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(start = 4.dp))
-            Note("Свободны — по расписанию: ключей, переносов и мероприятий таблица колледжа не знает.")
-        }
         item(key = "дни") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                shown.days.ifEmpty { listOf(shown.date) }.forEach { d ->
+                days.forEach { d ->
                     val day = runCatching { LocalDate.parse(d) }.getOrNull()
                     val label = when (day) {
                         today -> "Сегодня"
@@ -109,20 +114,28 @@ internal fun RoomsScreen(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 numbers.forEach { n ->
                     val start = shown.bells[n.toString()]?.getOrNull(0)
-                    FilterChip(selected = n == chosen, onClick = { pair = n },
-                        label = { Text("$n пара" + (start?.let { " · $it" } ?: "")) })
+                    FilterChip(selected = n == chosen, onClick = { pair = n }, label = { Text("$n") })
                 }
             }
-        }
-        if (shown.unread.isNotEmpty()) {
-            item(key = "непрочитанные") {
-                Note("У " + plural(shown.unread.size, "группы", "групп", "групп") +
-                    " день не прочитан — их кабинеты не учтены: " + shown.unread.joinToString(", ") + ".")
-            }
+            val span = shown.bells[chosen.toString()].orEmpty()
+            Text(
+                "$chosen пара" + (span.getOrNull(0)?.let { ", $it–" + span.getOrNull(1).orEmpty() } ?: ""),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+            )
         }
         shown.buildings.forEach { building ->
             item(key = "корпус:" + building.name) {
                 val free = building.rooms.filter { it.room !in busy }
+                // Сменили день или пару — кабинеты въезжают: видно, что список другой.
+                AnimatedContent(
+                    targetState = shown.date to chosen,
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 12 }) togetherWith fadeOut(tween(90))
+                    },
+                    label = "кабинеты",
+                ) { _ ->
                 Card {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text(
@@ -145,6 +158,7 @@ internal fun RoomsScreen(
                         }
                     }
                 }
+                }
             }
         }
         if (clashes.isNotEmpty()) {
@@ -165,8 +179,22 @@ internal fun RoomsScreen(
                 if (open) Card { busy.toSortedMap().entries.forEachIndexed { i, (room, uses) -> if (i > 0) Divider(); Uses(room, uses) } }
             }
         }
+        item(key = "пояснение") {
+            Note(
+                "Свободны по расписанию: ключей, переносов и мероприятий таблица колледжа не знает." +
+                    if (shown.unread.isEmpty()) "" else " Не учтены кабинеты " +
+                        plural(shown.unread.size, "группы", "групп", "групп") +
+                        ", у которых день не прочитан: " + shown.unread.joinToString(", ") + ".",
+            )
+        }
     }
 }
+
+/** Сколько дней показывать: сегодня, завтра и следующий учебный — дальше колледж всё равно переставит. */
+private const val DAYS_SHOWN = 3
+
+private fun clock(text: String?): LocalTime? =
+    text?.let { runCatching { LocalTime.parse(it.padStart(5, '0')) }.getOrNull() }
 
 @Composable
 private fun Note(text: String) = Text(
