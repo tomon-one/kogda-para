@@ -9,6 +9,17 @@
   код в «Поделиться».
 */
 @media (prefers-reduced-motion: no-preference) {
+  /* Аудитории: выбранная кнопка дня и пары перекрашивается плавно, а кабинеты
+     выбранной пары въезжают — видно, что список сменился. */
+  .chip-enter {
+    animation: chip-enter 0.22s ease-out both;
+    animation-delay: var(--shift, 0ms);
+  }
+  .rooms-enter {
+    animation: rooms-enter 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--shift, 0ms);
+  }
+
   .switch { transition: background 0.15s; }
   .switch::after { transition: transform 0.15s; }
 
@@ -203,3 +214,12 @@
 
 /* Код в «Поделиться» — белым квадратом и в тёмной теме: камера читает его и так. */
 .share-qr { display: block; margin: 0 auto 8px; width: 200px; height: 200px; border-radius: 8px; image-rendering: pixelated; }
+
+@keyframes rooms-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes chip-enter {
+  from { background: transparent; border-color: var(--button-border); color: var(--fg); }
+}

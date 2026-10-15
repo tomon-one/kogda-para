@@ -461,9 +461,11 @@
 /* ——— аудитории ——— */
 
 .rooms .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.rooms .chips.pairs .chip { min-width: 40px; text-align: center; }
+.room-when { margin: 2px 4px 4px; font-size: 14px; font-weight: 600; }
 .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--button-border); font-size: 14px; color: var(--fg); }
 .chip.on { background: var(--selected-bg); border-color: var(--primary); color: var(--primary); font-weight: 600; }
-.room-note { margin: 4px 4px 8px; font-size: 13px; color: var(--muted); }
+.room-note { margin: 12px 4px 8px; font-size: 12px; color: var(--muted); }
 .room-card { margin-top: 8px; padding: 12px 16px; }
 .room-building { font-weight: 600; margin-bottom: 6px; }
 .room-floor { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; }
