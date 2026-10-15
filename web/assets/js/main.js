@@ -13,7 +13,7 @@ import { showReport } from './ui/report.js';
 import { state, app } from './state.js';
 import { render, focusKey } from './render.js';
 import { parseRoute, go, back, home, onRoute, stepsNow } from './route.js';
-import { emptyList, loadLists, loadRetakes, refresh } from './data.js';
+import { emptyList, loadLists, loadRetakes, loadRooms, refresh } from './data.js';
 import { applyTheme, checkWorkerUpdate, countOpen, registerWorker, testNotice, workerUpdated } from './site.js';
 
 var installEvent = null;
@@ -77,6 +77,7 @@ Object.assign(app, {
   },
   loadLists: loadLists,
   loadRetakes: loadRetakes,
+  loadRooms: loadRooms,
   refresh: refresh,
   pick: pick,
   /** Подгруппа своей группы из строки «Добавить» — остаёмся в настройках. */

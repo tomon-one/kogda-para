@@ -5,6 +5,7 @@ import { h, icon, actionButton, actionLink, dialog, closeDialog, snackbar } from
 import { dayCards } from './days.js';
 import { othersList } from './lists.js';
 import { retakesActive, retakesView } from './retakes.js';
+import { roomsView } from './rooms.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE } from '../repo.js';
@@ -22,7 +23,7 @@ export function mainScreen(app) {
   var own = app.chosen();
   var route = app.route;
   // Вкладка: у студента своё — «Студентам», у преподавателя — «Преподавателям».
-  var tab = route.kind === 'retakes' ? 'retakes'
+  var tab = route.kind === 'retakes' || route.kind === 'rooms' ? route.kind
     : route.kind === 'teachers' ? 'teachers'
     : route.kind === 'groups' ? 'students'
     : teacherMode ? 'teachers' : 'students';
@@ -59,6 +60,8 @@ export function mainScreen(app) {
     content.appendChild(othersList(app, 'groups', null));
   } else if (route.kind === 'retakes') {
     content.appendChild(retakesView(app));
+  } else if (route.kind === 'rooms') {
+    content.appendChild(roomsView(app));
   } else {
     ownView(app, content);
     if (teacherMode) {
@@ -157,10 +160,16 @@ function tabs(app, current, teacherMode) {
 function secondTabs(app, current, live) {
   var on = current === 'retakes';
   var retakes = h('button', {
-    type: 'button', class: 'tab' + (on ? ' on' : '') + (live ? ' live' : ''), 'aria-current': on ? 'page' : null, 'data-key': 'tab:retakes',
+    type: 'button', class: 'tab' + (on ? ' on' : '') + (live ? ' live' : ''), title: live ? 'Пересдачи идут' : null,
+    'aria-label': live ? 'Пересдачи идут' : null, 'aria-current': on ? 'page' : null, 'data-key': 'tab:retakes',
     onclick: function () { if (!on) app.go('retakes'); },
-  }, h('span', { class: 'tab-label' }, live ? 'Пересдачи идут' : 'Пересдачи'));
-  return h('nav', { class: 'tabs soon', 'aria-label': 'Разделы' }, [retakes].concat(['exams'].map(function (key) {
+  }, h('span', { class: 'tab-label' }, 'Пересдачи'));
+  var roomsOn = current === 'rooms';
+  var rooms = h('button', {
+    type: 'button', class: 'tab' + (roomsOn ? ' on' : ''), 'aria-current': roomsOn ? 'page' : null, 'data-key': 'tab:rooms',
+    onclick: function () { if (!roomsOn) app.go('rooms'); },
+  }, h('span', { class: 'tab-label' }, 'Аудитории'));
+  return h('nav', { class: 'tabs soon', 'aria-label': 'Разделы' }, [retakes, rooms].concat(['exams'].map(function (key) {
     return h('button', {
       type: 'button', class: 'tab muted',
       onclick: function () { snackbar(SOON[key][1]); },
