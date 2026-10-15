@@ -451,7 +451,7 @@
 .tab.live .tab-label {
   display: inline-block;
   max-width: 100%;
-  padding: 3px 14px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--today-bg);
   color: var(--primary);
@@ -473,6 +473,10 @@
 .room-free { display: flex; flex-wrap: wrap; gap: 6px; }
 .room-chip { padding: 3px 10px; border-radius: 8px; background: var(--today-bg); color: var(--primary); font-weight: 600; font-size: 14px; }
 .room-busy { padding: 10px 16px; border-bottom: 1px solid var(--bg); font-size: 14px; }
+.room-use { margin-top: 2px; }
+.room-group { font-weight: 500; }
+.chips-label { align-self: center; width: 40px; font-size: 13px; }
+.room-note.top { margin-top: 0; }
 .room-busy:last-child { border-bottom: 0; }
-.room-name { display: inline-block; min-width: 64px; font-weight: 600; margin-right: 6px; }
+.room-name { font-weight: 600; color: var(--primary); }
 .room-taken summary { cursor: pointer; }

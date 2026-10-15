@@ -37,12 +37,15 @@ function dayLabel(date, today) {
   return dayTitle(date, today).split(',').slice(0, 1)[0];
 }
 
+/** Кабинет и кто в нём: каждая пара — своей строкой (группа, предмет, преподаватель). */
 function busyLine(room, entries) {
   return h('div', { class: 'room-busy' },
-    h('span', { class: 'room-name' }, room),
-    h('span', null, entries.map(function (e) {
-      return e.g + ' — ' + e.s + (e.t && e.t.length ? ', ' + e.t[0] : '');
-    }).join('; ')));
+    h('div', { class: 'room-name' }, room.replace(/^Восход /, 'Восход, ')),
+    entries.map(function (e) {
+      return h('div', { class: 'room-use' },
+        h('span', { class: 'room-group' }, e.g),
+        ' ' + e.s + (e.t && e.t.length ? ' · ' + e.t[0] : ''));
+    }));
 }
 
 /** Сколько дней показывать: сегодня, завтра и следующий учебный — дальше колледж всё равно переставит. */
@@ -110,22 +113,22 @@ export function roomsView(app) {
     app.render();
   }
 
-  wrap.appendChild(h('div', { class: 'chips' }, days.map(function (d) {
+  wrap.appendChild(h('div', { class: 'chips' }, [h('span', { class: 'chips-label muted' }, 'День')].concat(days.map(function (d) {
     var c = chip(dayLabel(d, now.date), d === body.date, function () {
       if (d === body.date) return;
       pick(function () { st.date = d; st.pair = null; });
     }, 'room-day:' + d);
     return d === body.date && d === st.date ? chipEntering(c, st) : c;
-  })));
+  }))));
 
   var pair = st.pair || defaultPair(body, now.date, now.sec);
-  wrap.appendChild(h('div', { class: 'chips pairs' }, numbers.map(function (n) {
+  wrap.appendChild(h('div', { class: 'chips pairs' }, [h('span', { class: 'chips-label muted' }, 'Пара')].concat(numbers.map(function (n) {
     var c = chip(String(n), n === pair, function () {
       if (n === pair) return;
       pick(function () { st.pair = n; });
     }, 'room-pair:' + n);
     return n === pair && n === st.pair ? chipEntering(c, st) : c;
-  })));
+  }))));
   var span = body.bells[pair] || [];
   wrap.appendChild(entering(h('p', { class: 'room-when' }, pair + ' пара' + (span[0] ? ', ' + span[0] + '–' + (span[1] || '') : '')), st));
 
@@ -151,7 +154,10 @@ export function roomsView(app) {
   });
 
   if (clashes.length) {
-    picked.appendChild(h('h3', { class: 'section-title' }, 'Накладки — в одном кабинете разные пары'));
+    // В таблице на одно время в кабинет поставлены разные пары — ошибка колледжа
+    // или перенос: кто-то из них будет в другом месте.
+    picked.appendChild(h('h3', { class: 'section-title' }, 'Две пары в одном кабинете'));
+    picked.appendChild(h('p', { class: 'room-note top' }, 'По таблице здесь в одно время разные пары — уточните, где ваша.'));
     picked.appendChild(h('div', { class: 'list-card' }, clashes.map(function (c) { return busyLine(c.room, c.lessons); })));
   }
 
@@ -159,7 +165,7 @@ export function roomsView(app) {
   if (taken.length) {
     var list = h('div', { class: 'list-card' }, taken.map(function (room) { return busyLine(room, busy[room]); }));
     picked.appendChild(h('details', { class: 'room-taken' },
-      h('summary', { class: 'section-title' }, 'Заняты — ' + taken.length),
+      h('summary', { class: 'section-title' }, 'Кто где занят — ' + plural(taken.length, 'кабинет', 'кабинета', 'кабинетов')),
       list));
   }
   wrap.appendChild(entering(picked, st));

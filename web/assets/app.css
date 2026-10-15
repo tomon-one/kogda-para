@@ -370,7 +370,8 @@ p a, .point a { text-decoration: underline; }
 
 .text-link { color: var(--primary); }
 
-/* Нижний ряд — три раздела под двумя верхними: равные колонки встали бы
-   вразнобой с верхними, поэтому ряд — по ширине подписей, по центру. */
-.tabs.soon { justify-content: center; gap: 8px; }
-.tabs.soon .tab { flex: 0 1 auto; padding-left: 14px; padding-right: 14px; }
+/* Нижний ряд — три раздела под двумя верхними. Середины вкладок — на четверти,
+   половине и трёх четвертях ширины: крайние стоят ровно под верхними, средняя
+   — между ними. Равные трети во всю ширину встали бы вразнобой с верхними. */
+.tabs.soon { padding: 0 12.5%; }
+.tabs.soon .tab { padding-left: 2px; padding-right: 2px; }
