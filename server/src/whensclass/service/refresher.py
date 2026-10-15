@@ -364,7 +364,7 @@ class Refresher(Failing, SheetWatch):
 
     def _tell_emptied(self, old, snapshot, today) -> None:
         """Группа потеряла все будущие пары — владельцу, сразу как появилась новая."""
-        emptied = groups_emptied(old, snapshot, today)
+        emptied = groups_emptied(old, snapshot, today, dropped=bool(self._dropped))
         if not emptied:
             return
         names = ", ".join(f"{name} с {first:%d.%m} ({n} дн.)" for name, first, n in emptied[:3])

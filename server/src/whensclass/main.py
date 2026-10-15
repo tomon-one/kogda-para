@@ -158,7 +158,7 @@ async def lifespan(app: FastAPI):
 
     # Сверка с листами преподавателей: раз в час, в стороне от обновления —
     # только тревога владельцу, ответы клиентам она не меняет.
-    crosscheck = CrossCheck(lambda: store.snapshot)
+    crosscheck = CrossCheck(lambda: store.snapshot if refresher.status == "ok" else None, directory)
     scheduler.add_job(
         crosscheck.run,
         CronTrigger(hour=f"{first}-{last}", minute=37),

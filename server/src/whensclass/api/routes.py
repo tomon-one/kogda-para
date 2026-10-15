@@ -242,8 +242,9 @@ def teachers(request: Request) -> Response:
 def rooms(request: Request, date: str | None = Query(None)) -> Response:
     """Кабинеты дня: что занято на каждой паре, по корпусам, и накладки.
 
-    `date` — день из листа, по умолчанию сегодня. Дня в листе нет — 404:
-    свободным по пустому дню оказался бы весь колледж.
+    `date` — день из листа, по умолчанию сегодня; сегодня в листе нет —
+    ближайший следующий. Другого дня в листе нет — 404: свободным по пустому
+    дню оказался бы весь колледж.
     """
     if refused := _too_old(request):
         return refused
@@ -254,6 +255,10 @@ def rooms(request: Request, date: str | None = Query(None)) -> Response:
         day = dt.date.fromisoformat(date) if date else _today()
     except ValueError:
         return Response(status_code=400, content='{"error":"date — вида 2026-10-16"}', media_type=JSON)
+    if day not in store.snapshot.dates and day == _today():
+        # Сегодня в листе нет (воскресенье, праздник) — ближайший учебный день:
+        # иначе вкладке весь день неоткуда взять, на какой день перейти.
+        day = next((d for d in sorted(store.snapshot.dates) if d > day), day)
     if day not in store.snapshot.dates:
         return Response(status_code=404, content='{"error":"этого дня в таблице нет"}', media_type=JSON)
     bells = own_bells(store.snapshot, day, BELLS) or BELLS

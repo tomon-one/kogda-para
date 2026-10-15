@@ -386,3 +386,13 @@ def test_rooms_for_a_day_in_the_sheet_and_404_outside(client):
     assert body["date"] == "2026-09-08" and body["buildings"] and "1" in body["busy"]
     assert client.get("/v1/rooms?date=2026-12-31").status_code == 404
     assert client.get("/v1/rooms?date=вчера").status_code == 400
+
+
+def test_rooms_on_a_sunday_are_for_the_next_day_in_the_sheet(client, monkeypatch):
+    """Воскресенья в листе нет — вкладка открывается на понедельнике, а не 404."""
+    from whensclass.api import routes
+
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 6))
+    for path in ("/v1/rooms", "/v1/rooms?date=2026-09-06"):
+        body = client.get(path).json()
+        assert body["date"] == "2026-09-07" and body["days"][0] == "2026-09-07", path

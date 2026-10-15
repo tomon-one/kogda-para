@@ -66,12 +66,30 @@ def parse_teacher_sheet(text: str) -> list[TeacherPair]:
     return out
 
 
-def sheet_week(title: str, year: int) -> tuple[dt.date, dt.date] | None:
-    """«расписание преподавателей 19.10-24.10» -> даты недели; не такое имя — None."""
-    m = re.search(r"преподавател\w*\s+(\d{1,2})\.(\d{1,2})\s*[-–]\s*(\d{1,2})\.(\d{1,2})", title, re.IGNORECASE)
+def sheet_week(title: str, today: dt.date) -> tuple[dt.date, dt.date] | None:
+    """«расписание преподавателей 19.10-24.10» -> даты недели; не лист преподавателей — None.
+
+    Имя колледж пишет руками: «26.-31.10», «26.10.-31.10», с годом, через «—».
+    Берутся первая и последняя дата после слова; месяц начала не написан — как у
+    конца. Год — ближайший к сегодня; неделя через Новый год кончается в следующем.
+    """
+    m = re.search(r"препод\w*(.*)", title, re.IGNORECASE)
     if not m:
         return None
+    found = re.findall(r"(\d{1,2})\.(\d{1,2})?", m[1])
+    if len(found) < 2 or not found[-1][1]:
+        return None
+    (d1, m1), (d2, m2) = found[0], found[-1]
     try:
-        return dt.date(year, int(m[2]), int(m[1])), dt.date(year, int(m[4]), int(m[3]))
+        end_month = int(m2)
+        start_month = int(m1) if m1 else end_month
+        start = min(
+            (dt.date(y, start_month, int(d1)) for y in (today.year - 1, today.year, today.year + 1)),
+            key=lambda d: abs((d - today).days),
+        )
+        end = dt.date(start.year, end_month, int(d2))
+        if end < start:
+            end = end.replace(year=start.year + 1)
     except ValueError:
         return None
+    return start, end

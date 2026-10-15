@@ -69,3 +69,21 @@ def test_stream_is_one_line_and_subgroups_are_not_a_clash():
     snap.schedule["в"][DAY] = []
     snap.schedule["г"][DAY] = [pair("Миллер Д.", "Немецкий"), pair("Уэллс Д.", "Английский")]
     assert rooms_payload(snap, DAY, {})["clashes"] == []
+
+
+def test_lesson_with_a_link_in_a_room_takes_the_room():
+    """«Преподаватель на онлайн, студенты в кабинете 269»: ссылка есть, пара очная."""
+    snap = _snapshot()
+    snap.schedule["б"][DAY] = [Lesson(number=6, subject="Право", room="269", teachers=("Петров П.П.",),
+                                      url="https://my.mts-link.ru/j/1")]
+    assert "269" in rooms_payload(snap, DAY, {})["busy"]["6"]
+
+
+def test_a_shared_lesson_is_one_sighting_of_a_room():
+    """Кабинет из одной ячейки общей пары — всё ещё «один раз в листе»."""
+    snap = _snapshot()
+    once = Lesson(number=6, subject="Право", room="368", teachers=("Петров П.П.",))
+    snap.schedule["а"][DAY] = snap.schedule["а"][DAY] + [once]
+    snap.schedule["б"][DAY] = snap.schedule["б"][DAY] + [once]
+    rooms = [r["room"] for b in rooms_payload(snap, DAY, {})["buildings"] for r in b["rooms"]]
+    assert "368" not in rooms

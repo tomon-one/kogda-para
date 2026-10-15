@@ -6,6 +6,7 @@ import io
 
 from whensclass.domain.models import GroupRef, Lesson, Snapshot
 from whensclass.parser.teacher_sheet import parse_teacher_sheet, sheet_week
+from whensclass.service import crosscheck as crosscheck_service
 from whensclass.service.crosscheck import compare
 
 MON, TUE = dt.date(2026, 10, 19), dt.date(2026, 10, 20)
@@ -39,8 +40,8 @@ def test_pairs_are_read_with_day_number_and_group():
         ("Иванов Иван Иванович", TUE, 2, "Физика (Пр)", "онлайн", "А-1 и Б-1"),
         ("Иванов Иван Иванович", MON, 3, "Химия (Пр)", "252", "А-1"),
     ]
-    assert sheet_week("расписание преподавателей 19.10-24.10", 2026) == (MON, dt.date(2026, 10, 24))
-    assert sheet_week("расписание групп 01.-19.09", 2026) is None
+    assert sheet_week("расписание преподавателей 19.10-24.10", dt.date(2026, 10, 16)) == (MON, dt.date(2026, 10, 24))
+    assert sheet_week("расписание групп 01.-19.09", dt.date(2026, 10, 16)) is None
 
 
 def _snapshot(a1_mon):
@@ -69,3 +70,61 @@ def test_one_late_edit_is_not_a_mismatch():
     """Одна несошедшаяся пара из двух — поздняя правка листа групп, не сдвиг."""
     edited = [Lesson(number=2, subject="Кураторский час"), Lesson(number=3, subject="Химия")]
     assert compare(_snapshot(edited), parse_teacher_sheet(SHEET), MON) == []
+
+
+def test_day_missing_from_the_group_sheet_is_not_checked():
+    """Следующий лист групп не принят — его дни сверять не с чем."""
+    snap = _snapshot([Lesson(number=2, subject="История"), Lesson(number=3, subject="Литература")])
+    snap.dates = [TUE]
+    assert compare(snap, parse_teacher_sheet(SHEET), MON) == []
+
+
+def test_week_names_as_the_college_writes_them():
+    today = dt.date(2026, 10, 16)
+    for title in ("расписание преподавателей 26.-31.10", "Расписание преподавателей 26.10.-31.10",
+                  "расписание преподавателей 26.10.2026-31.10.2026", "расписание преподавателей 26.10—31.10"):
+        assert sheet_week(title, today) == (dt.date(2026, 10, 26), dt.date(2026, 10, 31)), title
+    # Неделя через Новый год кончается в следующем.
+    assert sheet_week("расписание преподавателей 28.12-02.01", dt.date(2026, 12, 20)) == (
+        dt.date(2026, 12, 28), dt.date(2027, 1, 2))
+
+
+def _run(tmp_path, monkeypatch, snap, text, sent):
+    from whensclass.sources.gsheets import SheetInfo
+
+    monkeypatch.setattr(crosscheck_service.sheet_index, "list_sheets",
+                        lambda: [SheetInfo("расписание преподавателей 19.10-24.10", "5")])
+    monkeypatch.setattr(crosscheck_service.gsheets, "fetch_sheet_csv", text)
+    monkeypatch.setattr(crosscheck_service.alerts, "notify", lambda kind, *a, **k: sent.append(kind))
+    monkeypatch.setattr(crosscheck_service.alerts, "forget", lambda *a: None)
+
+    class Now(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt.datetime(2026, 10, 19, 6, 37, tzinfo=tz)
+
+    monkeypatch.setattr(crosscheck_service.dt, "datetime", Now)
+    crosscheck_service.CrossCheck(lambda: snap, tmp_path).run()
+
+
+def test_same_mismatch_is_told_once_across_restarts_and_failed_reads(tmp_path, monkeypatch):
+    import httpx
+
+    snap = _snapshot([Lesson(number=2, subject="История"), Lesson(number=3, subject="Литература")])
+    sent = []
+    _run(tmp_path, monkeypatch, snap, lambda gid, title=None: SHEET, sent)
+    assert sent == ["crosscheck"]
+
+    def down(gid, title=None):
+        raise httpx.ConnectError("нет сети")
+
+    _run(tmp_path, monkeypatch, snap, down, sent)
+    _run(tmp_path, monkeypatch, snap, lambda gid, title=None: SHEET, sent)
+    assert sent == ["crosscheck"]
+
+
+def test_unreadable_teacher_sheet_is_a_quiet_alert(tmp_path, monkeypatch):
+    sent = []
+    snap = _snapshot([Lesson(number=2, subject="Физика"), Lesson(number=3, subject="Химия")])
+    _run(tmp_path, monkeypatch, snap, lambda gid, title=None: "не тот лист", sent)
+    assert sent == ["crosscheck-sheet"]

@@ -58,13 +58,15 @@ def _clash(entries: list[dict]) -> bool:
 
 
 def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]]) -> dict:
-    seen: dict[tuple[str, str], int] = defaultdict(int)
+    # Встречи кабинета — разные (день, пара): общая пара нескольких групп —
+    # одна ячейка листа, а не несколько.
+    seen: dict[tuple[str, str], set] = defaultdict(set)
     for by_date in snapshot.schedule.values():
-        for lessons in by_date.values():
+        for day_, lessons in by_date.items():
             for x in lessons:
-                if not (x.online or x.url) and (place := room_of(x.room)):
-                    seen[place] += 1
-    known = {place for place, n in seen.items() if n >= MIN_SEEN}
+                if not x.online and (place := room_of(x.room)):
+                    seen[place].add((day_, x.number))
+    known = {place for place, slots in seen.items() if len(slots) >= MIN_SEEN}
 
     names = {g.id: g.name for g in snapshot.groups}
     busy: dict[int, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
@@ -74,7 +76,9 @@ def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]])
             unread.append(names.get(gid, gid))
             continue
         for x in by_date.get(day, []):
-            if x.cancelled or x.online or x.url:
+            # Пара со ссылкой, но не онлайн («преподаватель на онлайн, студенты
+            # в кабинете 269») кабинет занимает: онлайн ли она, решает `online`.
+            if x.cancelled or x.online:
                 continue
             place = room_of(x.room)
             if place is None:
