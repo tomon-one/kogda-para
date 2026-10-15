@@ -17,7 +17,8 @@ from fastapi import APIRouter, Query, Request, Response
 
 from ..config import settings
 from ..push.subscription import BadSubscription, parse_keys, parse_subscription
-from ..service.bells import BELLS
+from ..service.bells import BELLS, own_bells
+from ..service.rooms import rooms_payload
 from ..service.refresher import state_dir
 from .etag import etag_for, matches
 from .payloads import (
@@ -235,6 +236,30 @@ def teachers(request: Request) -> Response:
     if store.snapshot is None or store.teachers is None:
         return _not_loaded()
     return _json_response(request, teachers_payload(store.teachers, store.generated))
+
+
+@router.api_route("/v1/rooms", methods=["GET", "HEAD"])
+def rooms(request: Request, date: str | None = Query(None)) -> Response:
+    """Кабинеты дня: что занято на каждой паре, по корпусам, и накладки.
+
+    `date` — день из листа, по умолчанию сегодня. Дня в листе нет — 404:
+    свободным по пустому дню оказался бы весь колледж.
+    """
+    if refused := _too_old(request):
+        return refused
+    store, _ = _state(request)
+    if store.snapshot is None:
+        return _not_loaded()
+    try:
+        day = dt.date.fromisoformat(date) if date else _today()
+    except ValueError:
+        return Response(status_code=400, content='{"error":"date — вида 2026-10-16"}', media_type=JSON)
+    if day not in store.snapshot.dates:
+        return Response(status_code=404, content='{"error":"этого дня в таблице нет"}', media_type=JSON)
+    bells = own_bells(store.snapshot, day, BELLS) or BELLS
+    body = rooms_payload(store.snapshot, day, bells)
+    body["days"] = [d.isoformat() for d in store.snapshot.dates if d >= _today()][:7]
+    return _json_response(request, body)
 
 
 @router.api_route("/v1/retakes", methods=["GET", "HEAD"])
