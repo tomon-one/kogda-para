@@ -24,6 +24,7 @@ from .config import settings
 from .push.service import Push, load_vapid
 from .service.bells import BELLS
 from .service.refresher import Refresher, state_dir
+from .service.crosscheck import CrossCheck
 from .service.retakes import RetakesSource
 from .storage.snapshot_store import SnapshotStore
 
@@ -154,6 +155,17 @@ async def lifespan(app: FastAPI):
     )
     scheduler.add_job(retakes.refresh, "date",
                       run_date=dt.datetime.now(zone) + dt.timedelta(seconds=30))
+
+    # Сверка с листами преподавателей: раз в час, в стороне от обновления —
+    # только тревога владельцу, ответы клиентам она не меняет.
+    crosscheck = CrossCheck(lambda: store.snapshot)
+    scheduler.add_job(
+        crosscheck.run,
+        CronTrigger(hour=f"{first}-{last}", minute=37),
+        id="crosscheck",
+        max_instances=1,
+        coalesce=True,
+    )
 
     try:
         yield
