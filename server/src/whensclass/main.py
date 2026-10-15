@@ -24,6 +24,7 @@ from .config import settings
 from .push.service import Push, load_vapid
 from .service.bells import BELLS
 from .service.refresher import Refresher, state_dir
+from .service.retakes import RetakesSource
 from .storage.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
@@ -79,6 +80,8 @@ async def lifespan(app: FastAPI):
     app.state.store = store
     app.state.refresher = refresher
     app.state.push = push
+    retakes = RetakesSource(directory)
+    app.state.retakes = retakes
 
     if store.load():
         log.info("поднял снимок с диска: лист %r", store.snapshot.sheet_title)
@@ -139,6 +142,18 @@ async def lifespan(app: FastAPI):
     # Первый заход сразу, чтобы сервис не стоял пустым до ближайшего часа.
     scheduler.add_job(refresher.refresh, "date",
                       run_date=dt.datetime.now(zone) + dt.timedelta(seconds=1))
+
+    # Лист пересдач меняется редко: раз в час хватает, а лишние запросы к
+    # Google приближают его отказ «429» и для расписания.
+    scheduler.add_job(
+        retakes.refresh,
+        CronTrigger(hour=f"{first}-{last}", minute=7),
+        id="retakes",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(retakes.refresh, "date",
+                      run_date=dt.datetime.now(zone) + dt.timedelta(seconds=30))
 
     try:
         yield

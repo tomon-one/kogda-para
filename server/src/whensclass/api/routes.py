@@ -237,6 +237,17 @@ def teachers(request: Request) -> Response:
     return _json_response(request, teachers_payload(store.teachers, store.generated))
 
 
+@router.api_route("/v1/retakes", methods=["GET", "HEAD"])
+def retakes(request: Request) -> Response:
+    """Лист пересдач как есть: по преподавателям, текст ячеек без толкования."""
+    if refused := _too_old(request):
+        return refused
+    source = getattr(request.app.state, "retakes", None)
+    if source is None or source.payload is None:
+        return _not_loaded()
+    return _json_response(request, source.payload)
+
+
 @router.api_route("/v1/teacher/{teacher_id}", methods=["GET", "HEAD"])
 def teacher(
     request: Request,
