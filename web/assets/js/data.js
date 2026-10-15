@@ -4,6 +4,7 @@
 import * as repo from './repo.js';
 import * as store from './store.js';
 import { snackbar } from './ui/dom.js';
+import * as api from './api.js';
 import { HttpError, NetError } from './api.js';
 import { refreshLabel } from './ui/today.js';
 import { state, app } from './state.js';
@@ -47,6 +48,35 @@ export function loadLists(force) {
       store.set('listsAt', Date.now());
       repo.followRenamedPins(fresh[0].list, fresh[1].list);
     }
+    render();
+  });
+}
+
+var retakesLoading = false;
+var retakesAt = 0;
+/** Лист пересдач меняется редко, служба смотрит его раз в час. */
+var RETAKES_FRESH_MS = 30 * 60 * 1000;
+
+/** Лист пересдач: при первом открытии вкладки и когда полежал полчаса. */
+export function loadRetakes(force) {
+  if (retakesLoading) return;
+  if (!force && state.retakes && state.retakes !== 'failed' && Date.now() - retakesAt < RETAKES_FRESH_MS) return;
+  if (!force && state.retakes === 'failed') return;
+  retakesLoading = true;
+  if (force && state.retakes === 'failed') {
+    state.retakes = null;
+    render();
+  }
+  api.retakes().then(function (body) {
+    retakesLoading = false;
+    retakesAt = Date.now();
+    state.retakes = body;
+    render();
+  }, function () {
+    retakesLoading = false;
+    retakesAt = Date.now();
+    // Уже показанный список не прячем из-за одного неудачного запроса.
+    if (!state.retakes || state.retakes === 'failed') state.retakes = 'failed';
     render();
   });
 }

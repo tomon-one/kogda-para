@@ -9,6 +9,8 @@ export var state = {
   refreshFailed: false,
   groups: null,
   teachers: null,
+  /** Лист пересдач (ответ /v1/retakes); null — грузится, 'failed' — не загрузился. */
+  retakes: null,
   other: null,
   queries: {},
   /**
