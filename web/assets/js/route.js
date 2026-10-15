@@ -35,6 +35,7 @@ export function parseRoute() {
   if (head === 'pick') {
     return { screen: 'pick', mode: parts[1] === 'self' ? 'self' : parts[1] === 'extra' || parts[1] === 'second' ? 'extra' : 'group' };
   }
+  if (head === 'retakes') return { screen: 'main', kind: 'retakes', id: null };
   if (head === 'teachers' || head === 'groups') {
     // Id строит служба из названия: латиница, цифры, дефис. Прочее из адреса
     // в запрос не пускать: «..%2F» nginx раскодирует в чужой путь.

@@ -65,6 +65,10 @@ export function teachers() {
   return getJson('/v1/teachers').then(function (body) { return body.teachers || []; });
 }
 
+export function retakes() {
+  return getJson('/v1/retakes');
+}
+
 export function schedule(id, from, days) {
   return getJson('/v1/schedule/' + encodeURIComponent(id) + query(from, days));
 }

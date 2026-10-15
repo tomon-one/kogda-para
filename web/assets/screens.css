@@ -429,3 +429,11 @@
   box-shadow: var(--shadow);
   transform: translateX(-50%);
 }
+
+/* ——— пересдачи ——— */
+
+.retakes-title { padding: 4px 4px 0; font-size: 16px; font-weight: 600; }
+.retake { padding: 12px 16px; border-bottom: 1px solid var(--bg); }
+.retake:last-child { border-bottom: 0; }
+.retake-name { font-weight: 500; }
+.retake-line { margin-top: 2px; font-size: 14px; }

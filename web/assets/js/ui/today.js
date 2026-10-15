@@ -4,13 +4,13 @@
 import { h, icon, actionButton, actionLink, dialog, closeDialog, snackbar } from './dom.js';
 import { dayCards } from './days.js';
 import { othersList } from './lists.js';
+import { retakesView } from './retakes.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE } from '../repo.js';
 
 /** Разделы. Пересдачи и экзамены колледж публикует отдельными листами. */
 var SOON = {
-  retakes: ['Пересдачи', 'Будут списком по предметам и преподавателям: групп в таблице колледжа нет'],
   exams: ['Экзамены', 'Появятся к сессии — колледж выкладывает их в декабре'],
 };
 
@@ -22,7 +22,8 @@ export function mainScreen(app) {
   var own = app.chosen();
   var route = app.route;
   // Вкладка: у студента своё — «Студентам», у преподавателя — «Преподавателям».
-  var tab = route.kind === 'teachers' ? 'teachers'
+  var tab = route.kind === 'retakes' ? 'retakes'
+    : route.kind === 'teachers' ? 'teachers'
     : route.kind === 'groups' ? 'students'
     : teacherMode ? 'teachers' : 'students';
   // С ролью — своя память: своя вкладка преподавателя — не то, что смотрел студент.
@@ -31,7 +32,7 @@ export function mainScreen(app) {
   var head = h('div', { class: 'head' }, topbar(app, own), tabs(app, tab, teacherMode));
   var content = h('main', { class: 'content' });
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
-    head, secondTabs(), content);
+    head, secondTabs(app, tab), content);
 
   // Сбой и пропажа — на любой вкладке, как в приложении: иначе чужое
   // расписание во время сбоя выглядело бы свежим. На своём — у сегодняшнего
@@ -51,6 +52,8 @@ export function mainScreen(app) {
     content.appendChild(othersList(app, 'teachers', teacherMode && own ? own.id : null));
   } else if (route.kind === 'groups') {
     content.appendChild(othersList(app, 'groups', null));
+  } else if (route.kind === 'retakes') {
+    content.appendChild(retakesView(app));
   } else {
     ownView(app, content);
     if (teacherMode) {
@@ -146,13 +149,18 @@ function tabs(app, current, teacherMode) {
   }));
 }
 
-function secondTabs() {
-  return h('nav', { class: 'tabs soon', 'aria-label': 'Скоро' }, ['retakes', 'exams'].map(function (key) {
+function secondTabs(app, current) {
+  var on = current === 'retakes';
+  var retakes = h('button', {
+    type: 'button', class: 'tab' + (on ? ' on' : ''), 'aria-current': on ? 'page' : null, 'data-key': 'tab:retakes',
+    onclick: function () { if (!on) app.go('retakes'); },
+  }, h('span', { class: 'tab-label' }, 'Пересдачи'));
+  return h('nav', { class: 'tabs soon', 'aria-label': 'Разделы' }, [retakes].concat(['exams'].map(function (key) {
     return h('button', {
       type: 'button', class: 'tab muted',
       onclick: function () { snackbar(SOON[key][1]); },
     }, h('span', { class: 'tab-label' }, SOON[key][0]));
-  }));
+  })));
 }
 
 /** Плашки: группы нет в таблице, сервер в сбое. */
