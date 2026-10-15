@@ -185,6 +185,17 @@ def test_reminders_first_of_day_and_after_a_window():
     assert [a["number"] for a in changes.reminders(payload, 5, day)] == [1, 2, 4]
 
 
+def test_reminder_carries_join_link_only_of_known_webinar():
+    """«Войти» в напоминании — ссылка площадки вебинаров; чужая — без кнопки."""
+    day = dt.date(2026, 9, 29)
+    payload = _group({TUE: [
+        _l(1, "Физика", o=1, u="https://my.mts-link.ru/j/1/2"),
+        _l(4, "Право", o=1, u="https://example.com/x"),
+    ]})
+    plan = changes.reminders(payload, 20, day)
+    assert [(a["number"], a["join"]) for a in plan] == [(1, "https://my.mts-link.ru/j/1/2"), (4, None)]
+
+
 def test_reminder_names_both_lessons_of_a_halved_block():
     day = dt.date(2026, 9, 29)
     payload = _group({TUE: [

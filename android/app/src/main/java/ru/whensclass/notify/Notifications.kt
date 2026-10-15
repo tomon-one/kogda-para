@@ -108,10 +108,54 @@ object Notifications {
         context: Context, title: String, text: String, day: String?, until: Long? = null,
         /** Какая пара: «2026-09-29T21:47|Физика» — чтобы снять, если её отменят. */
         key: String? = null,
+        /** Ссылка на вебинар — кнопка «Войти»; только известные сервисы ([LessonAlarms.joinUrl]). */
+        join: String? = null,
     ) {
-        show(context, CHANNEL_LESSON, ID_LESSON, title, text, day, until = until,
-            extras = key?.let { android.os.Bundle().apply { putString(EXTRA_LESSON_KEY, it) } })
+        val extras = android.os.Bundle().apply {
+            key?.let { putString(EXTRA_LESSON_KEY, it) }
+            join?.let { putString(EXTRA_LESSON_URL, it) }
+        }
+        show(context, CHANNEL_LESSON, ID_LESSON, title, text, day, until = until, extras = extras, join = join)
     }
+
+    /** Ссылка, с которой показано висящее напоминание о паре; null — без кнопки. */
+    fun shownLessonUrl(context: Context): String? = runCatching {
+        context.getSystemService(NotificationManager::class.java)
+            ?.activeNotifications?.firstOrNull { it.id == ID_LESSON }
+            ?.notification?.extras?.getString(EXTRA_LESSON_URL)
+    }.getOrNull()
+
+    /**
+     * Ссылку на вебинар дописали после того, как напоминание пришло (её часто
+     * дают в день пары): то же напоминание — с кнопкой «Войти», без нового звука.
+     */
+    @android.annotation.SuppressLint("MissingPermission")
+    fun addJoin(context: Context, url: String) {
+        if (!allowed(context)) return
+        runCatching {
+            val shown = context.getSystemService(NotificationManager::class.java)
+                ?.activeNotifications?.firstOrNull { it.id == ID_LESSON }?.notification ?: return
+            val builder = android.app.Notification.Builder.recoverBuilder(context, shown)
+            // Прежняя кнопка (ссылку поменяли) — убрать, чтобы не было двух «Войти».
+            builder.setActions()
+            builder.addAction(
+                android.app.Notification.Action.Builder(null, JOIN, joinIntent(context, url)).build(),
+            )
+            builder.setOnlyAlertOnce(true)
+            builder.extras.putString(EXTRA_LESSON_URL, url)
+            NotificationManagerCompat.from(context).notify(ID_LESSON, builder.build())
+        }
+    }
+
+    private const val JOIN = "Войти"
+    private const val EXTRA_LESSON_URL = "ru.whensclass.lesson.url"
+
+    private fun joinIntent(context: Context, url: String): PendingIntent = PendingIntent.getActivity(
+        context,
+        ID_LESSON + 1000,
+        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
 
     /** `until` — когда снять само: новость о дне к его концу устаревает. */
     fun changes(context: Context, title: String, text: String, until: Long? = null) {
@@ -185,6 +229,7 @@ object Notifications {
         update: Boolean = false,
         until: Long? = null,
         extras: android.os.Bundle? = null,
+        join: String? = null,
     ): Boolean {
         if (!allowed(context)) return false
         ensureChannels(context)
@@ -207,6 +252,7 @@ object Notifications {
         val builder = NotificationCompat.Builder(context, channel)
         until?.let { builder.setTimeoutAfter((it - System.currentTimeMillis()).coerceAtLeast(60_000L)) }
         extras?.let { builder.addExtras(it) }
+        join?.let { builder.addAction(0, JOIN, joinIntent(context, it)) }
         val notification = builder
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)

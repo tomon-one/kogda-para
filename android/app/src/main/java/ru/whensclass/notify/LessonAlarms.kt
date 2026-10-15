@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.isKnownWebinar
 import ru.whensclass.widget.ScheduleWidget
 import ru.whensclass.widget.distinctSubjects
 import ru.whensclass.widget.joinSubjects
@@ -56,7 +57,13 @@ object LessonAlarms {
         // Висит напоминание о паре, которую с тех пор отменили или убрали, —
         // снять: рядом с «отменили N пару» оно звало бы на неё.
         Notifications.shownLessonKey(app)?.let { key ->
-            if (!stillOn(schedule, key)) Notifications.lessonGone(app)
+            if (!stillOn(schedule, key)) {
+                Notifications.lessonGone(app)
+            } else {
+                // Ссылку на вебинар дописали после напоминания — добавить «Войти».
+                val url = joinUrl(lessonsOf(schedule, key))
+                if (url != null && url != Notifications.shownLessonUrl(app)) Notifications.addJoin(app, url)
+            }
         }
         plan(schedule, minutes)
             // Две пары в одно время — одно напоминание.
@@ -69,18 +76,29 @@ object LessonAlarms {
      * Есть ли ещё пара из ключа напоминания («2026-09-29T21:47|Физика»), не
      * отменённая. У двух пар одного номера предметы в ключе — через [KEY_SEPARATOR].
      */
-    internal fun stillOn(schedule: ScheduleDto, key: String): Boolean {
+    internal fun stillOn(schedule: ScheduleDto, key: String): Boolean = lessonsOf(schedule, key).isNotEmpty()
+
+    /** Неотменённые пары из ключа напоминания. */
+    internal fun lessonsOf(schedule: ScheduleDto, key: String): List<LessonDto> {
         val start = key.substringBefore('|')
         val subjects = key.substringAfter('|').split(KEY_SEPARATOR).toSet()
         val date = start.take(10)
         val time = start.drop(11).take(5)
-        val day = schedule.days.firstOrNull { it.date == date } ?: return false
+        val day = schedule.days.firstOrNull { it.date == date } ?: return emptyList()
         val bells = schedule.bellsOf(day)
-        return day.lessons.any { lesson ->
+        return day.lessons.filter { lesson ->
             !lesson.isCancelled && lesson.subject in subjects &&
                 bells[lesson.number.toString()]?.getOrNull(0) == time
         }
     }
+
+    /**
+     * Ссылка для кнопки «Войти»: первая из пар, и только известного сервиса
+     * вебинаров. Чужая ссылка в таблице бывает ошибкой или подменой — на экране
+     * она помечена, а кнопка в шторке открыла бы её одним касанием.
+     */
+    internal fun joinUrl(lessons: List<LessonDto>): String? =
+        lessons.firstNotNullOfOrNull { lesson -> lesson.url?.trim()?.takeIf { isKnownWebinar(it) } }
 
     /** Что и когда напомнить. Вынесено отдельно, чтобы можно было проверить. */
     fun plan(schedule: ScheduleDto, minutes: Int, now: LocalDateTime = ru.whensclass.widget.collegeNow()):
@@ -166,6 +184,7 @@ object LessonAlarms {
             .putExtra(EXTRA_TEXT, text(alarm))
             .putExtra(EXTRA_DAY, alarm.day)
             .putExtra(EXTRA_END, alarm.end?.toString())
+            .putExtra(EXTRA_URL, joinUrl(alarm.lessons))
         val pending = PendingIntent.getBroadcast(
             context,
             index,
@@ -289,6 +308,7 @@ object LessonAlarms {
     const val EXTRA_TEXT = "text"
     const val EXTRA_DAY = "day"
     const val EXTRA_END = "end"
+    const val EXTRA_URL = "url"
 }
 
 /** Показывает напоминание и заодно переставляет будильники на следующие пары. */
@@ -307,6 +327,7 @@ class LessonAlarmReceiver : BroadcastReceiver() {
             intent.getStringExtra(LessonAlarms.EXTRA_DAY),
             until = end?.let { ru.whensclass.widget.millisOf(it) },
             key = "$start|" + (intent.getStringExtra(LessonAlarms.EXTRA_KEY) ?: subject),
+            join = intent.getStringExtra(LessonAlarms.EXTRA_URL),
         )
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {

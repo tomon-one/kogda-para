@@ -373,6 +373,7 @@ class Push(Delivery):
                         "subject": alarm["subject"][:MAX_LINE],
                         "start": int(start * 1000),
                         "end": int(end * 1000),
+                        **({"join": alarm["join"]} if alarm.get("join") else {}),
                     }),
                     max(60, int((alarm["start"] - now).total_seconds())),
                     deadline=start,
