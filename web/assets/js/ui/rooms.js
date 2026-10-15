@@ -129,6 +129,8 @@ export function roomsView(app) {
     var lastEnd = minutes((body.bells[numbers[numbers.length - 1]] || [])[1]);
     if (lastEnd != null && Math.floor(now.sec / 60) >= lastEnd) {
       st.date = days[1];
+      // Как при нажатии «Завтра»: на другом дне — с первой пары.
+      st.pair = null;
       return roomsView(app);
     }
   }

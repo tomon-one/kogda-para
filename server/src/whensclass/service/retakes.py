@@ -31,7 +31,7 @@ _IS_RETAKES = re.compile(r"пересдач", re.IGNORECASE)
 NETWORK_GRACE = dt.timedelta(hours=3)
 # Сколько предметов преподавателя показывать: у почасовика их два-три, у
 # заведующего — десяток, и длинный список прячет главное.
-SUBJECTS_SHOWN = 4
+SUBJECTS_SHOWN = 3
 
 
 def _who(index: TeacherIndex | None, name: str) -> tuple[str | None, list[str]]:

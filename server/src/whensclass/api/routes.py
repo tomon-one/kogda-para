@@ -26,6 +26,7 @@ from .payloads import (
     filling,
     groups_payload,
     meta_payload,
+    published,
     schedule_payload,
     teacher_answer,
     teachers_payload,
@@ -255,15 +256,18 @@ def rooms(request: Request, date: str | None = Query(None)) -> Response:
         day = dt.date.fromisoformat(date) if date else _today()
     except ValueError:
         return Response(status_code=400, content='{"error":"date — вида 2026-10-16"}', media_type=JSON)
-    if day not in store.snapshot.dates and day == _today():
+    # Только выложенные дни: недописанный хвост листа показал бы почти весь
+    # колледж свободным — у групп, до которых колледж не дошёл, пар ещё нет.
+    shown = set(published(store.snapshot, _today()))
+    if day not in shown and day == _today():
         # Сегодня в листе нет (воскресенье, праздник) — ближайший учебный день:
         # иначе вкладке весь день неоткуда взять, на какой день перейти.
-        day = next((d for d in sorted(store.snapshot.dates) if d > day), day)
-    if day not in store.snapshot.dates:
+        day = next((d for d in sorted(shown) if d > day), day)
+    if day not in shown:
         return Response(status_code=404, content='{"error":"этого дня в таблице нет"}', media_type=JSON)
     bells = own_bells(store.snapshot, day, BELLS) or BELLS
     body = rooms_payload(store.snapshot, day, bells)
-    body["days"] = [d.isoformat() for d in store.snapshot.dates if d >= _today()][:7]
+    body["days"] = [d.isoformat() for d in sorted(shown) if d >= _today()][:7]
     return _json_response(request, body)
 
 
