@@ -12,19 +12,59 @@ import json
 import logging
 import pathlib
 import re
+import zoneinfo
+from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict
 
-from ..parser.retakes import parse_retakes
+from ..config import settings
+from ..domain.teachers import TeacherIndex, _surname_initials
+from ..parser.retakes import Retake, parse_retakes
 from ..sources import gsheets, sheet_index
 from . import alerts
 
 log = logging.getLogger(__name__)
 
 _IS_RETAKES = re.compile(r"пересдач", re.IGNORECASE)
+# Сколько предметов преподавателя показывать: у почасовика их два-три, у
+# заведующего — десяток, и длинный список прячет главное.
+SUBJECTS_SHOWN = 4
+
+
+def _who(index: TeacherIndex | None, name: str) -> tuple[str | None, list[str]]:
+    """«Абб А.А.» из листа пересдач -> id в расписании и что он сейчас ведёт.
+
+    Лист пишет фамилию с инициалами, расписание — обычно полное имя. Совпали
+    фамилия и инициалы ровно у одного, кто ведёт пары, — это он; двое —
+    не угадываем. Предметы — нынешние, а долг может быть по прошлогоднему:
+    поэтому клиенты пишут «ведёт сейчас», а не «пересдача по».
+    """
+    if index is None:
+        return None, []
+    key = _surname_initials(name)
+    if not key[0] or not key[1]:
+        return None, []
+    found = [tid for tid, full in index.names.items() if _surname_initials(full) == key and index.schedule.get(tid)]
+    if len(found) != 1:
+        return None, []
+    tid = found[0]
+    # «Физическая культура.» и без точки — один предмет.
+    counts = Counter(x.lesson.subject.rstrip(" .") for lessons in index.schedule[tid].values() for x in lessons)
+    return tid, [subject for subject, _ in counts.most_common(SUBJECTS_SHOWN)]
+
+
+def _row(row: Retake, index: TeacherIndex | None) -> dict:
+    tid, subjects = _who(index, row.teacher)
+    return {
+        "teacher": row.teacher, "dates": row.dates, "time": row.time, "room": row.room,
+        "slots": [{"from": s.start.isoformat(), "to": s.end.isoformat(), "time": s.time} for s in row.slots],
+        "teacher_id": tid, "subjects": subjects,
+    }
 
 
 class RetakesSource:
-    def __init__(self, directory: pathlib.Path):
+    def __init__(self, directory: pathlib.Path, teachers: Callable[[], TeacherIndex | None] = lambda: None):
+        self.teachers = teachers
         self.path = directory / "retakes.json"
         # Тело ответа /v1/retakes; None — ещё ни разу не читали.
         self.payload: dict | None = None
@@ -47,7 +87,8 @@ class RetakesSource:
         # Листов несколько — берём последний в книге: новые колледж добавляет в конец.
         sheet = sheets[-1]
         try:
-            parsed = parse_retakes(gsheets.fetch_sheet_csv(sheet.gid, sheet.title))
+            year = dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone)).year
+            parsed = parse_retakes(gsheets.fetch_sheet_csv(sheet.gid, sheet.title), year)
         except Exception as exc:
             log.warning("пересдачи: лист %r не прочитан: %s", sheet.title, sheet_index.hide_key(exc))
             alerts.notify(
@@ -61,7 +102,7 @@ class RetakesSource:
         self._put({
             "title": parsed.title,
             "sheet": sheet.title,
-            "rows": [asdict(r) for r in parsed.rows],
+            "rows": [_row(r, self.teachers()) for r in parsed.rows],
             "redirects": [asdict(r) for r in parsed.redirects],
         })
 

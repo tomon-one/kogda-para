@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import io
 import re
 from dataclasses import dataclass, field
@@ -21,11 +22,22 @@ from ..domain.models import SourceFormatChanged
 
 
 @dataclass
+class Slot:
+    """Дни пересдачи: с `start` по `end` включительно (один день — равны) и время."""
+
+    start: dt.date
+    end: dt.date
+    time: str
+
+
+@dataclass
 class Retake:
     teacher: str
     dates: str
     time: str
     room: str
+    # Даты, разобранные из текста; пусто — текст не разобрался, показывать как есть.
+    slots: list[Slot] = field(default_factory=list)
 
 
 @dataclass
@@ -62,7 +74,54 @@ def _names(cell: str) -> list[str]:
     return [part for part in (_clean(p) for p in cell.split(",")) if part]
 
 
-def parse_retakes(text: str) -> Retakes:
+_RANGE = re.compile(r"(\d{1,2})\.?\s*[-–]\s*(\d{1,2})\.(\d{1,2})\.?")
+_DAY = re.compile(r"(\d{1,2})\.(\d{1,2})\.?")
+_CLOCK = re.compile(r"(\d{1,2})[.:](\d{2})\s*[-–]\s*(\d{1,2})[.:](\d{2})")
+
+
+def _clock(text: str) -> str:
+    """«16.00-17.30» -> «16:00–17:30»; не время — как есть."""
+    m = _CLOCK.fullmatch(text.strip())
+    if not m:
+        return text.strip()
+    return f"{int(m[1])}:{m[2]}–{int(m[3])}:{m[4]}"
+
+
+def _day(day: int, month: int, year: int) -> dt.date | None:
+    try:
+        return dt.date(year, month, day)
+    except ValueError:
+        return None
+
+
+def parse_slots(dates: str, time: str, year: int) -> list[Slot]:
+    """«14.10; 16.10» и «10.00-14.30; 9.30-17.30» -> два дня, каждый со своим временем.
+
+    Дат через «;» столько же, сколько времён, — идут парами; время одно — у
+    всех дат; иначе у каждой даты все времена. Хоть одна дата не разобралась —
+    пусто: половина разобранного хуже текста как есть.
+    """
+    parts = [p.strip() for p in dates.split(";") if p.strip()]
+    times = [_clock(t) for t in time.split(";") if t.strip()]
+    spans: list[tuple[dt.date, dt.date]] = []
+    for part in parts:
+        if m := _RANGE.fullmatch(part):
+            start, end = _day(int(m[1]), int(m[3]), year), _day(int(m[2]), int(m[3]), year)
+        elif m := _DAY.fullmatch(part):
+            start = end = _day(int(m[1]), int(m[2]), year)
+        else:
+            return []
+        if start is None or end is None or end < start:
+            return []
+        spans.append((start, end))
+    if len(times) == len(spans):
+        paired = times
+    else:
+        paired = [", ".join(times)] * len(spans)
+    return [Slot(start, end, t) for (start, end), t in zip(spans, paired)]
+
+
+def parse_retakes(text: str, year: int | None = None) -> Retakes:
     rows = [[_clean(c) for c in row] for row in csv.reader(io.StringIO(text.lstrip("﻿")))]
 
     head = None
@@ -94,7 +153,11 @@ def parse_retakes(text: str) -> Retakes:
         row = rows[i]
         teacher = cell(row, "teacher")
         if teacher:
-            retakes.append(Retake(teacher, cell(row, "dates"), cell(row, "time"), cell(row, "room")))
+            dates, time = cell(row, "dates"), cell(row, "time")
+            retakes.append(Retake(
+                teacher.rstrip(","), dates, time, cell(row, "room"),
+                parse_slots(dates, time, year or dt.date.today().year),
+            ))
         i += 1
     if not retakes:
         raise SourceFormatChanged("лист пересдач: под заголовком нет ни одной строки")

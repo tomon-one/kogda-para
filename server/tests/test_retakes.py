@@ -49,6 +49,44 @@ def test_rows_are_given_as_written():
     ]
 
 
+def test_dates_become_slots_paired_with_times():
+    from whensclass.parser.retakes import parse_slots
+
+    def days(dates, time):
+        return [(s.start.isoformat(), s.end.isoformat(), s.time) for s in parse_slots(dates, time, 2026)]
+
+    assert days("12-23.10", "16.00-17.00") == [("2026-10-12", "2026-10-23", "16:00–17:00")]
+    assert days("14.10; 16.10", "10.00-14.30; 9.30-17.30") == [
+        ("2026-10-14", "2026-10-14", "10:00–14:30"), ("2026-10-16", "2026-10-16", "9:30–17:30")]
+    assert days("17.10.; 24.10.", "в течение дня") == [
+        ("2026-10-17", "2026-10-17", "в течение дня"), ("2026-10-24", "2026-10-24", "в течение дня")]
+    assert days("16.10.", "9.00-10.30; 14.20-17.10") == [("2026-10-16", "2026-10-16", "9:00–10:30, 14:20–17:10")]
+    # Хоть одна дата не разобралась — показывать текст как есть.
+    assert days("на неделе; 16.10", "16.00-17.00") == []
+    assert days("31.02", "16.00-17.00") == []
+
+
+def test_teacher_found_by_initials_with_current_subjects():
+    import datetime as dt
+
+    from whensclass.domain.models import Lesson
+    from whensclass.domain.teachers import TeacherIndex, TeacherLesson
+
+    def lesson(subject):
+        return TeacherLesson(lesson=Lesson(number=1, subject=subject), group_name="ИСП-924/1")
+
+    day = dt.date(2026, 10, 12)
+    index = TeacherIndex(
+        names={"ivanov-ivan-ivanovich": "Иванов Иван Иванович", "petrova-p": "Петрова Полина Павловна",
+               "petrov-p": "Петрова Пелагея Петровна"},
+        schedule={"ivanov-ivan-ivanovich": {day: [lesson("Физика."), lesson("Физика"), lesson("Химия")]},
+                  "petrova-p": {day: [lesson("Химия")]}, "petrov-p": {day: [lesson("Химия")]}},
+    )
+    assert retakes_service._who(index, "Иванов И.И.") == ("ivanov-ivan-ivanovich", ["Физика", "Химия"])
+    # Двое с теми же фамилией и инициалами — не угадываем.
+    assert retakes_service._who(index, "Петрова П.П.") == (None, [])
+
+
 def test_redirects_collect_names_by_line_and_by_comma():
     parsed = parse_retakes(SHEET)
     assert [(r.to, r.teachers) for r in parsed.redirects] == [
