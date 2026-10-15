@@ -80,6 +80,14 @@ def test_year_is_the_nearest_to_today():
         ("2026-12-22", "2026-12-22"), ("2026-12-24", "2026-12-24")]
 
 
+def test_year_follows_the_sheet_title_not_the_reading_day():
+    """Октябрьский лист, пролежавший до апреля, не «переезжает» в следующий октябрь."""
+    parsed = parse_retakes(SHEET, dt.date(2027, 4, 28))
+    assert parsed.rows[0].slots[0].start == dt.date(2026, 10, 12)
+    january = SHEET.replace("октябрь 2026", "январь 2027").replace("12-23.10", "12-23.01")
+    assert parse_retakes(january, dt.date(2026, 12, 20)).rows[0].slots[0].start == dt.date(2027, 1, 12)
+
+
 def test_redirect_word_inside_a_row_does_not_end_the_table():
     rows = list(csv.reader(io.StringIO(SHEET)))
     rows.insert(4, ["", "", "", "2", "Носов Н.Н.", "обращаться к зав. отделением", "", ""])

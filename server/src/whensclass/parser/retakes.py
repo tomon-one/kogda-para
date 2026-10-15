@@ -63,6 +63,22 @@ _HEADS = {
 }
 _REDIRECTS = re.compile(r"обращаться", re.IGNORECASE)
 _TITLE = re.compile(r"пересдач|задолженност", re.IGNORECASE)
+_MONTHS = ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
+
+
+def _anchor(title: str, today: dt.date) -> dt.date:
+    """От какого дня считать год дат без года: месяц и год из заголовка листа
+    («График пересдач, октябрь 2026 г.»), если они там есть, иначе сегодня.
+    Иначе лист, пролежавший полгода, «переехал» бы в следующий год."""
+    year = re.search(r"\b(20\d{2})\b", title)
+    if not year:
+        return today
+    words = re.findall(r"[а-яё]+", title.lower())
+    month = next(
+        (i + 1 for i, stem in enumerate(_MONTHS) for w in words if w.startswith(stem) and (stem != "ма" or w in ("май", "мая"))),
+        None,
+    )
+    return dt.date(int(year[1]), month or 7, 15 if month else 1)
 
 
 def _clean(cell: str) -> str:
@@ -156,6 +172,7 @@ def parse_retakes(text: str, today: dt.date | None = None) -> Retakes:
         "Пересдачи",
     )
 
+    anchor = _anchor(title, today or dt.date.today())
     retakes: list[Retake] = []
     i = start + 1
     while i < len(rows):
@@ -169,7 +186,7 @@ def parse_retakes(text: str, today: dt.date | None = None) -> Retakes:
             dates, time = cell(row, "dates"), cell(row, "time")
             retakes.append(Retake(
                 teacher.rstrip(","), dates, time, cell(row, "room"),
-                parse_slots(dates, time, today or dt.date.today()),
+                parse_slots(dates, time, anchor),
             ))
         i += 1
     # Заголовок есть, а строк нет — таблицу очистили: пересдач нет, это не сбой.

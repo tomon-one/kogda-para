@@ -325,8 +325,13 @@ class ScheduleRepository(
         return answer.getOrNull()
     }
 
-    /** Кабинеты дня; null — сервер не ответил или дня в таблице нет. */
-    suspend fun rooms(date: String?): RoomsDto? = withContext(Dispatchers.IO) { loadList { api.rooms(date) } }
+    /** Кабинеты дня: ответ, или «дня в таблице нет» (404), или сбой — оба пусты. */
+    suspend fun rooms(date: String?): RoomsAnswer = withContext(Dispatchers.IO) {
+        val answer = runCatching { api.rooms(date) }
+        val code = (answer.exceptionOrNull() as? HttpFailure)?.code
+        if (code == 426) markUnsupported()
+        RoomsAnswer(answer.getOrNull(), missing = code == 404)
+    }
 
     /** Лист пересдач; null — сервер не ответил. */
     suspend fun retakes(): RetakesDto? = withContext(Dispatchers.IO) { loadList { api.retakes() } }
@@ -603,3 +608,6 @@ class ScheduleRepository(
         }
     }
 }
+
+/** Ответ /v1/rooms: `missing` — дня в таблице нет, а не сбой связи. */
+data class RoomsAnswer(val body: RoomsDto?, val missing: Boolean = false)
