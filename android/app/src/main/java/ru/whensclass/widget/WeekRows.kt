@@ -299,8 +299,8 @@ private fun LessonLine(
                 fontSize = 11.sp,
                 color = when {
                     lesson.isCancelled -> colors.error
-                    lesson.isOnline -> colors.accent
-                    else -> colors.textDim
+                    // Место пары — кабинет или «онлайн» — одним цветом, как на экране.
+                    else -> colors.accent
                 },
             ),
             modifier = GlanceModifier.padding(start = 4.dp),

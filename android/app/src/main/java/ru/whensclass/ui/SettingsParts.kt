@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.whensclass.notify.Background
 import ru.whensclass.notify.Vendor
@@ -87,6 +88,7 @@ internal fun GroupRow(
                 Text(
                     note,
                     style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Justify,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -242,6 +244,7 @@ internal fun Hint(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
+        textAlign = TextAlign.Justify,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier,
     )
@@ -321,6 +324,7 @@ private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
                 "выдаётся в настройках телефона."
         },
         style = MaterialTheme.typography.bodySmall,
+        textAlign = TextAlign.Justify,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
@@ -340,6 +344,7 @@ internal fun ChannelOff(channel: String) {
             "Уведомления «${ru.whensclass.notify.Notifications.channelName(channel)}» выключены " +
                 "в настройках телефона.",
             style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Justify,
             color = MaterialTheme.colorScheme.error,
         )
         ActionButton(
@@ -377,6 +382,7 @@ private fun PhoneLimits(phone: ru.whensclass.notify.PhoneState) {
                 phone.backgroundLimits.joinToString("; ").replaceFirstChar { it.uppercase() } + ". " +
                     "Напоминания, часовое обновление и сообщения об отменах могут не приходить.",
                 style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Justify,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ActionButton(
@@ -399,6 +405,7 @@ private fun PhoneLimits(phone: ru.whensclass.notify.PhoneState) {
         Text(
             it,
             style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Justify,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(bottom = 8.dp),
         )
@@ -423,6 +430,7 @@ internal fun NotificationsDenied(allowed: Boolean) {
         Text(
             "Пока разрешение не выдано, не придёт ни одно из уведомлений ниже.",
             style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Justify,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         ActionButton(
