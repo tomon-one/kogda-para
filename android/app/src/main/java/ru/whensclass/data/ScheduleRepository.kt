@@ -325,6 +325,9 @@ class ScheduleRepository(
         return answer.getOrNull()
     }
 
+    /** Кабинеты дня; null — сервер не ответил или дня в таблице нет. */
+    suspend fun rooms(date: String?): RoomsDto? = withContext(Dispatchers.IO) { loadList { api.rooms(date) } }
+
     /** Лист пересдач; null — сервер не ответил. */
     suspend fun retakes(): RetakesDto? = withContext(Dispatchers.IO) { loadList { api.retakes() } }
 

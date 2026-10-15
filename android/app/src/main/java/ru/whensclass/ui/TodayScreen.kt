@@ -53,6 +53,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.RetakesDto
+import ru.whensclass.data.RoomsDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.ScheduleStore
 import ru.whensclass.data.sheetLink
@@ -112,6 +113,8 @@ fun TodayScreen(
     retakes: RetakesDto? = null,
     retakesFailed: Boolean = false,
     onRetryRetakes: () -> Unit = {},
+    /** Кабинеты дня; null — сервер не ответил или дня в таблице нет. */
+    loadRooms: suspend (String?) -> RoomsDto? = { null },
 ) {
     // Часы со звонками: «сегодня» и давность сбоя на плашке пересчитываются сами.
     val now = rememberNow(schedule?.bellsOn(collegeToday()).orEmpty())
@@ -306,6 +309,13 @@ fun TodayScreen(
                                 // преподаватель: у студента это просто чужая фамилия.
                                 selfId = if (teacherMode) selfTeacherId else null,
                             )
+                        }
+                        return@ScheduleTabs
+                    }
+
+                    Tab.ROOMS -> {
+                        tabStates.SaveableStateProvider("rooms") {
+                            RoomsScreen(loadRooms, today, now.toLocalTime())
                         }
                         return@ScheduleTabs
                     }

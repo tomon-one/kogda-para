@@ -48,6 +48,7 @@ enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String =
     STUDENTS("Студентам", true),
     TEACHERS("Преподавателям", true),
     RETAKES("Пересдачи", true),
+    ROOMS("Аудитории", true),
     // Говорим, какими будут, а не «пока пусто»: пустая вкладка без слов
     // читается как недоделка.
     EXAMS("Экзамены", false, "Появятся к сессии — колледж выкладывает их в декабре"),
@@ -128,7 +129,7 @@ internal fun ScheduleTabs(
                 },
         ) {
             TabRow(
-                selectedTabIndex = (current.ordinal - 2).coerceIn(0, 1),
+                selectedTabIndex = (current.ordinal - 2).coerceIn(0, 2),
                 containerColor = MaterialTheme.colorScheme.background,
                 divider = {},
                 indicator = { positions ->
@@ -142,6 +143,7 @@ internal fun ScheduleTabs(
                 },
             ) {
                 TabButton(Tab.RETAKES, current, onPick, live)
+                TabButton(Tab.ROOMS, current, onPick)
                 TabButton(Tab.EXAMS, current, onPick)
             }
         }

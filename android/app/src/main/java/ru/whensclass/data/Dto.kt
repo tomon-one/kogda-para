@@ -169,6 +169,46 @@ data class TeachersDto(
     @SerialName("teachers") val teachers: List<GroupDto> = emptyList(),
 )
 
+/** Кабинеты дня (docs/api.md, /v1/rooms): что занято на каждой паре, по корпусам, накладки. */
+@Serializable
+data class RoomsDto(
+    @SerialName("date") val date: String,
+    @SerialName("days") val days: List<String> = emptyList(),
+    @SerialName("bells") val bells: Map<String, List<String>> = emptyMap(),
+    @SerialName("buildings") val buildings: List<BuildingDto> = emptyList(),
+    /** Номер пары -> кабинет -> кто в нём. */
+    @SerialName("busy") val busy: Map<String, Map<String, List<RoomUseDto>>> = emptyMap(),
+    @SerialName("clashes") val clashes: List<ClashDto> = emptyList(),
+    /** Группы, у которых день не прочитан: их кабинеты не учтены. */
+    @SerialName("unread") val unread: List<String> = emptyList(),
+)
+
+@Serializable
+data class BuildingDto(
+    @SerialName("name") val name: String,
+    @SerialName("rooms") val rooms: List<RoomDto> = emptyList(),
+)
+
+@Serializable
+data class RoomDto(
+    @SerialName("room") val room: String,
+    @SerialName("floor") val floor: String = "",
+)
+
+@Serializable
+data class RoomUseDto(
+    @SerialName("g") val group: String,
+    @SerialName("s") val subject: String,
+    @SerialName("t") val teachers: List<String> = emptyList(),
+)
+
+@Serializable
+data class ClashDto(
+    @SerialName("n") val number: Int,
+    @SerialName("room") val room: String,
+    @SerialName("lessons") val lessons: List<RoomUseDto> = emptyList(),
+)
+
 /** Лист пересдач колледжа (docs/api.md, /v1/retakes): по преподавателям, без групп. */
 @Serializable
 data class RetakesDto(

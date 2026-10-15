@@ -81,6 +81,9 @@ class ScheduleApi(
 
     fun retakes(): RetakesDto = get("/v1/retakes").let(json::decodeFromString)
 
+    fun rooms(date: String?): RoomsDto =
+        get("/v1/rooms" + (date?.let { "?date=$it" } ?: "")).let(json::decodeFromString)
+
     fun teacher(teacherId: String, from: java.time.LocalDate? = null, days: Int = 7):
         ScheduleDto = get(
         "/v1/teacher/$teacherId?days=$days&marks=1" + (from?.let { "&from=$it" } ?: ""),
