@@ -54,3 +54,18 @@ def test_unread_group_is_named_and_its_rooms_not_counted():
     body = rooms_payload(snap, DAY, {})
     assert body["unread"] == ["А"]
     assert body["clashes"] == []
+
+
+def test_stream_is_one_line_and_subgroups_are_not_a_clash():
+    snap = _snapshot()
+    pair = lambda teacher, subject="Физика": Lesson(number=5, subject=subject, room="269", teachers=(teacher,))
+    # Б и В — одна пара на поток; у Г две подгруппы в том же кабинете с разными преподавателями.
+    snap.schedule["б"][DAY] = [pair("Иванов И.И.")]
+    snap.schedule["в"][DAY] = [pair("Иванов И.И.")]
+    body = rooms_payload(snap, DAY, {})
+    assert body["busy"]["5"]["269"] == [{"g": "Б, В", "s": "Физика", "t": ["Иванов И.И."]}]
+    assert body["clashes"] == []
+    snap.schedule["б"][DAY] = []
+    snap.schedule["в"][DAY] = []
+    snap.schedule["г"][DAY] = [pair("Миллер Д.", "Немецкий"), pair("Уэллс Д.", "Английский")]
+    assert rooms_payload(snap, DAY, {})["clashes"] == []

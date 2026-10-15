@@ -42,6 +42,21 @@ def _floor(building: str, room: str) -> str:
     return digits[0] if len(digits) == 3 else ""
 
 
+def _clash(entries: list[dict]) -> bool:
+    """Разные пары в одном кабинете: две строки у разных групп с разными
+    преподавателями (без преподавателя — с разными предметами). Разные
+    преподаватели у одной группы — её подгруппы, а не накладка."""
+    for i, a in enumerate(entries):
+        for b in entries[i + 1:]:
+            if a["groups"] & b["groups"]:
+                continue
+            if (a["t"] or b["t"]) and set(a["t"]) != set(b["t"]):
+                return True
+            if not a["t"] and not b["t"] and a["s"] != b["s"]:
+                return True
+    return False
+
+
 def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]]) -> dict:
     seen: dict[tuple[str, str], int] = defaultdict(int)
     for by_date in snapshot.schedule.values():
@@ -68,14 +83,29 @@ def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]])
             if entry not in busy[x.number][place[1]]:
                 busy[x.number][place[1]].append(entry)
 
+    # Поток — одна пара на несколько групп: тот же предмет у того же
+    # преподавателя — одной строкой, группы через запятую.
+    for rooms in busy.values():
+        for room, entries in rooms.items():
+            merged: dict[tuple, dict] = {}
+            for e in entries:
+                key = (e["s"], tuple(e["t"]))
+                if key in merged:
+                    merged[key]["g"] += ", " + e["g"]
+                    merged[key]["groups"].add(e["g"])
+                else:
+                    merged[key] = {**e, "groups": {e["g"]}}
+            rooms[room] = list(merged.values())
+
     clashes = []
     for number in sorted(busy):
         for room, entries in sorted(busy[number].items()):
-            # Общая пара (поток): тот же преподаватель — одна пара на несколько групп.
-            teachers = {tuple(e["t"]) for e in entries if e["t"]}
-            subjects = {e["s"] for e in entries}
-            if len(entries) > 1 and (len(teachers) > 1 or (not teachers and len(subjects) > 1)):
+            if _clash(entries):
                 clashes.append({"n": number, "room": room, "lessons": entries})
+    for rooms in busy.values():
+        for entries in rooms.values():
+            for e in entries:
+                e.pop("groups", None)
 
     buildings = []
     for building in (MAIN, VOSKHOD):
