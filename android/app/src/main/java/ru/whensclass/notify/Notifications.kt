@@ -114,6 +114,7 @@ object Notifications {
         val extras = android.os.Bundle().apply {
             key?.let { putString(EXTRA_LESSON_KEY, it) }
             join?.let { putString(EXTRA_LESSON_URL, it) }
+            until?.let { putLong(EXTRA_LESSON_UNTIL, it) }
         }
         show(context, CHANNEL_LESSON, ID_LESSON, title, text, day, until = until, extras = extras, join = join)
     }
@@ -127,28 +128,40 @@ object Notifications {
 
     /**
      * Ссылку на вебинар дописали после того, как напоминание пришло (её часто
-     * дают в день пары): то же напоминание — с кнопкой «Войти», без нового звука.
+     * дают в день пары), сменили или убрали: то же напоминание — с новой
+     * кнопкой «Войти» или без неё, без нового звука. `url` null — кнопку снять.
      */
     @android.annotation.SuppressLint("MissingPermission")
-    fun addJoin(context: Context, url: String) {
+    fun addJoin(context: Context, url: String?) {
         if (!allowed(context)) return
         runCatching {
             val shown = context.getSystemService(NotificationManager::class.java)
                 ?.activeNotifications?.firstOrNull { it.id == ID_LESSON }?.notification ?: return
+            val until = shown.extras.getLong(EXTRA_LESSON_UNTIL, 0L)
+            val left = until - System.currentTimeMillis()
+            // Пара уже кончилась — напоминание снять, а не перепоказывать.
+            if (until > 0 && left <= 0) {
+                NotificationManagerCompat.from(context).cancel(ID_LESSON)
+                return
+            }
             val builder = android.app.Notification.Builder.recoverBuilder(context, shown)
             // Прежняя кнопка (ссылку поменяли) — убрать, чтобы не было двух «Войти».
             builder.setActions()
-            builder.addAction(
-                android.app.Notification.Action.Builder(null, JOIN, joinIntent(context, url)).build(),
-            )
+            url?.let {
+                builder.addAction(android.app.Notification.Action.Builder(null, JOIN, joinIntent(context, it)).build())
+            }
             builder.setOnlyAlertOnce(true)
-            builder.extras.putString(EXTRA_LESSON_URL, url)
+            // Срок снятия система отсчитывает от каждого показа: задать оставшийся
+            // до конца пары, иначе напоминание провисит лишнюю пару.
+            if (until > 0) builder.setTimeoutAfter(left)
+            builder.addExtras(android.os.Bundle().apply { putString(EXTRA_LESSON_URL, url) })
             NotificationManagerCompat.from(context).notify(ID_LESSON, builder.build())
         }
     }
 
     private const val JOIN = "Войти"
     private const val EXTRA_LESSON_URL = "ru.whensclass.lesson.url"
+    private const val EXTRA_LESSON_UNTIL = "ru.whensclass.lesson.until"
 
     private fun joinIntent(context: Context, url: String): PendingIntent = PendingIntent.getActivity(
         context,

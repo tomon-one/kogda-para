@@ -60,9 +60,9 @@ object LessonAlarms {
             if (!stillOn(schedule, key)) {
                 Notifications.lessonGone(app)
             } else {
-                // Ссылку на вебинар дописали после напоминания — добавить «Войти».
+                // Ссылку на вебинар дописали, сменили или убрали после напоминания — «Войти» за ней.
                 val url = joinUrl(lessonsOf(schedule, key))
-                if (url != null && url != Notifications.shownLessonUrl(app)) Notifications.addJoin(app, url)
+                if (url != Notifications.shownLessonUrl(app)) Notifications.addJoin(app, url)
             }
         }
         plan(schedule, minutes)

@@ -53,6 +53,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.RetakesDto
+import ru.whensclass.data.RoomsAnswer
 import ru.whensclass.data.RoomsDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.ScheduleStore
@@ -114,7 +115,7 @@ fun TodayScreen(
     retakesFailed: Boolean = false,
     onRetryRetakes: () -> Unit = {},
     /** Кабинеты дня; null — сервер не ответил или дня в таблице нет. */
-    loadRooms: suspend (String?) -> RoomsDto? = { null },
+    loadRooms: suspend (String?) -> RoomsAnswer = { RoomsAnswer(null) },
 ) {
     // Часы со звонками: «сегодня» и давность сбоя на плашке пересчитываются сами.
     val now = rememberNow(schedule?.bellsOn(collegeToday()).orEmpty())

@@ -29,6 +29,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -39,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import ru.whensclass.data.RoomUseDto
+import ru.whensclass.data.RoomsAnswer
 import ru.whensclass.data.RoomsDto
 import ru.whensclass.widget.formatDayRange
 import ru.whensclass.widget.plural
@@ -53,49 +56,72 @@ import java.time.LocalTime
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RoomsScreen(
-    load: suspend (String?) -> RoomsDto?,
+    load: suspend (String?) -> RoomsAnswer,
     today: LocalDate,
     now: LocalTime,
 ) {
+    // Выбранные день и пара — на тот день, когда их выбрали: назавтра вкладка
+    // снова открывается на сегодняшнем, а не на прошедшем.
     var date by rememberSaveable { mutableStateOf<String?>(null) }
     var pair by rememberSaveable { mutableIntStateOf(0) }
+    var chosenOn by rememberSaveable { mutableStateOf<String?>(null) }
+    val fresh = chosenOn == today.toString()
+    val active = date.takeIf { fresh }
+    val activePair = pair.takeIf { fresh } ?: 0
+    fun choose(day: String?, number: Int) {
+        date = day; pair = number; chosenOn = today.toString()
+    }
+
     var retry by rememberSaveable { mutableIntStateOf(0) }
-    var body by androidx.compose.runtime.remember { mutableStateOf<RoomsDto?>(null) }
-    var failed by androidx.compose.runtime.remember { mutableStateOf(false) }
-    LaunchedEffect(date, retry) {
+    var body by remember { mutableStateOf<RoomsDto?>(null) }
+    // На какой запрос ответ в `body` и когда он пришёл: полежавший перечитывается.
+    var loadedFor by remember { mutableStateOf<String?>(null) }
+    var loadedAt by remember { mutableLongStateOf(0L) }
+    var loadedRetry by remember { mutableIntStateOf(-1) }
+    var failed by remember { mutableStateOf(false) }
+    var missing by remember { mutableStateOf(false) }
+    val request = active ?: "сегодня $today"
+    LaunchedEffect(request, retry, ScreenClock.resumes) {
+        if (loadedFor == request && loadedRetry == retry &&
+            System.currentTimeMillis() - loadedAt < ROOMS_FRESH_MILLIS
+        ) return@LaunchedEffect
         failed = false
-        val fresh = load(date)
-        if (fresh != null) body = fresh else failed = true
+        missing = false
+        val answer = load(active)
+        val got = answer.body
+        when {
+            got != null -> {
+                body = got; loadedFor = request; loadedAt = System.currentTimeMillis(); loadedRetry = retry
+            }
+            answer.missing -> missing = true
+            else -> failed = true
+        }
     }
 
     val shown = body
-    if (shown == null || (date != null && shown.date != date && !failed)) {
-        if (failed) {
-            Explanation("Аудитории не загрузились", "Проверьте интернет.")
-            ActionButton(label = "Повторить", onClick = { retry++ }, modifier = Modifier.padding(horizontal = 24.dp).fillMaxWidth())
-        } else {
-            Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
-                CircularProgressIndicator()
-            }
-        }
+    val ready = shown != null && loadedFor == request
+    if (shown == null) {
+        Status(failed, missing, active == null) { retry++ }
         return
     }
 
     val numbers = shown.bells.keys.mapNotNull { it.toIntOrNull() }.sorted()
     val days = shown.days.ifEmpty { listOf(shown.date) }.take(DAYS_SHOWN)
-    // Поздно вечером сегодняшние пары кончились — сразу к следующему дню.
+    // Поздно вечером сегодняшние пары кончились — сразу к следующему дню, с первой пары.
     val lastEnd = numbers.lastOrNull()?.let { clock(shown.bells[it.toString()]?.getOrNull(1)) }
-    if (date == null && shown.date == today.toString() && days.size > 1 && lastEnd != null && now >= lastEnd) {
-        LaunchedEffect(Unit) { date = days[1] }
+    if (ready && active == null && shown.date == today.toString() && days.size > 1 && lastEnd != null && now >= lastEnd) {
+        LaunchedEffect(Unit) { choose(days[1], 0) }
     }
     // Сегодня — идущая или следующая пара, иначе первая.
-    val chosen = pair.takeIf { it in numbers } ?: run {
+    val chosen = activePair.takeIf { it in numbers } ?: run {
         if (shown.date != today.toString()) numbers.firstOrNull() ?: 1
         else numbers.firstOrNull { n -> clock(shown.bells[n.toString()]?.getOrNull(1))?.let { now < it } == true }
             ?: numbers.lastOrNull() ?: 1
     }
     val busy = shown.busy[chosen.toString()].orEmpty()
     val clashes = shown.clashes.filter { it.number == chosen }
+    // Кнопка горит у дня на экране, а пока выбранный грузится или не пришёл — у него.
+    val selected = if (ready) shown.date else active ?: shown.date
 
     LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp)) {
         item(key = "дни") {
@@ -110,13 +136,17 @@ internal fun RoomsScreen(
                         else -> formatDayRange(day, day).substringBefore(',')
                     }
                     FilterChip(
-                        selected = d == shown.date, onClick = { date = d; pair = 0 },
+                        // Тот же день ещё раз — повтор, если он не загрузился.
+                        selected = d == selected, onClick = { if (d == active) retry++ else choose(d, 0) },
                         label = { Text(label, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
+        if (!ready) {
+            item(key = "статус") { Status(failed, missing, active == null) { retry++ } }
+        } else {
         item(key = "пары") {
             ChipsLabel("Пара")
             // Номера пар делят строку поровну: шесть кнопок не переносятся и на узком экране.
@@ -124,7 +154,7 @@ internal fun RoomsScreen(
                 numbers.forEach { n ->
                     val start = shown.bells[n.toString()]?.getOrNull(0)
                     FilterChip(
-                        selected = n == chosen, onClick = { pair = n },
+                        selected = n == chosen, onClick = { choose(active, n) },
                         label = { Text("$n", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
                         modifier = Modifier.weight(1f),
                     )
@@ -204,8 +234,30 @@ internal fun RoomsScreen(
                         ", у которых день не прочитан: " + shown.unread.joinToString(", ") + ".",
             )
         }
+        }
     }
 }
+
+/** Загрузка, сбой или «дня в таблице нет» — с повтором, где он поможет. */
+@Composable
+private fun Status(failed: Boolean, missing: Boolean, today: Boolean, retry: () -> Unit) {
+    when {
+        missing -> Explanation(
+            if (today) "Ближайших дней в таблице нет" else "Этого дня в таблице нет",
+            "Колледж ещё не выложил расписание.",
+        )
+        failed -> {
+            Explanation("Аудитории не загрузились", "Проверьте интернет.")
+            ActionButton(label = "Повторить", onClick = retry, modifier = Modifier.padding(horizontal = 24.dp).fillMaxWidth())
+        }
+        else -> Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
+            CircularProgressIndicator()
+        }
+    }
+}
+
+/** Ответ полежал — при возврате на экран перечитать: колледж правит лист и днём. */
+private const val ROOMS_FRESH_MILLIS = 5 * 60 * 1000L
 
 /** Сколько дней показывать: сегодня, завтра и следующий учебный — дальше колледж всё равно переставит. */
 private const val DAYS_SHOWN = 3
