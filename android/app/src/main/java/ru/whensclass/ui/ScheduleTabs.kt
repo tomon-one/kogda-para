@@ -116,8 +116,16 @@ internal fun ScheduleTabs(
             top.forEach { TabButton(it, current, onPick) }
         }
         // Сдвиг читается только при раскладке: прокрутка не пересобирает экран.
+        // Середины нижних вкладок — на четверти, половине и трёх четвертях ширины:
+        // крайние ровно под верхними, средняя между ними (как на сайте).
         Box(
             Modifier
+                .fillMaxWidth()
+                .layout { measurable, constraints ->
+                    val side = constraints.maxWidth / 8
+                    val row = measurable.measure(constraints.copy(minWidth = 0, maxWidth = constraints.maxWidth - 2 * side))
+                    layout(constraints.maxWidth, row.height) { row.place(side, 0) }
+                }
                 .clipToBounds()
                 .layout { measurable, constraints ->
                     val row = measurable.measure(
@@ -208,7 +216,7 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boole
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-                        .padding(horizontal = 14.dp, vertical = 3.dp),
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
                 )
                 return@Tab
             }
