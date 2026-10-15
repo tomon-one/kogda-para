@@ -1,27 +1,59 @@
-// Вкладка «Пересдачи»: лист пересдач колледжа списком с поиском по фамилии.
-// Лист ведётся по преподавателям, без групп и предметов: даты, время и
-// кабинет показываются как записаны в таблице.
+// Вкладка «Пересдачи»: лист пересдач колледжа списком с поиском. Лист ведётся
+// по преподавателям, без групп и предметов; даты служба разбирает по дням, а что
+// преподаватель ведёт сейчас, берёт из расписания (docs/api.md, /v1/retakes).
 
 import { h, clear, actionButton } from './dom.js';
 import { matchesQuery } from '../search.js';
-import { plural } from '../time.js';
+import { dayRange, plural } from '../time.js';
 
 var KEY = 'retakes';
+
+/**
+ * Пересдачи идут: лист есть и в нём есть дни не раньше сегодняшнего (или даты,
+ * которые не разобрались, — про них не знаем, что прошли).
+ */
+export function retakesActive(data, today) {
+  if (!data || data === 'failed' || !data.rows || !data.rows.length) return false;
+  return data.rows.some(function (row) {
+    if (!row.slots || !row.slots.length) return true;
+    return row.slots.some(function (s) { return s.to >= today; });
+  });
+}
 
 function spinner() {
   return h('div', { class: 'centered' }, h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Загрузка' }));
 }
 
-function line(label, text) {
-  return text ? h('div', { class: 'retake-line' }, h('span', { class: 'muted' }, label + ' '), text) : null;
+function line(label, text, cls) {
+  return text ? h('div', { class: 'retake-line' + (cls ? ' ' + cls : '') }, h('span', { class: 'muted' }, label + ' '), text) : null;
 }
 
-function retakeCard(row) {
+function slotLines(row, today) {
+  if (!row.slots || !row.slots.length) {
+    // Даты не разобрались — как в таблице.
+    return [line('Дата:', row.dates), line('Время:', row.time)];
+  }
+  return row.slots.map(function (s) {
+    var past = s.to < today;
+    return h('div', { class: 'retake-slot' + (past ? ' past' : '') },
+      h('span', { class: 'retake-day' }, dayRange(s.from, s.to)),
+      s.time ? h('span', { class: 'retake-time' }, s.time) : null,
+      past ? h('span', { class: 'retake-past' }, 'прошло') : null);
+  });
+}
+
+function retakeCard(app, row, today) {
+  var name = row.teacher_id
+    ? h('button', {
+      type: 'button', class: 'retake-name link', title: 'Расписание преподавателя',
+      onclick: function () { app.go('teachers/' + row.teacher_id); },
+    }, row.teacher)
+    : h('div', { class: 'retake-name' }, row.teacher);
   return h('div', { class: 'retake' },
-    h('div', { class: 'retake-name' }, row.teacher),
-    line('Дата:', row.dates),
-    line('Время:', row.time),
-    line('Кабинет:', row.room));
+    name,
+    slotLines(row, today),
+    line('Кабинет:', row.room),
+    row.subjects && row.subjects.length ? line('Ведёт сейчас:', row.subjects.slice(0, 3).join(', '), 'subjects') : null);
 }
 
 function redirectCard(name, to) {
@@ -30,10 +62,18 @@ function redirectCard(name, to) {
     h('div', { class: 'retake-line' }, h('span', { class: 'muted' }, 'Долги принимает '), to));
 }
 
+function memo() {
+  return h('div', { class: 'retake-memo' },
+    h('p', null, 'График составлен по преподавателям: найдите того, у кого долг, и приходите строго в указанное время.'),
+    h('p', null, 'По прошедшим датам колледж договаривался с каждым отдельно.'),
+    h('p', null, 'Вопросы — куратору, декану или руководителю направления, в учебный офис (каб. 267).'));
+}
+
 export function retakesView(app) {
   var wrap = h('div', { class: 'retakes' });
   var results = h('div', { class: 'results' });
   var data = app.state.retakes;
+  var today = app.now().date;
 
   if (data === null || data === undefined) {
     app.loadRetakes(false);
@@ -59,6 +99,11 @@ export function retakesView(app) {
     r.teachers.forEach(function (name) { redirects.push({ name: name, to: r.to }); });
   });
 
+  function matches(row, query) {
+    return matchesQuery(row.teacher, query) ||
+      (row.subjects || []).some(function (s) { return matchesQuery(s, query); });
+  }
+
   function fill() {
     clear(results);
     var query = (app.state.queries[KEY] || '').trim();
@@ -67,7 +112,7 @@ export function retakesView(app) {
     if (query) {
       moved = redirects.filter(function (r) { return matchesQuery(r.name, query); });
       rows = rows.filter(function (r) {
-        return matchesQuery(r.teacher, query) || moved.some(function (m) { return matchesQuery(r.teacher, m.to); });
+        return matches(r, query) || moved.some(function (m) { return matchesQuery(r.teacher, m.to); });
       });
     }
     if (!rows.length && !moved.length) {
@@ -75,7 +120,7 @@ export function retakesView(app) {
       return;
     }
     var cards = moved.map(function (m) { return redirectCard(m.name, m.to); })
-      .concat(rows.map(retakeCard));
+      .concat(rows.map(function (r) { return retakeCard(app, r, today); }));
     results.appendChild(h('div', { class: 'list-card' }, cards));
     if (!query) {
       results.appendChild(h('p', { class: 'list-end' }, 'Всё. ' +
@@ -89,7 +134,7 @@ export function retakesView(app) {
   }
 
   var input = h('input', {
-    type: 'search', class: 'search', placeholder: 'Поиск по фамилии', 'aria-label': 'Поиск по фамилии',
+    type: 'search', class: 'search', placeholder: 'Фамилия или предмет', 'aria-label': 'Поиск по фамилии или предмету',
     autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false', 'data-query': KEY,
   });
   input.value = app.state.queries[KEY] || '';
@@ -100,6 +145,7 @@ export function retakesView(app) {
   });
 
   wrap.appendChild(h('h2', { class: 'retakes-title' }, data.title || 'Пересдачи'));
+  wrap.appendChild(memo());
   wrap.appendChild(h('div', { class: 'search-wrap' }, input));
   wrap.appendChild(results);
   fill();

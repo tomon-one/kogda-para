@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  addDays, collegeNow, dayOfYear, dayTitle, formatDurationLong, formatSince, hourOf, plural, weekStart,
+  addDays, collegeNow, dayOfYear, dayRange, dayTitle, formatDurationLong, formatSince, hourOf, plural, weekStart,
   weekday,
 } from '../assets/js/time.js';
 import {
@@ -318,4 +318,10 @@ test('свои звонки дня заменяют обычные, и толь�
   const merged = combineGroups(mine, [['Б', body]]);
   assert.deepEqual(merged.days.map((d) => [d.d, !!d.bl]),
     [['2026-10-03', false], ['2026-10-05', true], ['2026-10-06', false]]);
+});
+
+test('дни пересдачи: один день с днём недели, диапазон в месяце и через месяц', function () {
+  assert.equal(dayRange('2026-10-16', '2026-10-16'), '16 октября, пятница');
+  assert.equal(dayRange('2026-10-12', '2026-10-23'), '12–23 октября');
+  assert.equal(dayRange('2026-10-28', '2026-11-03'), '28 октября – 3 ноября');
 });

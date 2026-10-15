@@ -116,6 +116,18 @@ export function dayTitle(date, today) {
   return capitalize(prefix ? prefix + ', ' + text : text);
 }
 
+/** «16 октября, пятница»; диапазон — «12–23 октября», «28 октября – 3 ноября». */
+export function dayRange(from, to) {
+  var a = utcOf(from);
+  var b = utcOf(to);
+  if (isNaN(a) || isNaN(b)) return from + (to && to !== from ? '–' + to : '');
+  var x = new Date(a);
+  var y = new Date(b);
+  if (a === b) return x.getUTCDate() + ' ' + MONTHS[x.getUTCMonth()] + ', ' + WEEKDAYS[weekday(from)];
+  if (x.getUTCMonth() === y.getUTCMonth()) return x.getUTCDate() + '–' + y.getUTCDate() + ' ' + MONTHS[y.getUTCMonth()];
+  return x.getUTCDate() + ' ' + MONTHS[x.getUTCMonth()] + ' – ' + y.getUTCDate() + ' ' + MONTHS[y.getUTCMonth()];
+}
+
 export function capitalize(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }

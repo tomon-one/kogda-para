@@ -4,7 +4,7 @@
 import { h, icon, actionButton, actionLink, dialog, closeDialog, snackbar } from './dom.js';
 import { dayCards } from './days.js';
 import { othersList } from './lists.js';
-import { retakesView } from './retakes.js';
+import { retakesActive, retakesView } from './retakes.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE } from '../repo.js';
@@ -29,10 +29,15 @@ export function mainScreen(app) {
   // С ролью — своя память: своя вкладка преподавателя — не то, что смотрел студент.
   app.state.opened[teacherMode + tab] = route.kind ? route.kind + (route.id ? '/' + route.id : '') : '';
 
-  var head = h('div', { class: 'head' }, topbar(app, own), tabs(app, tab, teacherMode));
+  // Пересдачи идут — их ряд не уезжает при листании и горит: о них должны
+  // узнать и те, кто вкладку не открывал.
+  app.loadRetakes(false);
+  var live = retakesActive(app.state.retakes, app.now().date);
+  var head = h('div', { class: 'head' }, topbar(app, own), tabs(app, tab, teacherMode),
+    live ? secondTabs(app, tab, true) : null);
   var content = h('main', { class: 'content' });
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
-    head, secondTabs(app, tab), content);
+    head, live ? null : secondTabs(app, tab, false), content);
 
   // Сбой и пропажа — на любой вкладке, как в приложении: иначе чужое
   // расписание во время сбоя выглядело бы свежим. На своём — у сегодняшнего
@@ -149,12 +154,12 @@ function tabs(app, current, teacherMode) {
   }));
 }
 
-function secondTabs(app, current) {
+function secondTabs(app, current, live) {
   var on = current === 'retakes';
   var retakes = h('button', {
-    type: 'button', class: 'tab' + (on ? ' on' : ''), 'aria-current': on ? 'page' : null, 'data-key': 'tab:retakes',
+    type: 'button', class: 'tab' + (on ? ' on' : '') + (live ? ' live' : ''), 'aria-current': on ? 'page' : null, 'data-key': 'tab:retakes',
     onclick: function () { if (!on) app.go('retakes'); },
-  }, h('span', { class: 'tab-label' }, 'Пересдачи'));
+  }, h('span', { class: 'tab-label' }, live ? 'Пересдачи идут' : 'Пересдачи'));
   return h('nav', { class: 'tabs soon', 'aria-label': 'Разделы' }, [retakes].concat(['exams'].map(function (key) {
     return h('button', {
       type: 'button', class: 'tab muted',
