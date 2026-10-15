@@ -13,7 +13,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
+import pathlib
 import re
 import zoneinfo
 from collections import defaultdict
@@ -73,7 +75,12 @@ def compare(snapshot: Snapshot, pairs: list[TeacherPair], today: dt.date) -> lis
             if gid in names:
                 by_group_day[(gid, p.day)].append(p)
     out = []
+    days = set(snapshot.dates)
     for (gid, day), theirs in sorted(by_group_day.items(), key=lambda kv: (kv[0][1], names[kv[0][0]])):
+        # Дня нет в листе групп (следующий лист не дописан или не принят) —
+        # сверять не с чем: пустота тут не наша ошибка чтения.
+        if day not in days:
+            continue
         ours = snapshot.schedule.get(gid, {}).get(day, [])
         matched = sum(
             1 for p in theirs
@@ -85,9 +92,31 @@ def compare(snapshot: Snapshot, pairs: list[TeacherPair], today: dt.date) -> lis
 
 
 class CrossCheck:
-    def __init__(self, snapshot: Callable[[], Snapshot | None]):
+    """`snapshot` — принятый снимок или None, когда сверять нельзя (служба держит
+    прежний лист: новый лист преподавателей разошёлся бы с ним целиком)."""
+
+    def __init__(self, snapshot: Callable[[], Snapshot | None], directory: pathlib.Path | None = None):
         self.snapshot = snapshot
+        # О чём уже сказано — на диске: служба перезапускается при каждой выкладке.
+        self.path = directory / "crosscheck.json" if directory else None
         self.reported: set[tuple[str, dt.date]] = set()
+        if self.path:
+            try:
+                self.reported = {
+                    (g, dt.date.fromisoformat(d)) for g, d in json.loads(self.path.read_text(encoding="utf-8"))
+                }
+            except FileNotFoundError:
+                pass
+            except (OSError, ValueError, TypeError) as exc:
+                log.warning("crosscheck.json не читается (%s) — начну с пустого", exc)
+
+    def _save(self) -> None:
+        if not self.path:
+            return
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(sorted([g, d.isoformat()] for g, d in self.reported), ensure_ascii=False),
+                       encoding="utf-8")
+        tmp.replace(self.path)
 
     def run(self) -> None:
         snap = self.snapshot()
@@ -101,17 +130,27 @@ class CrossCheck:
             log.warning("сверка: список листов не получен (%s)", sheet_index.hide_key(exc))
             return
         weeks = []
+        unnamed = []
         for sheet in sheets:
-            week = sheet_week(sheet.title, now.year)
-            if week and sheet.gid and not sheet.hidden and week[1] >= today and week[0] <= today + AHEAD:
+            if sheet.hidden or not sheet.gid or not re.search(r"препод", sheet.title, re.IGNORECASE):
+                continue
+            week = sheet_week(sheet.title, today)
+            if week is None:
+                unnamed.append(sheet.title)
+            elif week[1] >= today and week[0] <= today + AHEAD:
                 weeks.append((sheet, week))
         found: list[Mismatch] = []
         checked = 0
-        for sheet, _ in weeks:
+        failed: list[tuple[dt.date, dt.date]] = []
+        broken = list(unnamed)
+        for sheet, week in weeks:
             try:
                 pairs = parse_teacher_sheet(gsheets.fetch_sheet_csv(sheet.gid, sheet.title))
             except Exception as exc:
                 log.warning("сверка: лист %r не прочитан: %s", sheet.title, sheet_index.hide_key(exc))
+                failed.append(week)
+                if not sheet_index._is_network(exc):
+                    broken.append(sheet.title)
                 continue
             checked += len(pairs)
             found += compare(snap, pairs, today)
@@ -119,9 +158,24 @@ class CrossCheck:
                  len(weeks), checked, len(found))
         # Непрочитанные дни уже в тревоге «не прочитаны» — второй раз о них не говорим.
         found = [m for m in found if not m.unread]
+        if broken:
+            # Сверка не сторожит эти недели — тихо, раз в сутки.
+            alerts.notify(
+                "crosscheck-sheet",
+                "Сверка с листами преподавателей не читает: " + "; ".join(f"«{t}»" for t in broken[:3])
+                + ". Имя или раскладка листа не те (руководство по серверу, «Когда что-то не так»).",
+                window=24 * 60 * 60, quiet=True,
+            )
+        else:
+            alerts.forget("crosscheck-sheet")
         now_set = {(m.group, m.day) for m in found}
         fresh = now_set - self.reported
-        self.reported = now_set
+        # Расхождения недель, чей лист в этот заход не прочитался, держатся: иначе
+        # о них сказали бы снова при следующем удачном чтении.
+        kept = {(g, d) for g, d in self.reported if any(a <= d <= b for a, b in failed)}
+        if now_set | kept != self.reported:
+            self.reported = now_set | kept
+            self._save()
         if not fresh:
             return
         shown = [m for m in found if (m.group, m.day) in fresh]

@@ -302,3 +302,10 @@ def test_group_that_lost_all_future_lessons_is_reported_not_rejected():
     # Не прочитаны — там держится прежнее, это не «пропали».
     assert gates.groups_emptied(before, snap(cut, {"g-1": {days[2]: False}}), today) == []
     assert gates.groups_emptied(None, snap(cut), today) == []
+    # Выпал следующий лист: его дни пусты у всех — не «у группы стёрли».
+    frame = {g.id: {d: pair for d in days[:2]} for g in groups}
+    assert len(gates.groups_emptied(before, snap(frame), today)) == len(groups)
+    assert gates.groups_emptied(before, snap(frame), today, dropped=True) == []
+    # А стёртая группа среди них всё равно видна.
+    assert gates.groups_emptied(before, snap({**full, "g-1": {days[0]: pair, days[1]: pair}}), today,
+                                dropped=True) == [("Г-1", days[2], 4)]

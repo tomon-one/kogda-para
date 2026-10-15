@@ -87,14 +87,19 @@ def _clock(text: str) -> str:
     return f"{int(m[1])}:{m[2]}–{int(m[3])}:{m[4]}"
 
 
-def _day(day: int, month: int, year: int) -> dt.date | None:
-    try:
-        return dt.date(year, month, day)
-    except ValueError:
-        return None
+def _day(day: int, month: int, today: dt.date) -> dt.date | None:
+    """День без года — ближайший к сегодня: в декабре «14.01» — январь
+    следующего года, в январе «22.12» — прошлого."""
+    found = []
+    for year in (today.year - 1, today.year, today.year + 1):
+        try:
+            found.append(dt.date(year, month, day))
+        except ValueError:
+            pass
+    return min(found, key=lambda d: abs((d - today).days), default=None)
 
 
-def parse_slots(dates: str, time: str, year: int) -> list[Slot]:
+def parse_slots(dates: str, time: str, today: dt.date) -> list[Slot]:
     """«14.10; 16.10» и «10.00-14.30; 9.30-17.30» -> два дня, каждый со своим временем.
 
     Дат через «;» столько же, сколько времён, — идут парами; время одно — у
@@ -106,9 +111,13 @@ def parse_slots(dates: str, time: str, year: int) -> list[Slot]:
     spans: list[tuple[dt.date, dt.date]] = []
     for part in parts:
         if m := _RANGE.fullmatch(part):
-            start, end = _day(int(m[1]), int(m[3]), year), _day(int(m[2]), int(m[3]), year)
+            start = _day(int(m[1]), int(m[3]), today)
+            try:
+                end = start.replace(day=int(m[2])) if start else None
+            except ValueError:
+                end = None
         elif m := _DAY.fullmatch(part):
-            start = end = _day(int(m[1]), int(m[2]), year)
+            start = end = _day(int(m[1]), int(m[2]), today)
         else:
             return []
         if start is None or end is None or end < start:
@@ -121,7 +130,7 @@ def parse_slots(dates: str, time: str, year: int) -> list[Slot]:
     return [Slot(start, end, t) for (start, end), t in zip(spans, paired)]
 
 
-def parse_retakes(text: str, year: int | None = None) -> Retakes:
+def parse_retakes(text: str, today: dt.date | None = None) -> Retakes:
     rows = [[_clean(c) for c in row] for row in csv.reader(io.StringIO(text.lstrip("﻿")))]
 
     head = None
@@ -149,18 +158,21 @@ def parse_retakes(text: str, year: int | None = None) -> Retakes:
 
     retakes: list[Retake] = []
     i = start + 1
-    while i < len(rows) and not any(_REDIRECTS.search(v) for v in rows[i] if v):
+    while i < len(rows):
         row = rows[i]
         teacher = cell(row, "teacher")
+        # Вторая таблица начинается строкой «Обращаться к …» без преподавателя;
+        # то же слово в датах или кабинете строки с преподавателем — её текст.
+        if not teacher and any(_REDIRECTS.search(v) for v in row if v):
+            break
         if teacher:
             dates, time = cell(row, "dates"), cell(row, "time")
             retakes.append(Retake(
                 teacher.rstrip(","), dates, time, cell(row, "room"),
-                parse_slots(dates, time, year or dt.date.today().year),
+                parse_slots(dates, time, today or dt.date.today()),
             ))
         i += 1
-    if not retakes:
-        raise SourceFormatChanged("лист пересдач: под заголовком нет ни одной строки")
+    # Заголовок есть, а строк нет — таблицу очистили: пересдач нет, это не сбой.
 
     # Вторая таблица: номер, кому обращаться (колонка ФИО), чьи долги — в
     # колонке дат, по строке на имя или через запятую в одной.

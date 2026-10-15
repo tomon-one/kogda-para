@@ -26,6 +26,9 @@ from . import alerts
 log = logging.getLogger(__name__)
 
 _IS_RETAKES = re.compile(r"пересдач", re.IGNORECASE)
+# Сеть и Google на минуту (429, 5xx, таймаут) — не повод будить владельца:
+# прежний список отдаётся, а тревога — если сбой держится столько.
+NETWORK_GRACE = dt.timedelta(hours=3)
 # Сколько предметов преподавателя показывать: у почасовика их два-три, у
 # заведующего — десяток, и длинный список прячет главное.
 SUBJECTS_SHOWN = 4
@@ -68,6 +71,8 @@ class RetakesSource:
         self.path = directory / "retakes.json"
         # Тело ответа /v1/retakes; None — ещё ни разу не читали.
         self.payload: dict | None = None
+        # Когда начался сбой сети или Google подряд; None — последнее чтение удалось.
+        self._network_since: dt.datetime | None = None
         try:
             self.payload = json.loads(self.path.read_text(encoding="utf-8"))
         except FileNotFoundError:
@@ -86,11 +91,15 @@ class RetakesSource:
             return
         # Листов несколько — берём последний в книге: новые колледж добавляет в конец.
         sheet = sheets[-1]
+        now = dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone))
         try:
-            year = dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone)).year
-            parsed = parse_retakes(gsheets.fetch_sheet_csv(sheet.gid, sheet.title), year)
+            parsed = parse_retakes(gsheets.fetch_sheet_csv(sheet.gid, sheet.title), now.date())
         except Exception as exc:
             log.warning("пересдачи: лист %r не прочитан: %s", sheet.title, sheet_index.hide_key(exc))
+            if sheet_index._is_network(exc):
+                self._network_since = self._network_since or now
+                if now - self._network_since < NETWORK_GRACE:
+                    return
             alerts.notify(
                 "retakes",
                 f"Лист пересдач «{sheet.title}» не прочитан: {sheet_index.hide_key(exc)}. "
@@ -98,6 +107,7 @@ class RetakesSource:
                 window=24 * 60 * 60,
             )
             return
+        self._network_since = None
         alerts.forget("retakes")
         self._put({
             "title": parsed.title,

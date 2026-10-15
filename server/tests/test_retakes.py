@@ -1,6 +1,7 @@
 """Лист пересдач: разбор, выбор листа в книге, ответ API."""
 
 import csv
+import datetime as dt
 import io
 
 import pytest
@@ -53,7 +54,7 @@ def test_dates_become_slots_paired_with_times():
     from whensclass.parser.retakes import parse_slots
 
     def days(dates, time):
-        return [(s.start.isoformat(), s.end.isoformat(), s.time) for s in parse_slots(dates, time, 2026)]
+        return [(s.start.isoformat(), s.end.isoformat(), s.time) for s in parse_slots(dates, time, dt.date(2026, 10, 16))]
 
     assert days("12-23.10", "16.00-17.00") == [("2026-10-12", "2026-10-23", "16:00–17:00")]
     assert days("14.10; 16.10", "10.00-14.30; 9.30-17.30") == [
@@ -64,6 +65,33 @@ def test_dates_become_slots_paired_with_times():
     # Хоть одна дата не разобралась — показывать текст как есть.
     assert days("на неделе; 16.10", "16.00-17.00") == []
     assert days("31.02", "16.00-17.00") == []
+
+
+def test_year_is_the_nearest_to_today():
+    from whensclass.parser.retakes import parse_slots
+
+    def days(dates, today):
+        return [(s.start.isoformat(), s.end.isoformat()) for s in parse_slots(dates, "", today)]
+
+    # В декабре январские даты — следующего года, в январе декабрьские — прошлого.
+    assert days("12-23.01; 28.12", dt.date(2026, 12, 25)) == [
+        ("2027-01-12", "2027-01-23"), ("2026-12-28", "2026-12-28")]
+    assert days("22.12; 24.12", dt.date(2027, 1, 11)) == [
+        ("2026-12-22", "2026-12-22"), ("2026-12-24", "2026-12-24")]
+
+
+def test_redirect_word_inside_a_row_does_not_end_the_table():
+    rows = list(csv.reader(io.StringIO(SHEET)))
+    rows.insert(4, ["", "", "", "2", "Носов Н.Н.", "обращаться к зав. отделением", "", ""])
+    parsed = parse_retakes(_sheet(rows))
+    assert [r.teacher for r in parsed.rows] == ["Иванов И.И.", "Носов Н.Н.", "Петрова П.П.", "Сидоров С.С."]
+    assert [r.to for r in parsed.redirects] == ["Иванов И.И.", "каб.263 (онлайн-тестирование)"]
+
+
+def test_cleared_table_means_no_retakes():
+    rows = list(csv.reader(io.StringIO(SHEET)))[:3]
+    parsed = parse_retakes(_sheet(rows))
+    assert parsed.rows == [] and parsed.redirects == []
 
 
 def test_teacher_found_by_initials_with_current_subjects():
@@ -136,6 +164,24 @@ def test_unreadable_sheet_keeps_the_previous_list(source, monkeypatch):
     source.refresh()
     assert source.payload == before
     assert source.sent
+
+
+def test_google_hiccup_is_not_an_alert_until_it_lasts(source, monkeypatch):
+    import httpx
+
+    _book(monkeypatch, [SheetInfo("График пересдач октябрь 2026", "3")])
+    source.refresh()
+
+    def busy(gid, title=None):
+        request = httpx.Request("GET", "https://docs.google.com/x")
+        raise httpx.HTTPStatusError("429", request=request, response=httpx.Response(429, request=request))
+
+    monkeypatch.setattr(retakes_service.gsheets, "fetch_sheet_csv", busy)
+    source.refresh()
+    assert source.sent == []
+    source._network_since -= retakes_service.NETWORK_GRACE
+    source.refresh()
+    assert len(source.sent) == 1
 
 
 def test_sheet_gone_means_no_retakes(source, monkeypatch):

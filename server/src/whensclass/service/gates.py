@@ -96,7 +96,7 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
 GROUP_EMPTIED_MIN_DAYS = 3
 
 
-def groups_emptied(previous, current, today: dt.date) -> list[tuple[str, dt.date, int]]:
+def groups_emptied(previous, current, today: dt.date, dropped: bool = False) -> list[tuple[str, dt.date, int]]:
     """Группы, у которых пропали все пары на будущее: (имя, первый день, дней).
 
     Одна группа — ниже порогов «день опустел», и лист принимается: так 15.10
@@ -109,6 +109,10 @@ def groups_emptied(previous, current, today: dt.date) -> list[tuple[str, dt.date
     if previous is None:
         return []
     days = sorted(d for d in set(previous.dates) & set(current.dates) if d >= today)
+    # Выпал следующий лист — дни пустого каркаса в текущем опустели у всех
+    # вместе с ним, а не стёрты у группы (как в `_check_days_emptied`).
+    if dropped:
+        days = [d for d in days if any(current.schedule.get(g.id, {}).get(d) for g in current.groups)]
     present = {g.id for g in current.groups}
     out = []
     for g in previous.groups:
