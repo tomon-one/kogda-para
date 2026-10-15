@@ -197,7 +197,7 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boole
             // должны узнать и те, кто её не открывал (как на сайте).
             if (live) {
                 Text(
-                    "Пересдачи идут",
+                    tab.title,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,

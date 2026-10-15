@@ -11,6 +11,9 @@ export var state = {
   teachers: null,
   /** Лист пересдач (ответ /v1/retakes); null — грузится, 'failed' — не загрузился. */
   retakes: null,
+  /** Аудитории по дню: ответ /v1/rooms, 'failed' — не загрузились, 'missing' — дня в листе нет. */
+  rooms: {},
+  roomsUi: null,
   other: null,
   queries: {},
   /**

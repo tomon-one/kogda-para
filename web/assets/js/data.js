@@ -81,6 +81,35 @@ export function loadRetakes(force) {
   });
 }
 
+var roomsLoading = {};
+var roomsAt = {};
+/** Занятость кабинетов меняется вместе с расписанием: не старше пяти минут. */
+var ROOMS_FRESH_MS = 5 * 60 * 1000;
+
+export function loadRooms(date, force) {
+  if (roomsLoading[date]) return;
+  var have = state.rooms[date];
+  if (!force && have && have !== 'failed' && Date.now() - (roomsAt[date] || 0) < ROOMS_FRESH_MS) return;
+  if (!force && have === 'failed') return;
+  roomsLoading[date] = true;
+  if (force && have === 'failed') {
+    state.rooms[date] = null;
+    render();
+  }
+  api.rooms(date).then(function (body) {
+    roomsLoading[date] = false;
+    roomsAt[date] = Date.now();
+    state.rooms[date] = body;
+    render();
+  }, function (error) {
+    roomsLoading[date] = false;
+    roomsAt[date] = Date.now();
+    var missing = error instanceof HttpError && error.status === 404;
+    if (missing || !have || have === 'failed') state.rooms[date] = missing ? 'missing' : 'failed';
+    render();
+  });
+}
+
 var otherTicket = 0;
 
 /** Чужое расписание открыто снова — не старше этого, иначе перезапросить. */
