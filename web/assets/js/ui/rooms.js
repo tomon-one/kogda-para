@@ -86,6 +86,7 @@ export function roomsView(app) {
     return wrap;
   }
   if (body === 'failed' || body === 'missing') {
+    if (body === 'failed') app.loadRooms(date, false);
     if (body === 'missing' && st.date) {
       st.date = null;
       return roomsView(app);
@@ -95,6 +96,9 @@ export function roomsView(app) {
       body === 'failed' ? h('div', null, actionButton('Повторить', function () { app.loadRooms(date, true); })) : null));
     return wrap;
   }
+
+  // Уже показанное — перезапросить, когда полежало (data.js, ROOMS_FRESH_MS).
+  app.loadRooms(date, false);
 
   var numbers = Object.keys(body.bells || {}).map(Number).sort(function (a, b) { return a - b; });
   var days = (body.days && body.days.length ? body.days : [body.date]).slice(0, DAYS_SHOWN);
