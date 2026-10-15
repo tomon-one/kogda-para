@@ -89,8 +89,10 @@ export function onRoute() {
   var chosen = repo.chosen();
   // Приветствие — один раз; без выбора — сразу к выбору.
   if (!chosen && route.screen !== 'pick') {
-    // Ссылку на чужое расписание из чата не терять: откроется после выбора.
-    var pending = route.kind && route.id ? route.kind + '/' + route.id : (history.state && history.state.pending) || null;
+    // Ссылку на чужое расписание или вкладку из чата не терять: откроется после выбора.
+    var pending = route.kind && route.id ? route.kind + '/' + route.id
+      : route.kind === 'retakes' || route.kind === 'rooms' ? route.kind
+        : (history.state && history.state.pending) || null;
     route = { screen: 'pick', mode: 'group' };
     history.replaceState({ steps: stepsNow(), pending: pending }, '', location.pathname + location.search + '#pick');
   }
