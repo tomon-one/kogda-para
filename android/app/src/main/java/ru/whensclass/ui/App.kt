@@ -563,6 +563,7 @@ internal fun App(
                         retakes = retakes,
                         retakesFailed = retakesFailed,
                         onRetryRetakes = { retakesRetry++ },
+                        loadRooms = { container.repository.rooms(it) },
                         startDay = startDay,
                         startKey = openSeq,
                         groupName = chosenName.orEmpty(),
