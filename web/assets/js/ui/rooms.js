@@ -142,7 +142,8 @@ export function roomsView(app) {
     free.forEach(function (r) { (floors[r.floor] = floors[r.floor] || []).push(r.room); });
     picked.appendChild(h('div', { class: 'list-card room-card' },
       h('div', { class: 'room-building' }, b.name,
-        h('span', { class: 'muted' }, ' · свободно ' + free.length + ' из ' + b.rooms.length)),
+        // Из тех, где по таблице бывают пары: других кабинетов колледжа в ней нет.
+        h('span', { class: 'muted' }, ' · свободно ' + free.length + ' из ' + b.rooms.length + ', где бывают пары')),
       free.length ? Object.keys(floors).sort().map(function (f) {
         return h('div', { class: 'room-floor' },
           // Без этажа («55/1») — пустая подпись: кабинеты в одну колонку с остальными.

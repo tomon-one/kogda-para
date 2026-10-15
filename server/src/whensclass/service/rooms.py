@@ -20,8 +20,8 @@ from ..domain.models import Snapshot
 
 MAIN = "Главный корпус"
 VOSKHOD = "Восход"
-# Кабинет, встретившийся реже, — опечатка или разовое место, а не аудитория.
-MIN_SEEN = 5
+# Кабинет, встретившийся один раз, — скорее опечатка, чем аудитория.
+MIN_SEEN = 2
 
 _NUMBER = re.compile(r"\d{2,3}(?:/\d)?[А-ЯA-Z]?", re.IGNORECASE)
 _VOSKHOD = re.compile(r"Восход\s+(\d{3})", re.IGNORECASE)

@@ -480,3 +480,5 @@
 .room-busy:last-child { border-bottom: 0; }
 .room-name { font-weight: 600; color: var(--primary); }
 .room-taken summary { cursor: pointer; }
+/* Заголовки разделов аудиторий — по одной линии с пояснениями. */
+.rooms .section-title { padding: 16px 4px 4px; font-size: 14px; font-weight: 600; color: var(--fg); }
