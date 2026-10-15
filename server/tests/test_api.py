@@ -379,3 +379,10 @@ def test_build_below_the_minimum_is_told_to_update(client, monkeypatch):
     monkeypatch.setattr(settings, "min_build", 0)
     assert "min" not in client.get("/v1/meta").json()
     assert client.get("/v1/meta", headers=old).status_code == 200
+
+
+def test_rooms_for_a_day_in_the_sheet_and_404_outside(client):
+    body = client.get("/v1/rooms?date=2026-09-08").json()
+    assert body["date"] == "2026-09-08" and body["buildings"] and "1" in body["busy"]
+    assert client.get("/v1/rooms?date=2026-12-31").status_code == 404
+    assert client.get("/v1/rooms?date=вчера").status_code == 400
