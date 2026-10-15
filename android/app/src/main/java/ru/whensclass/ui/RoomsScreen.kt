@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import ru.whensclass.data.RoomUseDto
@@ -98,8 +99,8 @@ internal fun RoomsScreen(
 
     LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp)) {
         item(key = "дни") {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ChipsLabel("День")
+            ChipsLabel("День")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 days.forEach { d ->
                     val day = runCatching { LocalDate.parse(d) }.getOrNull()
                     val label = when (day) {
@@ -108,16 +109,25 @@ internal fun RoomsScreen(
                         null -> d
                         else -> formatDayRange(day, day).substringBefore(',')
                     }
-                    FilterChip(selected = d == shown.date, onClick = { date = d; pair = 0 }, label = { Text(label) })
+                    FilterChip(
+                        selected = d == shown.date, onClick = { date = d; pair = 0 },
+                        label = { Text(label, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }
         item(key = "пары") {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ChipsLabel("Пара")
+            ChipsLabel("Пара")
+            // Номера пар делят строку поровну: шесть кнопок не переносятся и на узком экране.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 numbers.forEach { n ->
                     val start = shown.bells[n.toString()]?.getOrNull(0)
-                    FilterChip(selected = n == chosen, onClick = { pair = n }, label = { Text("$n") })
+                    FilterChip(
+                        selected = n == chosen, onClick = { pair = n },
+                        label = { Text("$n", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
             val span = shown.bells[chosen.toString()].orEmpty()
@@ -142,7 +152,8 @@ internal fun RoomsScreen(
                 Card {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         Text(
-                            building.name + " · свободно ${free.size} из ${building.rooms.size}",
+                            // Из тех, где по таблице бывают пары: других кабинетов колледжа в ней нет.
+                            building.name + " · свободно ${free.size} из ${building.rooms.size}, где бывают пары",
                             fontWeight = FontWeight.SemiBold,
                         )
                         if (free.isEmpty()) Note("Свободных по расписанию нет.")
@@ -178,9 +189,9 @@ internal fun RoomsScreen(
                 var open by rememberSaveable { mutableStateOf(false) }
                 Text(
                     (if (open) "▾ " else "▸ ") + "Кто где занят — " + plural(busy.size, "кабинет", "кабинета", "кабинетов"),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 8.dp, top = 12.dp, bottom = 4.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 4.dp, top = 16.dp, bottom = 4.dp),
                 )
                 if (open) Card { busy.toSortedMap().entries.forEachIndexed { i, (room, uses) -> if (i > 0) Divider(); Uses(room, uses) } }
             }
@@ -213,9 +224,9 @@ private fun Note(text: String) = Text(
 @Composable
 private fun Section(text: String) = Text(
     text,
-    style = MaterialTheme.typography.labelMedium,
-    color = MaterialTheme.colorScheme.onSurfaceVariant,
-    modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp),
+    style = MaterialTheme.typography.titleSmall,
+    fontWeight = FontWeight.SemiBold,
+    modifier = Modifier.padding(start = 4.dp, top = 16.dp),
 )
 
 @Composable
@@ -258,11 +269,10 @@ private fun Uses(room: String, uses: List<RoomUseDto>) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun androidx.compose.foundation.layout.FlowRowScope.ChipsLabel(text: String) = Text(
+private fun ChipsLabel(text: String) = Text(
     text,
     style = MaterialTheme.typography.bodySmall,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
-    modifier = Modifier.width(40.dp).align(androidx.compose.ui.Alignment.CenterVertically),
+    modifier = Modifier.padding(start = 4.dp, top = 8.dp),
 )

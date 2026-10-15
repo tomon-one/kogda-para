@@ -30,7 +30,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.widget.ThemeChoice
@@ -193,7 +192,6 @@ fun SettingsScreen(
                     else "откроет таблицу на вашей колонке и сегодняшнем дне, а если его в таблице " +
                         "нет — на ближайшем следующем."),
                 style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Justify,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             // Постоянное место для ссылки: её хотят и в обычный день —
