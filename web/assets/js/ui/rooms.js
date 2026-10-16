@@ -4,6 +4,7 @@
 
 import { h, actionButton } from './dom.js';
 import { addDays, dayTitle, plural } from '../time.js';
+import { failureText } from './retakes.js';
 
 function spinner() {
   return h('div', { class: 'centered' }, h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Загрузка' }));
@@ -50,14 +51,30 @@ function dayLabel(date, today) {
   return dayTitle(date, today).split(',').slice(0, 1)[0];
 }
 
+/**
+ * Кабинет в списках — с корпусом, если он не главный: «Вход 2, 55», «Восход,
+ * 221», как он стоит в карточках свободных (RoomsScreen.kt, place).
+ */
+function place(body, room) {
+  var buildings = (body.buildings || []).slice(1);
+  for (var i = 0; i < buildings.length; i++) {
+    var b = buildings[i];
+    for (var j = 0; j < b.rooms.length; j++) {
+      if (b.rooms[j].room === room) return b.name + ', ' + (room.indexOf(b.name + ' ') === 0 ? room.slice(b.name.length + 1) : room);
+    }
+  }
+  return room;
+}
+
 /** Кабинет и кто в нём: каждая пара — своей строкой (группа, предмет, преподаватель). */
 function busyLine(room, entries) {
   return h('div', { class: 'room-busy' },
-    h('div', { class: 'room-name' }, room.replace(/^Восход /, 'Восход, ')),
+    h('div', { class: 'room-name' }, room),
     entries.map(function (e) {
+      // Точка держится за предметом: строка не начинается с «· Фамилия».
       return h('div', { class: 'room-use' },
         h('span', { class: 'room-group' }, e.g),
-        ' ' + e.s + (e.t && e.t.length ? ' · ' + e.t[0] : ''));
+        ' ' + e.s + (e.t && e.t.length ? '\u00a0· ' + e.t[0] : ''));
     }));
 }
 
@@ -101,7 +118,7 @@ export function roomsView(app) {
 
   /** Ряд «День»: из этого дня или из любого уже загруженного — пока выбранный грузится или не пришёл. */
   function dayChips(days, selected) {
-    return h('div', { class: 'chips' }, [h('span', { class: 'chips-label muted' }, 'День')].concat(days.map(function (d) {
+    return h('div', null, h('span', { class: 'chips-label muted' }, 'День'), h('div', { class: 'chips' }, days.map(function (d) {
       var c = chip(dayLabel(d, now.date), d === selected, function () {
         if (d === selected) return;
         pick(function () { st.date = d; st.pair = null; });
@@ -127,7 +144,7 @@ export function roomsView(app) {
       return roomsView(app);
     }
     wrap.appendChild(h('div', { class: 'load-failed' },
-      h('p', null, body === 'missing' ? 'Сегодняшнего дня в таблице колледжа нет.' : 'Аудитории не загрузились. Проверьте интернет.'),
+      h('p', null, body === 'missing' ? 'Сегодняшнего дня в таблице колледжа нет.' : 'Аудитории не загрузились. ' + failureText(app.state.failedBy['rooms:' + date])),
       body === 'failed' ? h('div', null, actionButton('Повторить', function () { app.loadRooms(date, true); })) : null));
     return wrap;
   }
@@ -152,7 +169,7 @@ export function roomsView(app) {
 
   var pair = st.pair || defaultPair(body, now.date, now.sec);
   var running = runningPair(body, now.date, now.sec);
-  wrap.appendChild(h('div', { class: 'chips pairs' }, [h('span', { class: 'chips-label muted' }, 'Пара')].concat(numbers.map(function (n) {
+  wrap.appendChild(h('div', null, h('span', { class: 'chips-label muted' }, 'Пара'), h('div', { class: 'chips pairs' }, numbers.map(function (n) {
     var c = chip(String(n), n === pair, function () {
       if (n === pair) return;
       pick(function () { st.pair = n; });
@@ -175,6 +192,8 @@ export function roomsView(app) {
     var free = b.rooms.filter(function (r) { return !busy[r.room]; });
     var floors = {};
     free.forEach(function (r) { (floors[r.floor] = floors[r.floor] || []).push(r.room); });
+    // Этажа не знает ни один кабинет корпуса (Вход 2) — без пустой колонки подписей.
+    var labelled = Object.keys(floors).some(function (f) { return !!f; });
     picked.appendChild(h('div', { class: 'list-card room-card' },
       h('div', { class: 'room-building' }, b.name),
       // Из тех, где по таблице бывают пары: других кабинетов колледжа в ней нет (пояснение внизу).
@@ -182,7 +201,7 @@ export function roomsView(app) {
       free.length ? Object.keys(floors).sort().map(function (f) {
         return h('div', { class: 'room-floor' },
           // Без этажа («55/1») — пустая подпись: кабинеты в одну колонку с остальными.
-          h('span', { class: 'room-floor-label muted' }, f ? f + ' этаж' : ''),
+          labelled ? h('span', { class: 'room-floor-label muted' }, f ? f + ' этаж' : '') : null,
           h('div', { class: 'room-free' }, floors[f].map(function (room) {
             return h('span', { class: 'room-chip' }, room.replace(/^Восход /, ''));
           })));
@@ -194,12 +213,12 @@ export function roomsView(app) {
     // или перенос: кто-то из них будет в другом месте.
     picked.appendChild(h('h3', { class: 'section-title' }, 'Две пары в одном кабинете'));
     picked.appendChild(h('p', { class: 'room-note top' }, 'По таблице здесь в одно время разные пары — уточните, где ваша.'));
-    picked.appendChild(h('div', { class: 'list-card' }, clashes.map(function (c) { return busyLine(c.room, c.lessons); })));
+    picked.appendChild(h('div', { class: 'list-card' }, clashes.map(function (c) { return busyLine(place(body, c.room), c.lessons); })));
   }
 
   var taken = Object.keys(busy).sort();
   if (taken.length) {
-    var list = h('div', { class: 'list-card' }, taken.map(function (room) { return busyLine(room, busy[room]); }));
+    var list = h('div', { class: 'list-card' }, taken.map(function (room) { return busyLine(place(body, room), busy[room]); }));
     picked.appendChild(h('details', {
       class: 'room-taken',
       // Раскрытый список не сворачивается, когда экран перестраивается (обновление, звонок).

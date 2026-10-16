@@ -24,8 +24,9 @@
 .search:focus { border-color: var(--primary); outline: none; }
 
 .results { padding: 0 12px 24px; }
-.others .results { padding: 0 0 24px; }
-.others .search-wrap { padding: 8px 0; }
+/* Поиск и список — по краям памятки над ними, как в приложении. */
+.others .results, .retakes .results { padding: 0 0 24px; }
+.others .search-wrap, .retakes .search-wrap { padding: 8px 0; }
 
 .role-row {
   display: flex;
@@ -117,10 +118,17 @@
 
 .back-row { padding: 0 0 4px; }
 
+/* Имя и «К списку» прилипают под шапкой: страница открывается на сегодняшнем
+   дне, и без имени чужое расписание выглядело бы своим. --head-h — render.js. */
 .chosen-head {
+  position: -webkit-sticky;
+  position: sticky;
+  top: var(--head-h, 0);
+  z-index: 5;
   display: flex;
   align-items: center;
   padding: 0 0 8px 4px;
+  background: var(--bg);
 }
 
 .chosen-title { flex: 1; min-width: 0; }
@@ -321,6 +329,8 @@
   background: var(--overlay);
 }
 
+.dialog:focus { outline: none; }
+
 .dialog {
   width: 100%;
   max-width: 440px;
@@ -440,7 +450,8 @@
 .retake-name.link { display: block; padding: 0; text-align: left; color: var(--primary); }
 .retake-slot { margin-top: 2px; font-size: 14px; }
 .retake-day { font-weight: 500; }
-.retake-time { margin-left: 8px; }
+/* «10:00–14:30» не рвётся по тире: переносится целиком. */
+.retake-time { margin-left: 8px; white-space: nowrap; }
 .retake-past { margin-left: 8px; font-size: 12px; color: var(--muted); }
 .retake-slot.past .retake-day, .retake-slot.past .retake-time { color: var(--muted); text-decoration: line-through; }
 .retake-line.subjects { color: var(--muted); }
@@ -460,10 +471,13 @@
 
 /* ——— аудитории ——— */
 
-/* Промежутки — полями, не flex gap: его нет в старых Safari (app.css). */
-.rooms .chips { display: flex; flex-wrap: wrap; margin: 8px 0 2px; }
-.rooms .chips > * { margin: 0 6px 6px 0; }
-.rooms .chips.pairs .chip { min-width: 40px; text-align: center; }
+/* Как в приложении: подпись над рядом, кнопки дня и пары делят строку поровну —
+   шесть номеров не переносятся и на 320 px. Промежутки — полями, не flex gap:
+   его нет в старых Safari (app.css). */
+.rooms .chips-label { display: block; margin: 8px 4px 4px; font-size: 13px; }
+.rooms .chips { display: flex; margin: 0 -3px 2px; }
+.rooms .chips .chip { flex: 1 1 0; min-width: 0; margin: 0 3px 6px; padding-left: 4px; padding-right: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rooms .chips .chip.now { padding-left: 3px; padding-right: 3px; }
 .room-when { margin: 2px 4px 4px; font-size: 14px; font-weight: 600; }
 .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--button-border); font-size: 14px; color: var(--fg); }
 .chip.on { background: var(--selected-bg); border-color: var(--primary); color: var(--primary); font-weight: 600; }
@@ -474,14 +488,16 @@
 .room-building { font-weight: 600; }
 .room-count { font-size: 14px; margin-bottom: 6px; }
 .room-floor { display: flex; align-items: baseline; margin-top: 6px; }
-.room-floor-label { flex: none; width: 46px; margin-right: 6px; font-size: 13px; }
+/* В одну строку и шире при крупном тексте: «эта / ж» не читается. */
+.room-floor-label { flex: none; min-width: 46px; margin-right: 6px; font-size: 13px; white-space: nowrap; }
+/* Ровно под «свободно N из M», без своего поля. */
+.room-card .nothing { padding: 0; margin-top: 6px; font-size: 13px; }
 .room-free { display: flex; flex-wrap: wrap; margin-bottom: -6px; }
 .room-free .room-chip { margin: 0 5px 6px 0; }
 .room-chip { padding: 3px 8px; border-radius: 8px; background: var(--today-bg); color: var(--primary); font-weight: 600; font-size: 14px; }
 .room-busy { padding: 10px 16px; border-bottom: 1px solid var(--bg); font-size: 14px; }
 .room-use { margin-top: 2px; }
 .room-group { font-weight: 500; }
-.chips-label { align-self: center; width: 40px; font-size: 13px; }
 .room-note.top { margin-top: 0; }
 .room-busy:last-child { border-bottom: 0; }
 .room-name { font-weight: 600; color: var(--primary); }

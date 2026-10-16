@@ -6,7 +6,7 @@ import * as repo from './repo.js';
 import * as store from './store.js';
 import { h, clear, fitLabels } from './ui/dom.js';
 import { dayIndex } from './schedule.js';
-import { mainScreen } from './ui/today.js';
+import { mainScreen, refreshButton } from './ui/today.js';
 import { pickerScreen } from './ui/lists.js';
 import { settingsScreen } from './ui/settings.js';
 import { welcomeScreen } from './ui/welcome.js';
@@ -127,6 +127,8 @@ function renderScreen(navigated) {
   }
   clear(root);
   root.appendChild(screen);
+  // Имя открытого преподавателя или группы прилипает под шапкой (screens.css, .chosen-head).
+  root.style.setProperty('--head-h', stuck(root.querySelector('.head')) + 'px');
   fitLabels(screen);
   if (focusKey && !navigated && document.activeElement !== active && root.contains(active)) active.focus();
   if (!focusKey) restoreFocus(signature);
@@ -147,18 +149,40 @@ function renderScreen(navigated) {
   }
 }
 
-function headHeight() {
-  var head = root.querySelector('.head') || root.querySelector('.topbar');
-  return head ? head.getBoundingClientRect().height : 0;
+/** Только ⟳ в шапке — без перестройки экрана (today.js, refreshButton). */
+export function redrawRefresh() {
+  var old = root.querySelector('[data-key="refresh"]');
+  if (!old) return;
+  var fresh = refreshButton(app);
+  var focused = document.activeElement === old;
+  old.parentNode.replaceChild(fresh, old);
+  if (focused) fresh.focus();
 }
 
-/** Первая карточка дня под шапкой и её сдвиг — чтобы после перестройки остаться там же. */
+/** Сколько сверху закрыто: шапка и прилипшее имя открытого преподавателя или группы. */
+function headHeight() {
+  var head = root.querySelector('.head') || root.querySelector('.topbar');
+  var chosen = root.querySelector('.chosen-head');
+  return stuck(head) + (chosen ? chosen.getBoundingClientRect().height : 0);
+}
+
+/** Высота прилипшей шапки; не прилипает (альбомная, app.css) — ноль. */
+function stuck(head) {
+  if (!head || !/sticky/.test(window.getComputedStyle(head).position)) return 0;
+  return head.getBoundingClientRect().height;
+}
+
+/**
+ * Первая карточка дня под шапкой и её сдвиг от низа шапки — чтобы после
+ * перестройки остаться там же. От низа шапки, а не от края окна: шапка между
+ * перестройками растёт (загорелся ряд «Пересдачи»), и карточка уехала бы под неё.
+ */
 function scrollAnchor() {
   var top = headHeight();
   var cards = root.querySelectorAll('[data-day]');
   for (var i = 0; i < cards.length; i++) {
     var rect = cards[i].getBoundingClientRect();
-    if (rect.bottom > top) return { day: cards[i].getAttribute('data-day'), offset: rect.top };
+    if (rect.bottom > top) return { day: cards[i].getAttribute('data-day'), offset: rect.top - top };
   }
   return null;
 }
@@ -166,7 +190,7 @@ function scrollAnchor() {
 function restoreAnchor(anchor) {
   var card = root.querySelector('[data-day="' + anchor.day + '"]');
   if (!card) return;
-  window.scrollBy(0, card.getBoundingClientRect().top - anchor.offset);
+  window.scrollBy(0, card.getBoundingClientRect().top - headHeight() - anchor.offset);
 }
 
 /**

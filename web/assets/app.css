@@ -375,3 +375,13 @@ p a, .point a { text-decoration: underline; }
    — между ними. Равные трети во всю ширину встали бы вразнобой с верхними. */
 .tabs.soon { padding: 0 12.5%; }
 .tabs.soon .tab { padding-left: 2px; padding-right: 2px; }
+/* Узко (iPhone SE, крупный текст): трети во всю ширину, как в приложении, —
+   иначе подсвеченная «Пересдачи» мельчает до 11 px, а соседние слипаются. */
+@media (max-width: 380px) {
+  .tabs.soon { padding: 0; }
+}
+
+/* Альбомная на телефоне: шапка не прилипает, иначе она отнимает половину высоты. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .head { position: static; }
+}

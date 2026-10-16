@@ -113,7 +113,7 @@ function setBackground(hidden) {
 // Тё…»). Как FIT у кнопок приложения (Controls.kt). Тесно и в 10 px (текст
 // 200 % на узком экране) — кнопка в две строки, переключатель — столбиком,
 // у вкладки — узкие поля.
-var FIT = '.action, .segment, .primary-button, .text-button, .tab-label';
+var FIT = '.action, .segment, .primary-button, .text-button, .tab-label, .rooms .chip';
 var FIT_MIN_PX = 10;
 
 export function fitLabels(container) {
@@ -158,13 +158,22 @@ function shrink(el) {
   return fits(el);
 }
 
-/** Ширины целые, а текст — нет: «впритык» по ним бывает на долю пикселя шире, и браузер ставит многоточие. */
+/**
+ * Ширины целые, а текст — нет: «впритык» по ним бывает на долю пикселя шире, и
+ * браузер ставит многоточие. Меряется без трансформации: окно въезжает со
+ * scale(0.95), и по сжатым ширинам с несжатыми полями надпись «не влезала»
+ * никогда — кнопки окон мельчали до 10 px.
+ */
 function fits(el) {
   if (el.scrollWidth !== el.clientWidth) return el.scrollWidth < el.clientWidth;
   var range = document.createRange();
   range.selectNodeContents(el);
   var style = window.getComputedStyle(el);
-  var room = el.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  var box = el.getBoundingClientRect().width;
+  // Всё в сжатых пикселях: поля — тоже, умноженные на масштаб окна. offsetWidth
+  // округлён до целого — разница до пикселя не масштаб.
+  var scale = el.offsetWidth && Math.abs(box - el.offsetWidth) > 1 ? box / el.offsetWidth : 1;
+  var room = box - (parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)) * scale;
   return range.getBoundingClientRect().width <= room + 0.01;
 }
 
@@ -238,8 +247,11 @@ export function dialog(title, body, buttons, opts) {
   fitLabels(overlay);
   document.body.classList.add('dialog-open');
   setBackground(true);
-  var first = card.querySelector('button');
-  if (first) first.focus();
+  // Фокус — на само окно, а не на первую кнопку: иначе на телефоне вокруг неё
+  // красная рамка фокуса, а длинное окно открывается прокрученным к кнопкам.
+  // Tab дальше идёт по кнопкам окна (onKey).
+  card.setAttribute('tabindex', '-1');
+  try { card.focus({ preventScroll: true }); } catch (e) { card.focus(); }
   return card;
 }
 

@@ -8,7 +8,7 @@ import * as api from './api.js';
 import { HttpError, NetError } from './api.js';
 import { refreshLabel } from './ui/today.js';
 import { state, app } from './state.js';
-import { render } from './render.js';
+import { render, redrawRefresh } from './render.js';
 
 /**
  * Свежие списки — не при каждом заходе: группа, открывшая ссылку разом с
@@ -59,12 +59,19 @@ var RETAKES_FRESH_MS = 30 * 60 * 1000;
 /** Не загрузилось — сама пробует снова не чаще этого: связь могла вернуться. */
 var RETRY_MS = 2 * 60 * 1000;
 
+/** «Повторить» отказывает не мгновенно: без крутилки кажется, что нажатие не дошло. */
+var RETRY_SHOWN_MS = 600;
+
+/** Почему раздел не загрузился — для текста: сервер ответил ошибкой — дело не в интернете. */
+function failedBy(error) { return error instanceof HttpError ? 'server' : 'net'; }
+
 /** Лист пересдач: при первом открытии вкладки и когда полежал полчаса. */
 export function loadRetakes(force) {
   if (retakesLoading) return;
   if (!force && state.retakes && state.retakes !== 'failed' && Date.now() - retakesAt < RETAKES_FRESH_MS) return;
   if (!force && state.retakes === 'failed' && Date.now() - retakesAt < RETRY_MS) return;
   retakesLoading = true;
+  var started = Date.now();
   if (force && state.retakes === 'failed') {
     state.retakes = null;
     render();
@@ -74,12 +81,15 @@ export function loadRetakes(force) {
     retakesAt = Date.now();
     state.retakes = body;
     render();
-  }, function () {
-    retakesLoading = false;
-    retakesAt = Date.now();
-    // Уже показанный список не прячем из-за одного неудачного запроса.
-    if (!state.retakes || state.retakes === 'failed') state.retakes = 'failed';
-    render();
+  }, function (error) {
+    setTimeout(function () {
+      retakesLoading = false;
+      retakesAt = Date.now();
+      // Уже показанный список не прячем из-за одного неудачного запроса.
+      if (!state.retakes || state.retakes === 'failed') state.retakes = 'failed';
+      state.failedBy.retakes = failedBy(error);
+      render();
+    }, force ? Math.max(0, RETRY_SHOWN_MS - (Date.now() - started)) : 0);
   });
 }
 
@@ -94,6 +104,7 @@ export function loadRooms(date, force) {
   if (!force && have && have !== 'failed' && Date.now() - (roomsAt[date] || 0) < ROOMS_FRESH_MS) return;
   if (!force && have === 'failed' && Date.now() - (roomsAt[date] || 0) < RETRY_MS) return;
   roomsLoading[date] = true;
+  var started = Date.now();
   if (force && have === 'failed') {
     state.rooms[date] = null;
     render();
@@ -104,11 +115,14 @@ export function loadRooms(date, force) {
     state.rooms[date] = body;
     render();
   }, function (error) {
-    roomsLoading[date] = false;
-    roomsAt[date] = Date.now();
-    var missing = error instanceof HttpError && error.status === 404;
-    if (missing || !have || have === 'failed') state.rooms[date] = missing ? 'missing' : 'failed';
-    render();
+    setTimeout(function () {
+      roomsLoading[date] = false;
+      roomsAt[date] = Date.now();
+      var missing = error instanceof HttpError && error.status === 404;
+      if (missing || !have || have === 'failed') state.rooms[date] = missing ? 'missing' : 'failed';
+      state.failedBy['rooms:' + date] = failedBy(error);
+      render();
+    }, force ? Math.max(0, RETRY_SHOWN_MS - (Date.now() - started)) : 0);
   });
 }
 
@@ -253,11 +267,11 @@ export function refresh(force, manual) {
       state.flash = true;
       state.flashAt = Date.now();
       if (manual) announce(refreshLabel(app) || 'Расписание обновлено');
-      render();
+      redrawRefresh();
       clearTimeout(flashTimer);
       flashTimer = setTimeout(function () {
         state.flash = false;
-        render();
+        redrawRefresh();
       }, 900);
     }, Math.max(0, state.spinStart + turns * SPIN_MS - Date.now()));
   });
