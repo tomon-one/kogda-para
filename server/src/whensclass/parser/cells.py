@@ -37,6 +37,14 @@ _CANCEL_RE = re.compile(r"\bотмен\w*|\bотм\b\.?", re.IGNORECASE)
 # Ссылка на вебинар попадается и слитно с подписью: «онлайнhttps://...».
 _URL_RE = re.compile(r"https?://\S+")
 
+# Обрывок формулы, вставленный в ячейку при правке: «Ло+K156:N227гистика».
+# Диапазон с плюсом — где угодно, без плюса — только внутри русского слова:
+# так не задеть адрес и номер в ссылке.
+_RANGE_JUNK_RE = re.compile(
+    r"\+[A-Z]{1,3}\d{1,6}:[A-Z]{1,3}\d{1,6}"
+    r"|(?<=[а-яёА-ЯЁ])[A-Z]{1,3}\d{1,6}:[A-Z]{1,3}\d{1,6}(?=[а-яёА-ЯЁ])"
+)
+
 # Аудитория — это номер, иногда с буквой корпуса или через дробь («55/1»),
 # иногда со словом-зданием впереди («Восход 222», «Спортзал 2»). Всё
 # остальное после слова «отмена» в той же колонке — причина, а не место.
@@ -144,7 +152,10 @@ def normalize(raw: str | None) -> str:
     if not raw:
         return ""
     text = raw.replace("\xa0", " ").replace("\r\n", "\n").replace("\r", "\n")
-    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.split("\n")]
+    lines = [
+        re.sub(r"[ \t]+", " ", line if "://" in line else _RANGE_JUNK_RE.sub("", line)).strip()
+        for line in text.split("\n")
+    ]
     return "\n".join(line for line in lines if line)
 
 
