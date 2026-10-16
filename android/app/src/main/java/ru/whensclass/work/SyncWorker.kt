@@ -42,7 +42,6 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 .setConstraints(
                     Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
                 )
-                .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, TimeUnit.MINUTES)
                 .build()
             WorkManager.getInstance(context)
                 .enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP, request)
@@ -61,6 +60,10 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 .setConstraints(
                     Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
                 )
+                // Повторяет только разовая (periodic всегда success): без своей
+                // паузы WorkManager берёт 30 с с удвоением, и серия отказов за
+                // полчаса набирала бы «сервер не отвечает» сама.
+                .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, TimeUnit.MINUTES)
                 .build()
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(ONE_SHOT, ExistingWorkPolicy.REPLACE, request)

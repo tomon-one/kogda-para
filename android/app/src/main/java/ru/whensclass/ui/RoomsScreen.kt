@@ -297,9 +297,12 @@ internal fun RoomsScreen(
         item(key = "пояснение") {
             Note(
                 "Показано по расписанию колледжа. В списке — кабинеты, где по нему бывают пары; переносов и мероприятий в нём нет." +
-                    if (shown.unread.isEmpty()) "" else " Не учтены кабинеты " +
+                    (if (shown.unread.isEmpty()) "" else " Не учтены кабинеты " +
                         plural(shown.unread.size, "группы", "групп", "групп") +
-                        ", у которых день не прочитан: " + shown.unread.joinToString(", ") + ".",
+                        ", у которых день не прочитан: " + shown.unread.joinToString(", ") + ".") +
+                    (if (shown.unpublished == 0) "" else " Не учтены кабинеты " +
+                        plural(shown.unpublished, "группы", "групп", "групп") +
+                        ", которым колледж ещё не выложил этот день."),
             )
         }
         }

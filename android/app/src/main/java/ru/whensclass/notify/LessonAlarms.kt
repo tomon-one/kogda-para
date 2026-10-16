@@ -63,6 +63,11 @@ object LessonAlarms {
                 // Ссылку на вебинар дописали, сменили или убрали после напоминания — «Войти» за ней.
                 val url = joinUrl(lessonsOf(schedule, key))
                 if (url != Notifications.shownLessonUrl(app)) Notifications.addJoin(app, url)
+                // Кабинет или преподавателя сменили — текст за ними.
+                val text = currentText(schedule, key, minutes)
+                if (text != null && text != Notifications.shownLessonText(app)) {
+                    Notifications.replaceLessonText(app, text)
+                }
             }
         }
         plan(schedule, minutes)
@@ -78,6 +83,13 @@ object LessonAlarms {
      */
     internal fun stillOn(schedule: ScheduleDto, key: String): Boolean = lessonsOf(schedule, key).isNotEmpty()
 
+    /** Текст напоминания о паре из ключа — каким он был бы по нынешнему снимку. */
+    internal fun currentText(schedule: ScheduleDto, key: String, minutes: Int): String? {
+        val start = runCatching { LocalDateTime.parse(key.substringBefore('|')) }.getOrNull() ?: return null
+        return plan(schedule, minutes, now = start.minusMinutes(minutes.toLong() + 1))
+            .firstOrNull { it.start == start }?.let { text(it) }
+    }
+
     /** Неотменённые пары из ключа напоминания. */
     internal fun lessonsOf(schedule: ScheduleDto, key: String): List<LessonDto> {
         val start = key.substringBefore('|')
@@ -87,7 +99,9 @@ object LessonAlarms {
         val day = schedule.days.firstOrNull { it.date == date } ?: return emptyList()
         val bells = schedule.bellsOf(day)
         return day.lessons.filter { lesson ->
-            !lesson.isCancelled && lesson.subject in subjects &&
+            // Исправили написание («Обествознание» → «Обществознание») — та же
+            // пара: напоминание о ней не снимается.
+            !lesson.isCancelled && subjects.any { ru.whensclass.data.ScheduleDiff.sameSubject(it, lesson.subject) } &&
                 bells[lesson.number.toString()]?.getOrNull(0) == time
         }
     }
@@ -320,7 +334,11 @@ class LessonAlarmReceiver : BroadcastReceiver() {
         val text = intent.getStringExtra(LessonAlarms.EXTRA_TEXT).orEmpty()
         val end = intent.getStringExtra(LessonAlarms.EXTRA_END)
             ?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
-        Notifications.lessonSoon(
+        // Будильник опоздал дальше конца пары (неточный, телефон спал): «Пара
+        // уже идёт» про прошедшую пару — ложь. Напоминание не показывать, а
+        // следующие переставить всё равно.
+        val over = end != null && !LocalDateTime.now(ru.whensclass.widget.COLLEGE_ZONE).isBefore(end)
+        if (!over) Notifications.lessonSoon(
             context,
             LessonAlarms.title(subject, start),
             text,

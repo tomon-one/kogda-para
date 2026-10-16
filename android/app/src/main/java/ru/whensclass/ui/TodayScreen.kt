@@ -1,5 +1,6 @@
 package ru.whensclass.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -127,8 +128,10 @@ fun TodayScreen(
     // Преподаватель открывает приложение на своём разделе. Вкладка переживает
     // поворот экрана.
     // Имя в «Пересдачах» нажали — открыть его во вкладке преподавателей (только на новое нажатие).
-    var openTeacher by rememberSaveable { mutableStateOf<String?>(null) }
-    var openTeacherKey by rememberSaveable { mutableIntStateOf(0) }
+    // С ролью: вкладка преподавателей у каждой роли своя (ниже, "teachers:$teacherMode"),
+    // и прежнее нажатие не должно исполниться в новой как свежее.
+    var openTeacher by rememberSaveable(teacherMode) { mutableStateOf<String?>(null) }
+    var openTeacherKey by rememberSaveable(teacherMode) { mutableIntStateOf(0) }
     // Нажали на саму вкладку преподавателей — к тому, что было открыто на ней.
     var teachersEnterKey by rememberSaveable { mutableIntStateOf(0) }
     var tab by rememberSaveable(teacherMode) {
@@ -148,6 +151,11 @@ fun TodayScreen(
             handledStart = startKey
             tab = if (teacherMode) Tab.TEACHERS else Tab.STUDENTS
         }
+    }
+    // «Назад» с «Пересдач» и «Аудиторий» — к своему расписанию, как на сайте,
+    // а не из приложения.
+    BackHandler(enabled = tab == Tab.RETAKES || tab == Tab.ROOMS) {
+        tab = if (teacherMode) Tab.TEACHERS else Tab.STUDENTS
     }
     val snackbar = remember { SnackbarHostState() }
     // Неудачу показываем плашкой, чтобы человек не ушёл уверенным в свежих
@@ -328,6 +336,7 @@ fun TodayScreen(
                                 openId = openTeacher,
                                 openKey = openTeacherKey,
                                 enterKey = teachersEnterKey,
+                                onLeaveOpened = { tab = Tab.RETAKES },
                             )
                         }
                         return@ScheduleTabs
@@ -344,7 +353,7 @@ fun TodayScreen(
                         tabStates.SaveableStateProvider("retakes") {
                             // Не загрузились — при входе на вкладку пробовать снова, а не ждать возврата в приложение.
                             LaunchedEffect(Unit) { if (retakesFailed) onRetryRetakes() }
-                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes, answered = retakesAnswered, onOpenTeacher = { id ->
+                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes, answered = retakesAnswered, teachers = teachers, onOpenTeacher = { id ->
                                 openTeacher = id
                                 openTeacherKey++
                                 tab = Tab.TEACHERS

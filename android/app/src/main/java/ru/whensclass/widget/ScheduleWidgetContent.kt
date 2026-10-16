@@ -135,6 +135,10 @@ fun ScheduleWidgetContent(
                     day.toString(), schedule.isTeacher,
                     nextFree = schedule.days.firstOrNull { it.date == day.plusDays(1).toString() }
                         ?.let { ru.whensclass.ui.freeOwnDay(it, schedule.groupNames) } == true,
+                    // Время — как на экране: «до полудня» своя фраза (к полудню
+                    // виджет перерисовывается, MidnightUpdater). Только простоя
+                    // экрана виджет не знает.
+                    now = collegeNow(),
                 ),
                 colors, open = actionStartActivity(openDay(context, day)),
             )

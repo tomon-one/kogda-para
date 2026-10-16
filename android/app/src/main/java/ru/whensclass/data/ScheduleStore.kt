@@ -86,6 +86,21 @@ class ScheduleStore(private val context: Context) {
     }
 
     /**
+     * Сервер ответил расписанием, хотя /v1/meta в этом заходе сорвался: «не
+     * отвечает» — уже неправда. true — отметка стояла и снята.
+     */
+    suspend fun forgetUnreachable(): Boolean {
+        var was = false
+        context.dataStore.edit {
+            if (it[KEY_SERVER_STATUS] != STATUS_UNREACHABLE) return@edit
+            was = true
+            it[KEY_SERVER_STATUS] = "ok"
+            it.remove(KEY_SERVER_SINCE)
+        }
+        return was
+    }
+
+    /**
      * Сервер отказал прежней сборке (426), а приложение с тех пор обновили:
      * отказ к нынешней не относится, и до первого ответа сервера на экране и в
      * виджетах не должно висеть «обновите приложение».
@@ -167,6 +182,9 @@ class ScheduleStore(private val context: Context) {
      * двадцать. 404 должен повториться не раньше чем через час после первого.
      */
     val gone: Flow<Boolean> = context.dataStore.data.map { it[KEY_GONE] == "1" }
+
+    /** Сервер ответил 404 на свою группу, но час ещё не прошёл ([noteNotFound]). */
+    val notFoundPending: Flow<Boolean> = context.dataStore.data.map { it[KEY_GONE_SINCE] != null }
 
     /** Отмечает 404. True, если пора говорить человеку. */
     suspend fun noteNotFound(nowMillis: Long): Boolean {
@@ -302,9 +320,7 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
-    /** Закреплённый id сменился — переименование. */
-    suspend fun replacePinnedGroup(old: String, new: String) = replacePinned(KEY_PINNED_GROUPS, old, new)
-
+    /** Закреплённый id сменился — имя исправили. */
     suspend fun replacePinnedTeacher(old: String, new: String) = replacePinned(KEY_PINNED_TEACHERS, old, new)
 
     private suspend fun replacePinned(key: Preferences.Key<String>, old: String, new: String) {
@@ -510,7 +526,7 @@ class ScheduleStore(private val context: Context) {
     suspend fun clearExtrasNotFound(ids: Set<String>) {
         if (ids.isEmpty()) return
         editExtras { list ->
-            list.map { if (it.id in ids && (it.gone || it.goneSince != null)) it.copy(gone = false, goneSince = null) else it }
+            list.map { if (it.id in ids && (it.gone || it.goneSince != null)) it.copy(gone = false, goneSince = null, told = false) else it }
         }
     }
 
@@ -518,6 +534,11 @@ class ScheduleStore(private val context: Context) {
      * Группы нет в таблице — подтверждено. Выбор не стирается: после починки
      * таблицы её пары вернутся сами. true — отметка новая, о ней пора сказать.
      */
+    /** Пропавшие группы, о которых уведомление сказало. */
+    suspend fun markExtrasTold(ids: Set<String>) {
+        editExtras { list -> list.map { if (it.id in ids) it.copy(told = true) else it } }
+    }
+
     suspend fun markExtraGone(id: String): Boolean {
         var fresh = false
         editExtras { list ->

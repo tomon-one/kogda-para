@@ -26,6 +26,12 @@ data class ExtraGroup(
     @SerialName("gone") val gone: Boolean = false,
     /** Когда сервер впервые ответил на неё 404, мс; null — отвечает. */
     @SerialName("gone_since") val goneSince: Long? = null,
+    /**
+     * О пропаже сказано уведомлением. Отдельно от [gone]: уведомления могли
+     * быть запрещены, и сказать надо, когда их разрешат. Записи прежних
+     * версий поля не знают: там о пропавшей уже сказано (или нет — не узнать).
+     */
+    @SerialName("told") val told: Boolean = gone,
 )
 
 /**

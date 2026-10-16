@@ -135,7 +135,12 @@ class ScheduleRepository(
      * задержка отсекает чихи Google, которые сервер сам лечит к следующему
      * заходу.
      */
-    private suspend fun announceStale(status: String?, sinceIso: String?) {
+    /**
+     * `countFrom` — с какого момента считать срок уведомления, если не с
+     * `sinceIso`: у «не отвечает» — с начала серии неудач подряд, иначе вечерняя
+     * неудача и утренние полчаса сложились бы через ночь в «два часа».
+     */
+    private suspend fun announceStale(status: String?, sinceIso: String?, countFrom: java.time.Instant? = null) {
         if (status == "ok" || sinceIso == null) {
             if (store.staleNotifiedFor() != null) {
                 store.setStaleNotifiedFor(null)
@@ -146,7 +151,7 @@ class ScheduleRepository(
         if (!store.notifyServerEnabled()) return
         if (store.staleNotifiedFor() == sinceIso) return
         val since = runCatching { java.time.Instant.parse(sinceIso) }.getOrNull() ?: return
-        if (System.currentTimeMillis() - since.toEpochMilli() < STALE_NOTIFY_AFTER_MILLIS) return
+        if (System.currentTimeMillis() - (countFrom ?: since).toEpochMilli() < STALE_NOTIFY_AFTER_MILLIS) return
         val silent = status == STATUS_UNREACHABLE
         val shown = Notifications.serverDown(
             context,
@@ -232,12 +237,18 @@ class ScheduleRepository(
      * до следующей правки таблицы, а группа на практике качалась бы на каждом
      * открытии.
      */
-    private suspend fun extrasMissing(groups: List<ExtraGroup>): Boolean {
+    private suspend fun extrasMissing(groups: List<ExtraGroup>, from: String): Boolean {
         val asked = groups.filterNot { it.gone }
         if (asked.isEmpty()) return false
         val saved = extraSchedules.first()
         val gen = store.generatedAt.first()
-        return asked.any { saved[it.id]?.generatedAt != gen }
+        // Gen тот же, а снимок — прошлой недели: в понедельник своё окно пришло,
+        // а запрос другой группы сорвался. Без этой сверки её новая неделя не
+        // пришла бы до правки таблицы.
+        return asked.any { group ->
+            val one = saved[group.id]
+            one == null || one.generatedAt != gen || one.days.firstOrNull()?.date?.let { it < from } == true
+        }
     }
 
     /**
@@ -251,10 +262,14 @@ class ScheduleRepository(
         // Выбор не стираем, а отмечаем: вернётся группа — вернутся и её пары.
         // Сказать — один раз, если просили; все пропавшие за заход — одним
         // уведомлением: с одним id каждое следующее затёрло бы прежнее.
-        val newlyGone = extras.gone.filter { store.markExtraGone(it.id) }.map { it.name }
+        extras.gone.forEach { store.markExtraGone(it.id) }
+        // Сказано — только показанное: при запрещённых уведомлениях скажут,
+        // когда их разрешат, а не никогда.
+        val untold = store.currentExtraGroups().filter { it.gone && !it.told }
+        val newlyGone = untold.map { it.name }
         if (newlyGone.isNotEmpty() && store.notifyGroupsGoneEnabled()) {
             val one = newlyGone.size == 1
-            Notifications.subgroupGone(
+            val shown = Notifications.subgroupGone(
                 context,
                 if (one) "Группы ${newlyGone[0]} сейчас нет в таблице"
                 else "Групп ${newlyGone.joinToString(", ")} сейчас нет в таблице",
@@ -263,6 +278,7 @@ class ScheduleRepository(
                 else "Их пары пока не показываются и вернутся сами, когда они появятся. " +
                     "Если их переименовали — выберите заново в настройках."),
             )
+            if (shown) store.markExtrasTold(untold.map { it.id }.toSet())
         }
         if (extras.schedules.isEmpty()) return
         val keep = store.currentExtraGroups().map { it.id }.toSet()
@@ -362,17 +378,14 @@ class ScheduleRepository(
     }
 
     /**
-     * Закреплённые — за переименованием. Id, которого нет в свежем списке,
-     * спрашиваем у сервера: по памяти о старом имени он отвечает под новым
-     * id, его и закрепляем. Иначе звёздочка молча пропала бы.
+     * Закреплённые преподаватели — за исправленным именем. Id, которого нет в
+     * свежем списке, спрашиваем у сервера: он отвечает расписанием
+     * исправленного (docs/api.md), его и закрепляем.
      */
     suspend fun followRenamedPins(groups: List<GroupDto>, teachers: List<GroupDto>) =
         withContext(Dispatchers.IO) {
-            val groupIds = groups.map { it.id }.toSet()
-            for (old in store.pinnedGroups.first().filter { it !in groupIds }) {
-                val now = runCatching { api.schedule(old, days = 1).groupId }.getOrNull() ?: continue
-                if (now != old && now in groupIds) store.replacePinnedGroup(old, now)
-            }
+            // Групп сервер по старому имени не сводит (404), спрашивать о них
+            // незачем: закреплённая остаётся и видна снова, если группа вернётся.
             val teacherIds = teachers.map { it.id }.toSet()
             for (old in store.pinnedTeachers.first().filter { it !in teacherIds }) {
                 val now = runCatching { api.teacher(old, days = 1).groupId }.getOrNull() ?: continue
@@ -386,21 +399,25 @@ class ScheduleRepository(
     }
 
     /** Студент выбрал группу — заодно это и означает, что он студент. */
-    suspend fun selectGroup(group: GroupDto) {
+    suspend fun selectGroup(group: GroupDto): RefreshResult {
         // Смотрим до смены роли: после неё «та же группа» уже не значит
         // «ничего не изменилось» — у преподавателя лежит чужое расписание.
         val unchanged = !store.teacherMode() && store.currentGroupId() == group.id
-        store.setTeacherMode(false)
-        store.selectGroup(group.id, group.name, unchanged)
-        afterSelection()
+        choiceLock.withLock {
+            store.setTeacherMode(false)
+            store.selectGroup(group.id, group.name, unchanged)
+        }
+        return afterSelection()
     }
 
     /** Преподаватель выбрал себя — дальше всё работает как у студента. */
-    suspend fun selectSelfAsTeacher(teacher: GroupDto) {
+    suspend fun selectSelfAsTeacher(teacher: GroupDto): RefreshResult {
         val unchanged = store.teacherMode() && store.teacherId.first() == teacher.id
-        store.setTeacherMode(true)
-        store.selectTeacher(teacher.id, teacher.name, unchanged)
-        afterSelection()
+        choiceLock.withLock {
+            store.setTeacherMode(true)
+            store.selectTeacher(teacher.id, teacher.name, unchanged)
+        }
+        return afterSelection()
     }
 
     /**
@@ -437,12 +454,15 @@ class ScheduleRepository(
      * паре прежней группы), и сходить за новым. Не вышло — повторит фоновая
      * работа, как только будет сеть.
      */
-    private suspend fun afterSelection() {
+    /** Итог загрузки — для значка ⟳ на экране. */
+    private suspend fun afterSelection(): RefreshResult {
         updateWidgets()
         LessonAlarms.reschedule(context)
-        if (refresh(force = true) is RefreshResult.Failed) {
+        val result = refresh(force = true)
+        if (result is RefreshResult.Failed) {
             ru.whensclass.work.SyncWorker.now(context)
         }
+        return result
     }
 
     /** Расписание группы — для просмотра чужого, без смены роли. */
@@ -456,6 +476,10 @@ class ScheduleRepository(
      * ответ мог бы лечь поверх нового.
      */
     private val refreshLock = Mutex()
+    // Сверка выбора и запись ответа — одним куском против смены выбора: без
+    // него выбор, записанный между сверкой и записью, получил бы снимок
+    // прежней группы под своим именем. Короткий: сеть под ним не ждут.
+    private val choiceLock = Mutex()
 
     /** Идёт ли сейчас обновление. */
     val refreshing: Boolean get() = refreshLock.isLocked
@@ -492,7 +516,7 @@ class ScheduleRepository(
                 // прошлого окна, и до правки таблицы был бы виден один он;
                 store.windowFrom() != windowMark(from) ||
                 // снимок какой-то из остальных групп не дошёл.
-                extrasMissing(extraGroups)
+                extrasMissing(extraGroups, from.toString())
             // Состояние сервера спрашиваем всегда, и при ручном обновлении
             // тоже: именно тогда оно и нужно.
             val metaAnswer = runCatching { api.meta() }
@@ -515,7 +539,7 @@ class ScheduleRepository(
                 val down = store.noteUnreachable(now)
                 if (now.toEpochMilli() - down.run.toEpochMilli() >= UNREACHABLE_BROKEN_AFTER_MILLIS) {
                     store.putServerState(STATUS_UNREACHABLE, null, down.since.toString())
-                    announceStale(STATUS_UNREACHABLE, down.since.toString())
+                    announceStale(STATUS_UNREACHABLE, down.since.toString(), countFrom = down.run)
                 }
             }
             // Сервер занят — и своё, и другие группы упрутся в тот же лимит:
@@ -559,15 +583,16 @@ class ScheduleRepository(
                 }
                 store.clearNotFound()
                 // Отметка «не отвечает» снимается любым удачным ответом, даже
-                // если /v1/meta не ответил.
+                // если /v1/meta не ответил, — и плашка с цветом сбоя тоже.
                 store.clearUnreachable()
+                if (store.forgetUnreachable()) announceStale("ok", null)
                 val extras = extrasAsked.await()
 
                 // Сверка выбора ([subject]). Всё, что пишет, — внутри
                 // writeIfStillAsked, чтобы сверку нельзя было забыть или
                 // переставить за запись. Другие группы в сверку не входят — их
                 // пишет writeExtras по нынешнему выбору.
-                writeIfStillAsked(asked.own(), { subject().own() }) {
+                choiceLock.withLock { writeIfStillAsked(asked.own(), { subject().own() }) {
                     // Ответ пришёл под другим id: группу или преподавателя переименовали
                     // в таблице, и сервер ответил по памяти о старом имени.
                     val adopted = fresh.groupId != subject
@@ -601,7 +626,7 @@ class ScheduleRepository(
                     val missed = extras.missed.filter { it in chosen }
                     if (missed.isEmpty()) RefreshResult.Updated
                     else RefreshResult.Partial(missed, extras.fresh.filter { it in chosen }.toSet())
-                } ?: RefreshResult.AlreadyFresh
+                } } ?: RefreshResult.AlreadyFresh
             }
         } catch (error: CancellationException) {
             throw error

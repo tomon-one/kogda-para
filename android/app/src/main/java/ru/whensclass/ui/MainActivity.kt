@@ -87,7 +87,9 @@ class MainActivity : ComponentActivity() {
         opened.value = Opened(
             intent?.getStringExtra(EXTRA_DAY),
             intent?.getBooleanExtra(EXTRA_UPDATE, false) == true,
-            0,
+            // После поворота — прежний счёт: экран помнит, какие нажатия уже
+            // исполнил, и с нуля счёл бы старое нажатие новым.
+            savedInstanceState?.getInt(KEY_SEQ) ?: 0,
         )
         setContent {
             val open = opened.value
@@ -102,7 +104,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(KEY_SEQ, opened.value.seq)
+    }
+
     companion object {
+        private const val KEY_SEQ = "seq"
         const val EXTRA_DAY = "day"
         const val EXTRA_UPDATE = "update"
     }

@@ -435,4 +435,12 @@ class ScheduleDiffTest {
                 schedule(lesson(4, "Кураторский час", note = "Преподаватель заболел; вместо: Иностранный язык"))),
         )
     }
+
+    @Test
+    fun `огромные названия сравниваются быстро и только точно`() {
+        assertTrue(ScheduleDiff.sameSubject("Обествознание", "Обществознание"))
+        val started = System.nanoTime()
+        assertEquals(false, ScheduleDiff.sameSubject("а".repeat(50_000) + "б", "а".repeat(50_000) + "в"))
+        assertTrue(System.nanoTime() - started < 1_000_000_000L)
+    }
 }

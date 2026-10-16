@@ -112,6 +112,7 @@ internal fun App(
     val tableUrl by container.store.sourceUrl.collectAsState(initial = null)
     val serverSince by container.store.serverSince.collectAsState(initial = null)
     val gone by container.store.gone.collectAsState(initial = false)
+    val notFoundPending by container.store.notFoundPending.collectAsState(initial = false)
     val teacherName by container.store.teacherName.collectAsState(initial = null)
     val teacherId by container.store.teacherId.collectAsState(initial = null)
     val pinnedGroups by container.store.pinnedGroups.collectAsState(initial = emptyList())
@@ -278,11 +279,14 @@ internal fun App(
 
     // Выбрали группу или себя: сразу на экран расписания, и ⟳ крутится, пока
     // идёт сеть.
-    val afterPick: (suspend () -> Unit) -> Unit = { select ->
+    val afterPick: (suspend () -> RefreshResult) -> Unit = { select ->
         scope.launch {
             refreshing = true
             screen = Screen.TODAY
-            select()
+            // Значок ⟳ — по этой загрузке: без сети не «обновлено», а после
+            // прежней неудачи удачный выбор — не крестик.
+            val result = select()
+            refreshFailed = result is RefreshResult.Failed || result is RefreshResult.Partial
             // После записи выбора: на первом запуске до неё виден экран выбора,
             // и сброс роли мелькнул бы списком групп.
             pickTeacher = null
@@ -530,9 +534,16 @@ internal fun App(
                             }
                         },
                         onUpdate = {
-                            update?.let {
+                            scope.launch {
                                 updateError = null
-                                container.updates.start(it)
+                                // Запомненная сборка могла уже уйти с сервера (держатся
+                                // две последние): качать ту, что выложена сейчас.
+                                when (val result = container.updates.check(github = false)) {
+                                    is AppUpdate.Check.Available -> update = result.release
+                                    AppUpdate.Check.UpToDate -> update = null
+                                    AppUpdate.Check.Failed -> Unit
+                                }
+                                update?.let { container.updates.start(it) }
                             }
                         },
                         onTheme = { choice ->
@@ -609,7 +620,9 @@ internal fun App(
                         unsupported = serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED,
                         sourceUrl = tableUrl,
                         serverSince = serverSince,
-                        gone = gone,
+                        // Показать нечего, а сервер уже говорит «нет такой группы» —
+                        // сразу «выбрать заново», как на сайте, а не час «проверьте интернет».
+                        gone = gone || (notFoundPending && shownSchedule == null),
                         onRepick = {
                             pickTeacher = teacherMode
                             pickExtra = false

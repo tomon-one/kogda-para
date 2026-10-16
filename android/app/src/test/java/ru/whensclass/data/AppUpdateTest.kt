@@ -164,6 +164,8 @@ class AppUpdateTest {
         assertTrue(shouldAnnounce(release = 82, installed = 81, announced = Int.MAX_VALUE))
         assertFalse(shouldAnnounce(release = 82, installed = 81, announced = 82))
         assertFalse(shouldAnnounce(release = 81, installed = 81, announced = 0))
+        // GitHub отстаёт: объявлена 10, фон дошёл только до GitHub с 9 — не объявлять 9.
+        assertFalse(shouldAnnounce(release = 9, installed = 8, announced = 10))
     }
 
     @Test

@@ -121,7 +121,10 @@ data class LessonDto(
     @SerialName("x") val cancelled: Int = 0,
     @SerialName("c") val note: String? = null,
     @SerialName("gr") val groups: String? = null,
-    /** В расписании преподавателя — колонка группы, у которой эта пара. */
+    /**
+     * Колонка пары в листе: у преподавателя — группы, у которой эта пара; у
+     * группы — только в днях, прочитанных по повторному заголовку.
+     */
     @SerialName("col") val column: String? = null,
     /**
      * Только для экрана: у каких из выбранных групп есть эта пара — места в
@@ -181,6 +184,8 @@ data class RoomsDto(
     @SerialName("clashes") val clashes: List<ClashDto> = emptyList(),
     /** Группы, у которых день не прочитан: их кабинеты не учтены. */
     @SerialName("unread") val unread: List<String> = emptyList(),
+    /** Скольким группам колледж этот день ещё не выложил: их кабинеты не учтены. */
+    @SerialName("unpublished") val unpublished: Int = 0,
 )
 
 @Serializable

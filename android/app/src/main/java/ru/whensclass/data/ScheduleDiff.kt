@@ -137,8 +137,13 @@ object ScheduleDiff {
         if (na == nb) return true
         val headA = norm(a.substringBefore('/'))
         if (headA.isNotEmpty() && headA == norm(b.substringBefore('/'))) return true
+        // Расстояние правки — квадрат длины: на названии в десятки тысяч знаков
+        // это минуты. Опечатки правят в обычных названиях.
+        if (maxOf(na.length, nb.length) > MAX_FUZZY || kotlin.math.abs(na.length - nb.length) > 2) return false
         return minOf(na.length, nb.length) >= 8 && distance(na, nb) <= 2
     }
+
+    private const val MAX_FUZZY = 200
 
     /**
      * Хост, куда поведёт ссылка, — для «чужой адрес: …». «\» браузер читает

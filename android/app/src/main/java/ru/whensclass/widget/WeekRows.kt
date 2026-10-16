@@ -240,7 +240,8 @@ private fun EmptyLine(
         when {
             unread -> "сервер не прочитал день"
             absent -> "выходной"
-            else -> ru.whensclass.ui.freeDay(date.toString(), teacher, nextFree).replaceFirstChar { it.lowercase() }
+            else -> ru.whensclass.ui.freeDay(date.toString(), teacher, nextFree, now = collegeNow())
+                .replaceFirstChar { it.lowercase() }
         },
         maxLines = 1,
         style = TextStyle(fontSize = 11.sp, color = colors.textDim),

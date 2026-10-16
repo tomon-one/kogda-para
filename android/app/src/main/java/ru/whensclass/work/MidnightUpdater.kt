@@ -20,8 +20,9 @@ import ru.whensclass.widget.WeekWidget
 
 /**
  * Перерисовка виджетов в момент, когда их содержимое меняется само: смена
- * суток (WorkManager не обещает сработать в полночь) и звонок (подсветка
- * идущей пары иначе ждала бы часового обновления).
+ * суток (WorkManager не обещает сработать в полночь), звонок (подсветка
+ * идущей пары иначе ждала бы часового обновления) и полдень (фраза
+ * свободного дня).
  *
  * Будильник один и всегда стоит на ближайшем из этих моментов; сработав, он
  * заводит себя заново.
@@ -36,7 +37,10 @@ object MidnightUpdater {
         val state = runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()
         val now = ru.whensclass.widget.collegeNow()
         val bells = state?.let { ScheduleWidget.parse(it.scheduleJson)?.bellsOn(now.toLocalDate()) }.orEmpty()
-        return ru.whensclass.widget.nextTick(bells, now)
+        val tick = ru.whensclass.widget.nextTick(bells, now)
+        // И полдень: фраза свободного дня до полудня своя, как на экране.
+        val noon = now.toLocalDate().atTime(12, 0)
+        return if (noon.isAfter(now) && noon.isBefore(tick)) noon else tick
     }
 
     suspend fun schedule(context: Context) {
@@ -77,7 +81,9 @@ class MidnightReceiver : BroadcastReceiver() {
                 val night = ScheduleWidget().newDay(app)
                 // Сброс листания сам перерисовывает дневной виджет, поэтому
                 // здесь только он; остальные — общим путём ниже.
-                if (night) ScheduleWidget().resetDayOffset(app)
+                // Сбой записи (память телефона забита) не должен отменить звонки
+                // и напоминания ниже.
+                if (night) runCatching { ScheduleWidget().resetDayOffset(app) }
                 // Все три виджета — через репозиторий: там вшит счёт показов.
                 // Сбой перерисовки не должен отменить следующий звонок.
                 runCatching { AppContainer.get(app).repository.redrawWidgets() }

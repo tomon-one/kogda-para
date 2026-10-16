@@ -87,7 +87,13 @@ internal fun olderNumbering(versionName: String?): Boolean {
  * один ответ с огромным versionCode заглушил бы объявления навсегда.
  */
 internal fun shouldAnnounce(release: Int, installed: Int, announced: Int): Boolean =
-    release > installed && release != announced
+    release > installed && release != announced &&
+        // Уже объявлена сборка новее (GitHub отстаёт от сервера): о старшей
+        // не напоминать. Только для правдоподобного номера, см. выше.
+        announced !in (release + 1)..(installed + PLAUSIBLE_JUMP)
+
+/** На сколько сборок вперёд номер с сервера ещё правдоподобен. */
+private const val PLAUSIBLE_JUMP = 100
 
 /**
  * Годится ли подпись скачанного файла. Нынешний сертификат установленного

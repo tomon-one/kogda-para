@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import ru.whensclass.data.GroupDto
 import ru.whensclass.data.RetakeDto
 import ru.whensclass.data.RetakesDto
 import ru.whensclass.widget.formatDayRange
@@ -53,7 +54,14 @@ internal fun RetakesScreen(
     answered: Boolean = false,
     /** Преподаватель найден в расписании — нажатие на имя открывает его расписание. */
     onOpenTeacher: (String) -> Unit = {},
+    /**
+     * Список преподавателей: имя полностью — оттуда по id. В листе пересдач
+     * «Фамилия И.О.», инициалы читаются хуже; нет в списке — как в листе.
+     */
+    teachers: List<GroupDto>? = null,
 ) {
+    val fullNames = remember(teachers) { teachers.orEmpty().associate { it.id to it.name } }
+    fun nameOf(row: RetakeDto) = row.teacherId?.let { fullNames[it] } ?: row.teacher
     if (retakes == null) {
         if (failed) {
             Explanation("Пересдачи не загрузились", failureText(answered), onRetry = onRetry)
@@ -76,7 +84,7 @@ internal fun RetakesScreen(
     val q = query.trim()
     val moved = if (q.isEmpty()) emptyList() else redirects.filter { matchesQuery(it.first, q) }
     val rows = if (q.isEmpty()) retakes.rows else retakes.rows.filter { row ->
-        matchesQuery(row.teacher, q) || row.subjects.any { matchesQuery(it, q) } ||
+        matchesQuery(row.teacher, q) || matchesQuery(nameOf(row), q) || row.subjects.any { matchesQuery(it, q) } ||
             moved.any { matchesQuery(row.teacher, it.second) }
     }
 
@@ -118,7 +126,7 @@ internal fun RetakesScreen(
                 item(key = "перенос:$i") { Piece(i, count) { RedirectRow(name, to) } }
             }
             rows.forEachIndexed { i, row ->
-                item(key = "строка:$i") { Piece(moved.size + i, count) { RetakeRow(row, today, onOpenTeacher) } }
+                item(key = "строка:$i") { Piece(moved.size + i, count) { RetakeRow(row, nameOf(row), today, onOpenTeacher) } }
             }
         }
         if (q.isEmpty()) {
@@ -208,12 +216,12 @@ private fun Line(label: String, text: String, muted: Boolean = false) {
 }
 
 @Composable
-private fun RetakeRow(row: RetakeDto, today: LocalDate, onOpenTeacher: (String) -> Unit) {
+private fun RetakeRow(row: RetakeDto, name: String, today: LocalDate, onOpenTeacher: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         // Нашёлся в расписании — имя цветом и ведёт к его парам, как на сайте.
         val id = row.teacherId
         Text(
-            row.teacher,
+            name,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
             color = if (id != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,

@@ -159,6 +159,39 @@ object Notifications {
         }
     }
 
+    /** Текст висящего напоминания о паре; null — его нет. */
+    fun shownLessonText(context: Context): String? = runCatching {
+        context.getSystemService(NotificationManager::class.java)
+            ?.activeNotifications?.firstOrNull { it.id == ID_LESSON }
+            ?.notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)?.toString()
+    }.getOrNull()
+
+    /**
+     * Пару перевели в другой кабинет (или сменился преподаватель) после того,
+     * как напоминание пришло: то же напоминание — с новым текстом, без нового
+     * звука, иначе до конца пары в шторке висел бы старый кабинет.
+     */
+    @android.annotation.SuppressLint("MissingPermission")
+    fun replaceLessonText(context: Context, text: String) {
+        if (!allowed(context)) return
+        runCatching {
+            val shown = context.getSystemService(NotificationManager::class.java)
+                ?.activeNotifications?.firstOrNull { it.id == ID_LESSON }?.notification ?: return
+            val until = shown.extras.getLong(EXTRA_LESSON_UNTIL, 0L)
+            val left = until - System.currentTimeMillis()
+            if (until > 0 && left <= 0) {
+                NotificationManagerCompat.from(context).cancel(ID_LESSON)
+                return
+            }
+            val builder = android.app.Notification.Builder.recoverBuilder(context, shown)
+                .setContentText(text)
+                .setStyle(android.app.Notification.BigTextStyle().bigText(text))
+                .setOnlyAlertOnce(true)
+            if (until > 0) builder.setTimeoutAfter(left)
+            NotificationManagerCompat.from(context).notify(ID_LESSON, builder.build())
+        }
+    }
+
     private const val JOIN = "Войти"
     private const val EXTRA_LESSON_URL = "ru.whensclass.lesson.url"
     private const val EXTRA_LESSON_UNTIL = "ru.whensclass.lesson.until"
@@ -175,9 +208,9 @@ object Notifications {
         show(context, CHANNEL_CHANGES, ID_CHANGES, title, text, day = null, until = until)
     }
 
-    fun subgroupGone(context: Context, title: String, text: String) {
-        show(context, CHANNEL_SUBGROUP, ID_SUBGROUP, title, text, day = null)
-    }
+    /** true — показано: канал включён и уведомления разрешены. */
+    fun subgroupGone(context: Context, title: String, text: String): Boolean =
+        show(context, CHANNEL_SUBGROUP, ID_SUBGROUP, title, text, day = null) && !channelOff(context, CHANNEL_SUBGROUP)
 
     /**
      * Сервер лежит дольше двух часов. true — показано: только тогда сбой

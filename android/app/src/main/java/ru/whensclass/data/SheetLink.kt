@@ -19,7 +19,9 @@ fun sheetLink(schedule: ScheduleDto?, day: LocalDate?, fallback: String?): Strin
         // Дня в ответе нет (воскресенье, каникулы) — ближайший следующий:
         // именно на него человек и смотрит.
         ?: today?.let { d -> schedule.days.firstOrNull { it.date > d } }
-    val column = schedule.column ?: dayDto?.lessons?.firstNotNullOfOrNull { it.column }
+    // Колонка пары — у преподавателя и в днях, прочитанных по повторному
+    // заголовку с другой раскладкой; иначе — колонка группы.
+    val column = dayDto?.lessons?.firstNotNullOfOrNull { it.column } ?: schedule.column
     val row = dayDto?.row
     // День — по две строки на пару (пара и преподаватели), сколько пар в
     // сетке звонков; без сетки — шесть, как в листе.

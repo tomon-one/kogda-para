@@ -67,6 +67,8 @@ fun TeacherScreen(
     openKey: Int = 0,
     /** Вкладку открыли нажатием на неё: открытый из «Пересдач» уступает тому, что было на ней. */
     enterKey: Int = 0,
+    /** Открытого из «Пересдач» закрыли («К списку», «назад») — туда и вернуться, как на сайте. */
+    onLeaveOpened: () -> Unit = {},
     othersTitle: String = "Другие преподаватели",
     // Дно списка — без утверждений про колледж: листы преподавателей в книге
     // есть, скрытые и с именами длиннее 31 символа, и сервер их не читает.
@@ -150,14 +152,31 @@ fun TeacherScreen(
         pickedName = teacher?.name.orEmpty()
     }
     var schedule by remember { mutableStateOf<ScheduleDto?>(null) }
+    // Чьё расписание в [schedule]: у другого открытого — не показывать.
+    var loadedFor by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    // ⟳ не дошёл до сервера — на экране прежнее, как на сайте.
+    var reloadFailed by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
 
-    // Системное «назад» — к списку и к своему расписанию, как кнопки на экране.
-    BackHandler(enabled = picked != null) {
-        pick(null)
-        schedule = null
+    // Открытый из «Пересдач» закрывают — вкладка возвращает своё, а человек
+    // — в «Пересдачи», откуда пришёл.
+    fun close() {
+        if (viaOpen) {
+            viaOpen = false
+            pickedId = beforeId
+            pickedName = beforeName
+            browsing = beforeBrowsing
+            schedule = null
+            onLeaveOpened()
+        } else {
+            pick(null)
+            schedule = null
+        }
     }
+
+    // Системное «назад» — к списку и к своему расписанию, как кнопки на экране.
+    BackHandler(enabled = picked != null) { close() }
     BackHandler(enabled = picked == null && ownSchedule != null && browsing) { browsing = false }
 
     // reloadKey меняется по нажатию на обновление: перечитываем расписание
@@ -165,7 +184,14 @@ fun TeacherScreen(
     LaunchedEffect(pickedId, reloadKey) {
         val teacher = picked ?: return@LaunchedEffect
         loading = true
-        schedule = loadSchedule(teacher.id)
+        val fresh = loadSchedule(teacher.id)
+        // Не загрузилось у того же — прежнее остаётся: человек его читал.
+        val same = loadedFor == teacher.id && schedule != null
+        reloadFailed = fresh == null && same
+        if (fresh != null || !same) {
+            schedule = fresh
+            loadedFor = teacher.id
+        }
         loading = false
     }
 
@@ -173,12 +199,10 @@ fun TeacherScreen(
     if (chosen != null) {
         ChosenTeacher(
             teacher = chosen,
-            schedule = schedule,
+            schedule = schedule.takeIf { loadedFor == chosen.id },
             loading = loading,
-            onBack = {
-                pick(null)
-                schedule = null
-            },
+            reloadFailed = reloadFailed && !loading,
+            onBack = { close() },
         )
         return
     }
@@ -297,6 +321,7 @@ private fun ChosenTeacher(
     teacher: GroupDto,
     schedule: ScheduleDto?,
     loading: Boolean,
+    reloadFailed: Boolean,
     onBack: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -305,7 +330,9 @@ private fun ChosenTeacher(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                teacher.name,
+                // Открыт из «Пересдач», а списка преподавателей ещё нет — имя
+                // из ответа, как на сайте.
+                teacher.name.ifEmpty { schedule?.groupName.orEmpty() },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
@@ -313,8 +340,18 @@ private fun ChosenTeacher(
             TextButton(onClick = onBack) { Text("К списку", maxLines = 1, softWrap = false) }
         }
 
+        if (reloadFailed && schedule != null) {
+            Text(
+                "Не обновилось — на экране прежнее.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+            )
+        }
         when {
-            loading -> Centered { CircularProgressIndicator() }
+            // Обновление открытого — без крутилки на месте пар: прокрутка и
+            // прочитанное остаются, пока не пришло новое.
+            loading && schedule == null -> Centered { CircularProgressIndicator() }
             schedule == null -> Centered {
                 Text(
                     "Расписание не загрузилось. Проверьте интернет и нажмите ⟳ вверху.",
