@@ -77,3 +77,10 @@ test('boot.js — ES5', () => {
     assert.doesNotMatch(code, pattern, what);
   }
 });
+
+test('маркер номера сборки — ровно один на файл: выкладка вписывает номер вместо каждого', () => {
+  for (const file of ['index.html', 'sw.js', 'assets/js/version.js']) {
+    const text = readFileSync(join(WEB, file), 'utf8');
+    assert.equal(text.split('__BUILD__').length - 1, 1, file);
+  }
+});
