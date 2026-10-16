@@ -159,6 +159,7 @@ def test_network_blip_is_not_shown_as_failure(tmp_path, sent, fixture_csv):
 
 def test_html_instead_of_csv_is_closed_sheet(monkeypatch):
     class Resp:
+        status_code = 200
         headers = {"content-type": "text/html; charset=utf-8"}
         text = "<!DOCTYPE html><html>Вход</html>"
 

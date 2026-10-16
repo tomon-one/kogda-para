@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -17,6 +18,18 @@ import httpx
 from ..config import settings
 
 log = logging.getLogger(__name__)
+
+# Когда Google в последний раз ответил 429 «слишком часто». Пока не прошло
+# THROTTLE_SECONDS, необязательное (пересдачи, сверка) к нему не ходит: его
+# запросы отнимают у расписания ту же долю, которой Google и так не хватает.
+THROTTLE_SECONDS = 30 * 60
+_last_429: float | None = None
+
+
+def throttled() -> bool:
+    """Google недавно просил ходить реже (429)."""
+    return _last_429 is not None and time.monotonic() - _last_429 < THROTTLE_SECONDS
+
 
 class SheetClosed(Exception):
     """Вместо CSV пришла веб-страница: таблицу закрыли или она просит входа.
@@ -95,8 +108,9 @@ def _direct_or_exit(direct, *args: str, stdin: str | None = None) -> tuple[str |
     мёртвый ключ exit не починит. Не вышло и через exit — наверх уходит
     исходная ошибка, чтобы причина сбоя осталась прежней.
     """
+    global _last_429
     try:
-        return None, direct()
+        response = direct()
     except httpx.TransportError as error:
         if not settings.exit_ssh:
             raise
@@ -107,6 +121,9 @@ def _direct_or_exit(direct, *args: str, stdin: str | None = None) -> tuple[str |
             raise error from None
         log.warning("Google не ответил напрямую (%s) — взято через exit", error)
         return text, None
+    if response.status_code == 429:
+        _last_429 = time.monotonic()
+    return None, response
 
 
 def fetch_sheet_csv(gid: str | None = None, title: str | None = None) -> str:

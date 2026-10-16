@@ -93,7 +93,7 @@ def _run(tmp_path, monkeypatch, snap, text, sent):
     from whensclass.sources.gsheets import SheetInfo
 
     monkeypatch.setattr(crosscheck_service.sheet_index, "list_sheets",
-                        lambda: [SheetInfo("расписание преподавателей 19.10-24.10", "5")])
+                        lambda **_: [SheetInfo("расписание преподавателей 19.10-24.10", "5")])
     monkeypatch.setattr(crosscheck_service.gsheets, "fetch_sheet_csv", text)
     monkeypatch.setattr(crosscheck_service.alerts, "notify", lambda kind, *a, **k: sent.append(kind))
     monkeypatch.setattr(crosscheck_service.alerts, "forget", lambda *a: None)
@@ -128,3 +128,14 @@ def test_unreadable_teacher_sheet_is_a_quiet_alert(tmp_path, monkeypatch):
     snap = _snapshot([Lesson(number=2, subject="Физика"), Lesson(number=3, subject="Химия")])
     _run(tmp_path, monkeypatch, snap, lambda gid, title=None: "не тот лист", sent)
     assert sent == ["crosscheck-sheet"]
+
+
+def test_google_asking_to_slow_down_skips_the_check(tmp_path, monkeypatch):
+    """После 429 большие листы преподавателей не выгружаются: им отдана бы доля расписания."""
+    import time
+
+    monkeypatch.setattr(crosscheck_service.gsheets, "_last_429", time.monotonic())
+    read = []
+    snap = _snapshot([Lesson(number=2, subject="История")])
+    _run(tmp_path, monkeypatch, snap, lambda gid, title=None: read.append(gid) or SHEET, [])
+    assert read == []

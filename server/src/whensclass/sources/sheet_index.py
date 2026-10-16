@@ -71,10 +71,11 @@ _last_list: list[SheetInfo] = []
 _last_list_at: dt.datetime | None = None
 # Сколько раз подряд Sheets API не ответил. Мёртвый ключ (отозван, квота)
 # иначе заметен, лишь когда кончится покрытие запомненного листа.
-# Один отказ — чих, два подряд (полчаса) — тревога.
+# Один отказ — чих, два подряд — тревога.
 _api_failures = 0
 API_FAILURES_TO_ALERT = 2
-_KEY_CODES = (400, 401, 403, 429)
+# 429 — не ключ: Google просит ходить реже, и выгрузке листа он отвечает так же.
+_KEY_CODES = (400, 401, 403)
 
 
 def looks_like_groups(title: str) -> bool:
@@ -82,14 +83,17 @@ def looks_like_groups(title: str) -> bool:
     return bool(_LOOKS_LIKE_GROUPS.search(title))
 
 
-def list_sheets() -> list[SheetInfo]:
+def list_sheets(max_age: dt.timedelta | None = None) -> list[SheetInfo]:
     """Список листов через Sheets API. Без ключа и без свежего списка — нет.
 
     При сбое API — последний удачный список, если ему меньше шести часов:
-    gid листов от этого не меняются.
+    gid листов от этого не меняются. С `max_age` список моложе него берётся
+    без запроса: поиск листа расписания обновляет его раз в полчаса.
     """
     global _api_failures, _last_list, _last_list_at
 
+    if max_age and _last_list and _last_list_at and dt.datetime.now(dt.timezone.utc) - _last_list_at < max_age:
+        return _last_list
     if not settings.sheets_api_key:
         raise SheetNotFound(
             "ключа Sheets API нет — gid листов взять неоткуда"

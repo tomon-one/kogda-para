@@ -72,6 +72,34 @@ def test_network_trouble_is_not_blamed_on_the_key(monkeypatch, sent):
     assert len(sent) == 2 and "ключ работает" in sent[1]["message"]
 
 
+def test_google_asking_to_slow_down_is_not_blamed_on_the_key(monkeypatch, sent):
+    """429 — Google просит ходить реже (выгрузке листа он отвечает так же), а не отказ ключа."""
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
+    monkeypatch.setattr(sheet_index, "_api_failures", 0)
+
+    def busy(key):
+        raise _google_says(429)
+
+    monkeypatch.setattr(gsheets, "list_sheets_via_api", busy)
+    monkeypatch.setattr(sheet_index, "_last_list", [gsheets.SheetInfo("расписание групп 01.-19.09", "1")])
+    monkeypatch.setattr(sheet_index, "_last_list_at", dt.datetime.now(dt.timezone.utc))
+    for _ in range(3):
+        assert [s.gid for s in sheet_index.list_sheets()] == ["1"]
+    assert sent == []
+
+
+def test_recent_list_is_taken_without_asking_google(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
+    monkeypatch.setattr(gsheets, "list_sheets_via_api", lambda key: calls.append(key) or [])
+    monkeypatch.setattr(sheet_index, "_last_list", [gsheets.SheetInfo("расписание групп 01.-19.09", "1")])
+    monkeypatch.setattr(sheet_index, "_last_list_at", dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=40))
+    assert [s.gid for s in sheet_index.list_sheets(max_age=dt.timedelta(hours=1))] == ["1"]
+    assert calls == []
+    sheet_index.list_sheets(max_age=dt.timedelta(minutes=30))
+    assert calls == ["ключ"]
+
+
 # --- Ключ в журнале ---------------------------------------------------------
 
 

@@ -121,3 +121,12 @@ def test_exit_setting_without_port_does_not_call_ssh(monkeypatch, exit_on):
     with pytest.raises(httpx.ConnectError):
         gsheets.fetch_sheet_csv("1")
     assert exit_on.calls == []
+
+
+def test_429_goes_up_and_is_remembered(monkeypatch, exit_on):
+    monkeypatch.setattr(gsheets, "_client", _google(lambda r: httpx.Response(429, text="slow down")))
+    with pytest.raises(httpx.HTTPStatusError) as caught:
+        gsheets.fetch_sheet_csv("1")
+    assert caught.value.response.status_code == 429
+    assert gsheets.throttled()
+    assert exit_on.calls == []
