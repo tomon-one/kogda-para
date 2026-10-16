@@ -382,7 +382,6 @@ def _check_columnar(
         # колонке листа) читается по главному.
         start = min(moved)
         moved.update(col for col, _, _ in renamed if col >= start)
-        renamed = [r for r in renamed if r[0] < start]
         for _, declared, _, _ in strangers:
             moved.update(
                 column_of[gid] for gid in map(group_id, declared) if gid in column_of
@@ -393,7 +392,8 @@ def _check_columnar(
             col for col in by_column
             if not split_group_names((names_row[col] if col < len(names_row) else "") or "")
         )
-        _warn_renamed(renamed)
+        # В журнал — только те, что и правда читаются по главному.
+        _warn_renamed([r for r in renamed if r[0] not in moved])
         return moved, message
     _warn_renamed(renamed)
     for col, declared, gid, known in strangers:
