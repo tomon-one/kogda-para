@@ -122,10 +122,14 @@ class CrossCheck:
         snap = self.snapshot()
         if snap is None:
             return
+        # Листы преподавателей большие: при 429 они отняли бы у расписания последнее.
+        if gsheets.throttled():
+            log.info("сверка: Google недавно ответил 429 — пропускаю заход")
+            return
         now = dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone))
         today = now.date()
         try:
-            sheets = sheet_index.list_sheets()
+            sheets = sheet_index.list_sheets(max_age=dt.timedelta(hours=1))
         except Exception as exc:  # тревогу о сбое API шлёт list_sheets
             log.warning("сверка: список листов не получен (%s)", sheet_index.hide_key(exc))
             return

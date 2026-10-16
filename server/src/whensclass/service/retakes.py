@@ -81,8 +81,15 @@ class RetakesSource:
             log.warning("retakes.json не читается (%s) — начну с пустого", exc)
 
     def refresh(self) -> None:
+        # Google просил ходить реже — лист пересдач подождёт, отдаётся прежний.
+        if gsheets.throttled() and self.payload is not None:
+            log.info("пересдачи: Google недавно ответил 429 — пропускаю заход")
+            return
         try:
-            sheets = [s for s in sheet_index.list_sheets() if not s.hidden and s.gid and _IS_RETAKES.search(s.title)]
+            sheets = [
+                s for s in sheet_index.list_sheets(max_age=dt.timedelta(hours=1))
+                if not s.hidden and s.gid and _IS_RETAKES.search(s.title)
+            ]
         except Exception as exc:  # сбой API: тревогу о нём шлёт list_sheets
             log.warning("пересдачи: список листов не получен (%s)", sheet_index.hide_key(exc))
             return

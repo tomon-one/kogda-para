@@ -147,7 +147,7 @@ def source(tmp_path, monkeypatch):
 
 
 def _book(monkeypatch, sheets, text=SHEET):
-    monkeypatch.setattr(retakes_service.sheet_index, "list_sheets", lambda: sheets)
+    monkeypatch.setattr(retakes_service.sheet_index, "list_sheets", lambda **_: sheets)
     monkeypatch.setattr(retakes_service.gsheets, "fetch_sheet_csv", lambda gid, title=None: text)
 
 
@@ -212,3 +212,15 @@ def test_api_serves_payload_or_503(source, monkeypatch):
     assert response.status_code == 200
     assert response.json()["rows"][0]["teacher"] == "Иванов И.И."
     assert client.get("/v1/retakes", headers={"If-None-Match": response.headers["ETag"]}).status_code == 304
+
+
+def test_google_asking_to_slow_down_keeps_the_previous_list(source, monkeypatch):
+    import time
+
+    _book(monkeypatch, [SheetInfo("График пересдач октябрь 2026", "3")])
+    source.refresh()
+    before = source.payload
+    monkeypatch.setattr(retakes_service.gsheets, "_last_429", time.monotonic())
+    _book(monkeypatch, [SheetInfo("График пересдач октябрь 2026", "3")], text="что-то другое")
+    source.refresh()
+    assert source.payload == before and source.sent == []

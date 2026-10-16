@@ -156,12 +156,13 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(retakes.refresh, "date",
                       run_date=dt.datetime.now(zone) + dt.timedelta(seconds=30))
 
-    # Сверка с листами преподавателей: раз в час, в стороне от обновления —
-    # только тревога владельцу, ответы клиентам она не меняет.
+    # Сверка с листами преподавателей: раз в три часа, в стороне от обновления —
+    # только тревога владельцу, ответы клиентам она не меняет. Листы большие,
+    # Google выгружает их подолгу, а частые выгрузки он встречает ответом 429.
     crosscheck = CrossCheck(lambda: store.snapshot if refresher.status == "ok" else None, directory)
     scheduler.add_job(
         crosscheck.run,
-        CronTrigger(hour=f"{first}-{last}", minute=37),
+        CronTrigger(hour=f"{first}-{last}/3", minute=37),
         id="crosscheck",
         max_instances=1,
         coalesce=True,

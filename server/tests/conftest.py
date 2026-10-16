@@ -26,6 +26,14 @@ def _fresh_header_warnings():
     groups._warned.clear()
 
 
+@pytest.fixture(autouse=True)
+def _google_not_throttled(monkeypatch):
+    """Память о 429 — на процесс: ответ Google в одном тесте не глушит другой."""
+    from whensclass.sources import gsheets
+
+    monkeypatch.setattr(gsheets, "_last_429", None)
+
+
 @pytest.fixture
 def sent(monkeypatch):
     box = []
