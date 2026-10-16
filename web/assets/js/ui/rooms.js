@@ -27,6 +27,19 @@ function defaultPair(body, today, nowSec) {
   return numbers[numbers.length - 1];
 }
 
+/** Идущая сейчас пара дня или null: её кнопка — своей рамкой. */
+function runningPair(body, today, nowSec) {
+  if (body.date !== today) return null;
+  var now = Math.floor(nowSec / 60);
+  var numbers = Object.keys(body.bells || {}).map(Number);
+  for (var i = 0; i < numbers.length; i++) {
+    var span = body.bells[numbers[i]];
+    var from = minutes(span[0]), to = minutes(span[1]);
+    if (from != null && to != null && now >= from && now < to) return numbers[i];
+  }
+  return null;
+}
+
 function chip(label, on, onclick, key) {
   return h('button', { type: 'button', class: 'chip' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', 'data-key': key, onclick: onclick }, label);
 }
@@ -138,15 +151,21 @@ export function roomsView(app) {
   wrap.appendChild(dayChips(days, body.date));
 
   var pair = st.pair || defaultPair(body, now.date, now.sec);
+  var running = runningPair(body, now.date, now.sec);
   wrap.appendChild(h('div', { class: 'chips pairs' }, [h('span', { class: 'chips-label muted' }, 'Пара')].concat(numbers.map(function (n) {
     var c = chip(String(n), n === pair, function () {
       if (n === pair) return;
       pick(function () { st.pair = n; });
     }, 'room-pair:' + n);
+    if (n === running) {
+      c.classList.add('now');
+      c.title = 'Идёт сейчас';
+    }
     return n === pair && n === st.pair ? chipEntering(c, st) : c;
   }))));
   var span = body.bells[pair] || [];
-  wrap.appendChild(entering(h('p', { class: 'room-when' }, pair + ' пара' + (span[0] ? ', ' + span[0] + '–' + (span[1] || '') : '')), st));
+  wrap.appendChild(entering(h('p', { class: 'room-when' }, pair + ' пара' + (span[0] ? ', ' + span[0] + '–' + (span[1] || '') : '')
+    + (pair === running ? ' · идёт сейчас' : '')), st));
 
   var busy = (body.busy || {})[pair] || {};
   var clashes = (body.clashes || []).filter(function (c) { return c.n === pair; });

@@ -109,17 +109,14 @@ internal fun RetakesScreen(
                 )
             }
         } else {
-            item(key = "список") {
-                Card {
-                    moved.forEachIndexed { i, (name, to) ->
-                        if (i > 0) Divider()
-                        RedirectRow(name, to)
-                    }
-                    rows.forEachIndexed { i, row ->
-                        if (i > 0 || moved.isNotEmpty()) Divider()
-                        RetakeRow(row, today, onOpenTeacher)
-                    }
-                }
+            // Строка — свой элемент списка: одной карточкой семьдесят строк
+            // строились бы разом, и вкладка открывалась бы с заминкой.
+            val count = moved.size + rows.size
+            moved.forEachIndexed { i, (name, to) ->
+                item(key = "перенос:$i") { Piece(i, count) { RedirectRow(name, to) } }
+            }
+            rows.forEachIndexed { i, row ->
+                item(key = "строка:$i") { Piece(moved.size + i, count) { RetakeRow(row, today, onOpenTeacher) } }
             }
         }
         if (q.isEmpty()) {
@@ -171,6 +168,23 @@ private fun Card(content: @Composable () -> Unit) {
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
     ) { Column { content() } }
+}
+
+/** Кусок общей карточки: скруглён сверху у первой строки и снизу у последней. */
+@Composable
+private fun Piece(index: Int, count: Int, content: @Composable () -> Unit) {
+    val top = if (index == 0) 12.dp else 0.dp
+    val bottom = if (index == count - 1) 12.dp else 0.dp
+    Surface(
+        shape = RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column {
+            if (index > 0) Divider()
+            content()
+        }
+    }
 }
 
 @Composable
