@@ -22,14 +22,22 @@ internal fun weekTitle(days: List<DayDto>, today: LocalDate): String {
 /** Недельный виджет — сегодня и шесть дней вперёд. */
 internal const val WEEK_AHEAD = 6L
 
-/** Шапка с логотипом и группой плюс отступы — то, что списку не достаётся. */
-internal val HEADER_SPACE = 62.dp
+/**
+ * Высота строки: поля плюс текст, а растёт со шрифтом только текст — при
+ * «всё × масштаб» на шрифте 2,0 виджет прятал дни при пустом месте. Сняты с
+ * живого экрана (TECNO, шрифт 1,0 и 2,0): о размерах разметки виджет не сообщает.
+ */
+internal class RowSize(private val pad: Float, private val text: Float) {
+    fun at(scale: Float): Dp = (pad + text * scale).dp
+}
 
-/** Высоты строк — сняты с живого экрана: о размерах разметки виджет не сообщает. */
-private val TITLE_ROW = 21.dp
-private val LESSON_ROW = 19.dp
-private val EMPTY_ROW = 17.dp
-internal val SUMMARY_ROW = 21.dp
+/** Шапка с логотипом и группой плюс отступы — то, что списку не достаётся. */
+internal val HEADER_SPACE = RowSize(16f, 46f)
+
+private val TITLE_ROW = RowSize(5f, 16f)
+private val LESSON_ROW = RowSize(4f, 15f)
+private val EMPTY_ROW = RowSize(3f, 14f)
+internal val SUMMARY_ROW = RowSize(5f, 16f)
 
 /** Раскладка недели: [open] ближайших дней парами, [shown] дней всего, остальные — «и ещё N дней». */
 internal data class WeekFit(val open: Int, val shown: Int)
@@ -72,8 +80,8 @@ internal fun fitWeek(
     }
 }
 
-internal fun dayHeight(day: WeekDay): Dp =
-    TITLE_ROW + if (day.lessons.isEmpty()) EMPTY_ROW else LESSON_ROW * day.lessons.size
+internal fun dayHeight(day: WeekDay, scale: Float = 1f): Dp =
+    TITLE_ROW.at(scale) + if (day.lessons.isEmpty()) EMPTY_ROW.at(scale) else LESSON_ROW.at(scale) * day.lessons.size
 
 
 /** День недели в виджете: заголовок и пары, если они есть. */

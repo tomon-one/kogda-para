@@ -1,5 +1,6 @@
 package ru.whensclass.ui
 
+import androidx.compose.material.icons.filled.Close
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -371,5 +372,17 @@ fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Uni
         // Длинная подпись переносится, а не налезает на тумблер.
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(end = 12.dp))
         MinimalSwitch(checked = checked, onCheckedChange = null)
+    }
+}
+
+/** Крестик в поле поиска: стереть набранное одним нажатием (как у поиска на сайте). */
+@androidx.compose.runtime.Composable
+internal fun ClearSearch(query: String, onClear: () -> Unit) {
+    if (query.isEmpty()) return
+    androidx.compose.material3.IconButton(onClick = onClear) {
+        androidx.compose.material3.Icon(
+            androidx.compose.material.icons.Icons.Default.Close,
+            contentDescription = "Очистить поиск",
+        )
     }
 }

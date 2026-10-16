@@ -57,9 +57,9 @@ internal fun Week(
     // тогда хвост недели — одной строкой «и ещё N дней».
     val fit = remember(all, height, scale) {
         fitWeek(
-            all.map { (dayHeight(it) * scale).value },
-            (height - HEADER_SPACE * scale).value,
-            (SUMMARY_ROW * scale).value,
+            all.map { dayHeight(it, scale).value },
+            (height - HEADER_SPACE.at(scale)).value,
+            SUMMARY_ROW.at(scale).value,
             firstHasLessons = all.firstOrNull()?.lessons?.isNotEmpty() == true,
         )
     }

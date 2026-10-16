@@ -25,6 +25,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -73,6 +75,24 @@ fun ScheduleDays(
     val opening = remember(days, target) { dayIndex(days, target) + shift }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = opening)
 
+    // Поворот: в альбомной плашки уходят в список первой строкой ([header]), и
+    // номер строки, сохранённый в книжной, показал бы день раньше. Помним день.
+    var topDay by rememberSaveable { mutableStateOf<String?>(null) }
+    var topOffset by rememberSaveable { mutableIntStateOf(0) }
+    val restored = remember { topDay to topOffset }
+    val daysNow by rememberUpdatedState(days)
+    val shiftNow by rememberUpdatedState(shift)
+    LaunchedEffect(listState) {
+        val (day, offset) = restored
+        if (day != null && daysNow.isNotEmpty()) {
+            listState.scrollToItem(dayIndex(daysNow, day) + shiftNow, offset)
+        }
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                daysNow.getOrNull(index - shiftNow)?.let { topDay = it.date; topOffset = offset }
+            }
+    }
+
     // Какой день ещё надо показать: экран живёт и через ночь, а начальная
     // позиция задаётся один раз. Новые сутки — снова сегодняшний день; нужного
     // дня пока нет в окне — ждём, пока обновление его принесёт. Переживает
@@ -83,8 +103,12 @@ fun ScheduleDays(
         if (today.toString() != firstToday) wanted = today.toString()
     }
     // Нажали на день в виджете, а экран жив: к этому дню.
+    var handledStart by rememberSaveable { mutableIntStateOf(startKey) }
     LaunchedEffect(startKey) {
-        if (startKey > 0) wanted = startDay ?: today.toString()
+        if (startKey != handledStart) {
+            handledStart = startKey
+            wanted = startDay ?: today.toString()
+        }
     }
     // Человек сам повёл список — ждать обещанного дня больше не надо, иначе
     // следующее обновление утащит его обратно.

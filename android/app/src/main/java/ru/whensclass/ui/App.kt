@@ -157,6 +157,8 @@ internal fun App(
     // и сама смотрит его раз в час.
     var retakes by remember { mutableStateOf<RetakesDto?>(null) }
     var retakesFailed by remember { mutableStateOf(false) }
+    // Не пришёл, хотя сервер ответил (ошибкой), — а не «нет связи».
+    var retakesAnswered by remember { mutableStateOf(false) }
     var retakesAt by remember { mutableStateOf(0L) }
     var retakesRetry by remember { mutableStateOf(0) }
     val roomsMemory = remember { RoomsMemory() }
@@ -202,7 +204,9 @@ internal fun App(
         if (screen != Screen.TODAY) return@LaunchedEffect
         if (retakes != null && System.currentTimeMillis() - retakesAt < RETAKES_FRESH_MILLIS) return@LaunchedEffect
         retakesFailed = false
-        val fresh = container.repository.retakes()
+        val answer = container.repository.retakes()
+        val fresh = answer.body
+        retakesAnswered = answer.answered
         if (fresh != null) {
             retakes = fresh
             retakesAt = System.currentTimeMillis()
@@ -291,6 +295,9 @@ internal fun App(
             refreshing = true
             // Списки на ⟳ не перезапрашиваются: они — раз в 12 часов.
             reloadKey++
+            // Пересдачи и кабинеты, что не загрузились, — заново вместе с расписанием.
+            if (retakes == null) retakesRetry++
+            roomsMemory.nudge++
             // Напрямую, без WorkManager: он вправе отложить задачу на минуты,
             // а человек только что нажал кнопку и ждёт ответа сейчас.
             val result = container.repository.refresh(force = true)
@@ -371,6 +378,7 @@ internal fun App(
             // Пустой фон, пока настройки читаются с диска: это доли секунды,
             // но без него успевает мелькнуть чужой экран.
             if (!loaded) return@Surface
+            val screenStates = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
 
             // Экраны сменяются со сдвигом: вглубь — справа налево, назад —
             // наоборот; резкая подмена читается как подвисание.
@@ -387,6 +395,9 @@ internal fun App(
                 },
                 label = "screen",
             ) { target ->
+                // Экран помнит своё, пока открыт другой: из настроек «назад» — на ту
+                // же вкладку расписания, с её поиском и выбором.
+                screenStates.SaveableStateProvider(target.name) {
                 when (target) {
                     Screen.WELCOME -> WelcomeScreen(
                         onContinue = {
@@ -563,6 +574,7 @@ internal fun App(
                     Screen.TODAY -> TodayScreen(
                         retakes = retakes,
                         retakesFailed = retakesFailed,
+                        retakesAnswered = retakesAnswered,
                         onRetryRetakes = { retakesRetry++ },
                         loadRooms = { container.repository.rooms(it) },
                         roomsMemory = roomsMemory,
@@ -615,6 +627,7 @@ internal fun App(
                         },
                         onRefresh = refreshNow,
                     )
+                }
                 }
             }
         }

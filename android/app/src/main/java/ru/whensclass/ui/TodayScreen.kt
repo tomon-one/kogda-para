@@ -114,6 +114,7 @@ fun TodayScreen(
     /** Лист пересдач; null — грузится или не загрузился ([retakesFailed]). */
     retakes: RetakesDto? = null,
     retakesFailed: Boolean = false,
+    retakesAnswered: Boolean = false,
     onRetryRetakes: () -> Unit = {},
     /** Кабинеты дня; null — сервер не ответил или дня в таблице нет. */
     loadRooms: suspend (String?) -> RoomsAnswer = { RoomsAnswer(null) },
@@ -137,8 +138,14 @@ fun TodayScreen(
     val tabStates = rememberSaveableStateHolder()
     // Нажали на день в виджете по живому экрану — к своему расписанию, а не к
     // открытой чужой вкладке.
+    // Только на новое нажатие: экран переживает поворот и поход в настройки,
+    // и прежнее нажатие не должно снова уводить с выбранной вкладки.
+    var handledStart by rememberSaveable { mutableIntStateOf(startKey) }
     LaunchedEffect(startKey) {
-        if (startKey > 0) tab = if (teacherMode) Tab.TEACHERS else Tab.STUDENTS
+        if (startKey != handledStart) {
+            handledStart = startKey
+            tab = if (teacherMode) Tab.TEACHERS else Tab.STUDENTS
+        }
     }
     val snackbar = remember { SnackbarHostState() }
     // Неудачу показываем плашкой, чтобы человек не ушёл уверенным в свежих
@@ -159,11 +166,12 @@ fun TodayScreen(
     Scaffold(
         snackbarHost = {
             SnackbarHost(snackbar) { data ->
-                // Своя плашка: у Material по умолчанию она светлая в любой теме.
+                // Своя плашка: у Material по умолчанию она светлая в любой теме, а
+                // цвета карточки сливаются с карточкой под ней (Theme.kt, inverseSurface).
                 Snackbar(
                     snackbarData = data,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
                 )
             }
         },
@@ -330,7 +338,9 @@ fun TodayScreen(
 
                     Tab.RETAKES -> {
                         tabStates.SaveableStateProvider("retakes") {
-                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes, onOpenTeacher = { id ->
+                            // Не загрузились — при входе на вкладку пробовать снова, а не ждать возврата в приложение.
+                            LaunchedEffect(Unit) { if (retakesFailed) onRetryRetakes() }
+                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes, answered = retakesAnswered, onOpenTeacher = { id ->
                                 openTeacher = id
                                 openTeacherKey++
                                 tab = Tab.TEACHERS

@@ -75,10 +75,10 @@ internal suspend fun collectDiagnostics(
     lines += widgets(context)
     lines += reminders(context, store)
     // Выключатели сообщений — первая причина «не приходят сообщения об отменах».
-    fun yes(on: Boolean) = if (on) "да" else "нет"
-    lines += "Сообщать: изменения ${yes(store.notifyChangesEnabled())}, " +
-        "сбои ${yes(store.notifyServerEnabled())}, версии ${yes(store.notifyUpdatesEnabled())}, " +
-        "пропажа групп ${yes(store.notifyGroupsGoneEnabled())}"
+    fun yes(on: Boolean) = if (on) "вкл" else "выкл"
+    lines += "Сообщать об изменениях: ${yes(store.notifyChangesEnabled())}, " +
+        "о сбоях: ${yes(store.notifyServerEnabled())}, о версиях: ${yes(store.notifyUpdatesEnabled())}, " +
+        "о пропаже групп: ${yes(store.notifyGroupsGoneEnabled())}"
     // То, что телефон делает с приложением сам.
     val phone = ru.whensclass.notify.PhoneState.read(context)
     val off = listOfNotNull(
@@ -91,7 +91,7 @@ internal suspend fun collectDiagnostics(
     if (off.isNotEmpty()) lines += "Каналы выключены в телефоне: ${off.joinToString(", ")}"
     lines += "Фон: " + phone.backgroundLimits.joinToString("; ").ifEmpty { "ограничений не видно" } +
         // Те же слова, что в разделе «Работа в фоне».
-        ", без экономии батареи ${if (phone.unrestricted) "да" else "нет"}"
+        "; оптимизация батареи: ${if (phone.unrestricted) "выключена" else "включена"}"
     if (phone.zoneWarning != null) lines += "Пояс: выставлен вручную и не колледжа"
     lines += "Телефон: ${LocalDateTime.now().format(STAMP)}, $zone"
 

@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,6 +61,8 @@ class RoomsMemory {
     var loadedFor by mutableStateOf<String?>(null)
     var loadedAt by mutableLongStateOf(0L)
     var loadedRetry by mutableIntStateOf(-1)
+    // ⟳ на экране: не загрузившееся — заново.
+    var nudge by mutableIntStateOf(0)
 }
 
 /**
@@ -95,8 +97,9 @@ internal fun RoomsScreen(
     var loadedRetry by memory::loadedRetry
     var failed by remember { mutableStateOf(false) }
     var missing by remember { mutableStateOf(false) }
+    var answered by remember { mutableStateOf(false) }
     val request = active ?: "сегодня $today"
-    LaunchedEffect(request, retry, ScreenClock.resumes) {
+    LaunchedEffect(request, retry, ScreenClock.resumes, memory.nudge) {
         if (loadedFor == request && loadedRetry == retry &&
             System.currentTimeMillis() - loadedAt < ROOMS_FRESH_MILLIS
         ) return@LaunchedEffect
@@ -104,6 +107,7 @@ internal fun RoomsScreen(
         missing = false
         val answer = load(active)
         val got = answer.body
+        answered = answer.answered
         when {
             got != null -> {
                 body = got; loadedFor = request; loadedAt = System.currentTimeMillis(); loadedRetry = retry
@@ -116,7 +120,7 @@ internal fun RoomsScreen(
     val shown = body
     val ready = shown != null && loadedFor == request
     if (shown == null) {
-        Status(failed, missing, active == null) { retry++ }
+        Status(failed, missing, active == null, answered) { retry++ }
         return
     }
 
@@ -141,6 +145,15 @@ internal fun RoomsScreen(
         from != null && to != null && now >= from && now < to
     }
     val busy = shown.busy[chosen.toString()].orEmpty()
+    // Кабинет в списках — с корпусом, если он не главный: «Вход 2, 55», «Восход, 221»,
+    // как он стоит в карточках свободных.
+    val buildingOf = remember(shown) {
+        shown.buildings.drop(1).flatMap { b -> b.rooms.map { it.room to b.name } }.toMap()
+    }
+    fun place(room: String): String {
+        val building = buildingOf[room] ?: return room
+        return "$building, " + room.removePrefix("$building ")
+    }
     val clashes = shown.clashes.filter { it.number == chosen }
     // Кнопка горит у дня на экране, а пока выбранный грузится или не пришёл — у него.
     val selected = if (ready) shown.date else active ?: shown.date
@@ -160,14 +173,15 @@ internal fun RoomsScreen(
                     FilterChip(
                         // Тот же день ещё раз — повтор, если он не загрузился.
                         selected = d == selected, onClick = { if (d == active) retry++ else choose(d, 0) },
-                        label = { Text(label, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                        // Крупный шрифт — надпись мельчает, а не обрезается до «Сегод» (FIT, как у кнопок).
+                        label = { Text(label, maxLines = 1, autoSize = FIT, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
         if (!ready) {
-            item(key = "статус") { Status(failed, missing, active == null) { retry++ } }
+            item(key = "статус") { Status(failed, missing, active == null, answered) { retry++ } }
         } else {
         item(key = "пары") {
             ChipsLabel("Пара")
@@ -226,14 +240,28 @@ internal fun RoomsScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (free.isEmpty()) Note("Свободных по расписанию нет.")
-                        free.groupBy { it.floor }.toSortedMap().forEach { (floor, rooms) ->
+                        // Ровно под строкой выше, без своего отступа (Note — для текста вне карточки).
+                        if (free.isEmpty()) {
+                            Text(
+                                "Свободных по расписанию нет.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                        }
+                        val byFloor = free.groupBy { it.floor }.toSortedMap()
+                        // Этажа не знает ни один кабинет корпуса (Вход 2) — без пустой колонки подписей.
+                        val floors = byFloor.keys.any { it.isNotEmpty() }
+                        byFloor.forEach { (floor, rooms) ->
                             Row(Modifier.padding(top = 6.dp)) {
-                                Text(
+                                // В одну строку и шире при крупном шрифте: «эта / ж» не читается.
+                                if (floors) Text(
                                     if (floor.isNotEmpty()) "$floor этаж" else "",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.width(48.dp).padding(top = 4.dp),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.widthIn(min = 48.dp).padding(top = 4.dp, end = 4.dp),
                                 )
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     rooms.forEach { RoomChip(it.room.removePrefix("Восход ")) }
@@ -251,7 +279,7 @@ internal fun RoomsScreen(
                 // ошибка колледжа или перенос: кто-то из них будет в другом месте.
                 Section("Две пары в одном кабинете")
                 Note("По таблице здесь в одно время разные пары — уточните, где ваша.")
-                Card { clashes.forEachIndexed { i, c -> if (i > 0) Divider(); Uses(c.room, c.lessons) } }
+                Card { clashes.forEachIndexed { i, c -> if (i > 0) Divider(); Uses(place(c.room), c.lessons) } }
             }
         }
         if (busy.isNotEmpty()) {
@@ -263,7 +291,7 @@ internal fun RoomsScreen(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 4.dp, top = 16.dp, bottom = 4.dp),
                 )
-                if (open) Card { busy.toSortedMap().entries.forEachIndexed { i, (room, uses) -> if (i > 0) Divider(); Uses(room, uses) } }
+                if (open) Card { busy.toSortedMap().entries.forEachIndexed { i, (room, uses) -> if (i > 0) Divider(); Uses(place(room), uses) } }
             }
         }
         item(key = "пояснение") {
@@ -280,16 +308,13 @@ internal fun RoomsScreen(
 
 /** Загрузка, сбой или «дня в таблице нет» — с повтором, где он поможет. */
 @Composable
-private fun Status(failed: Boolean, missing: Boolean, today: Boolean, retry: () -> Unit) {
+private fun Status(failed: Boolean, missing: Boolean, today: Boolean, answered: Boolean, retry: () -> Unit) {
     when {
         missing -> Explanation(
             if (today) "Ближайших дней в таблице нет" else "Этого дня в таблице нет",
             "Колледж ещё не выложил расписание.",
         )
-        failed -> {
-            Explanation("Аудитории не загрузились", "Проверьте интернет.")
-            ActionButton(label = "Повторить", onClick = retry, modifier = Modifier.padding(horizontal = 24.dp).fillMaxWidth())
-        }
+        failed -> Explanation("Аудитории не загрузились", failureText(answered), onRetry = retry)
         else -> Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
             CircularProgressIndicator()
         }
@@ -347,12 +372,13 @@ private fun RoomChip(room: String) = Text(
 @Composable
 private fun Uses(room: String, uses: List<RoomUseDto>) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Text(room.replace("Восход ", "Восход, "), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+        Text(room, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
         uses.forEach { u ->
             Text(
                 androidx.compose.ui.text.buildAnnotatedString {
                     withStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Medium)) { append(u.group) }
-                    append(" " + u.subject + (u.teachers.firstOrNull()?.let { " · $it" } ?: ""))
+                    // Точка держится за предметом: строка не начинается с «· Фамилия».
+                    append(" " + u.subject + (u.teachers.firstOrNull()?.let { "\u00A0· $it" } ?: ""))
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 2.dp),

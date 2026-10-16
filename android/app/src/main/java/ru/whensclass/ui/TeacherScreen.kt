@@ -87,7 +87,9 @@ fun TeacherScreen(
     }
     var pickedId by rememberSaveable { mutableStateOf<String?>(null) }
     var pickedName by rememberSaveable { mutableStateOf("") }
-    var handledOpen by rememberSaveable { mutableStateOf(openKey) }
+    // С нуля, а не с нынешнего [openKey]: вкладку открывает само нажатие на имя,
+    // и при первом входе на неё ключ уже новый — его надо исполнить.
+    var handledOpen by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(openKey) {
         if (openKey != handledOpen && openId != null) {
             handledOpen = openKey
@@ -166,6 +168,7 @@ fun TeacherScreen(
             value = query,
             onValueChange = { query = it },
             label = { Text(searchLabel) },
+            trailingIcon = { ClearSearch(query) { query = "" } },
             singleLine = true,
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),

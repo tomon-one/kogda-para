@@ -90,6 +90,7 @@ fun SelfPickerScreen(
                 value = query,
                 onValueChange = { query = it },
                 label = { Text("Поиск по фамилии") },
+                trailingIcon = { ClearSearch(query) { query = "" } },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),

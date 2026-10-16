@@ -49,13 +49,14 @@ internal fun RetakesScreen(
     failed: Boolean,
     today: LocalDate,
     onRetry: () -> Unit,
+    /** Не загрузились, хотя сервер ответил, — иначе нет связи. */
+    answered: Boolean = false,
     /** Преподаватель найден в расписании — нажатие на имя открывает его расписание. */
     onOpenTeacher: (String) -> Unit = {},
 ) {
     if (retakes == null) {
         if (failed) {
-            Explanation("Пересдачи не загрузились", "Проверьте интернет.")
-            ActionButton(label = "Повторить", onClick = onRetry, modifier = Modifier.padding(horizontal = 24.dp).fillMaxWidth())
+            Explanation("Пересдачи не загрузились", failureText(answered), onRetry = onRetry)
         } else {
             Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
                 CircularProgressIndicator()
@@ -94,6 +95,7 @@ internal fun RetakesScreen(
                 value = query,
                 onValueChange = { query = it },
                 label = { Text("Фамилия или предмет") },
+                trailingIcon = { ClearSearch(query) { query = "" } },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -102,7 +104,7 @@ internal fun RetakesScreen(
         if (rows.isEmpty() && moved.isEmpty()) {
             item(key = "пусто") {
                 Text(
-                    "Ничего не нашлось. Вопросы о задолженностях — куратору или в учебный офис, каб. 267.",
+                    "Ничего не нашлось. Вопросы — куратору, декану или руководителю направления, в учебный офис (каб. 267).",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),
@@ -254,7 +256,7 @@ private fun RetakeRow(row: RetakeDto, today: LocalDate, onOpenTeacher: (String) 
             }
         }
         Line("Кабинет:", row.room)
-        if (row.subjects.isNotEmpty()) Line("Ведёт сейчас:", row.subjects.take(3).joinToString(", "), muted = true)
+        if (row.subjects.isNotEmpty()) Line("Ведёт сейчас:", row.subjects.take(3).joinToString("; "), muted = true)
     }
 }
 
@@ -265,3 +267,7 @@ private fun RedirectRow(name: String, to: String) {
         Line("Долги принимает", to)
     }
 }
+
+/** Почему раздел не загрузился: сервер ответил ошибкой — дело не в интернете. */
+internal fun failureText(answered: Boolean) =
+    if (answered) "Сервер не смог их отдать. Повторите позже." else "Нет связи с сервером. Проверьте интернет."
