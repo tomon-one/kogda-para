@@ -472,10 +472,10 @@
 .room-building { font-weight: 600; }
 .room-count { font-size: 14px; margin-bottom: 6px; }
 .room-floor { display: flex; align-items: baseline; margin-top: 6px; }
-.room-floor-label { flex: none; width: 56px; margin-right: 8px; font-size: 13px; }
+.room-floor-label { flex: none; width: 46px; margin-right: 6px; font-size: 13px; }
 .room-free { display: flex; flex-wrap: wrap; margin-bottom: -6px; }
-.room-free .room-chip { margin: 0 6px 6px 0; }
-.room-chip { padding: 3px 10px; border-radius: 8px; background: var(--today-bg); color: var(--primary); font-weight: 600; font-size: 14px; }
+.room-free .room-chip { margin: 0 5px 6px 0; }
+.room-chip { padding: 3px 8px; border-radius: 8px; background: var(--today-bg); color: var(--primary); font-weight: 600; font-size: 14px; }
 .room-busy { padding: 10px 16px; border-bottom: 1px solid var(--bg); font-size: 14px; }
 .room-use { margin-top: 2px; }
 .room-group { font-weight: 500; }
