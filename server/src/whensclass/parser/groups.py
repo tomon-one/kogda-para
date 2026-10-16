@@ -315,6 +315,7 @@ def _check_columnar(
         column_of[group.id] = group.column
 
     strangers: list[tuple[int, list[str], str, set[str] | None]] = []
+    renamed: list[int] = []
     for col in sorted(cells):
         declared = split_group_names((names_row[col] if col < len(names_row) else "") or "")
         if not declared:
@@ -334,6 +335,7 @@ def _check_columnar(
             continue
         if ids == known:
             continue
+        renamed.append(col)
         _warn_once(
             ("rename", col, tuple(declared)),
             "повторный заголовок: в колонке %s стоит %s, а по главному заголовку там "
@@ -354,6 +356,10 @@ def _check_columnar(
         if reject:
             raise SourceFormatChanged(message)
         moved = {col for col, _, _, _ in strangers}
+        # Под сдвинутым заголовком незнакомое имя — уже не переименование:
+        # сдвиг мог принести сюда прежнее имя соседа, и пары под колонкой —
+        # его, а не группы главного заголовка.
+        moved.update(renamed)
         for _, declared, _, _ in strangers:
             moved.update(
                 column_of[gid] for gid in map(group_id, declared) if gid in column_of

@@ -428,6 +428,23 @@ def test_two_neighbour_names_in_repeated_header_are_a_shift(fixture_csv):
     assert "таких колонок 2" in snap.unread_why[0]
 
 
+def test_unknown_name_under_a_shifted_header_is_not_a_rename(fixture_csv):
+    """Сдвиг принёс в колонку прежнее имя соседа («ДП(а)-923»): главному
+    заголовку здесь не верят — колонка не прочитана, а не отдаёт чужие пары."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
+    by_column = {g.column: g.name for g in groups}
+    _, columns, names_row = _columnar_header(rows)
+    ordered = sorted(c for c in columns if c in by_column and c < len(names_row))
+    names_row[ordered[1]] = by_column[ordered[0]]
+    names_row[ordered[2]] = by_column[ordered[1]]
+    names_row[ordered[3]] = "ДП(а)-923"
+    honest = parse_sheet([list(r) for r in collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)],
+                         "фикстура", FIXTURE)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    _assert_unread_below(snap, honest, rows, _columnar_header(rows)[0], set(ordered[:4]))
+
+
 def test_neighbour_name_in_the_main_header_is_resolved_by_the_repeated_one(fixture_csv):
     """«ИСП-924/1» над ИСП-924/2 в главном заголовке — не отказ у всех: обе
     колонки безымянны в главном, а имена им даёт повторный заголовок."""
