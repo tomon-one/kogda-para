@@ -159,6 +159,7 @@ internal fun App(
     var retakesFailed by remember { mutableStateOf(false) }
     var retakesAt by remember { mutableStateOf(0L) }
     var retakesRetry by remember { mutableStateOf(0) }
+    val roomsMemory = remember { RoomsMemory() }
     // Свежие списки за этот заход уже пришли — дальше хватит их.
     var listsFresh by remember { mutableStateOf(false) }
     // «Повторить» — в сеть, даже если сохранённые моложе 12 часов.
@@ -564,6 +565,7 @@ internal fun App(
                         retakesFailed = retakesFailed,
                         onRetryRetakes = { retakesRetry++ },
                         loadRooms = { container.repository.rooms(it) },
+                        roomsMemory = roomsMemory,
                         startDay = startDay,
                         startKey = openSeq,
                         groupName = chosenName.orEmpty(),

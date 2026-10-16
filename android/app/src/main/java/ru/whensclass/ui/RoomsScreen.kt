@@ -21,12 +21,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -49,6 +51,19 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /**
+ * Последний ответ вкладки «Аудитории». Живёт выше вкладки: иначе каждое
+ * переключение вкладок стирало бы его и кабинеты грузились бы заново.
+ */
+@Stable
+class RoomsMemory {
+    var body by mutableStateOf<RoomsDto?>(null)
+    // На какой запрос ответ в `body` и когда он пришёл: полежавший перечитывается.
+    var loadedFor by mutableStateOf<String?>(null)
+    var loadedAt by mutableLongStateOf(0L)
+    var loadedRetry by mutableIntStateOf(-1)
+}
+
+/**
  * Кабинеты: какие свободны по расписанию на паре дня, какие заняты и где
  * накладки (docs/api.md, /v1/rooms). То же, что вкладка на сайте. «По
  * расписанию» — всерьёз: ключей, переносов и мероприятий таблица не знает.
@@ -59,6 +74,7 @@ internal fun RoomsScreen(
     load: suspend (String?) -> RoomsAnswer,
     today: LocalDate,
     now: LocalTime,
+    memory: RoomsMemory = remember { RoomsMemory() },
 ) {
     // Выбранные день и пара — на тот день, когда их выбрали: назавтра вкладка
     // снова открывается на сегодняшнем, а не на прошедшем.
@@ -73,11 +89,10 @@ internal fun RoomsScreen(
     }
 
     var retry by rememberSaveable { mutableIntStateOf(0) }
-    var body by remember { mutableStateOf<RoomsDto?>(null) }
-    // На какой запрос ответ в `body` и когда он пришёл: полежавший перечитывается.
-    var loadedFor by remember { mutableStateOf<String?>(null) }
-    var loadedAt by remember { mutableLongStateOf(0L) }
-    var loadedRetry by remember { mutableIntStateOf(-1) }
+    var body by memory::body
+    var loadedFor by memory::loadedFor
+    var loadedAt by memory::loadedAt
+    var loadedRetry by memory::loadedRetry
     var failed by remember { mutableStateOf(false) }
     var missing by remember { mutableStateOf(false) }
     val request = active ?: "сегодня $today"
@@ -118,6 +133,13 @@ internal fun RoomsScreen(
         else numbers.firstOrNull { n -> clock(shown.bells[n.toString()]?.getOrNull(1))?.let { now < it } == true }
             ?: numbers.lastOrNull() ?: 1
     }
+    // Идущая сейчас пара — своей рамкой, чтобы её было видно и при другой выбранной.
+    val running = if (shown.date != today.toString()) null else numbers.firstOrNull { n ->
+        val span = shown.bells[n.toString()]
+        val from = clock(span?.getOrNull(0))
+        val to = clock(span?.getOrNull(1))
+        from != null && to != null && now >= from && now < to
+    }
     val busy = shown.busy[chosen.toString()].orEmpty()
     val clashes = shown.clashes.filter { it.number == chosen }
     // Кнопка горит у дня на экране, а пока выбранный грузится или не пришёл — у него.
@@ -153,16 +175,32 @@ internal fun RoomsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 numbers.forEach { n ->
                     val start = shown.bells[n.toString()]?.getOrNull(0)
+                    val accent = MaterialTheme.colorScheme.primary
                     FilterChip(
                         selected = n == chosen, onClick = { choose(active, n) },
-                        label = { Text("$n", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                        label = {
+                            Text(
+                                "$n", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                                fontWeight = if (n == running) FontWeight.Bold else null,
+                            )
+                        },
+                        border = if (n == running) {
+                            FilterChipDefaults.filterChipBorder(
+                                enabled = true, selected = n == chosen,
+                                borderColor = accent, selectedBorderColor = accent,
+                                borderWidth = 2.dp, selectedBorderWidth = 2.dp,
+                            )
+                        } else {
+                            FilterChipDefaults.filterChipBorder(enabled = true, selected = n == chosen)
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
             val span = shown.bells[chosen.toString()].orEmpty()
             Text(
-                "$chosen пара" + (span.getOrNull(0)?.let { ", $it–" + span.getOrNull(1).orEmpty() } ?: ""),
+                "$chosen пара" + (span.getOrNull(0)?.let { ", $it–" + span.getOrNull(1).orEmpty() } ?: "") +
+                    (if (chosen == running) " · идёт сейчас" else ""),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = 4.dp, top = 2.dp),

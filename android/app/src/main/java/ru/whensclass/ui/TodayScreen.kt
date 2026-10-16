@@ -117,6 +117,7 @@ fun TodayScreen(
     onRetryRetakes: () -> Unit = {},
     /** Кабинеты дня; null — сервер не ответил или дня в таблице нет. */
     loadRooms: suspend (String?) -> RoomsAnswer = { RoomsAnswer(null) },
+    roomsMemory: RoomsMemory = remember { RoomsMemory() },
 ) {
     // Часы со звонками: «сегодня» и давность сбоя на плашке пересчитываются сами.
     val now = rememberNow(schedule?.bellsOn(collegeToday()).orEmpty())
@@ -322,7 +323,7 @@ fun TodayScreen(
 
                     Tab.ROOMS -> {
                         tabStates.SaveableStateProvider("rooms") {
-                            RoomsScreen(loadRooms, today, now.toLocalTime())
+                            RoomsScreen(loadRooms, today, now.toLocalTime(), roomsMemory)
                         }
                         return@ScheduleTabs
                     }
