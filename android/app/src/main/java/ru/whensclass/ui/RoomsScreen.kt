@@ -195,9 +195,9 @@ internal fun RoomsScreen(
                                     if (floor.isNotEmpty()) "$floor этаж" else "",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.width(56.dp).padding(top = 4.dp),
+                                    modifier = Modifier.width(48.dp).padding(top = 4.dp),
                                 )
-                                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     rooms.forEach { RoomChip(it.room.removePrefix("Восход ")) }
                                 }
                             }
@@ -302,7 +302,7 @@ private fun RoomChip(room: String) = Text(
     modifier = Modifier
         .clip(RoundedCornerShape(8.dp))
         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-        .padding(horizontal = 10.dp, vertical = 3.dp),
+        .padding(horizontal = 8.dp, vertical = 3.dp),
 )
 
 /** Кабинет и кто в нём: каждая пара — своей строкой (группа, предмет, преподаватель). */
