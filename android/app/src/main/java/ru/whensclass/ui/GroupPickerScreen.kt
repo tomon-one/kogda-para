@@ -85,6 +85,7 @@ fun GroupPickerScreen(
                 value = query,
                 onValueChange = { query = it },
                 label = { Text("Поиск по названию") },
+                trailingIcon = { ClearSearch(query) { query = "" } },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier

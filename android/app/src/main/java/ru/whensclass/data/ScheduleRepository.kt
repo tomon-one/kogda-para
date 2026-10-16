@@ -330,11 +330,16 @@ class ScheduleRepository(
         val answer = runCatching { api.rooms(date) }
         val code = (answer.exceptionOrNull() as? HttpFailure)?.code
         if (code == 426) markUnsupported()
-        RoomsAnswer(answer.getOrNull(), missing = code == 404)
+        RoomsAnswer(answer.getOrNull(), missing = code == 404, answered = code != null)
     }
 
-    /** Лист пересдач; null — сервер не ответил. */
-    suspend fun retakes(): RetakesDto? = withContext(Dispatchers.IO) { loadList { api.retakes() } }
+    /** Лист пересдач; body null — не пришёл: `answered` — сервер ответил ошибкой, иначе нет связи. */
+    suspend fun retakes(): RetakesAnswer = withContext(Dispatchers.IO) {
+        val answer = runCatching { api.retakes() }
+        val code = (answer.exceptionOrNull() as? HttpFailure)?.code
+        if (code == 426) markUnsupported()
+        RetakesAnswer(answer.getOrNull(), answered = code != null)
+    }
 
     /** Свежий список групп; null — сервер не ответил. */
     suspend fun freshGroups(): List<GroupDto>? = withContext(Dispatchers.IO) {
@@ -610,4 +615,6 @@ class ScheduleRepository(
 }
 
 /** Ответ /v1/rooms: `missing` — дня в таблице нет, а не сбой связи. */
-data class RoomsAnswer(val body: RoomsDto?, val missing: Boolean = false)
+data class RoomsAnswer(val body: RoomsDto?, val missing: Boolean = false, val answered: Boolean = false)
+
+data class RetakesAnswer(val body: RetakesDto?, val answered: Boolean = false)

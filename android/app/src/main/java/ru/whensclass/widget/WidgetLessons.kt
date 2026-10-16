@@ -50,9 +50,12 @@ internal fun Lessons(
     // Высоты сняты со снимка экрана (TECNO LF7n, плотность 480): шаг между
     // плашками пар — 44,3 dp, от верха карточки до первой — 47,7 dp. Округлено
     // вверх: ошибка в меньшую сторону обрежет последнюю пару корпусом.
-    val rowHeight = (if (fit.dense) 41.dp else 45.dp) * fontScale()
+    // Растёт со шрифтом только текст, поля — нет (как в WeekFit.kt): на шрифте 2,0
+    // шаг пары ~76 dp, шапка ~85, а не вдвое больше.
+    val scale = fontScale()
+    val rowHeight = if (fit.dense) (13 + 28 * scale).dp else (14 + 31 * scale).dp
     // Место под шапкой; строки «прошло/ещё N» вычитаются ниже, отдельно.
-    val free = LocalSize.current.height - (if (fit.dense) 42.dp else 50.dp) * fontScale()
+    val free = LocalSize.current.height - if (fit.dense) (12 + 30 * scale).dp else (15 + 35 * scale).dp
     // Строки «прошло N пар» и «ещё N пар» занимают место, а нужны ли они —
     // видно только после выбора окна. Поэтому прикидка, потом уточнение:
     // одного круга хватает.
@@ -76,7 +79,12 @@ internal fun Lessons(
 
     val window = windowRange(lessons, start, fits)
     val shown = lessons.subList(window.first, window.last + 1)
-    val (passed, ahead) = hiddenNumbers(lessons, window)
+    val (passedAll, aheadAll) = hiddenNumbers(lessons, window)
+    // Одна пара — минимум, а подписи на неё места не хватило: без них, иначе
+    // корпус режет подпись посередине букв.
+    val crowded = free - rowHeight * shown.size - lineHeight * labels < 0.dp
+    val passed = if (crowded) 0 else passedAll
+    val ahead = if (crowded) 0 else aheadAll
 
     Column(modifier = modifier) {
         // Прожитое называем сверху — там, где оно исчезло.

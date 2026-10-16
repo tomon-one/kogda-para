@@ -73,7 +73,9 @@ internal fun ScheduleTabs(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val top = topTabs(teacherMode)
-    val pinned by rememberUpdatedState(current.ordinal >= 2 || live)
+    // В альбомной ряд уезжает всегда: шапка иначе отнимает больше половины высоты.
+    val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
+    val pinned by rememberUpdatedState((current.ordinal >= 2 || live) && !short)
     var rowHeight by remember { mutableIntStateOf(0) }
     // Насколько нижний ряд уехал вверх: от минус его высоты до нуля.
     var shift by remember { mutableFloatStateOf(0f) }
@@ -154,7 +156,14 @@ internal fun ScheduleTabs(
 
 /** Объяснение вместо пустого экрана: пустой раздел без слов читается как поломка. */
 @Composable
-internal fun Explanation(title: String, text: String, sourceUrl: String? = null, busy: Boolean = false) {
+internal fun Explanation(
+    title: String,
+    text: String,
+    sourceUrl: String? = null,
+    busy: Boolean = false,
+    /** «Повторить» под текстом: отдельной строкой после [Explanation] ей не осталось бы места. */
+    onRetry: (() -> Unit)? = null,
+) {
     val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
@@ -186,6 +195,7 @@ internal fun Explanation(title: String, text: String, sourceUrl: String? = null,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        onRetry?.let { ActionButton(label = "Повторить", onClick = it, modifier = Modifier.fillMaxWidth()) }
     }
 }
 

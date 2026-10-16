@@ -19,6 +19,20 @@ internal val DarkScheme = darkColorScheme(
     primary = BRAND_LIGHT,
     onPrimary = Color(0xFF000000),
     error = BRAND_LIGHT,
+    // Остальное задано явно: по умолчанию у Material сиреневые выбранные кнопки,
+    // окна и дорожки выключателей — чужой цвет в красно-серой теме.
+    secondaryContainer = Color(0xFF3D2224),
+    onSecondaryContainer = Color(0xFFF5F5F5),
+    surfaceContainerLowest = Color(0xFF000000),
+    surfaceContainerLow = Color(0xFF0E0E0E),
+    surfaceContainer = Color(0xFF141414),
+    surfaceContainerHigh = Color(0xFF1C1C1C),
+    surfaceContainerHighest = Color(0xFF262626),
+    outline = Color(0xFF5F6368),
+    outlineVariant = Color(0xFF3A3A3A),
+    // Плашка-сообщение: светлее карточек, иначе читается строкой карточки под ней.
+    inverseSurface = Color(0xFF3A3A3A),
+    inverseOnSurface = Color(0xFFF5F5F5),
 )
 
 /**
@@ -35,4 +49,15 @@ internal val LightScheme = lightColorScheme(
     primary = BRAND,
     onPrimary = Color(0xFFFFFFFF),
     error = BRAND,
+    secondaryContainer = Color(0xFFFADADB),
+    onSecondaryContainer = Color(0xFF15171A),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF7F8F9),
+    surfaceContainer = Color(0xFFF1F2F4),
+    surfaceContainerHigh = Color(0xFFFFFFFF),
+    surfaceContainerHighest = Color(0xFFE7E8EA),
+    outline = Color(0xFF8A8E93),
+    outlineVariant = Color(0xFFC9CBCF),
+    inverseSurface = Color(0xFF2B2D30),
+    inverseOnSurface = Color(0xFFF5F5F5),
 )
