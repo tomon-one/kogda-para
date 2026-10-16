@@ -494,3 +494,13 @@ def test_role_before_a_name_is_dropped_not_the_name():
     assert split_teachers("куратор: Фальконер К. Х.") == ("Фальконер К. Х.",)
     assert split_teachers("Кураторова Анна Петровна") == ("Кураторова Анна Петровна",)
 
+
+
+def test_formula_range_pasted_into_cell_is_dropped():
+    from whensclass.parser.cells import normalize
+
+    assert normalize("Ло+K156:N227гистика закупок") == "Логистика закупок"
+    assert normalize("ЛоK156:N227гистика") == "Логистика"
+    # В ссылке и отдельным словом диапазон без плюса не трогаем.
+    assert normalize("https://example.org/j/AB12:CD34x") == "https://example.org/j/AB12:CD34x"
+    assert normalize("Каб. A1:B2") == "Каб. A1:B2"
