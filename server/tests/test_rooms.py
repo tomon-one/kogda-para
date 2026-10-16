@@ -3,14 +3,15 @@
 import datetime as dt
 
 from whensclass.domain.models import GroupRef, Lesson, Snapshot
-from whensclass.service.rooms import MAIN, VOSKHOD, room_of, rooms_payload
+from whensclass.service.rooms import ENTRANCE_2, MAIN, VOSKHOD, room_of, rooms_payload
 
 DAY = dt.date(2026, 10, 16)
 
 
 def test_what_is_a_room():
     assert room_of("269") == (MAIN, "269")
-    assert room_of("55/2") == (MAIN, "55/2")
+    assert room_of("55/2") == (ENTRANCE_2, "55/2")  # отдельный корпус, «Вход 2»
+    assert room_of("255") == (MAIN, "255")
     assert room_of("262а") == (MAIN, "262А")
     assert room_of("Восход  222") == (VOSKHOD, "Восход 222")
     for place in ("Спортзал", "актовый зал", "Фойе 3 этажа", "", None, "ул. Восход, д. 15", "онлайн 2"):

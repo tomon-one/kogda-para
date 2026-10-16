@@ -157,9 +157,9 @@ export function roomsView(app) {
     var floors = {};
     free.forEach(function (r) { (floors[r.floor] = floors[r.floor] || []).push(r.room); });
     picked.appendChild(h('div', { class: 'list-card room-card' },
-      h('div', { class: 'room-building' }, b.name,
-        // Из тех, где по таблице бывают пары: других кабинетов колледжа в ней нет.
-        h('span', { class: 'muted' }, ' · свободно ' + free.length + ' из ' + b.rooms.length + ', где бывают пары')),
+      h('div', { class: 'room-building' }, b.name),
+      // Из тех, где по таблице бывают пары: других кабинетов колледжа в ней нет (пояснение внизу).
+      h('div', { class: 'room-count muted' }, 'свободно ' + free.length + ' из ' + plural(b.rooms.length, 'кабинета', 'кабинетов', 'кабинетов')),
       free.length ? Object.keys(floors).sort().map(function (f) {
         return h('div', { class: 'room-floor' },
           // Без этажа («55/1») — пустая подпись: кабинеты в одну колонку с остальными.
@@ -193,7 +193,7 @@ export function roomsView(app) {
   wrap.appendChild(entering(picked, st));
 
   wrap.appendChild(h('p', { class: 'room-note' },
-    'Свободны по расписанию: ключей, переносов и мероприятий таблица колледжа не знает.' +
+    'Показано по расписанию колледжа. В списке — кабинеты, где по нему бывают пары; переносов и мероприятий в нём нет.' +
     (body.unread && body.unread.length ? ' Не учтены кабинеты ' + plural(body.unread.length, 'группы', 'групп', 'групп') +
       ', у которых день не прочитан: ' + body.unread.join(', ') + '.' : '')));
   return wrap;

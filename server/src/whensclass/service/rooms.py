@@ -4,8 +4,9 @@
 таблице: ключей, устных переносов и чужих мероприятий она не знает, поэтому
 клиенты так и пишут — «по расписанию».
 
-Кабинеты — те, что встречались в листе: номер («269», «55/2», «262А») — в
-главном корпусе, «Восход 222» — в корпусе на Восходе. Спортзалы, актовый зал,
+Кабинеты — те, что встречались в листе: номер («269», «262А») — в главном
+корпусе, 55-й («55/1», «55/2») — в отдельном корпусе «Вход 2», «Восход 222» —
+в корпусе на Восходе. Спортзалы, актовый зал,
 фойе, музеи и адреса — не кабинеты: свободными их не показываем, а общая пара
 в них — не накладка.
 """
@@ -19,17 +20,22 @@ from collections import defaultdict
 from ..domain.models import Snapshot
 
 MAIN = "Главный корпус"
+# 55-й кабинет — отдельный корпус со своим входом, у колледжа «Вход 2».
+ENTRANCE_2 = "Вход 2"
 VOSKHOD = "Восход"
 # Кабинет, встретившийся один раз, — скорее опечатка, чем аудитория.
 MIN_SEEN = 2
 
 _NUMBER = re.compile(r"\d{2,3}(?:/\d)?[А-ЯA-Z]?", re.IGNORECASE)
+_ENTRANCE_2 = re.compile(r"55(?:/\d)?[А-ЯA-Z]?", re.IGNORECASE)
 _VOSKHOD = re.compile(r"Восход\s+(\d{3})", re.IGNORECASE)
 
 
 def room_of(raw: str | None) -> tuple[str, str] | None:
-    """«269» -> (главный корпус, «269»), «Восход 222» -> (Восход, «Восход 222»); иное — None."""
+    """«269» -> (главный корпус, «269»), «55/1» -> (Вход 2, «55/1»), «Восход 222» -> (Восход, «Восход 222»); иное — None."""
     text = " ".join((raw or "").split())
+    if _ENTRANCE_2.fullmatch(text):
+        return ENTRANCE_2, text.upper()
     if _NUMBER.fullmatch(text):
         return MAIN, text.upper()
     if m := _VOSKHOD.fullmatch(text):
@@ -112,7 +118,7 @@ def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]])
                 e.pop("groups", None)
 
     buildings = []
-    for building in (MAIN, VOSKHOD):
+    for building in (MAIN, ENTRANCE_2, VOSKHOD):
         rooms = sorted(
             (room for b, room in known if b == building),
             key=lambda r: (int(re.sub(r"\D", "", r.split("/")[0]) or 0), r),
