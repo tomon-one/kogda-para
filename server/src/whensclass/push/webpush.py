@@ -105,6 +105,10 @@ class Vapid:
     # RFC 8292 советует переиспользовать.
     LIFETIME = 12 * 3600
     RENEW_BEFORE = 3600
+    # Служб рассылки — единицы, но у Windows и Apple поддомен свой у каждой
+    # подписки, а подписаться может кто угодно. Без предела кэш рос бы с каждой
+    # подпиской и не убывал после отписки; пересчитать подпись — миллисекунда.
+    MAX_AUDIENCES = 1000
 
     def __init__(self, private_b64: str, subject: str):
         value = int.from_bytes(b64decode(private_b64.strip()), "big")
@@ -123,6 +127,8 @@ class Vapid:
             cached = self._tokens.get(aud)
             if cached is None or cached[1] - moment < self.RENEW_BEFORE:
                 cached = (self._sign(aud, moment + self.LIFETIME), moment + self.LIFETIME)
+                if len(self._tokens) >= self.MAX_AUDIENCES:
+                    self._tokens.clear()
                 self._tokens[aud] = cached
         return f"vapid t={cached[0]}, k={self.public}"
 

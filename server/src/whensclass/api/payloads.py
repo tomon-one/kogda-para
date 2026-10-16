@@ -36,6 +36,8 @@ def sheet_url(gid: str | None = None) -> str:
 # день недели: в листе из одной недели каждый день недели один, и он сам себе
 # опора.
 FILLED_SHARE = 0.5
+# День, дописанный почти всем группам: кто там пуст — не учится, а не ждёт.
+ALMOST_ALL_SHARE = 0.9
 
 
 def published(snapshot: Snapshot, today: date | None) -> list[date]:
@@ -123,8 +125,11 @@ def _group_edge(
         # покрытии со своей пометкой, а не «ещё не опубликовано». Только
         # вплотную к выложенному и без остатка недели после него: `cov` —
         # сплошной отрезок, а колонку недели колледж мог ещё не дописать.
+        # «Вплотную» — следующий день листа, а не календаря: воскресенья в
+        # листе нет, и между двумя непрочитанными неделями цепочка не рвётся.
         for day in sorted(unread):
-            if last < day <= last + timedelta(days=1) and (not sheet or day <= sheet[-1]):
+            after = next((d for d in sheet if d > last), last + timedelta(days=1))
+            if last < day <= max(after, last + timedelta(days=1)) and (not sheet or day <= sheet[-1]):
                 last = day
     # Версии без пометок показали бы день, которого прежний снимок не знал,
     # как «пар нет»: им край — перед ним, вместе с общим stale. Знакомый день
@@ -175,6 +180,14 @@ def teacher_published(
     monday = today - timedelta(days=today.weekday())
     current = [g for g in sorted(groups) if _alive_since(snapshot, g, monday)]
     edges = [_group_edge(snapshot, group, sheet, today, marks) for group in current or sorted(groups)]
+    # Дни, где пары уже у почти всех групп, колледж дописал: пустая там колонка
+    # — практика, а не «ещё не дошёл». Группа, уходящая на практику со
+    # следующей недели, на этой ещё жива и иначе отрезала бы преподавателю
+    # выложенную неделю.
+    busy, fullest = filling(snapshot)
+    done = next((d for d in reversed(sheet) if busy[d] >= ALMOST_ALL_SHARE * fullest), None)
+    if done is not None:
+        edges = [max(edge, done) if edge is not None else None for edge in edges]
     edge = min(today, sheet[-1])
     if None not in edges:
         edge = max(edge, min(edges))
@@ -458,6 +471,11 @@ def schedule_payload(
         }
         if day in placed:
             out_day["row"] = placed[day].row
+        if (moved := snapshot.day_columns.get(group_id, {}).get(day)) is not None:
+            # День прочитан по повторному заголовку с другой раскладкой: у пар
+            # своя колонка, как у преподавателя, — ссылка ведёт в неё.
+            for item in out_day["l"]:
+                item["col"] = a1_column(moved)
         if bells and (own := own_bells(snapshot, day, bells)):
             out_day["bl"] = own
         if marks and (mark := _unread_mark(snapshot, group_id, day)):

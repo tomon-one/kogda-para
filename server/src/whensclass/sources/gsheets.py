@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import httpx
 
 from ..config import settings
+from ..domain.models import SourceFormatChanged
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +30,20 @@ _last_429: float | None = None
 def throttled() -> bool:
     """Google недавно просил ходить реже (429)."""
     return _last_429 is not None and time.monotonic() - _last_429 < THROTTLE_SECONDS
+
+
+# Живой лист — около мегабайта. Разбор держит в памяти в несколько раз больше
+# самого текста, а служба живёт в 512 МБ: лист в десятки мегабайт (ячейки по
+# 50 000 знаков) уронил бы её на каждом заходе.
+MAX_SHEET_CHARS = 20_000_000
+
+
+class SheetTooLarge(SourceFormatChanged):
+    """Лист больше MAX_SHEET_CHARS: не разбирается, прежний снимок в силе."""
+
+    def __init__(self, message: str, title: str | None) -> None:
+        super().__init__(message)
+        self.title = title
 
 
 class SheetClosed(Exception):
@@ -116,6 +131,12 @@ def _direct_or_exit(direct, *args: str, stdin: str | None = None) -> tuple[str |
             raise
         try:
             text = _via_exit(*args, stdin=stdin)
+        except httpx.HTTPStatusError as answered:
+            # Google ответил через exit — 429 значит то же, что напрямую:
+            # необязательное полчаса к нему не ходит.
+            if answered.response.status_code == 429:
+                _last_429 = time.monotonic()
+            raise
         except (OSError, subprocess.TimeoutExpired, UnicodeDecodeError) as fallback:
             log.warning("Google не ответил (%s), и через exit тоже: %s", error, fallback)
             raise error from None
@@ -156,6 +177,10 @@ def fetch_sheet_csv(gid: str | None = None, title: str | None = None) -> str:
         text = response.text
     else:
         kind, text = "", relayed or ""
+    if len(text) > MAX_SHEET_CHARS:
+        raise SheetTooLarge(
+            f"лист {title or gid} — {len(text)} знаков, предел {MAX_SHEET_CHARS}", title
+        )
     # Экспорт приходит с BOM.
     text = text.lstrip("\ufeff")
     if "html" in kind.lower() or text.lstrip()[:15].lower().startswith(("<!doctype", "<html")):

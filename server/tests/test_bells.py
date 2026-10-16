@@ -117,6 +117,27 @@ def test_neighbour_sheet_brings_its_own_times(fixture_csv):
     assert second.merged_with(first).bells[SHORT_DAY] == SHORT_GRID
 
 
+def test_empty_date_frame_in_the_first_sheet_does_not_cover_the_second(fixture_csv):
+    """Во втором листе — пары дня, в первом на ту же дату пустой каркас.
+    День целиком второго: его звонки, место в книге и пометки «не прочитан»,
+    а не каркаса первого."""
+    from whensclass.domain.models import SheetPlace
+
+    first = parse_csv(fixture_csv, "первый", FIXTURE)
+    for by_date in first.schedule.values():
+        by_date.pop(SHORT_DAY, None)
+    second = parse_csv(with_times(fixture_csv, SHORT_DAY, SHORT), "второй", FIXTURE)
+    first.places[SHORT_DAY] = SheetPlace("1", 400)
+    second.places[SHORT_DAY] = SheetPlace("2", 30)
+    quiet, busy = second.groups[0].id, second.groups[1].id
+    second.unread[quiet] = {SHORT_DAY: False}
+    merged = first.merged_with(second)
+    assert merged.bells[SHORT_DAY] == SHORT_GRID
+    assert merged.places[SHORT_DAY].gid == "2"
+    assert merged.unread[quiet] == {SHORT_DAY: False}
+    assert merged.schedule[busy][SHORT_DAY] == second.schedule[busy][SHORT_DAY]
+
+
 def test_reminder_comes_by_the_times_of_the_day():
     day = dt.date(2026, 10, 5)
     lessons = [{"n": 1, "s": "Физика"}, {"n": 2, "s": "История"}, {"n": 5, "s": "Право"}]

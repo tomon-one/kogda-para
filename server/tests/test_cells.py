@@ -504,3 +504,14 @@ def test_formula_range_pasted_into_cell_is_dropped():
     # В ссылке и отдельным словом диапазон без плюса не трогаем.
     assert normalize("https://example.org/j/AB12:CD34x") == "https://example.org/j/AB12:CD34x"
     assert normalize("Каб. A1:B2") == "Каб. A1:B2"
+
+
+def test_long_run_of_dots_after_cancellation_is_read_quickly():
+    """Ряд точек в десятки тысяч знаков после «Отмена» — ячейка Google вмещает
+    50 000 — разбирается за доли секунды, а не за минуты."""
+    import time
+
+    started = time.monotonic()
+    lesson = parse_lesson(1, "Физика (Пр) Отмена " + "." * 50_000 + "ab", "", "")
+    assert time.monotonic() - started < 1
+    assert lesson is not None and lesson.cancelled

@@ -78,7 +78,14 @@ def _anchor(title: str, today: dt.date) -> dt.date:
         (i + 1 for i, stem in enumerate(_MONTHS) for w in words if w.startswith(stem) and (stem != "ма" or w in ("май", "мая"))),
         None,
     )
-    return dt.date(int(year[1]), month or 7, 15 if month else 1)
+    if month:
+        return dt.date(int(year[1]), month, 15)
+    # Учебный год без месяца («2026-2027 уч. год», «2026/27»): сентябрь —
+    # первого года, январь — второго; середина — новый год между ними.
+    span = re.search(r"\b(20\d{2})\s*[-–/]\s*(?:20)?(\d{2})\b", title)
+    if span and (int(span[1]) + 1) % 100 == int(span[2]):
+        return dt.date(int(span[1]) + 1, 1, 1)
+    return dt.date(int(year[1]), 7, 1)
 
 
 def _clean(cell: str) -> str:
@@ -124,6 +131,9 @@ def _day(day: int, month: int, today: dt.date, year: str | None = None) -> dt.da
     return min(found, key=lambda d: abs((d - today).days), default=None)
 
 
+MAX_SLOTS = 40
+
+
 def parse_slots(dates: str, time: str, today: dt.date) -> list[Slot]:
     """«14.10; 16.10» и «10.00-14.30; 9.30-17.30» -> два дня, каждый со своим временем.
 
@@ -133,6 +143,11 @@ def parse_slots(dates: str, time: str, today: dt.date) -> list[Slot]:
     """
     parts = [p.strip() for p in dates.split(";") if p.strip()]
     times = [_clock(t) for t in time.split(";") if t.strip()]
+    # Живой лист даёт до двух дат и двух времён. Сотни через «;» — не
+    # пересдачи, а мусор, и склейка «каждой дате все времена» растёт как их
+    # произведение: такую ячейку оставляем текстом.
+    if len(parts) > MAX_SLOTS or len(times) > MAX_SLOTS:
+        return []
     spans: list[tuple[dt.date, dt.date]] = []
     for part in parts:
         if m := _RANGE.fullmatch(part):

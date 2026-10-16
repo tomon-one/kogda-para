@@ -86,6 +86,7 @@ def parse_export(
     gid: str | None,
     limits: Limits = FULL_SHEET,
     around: date | None = None,
+    previous: Snapshot | None = None,
 ) -> Snapshot:
     """То же, что `parse_csv`, но помнит, в каких строках листа стоят дни.
 
@@ -99,7 +100,9 @@ def parse_export(
         for day, row in date_rows([r[0] if r else "" for r in rows]).items()
     }
     collapsed, numbers = collapse_with_rows(rows, limits.min_groups)
-    snapshot = parse_sheet(collapsed, sheet_title, limits, around=around, sheet_rows=numbers)
+    snapshot = parse_sheet(
+        collapsed, sheet_title, limits, around=around, sheet_rows=numbers, previous=previous
+    )
     snapshot.places = places
     if gid:
         snapshot.sheet_columns = {gid: {g.id: g.column for g in snapshot.groups}}

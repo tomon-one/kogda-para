@@ -446,3 +446,49 @@ def test_each_push_service_has_its_own_queue(tmp_path, monkeypatch):
         push._dispatch([service.Job({"endpoint": endpoint}, {}, 60)])
     assert done.wait(5)
     assert seen["apple"].startswith("push-apple") and seen["google"].startswith("push-google")
+
+
+def test_reminder_with_a_huge_link_still_fits_the_message():
+    """Ссылка «Войти» в тысячи знаков или название из четырёхбайтовых букв не
+    делают напоминание больше, чем примет служба рассылки: сначала уходит
+    ссылка, потом строки короче."""
+    import json
+
+    from whensclass.push.messages import MAX_PAYLOAD
+    from whensclass.push.service import _reminder
+
+    sub = {"site": "main", "kind": "group", "id": "isp-924-2"}
+    alarm = {"number": 2, "title": "𝐌" * 300, "text": "𝐓" * 300, "subject": "𝐒" * 300,
+             "join": "https://my.mts-link.ru/j/" + "a" * 3700}
+    data = _reminder(sub, alarm, 1, 2)
+    assert len(json.dumps(data, ensure_ascii=False).encode("utf-8")) <= MAX_PAYLOAD
+    short = _reminder(sub, {**alarm, "title": "Физика", "text": "каб. 369", "subject": "Физика",
+                            "join": "https://my.mts-link.ru/j/1"}, 1, 2)
+    assert short["notification"]["data"]["join"] == "https://my.mts-link.ru/j/1"
+
+
+def test_rare_failures_of_a_push_service_add_up_across_windows(tmp_path, monkeypatch, sent):
+    """Подписчиков у службы единицы — по отказу в окно: тревога всё равно
+    приходит, когда отказы идут подряд, а доставка снимает счёт."""
+    push = Recorder(tmp_path, _vapid())
+    clock = [1000.0]
+    monkeypatch.setattr(service.time, "monotonic", lambda: clock[0])
+    for _ in range(service.ALARM_MIN_FAILS):
+        push._stats = {"Apple": [0, 1, "403 BadJwtToken"]}
+        push._checked = -1e9
+        push._check(None, None, dt.date(2026, 9, 8), fresh=False)
+    assert any("Apple" in b["message"] for b in sent)
+    push._stats = {"Apple": [1, 0, None]}
+    push._checked = -1e9
+    push._check(None, None, dt.date(2026, 9, 8), fresh=False)
+    assert push._fail_streak["Apple"] == 0
+
+
+def test_line_break_in_a_group_name_does_not_shift_lines_against_days():
+    """Перевод строки в имени группы не даёт лишних строк сервис-воркеру."""
+    from whensclass.push.messages import changes_message
+
+    out = changes_message({"site": "main", "kind": "teacher", "id": "t"},
+                          [["2026-10-20", "убрали 2 пару (ГД\n-1124)"], ["2026-10-21", "отменили 1 пару"]])
+    body = out["notification"]["body"].split("\n")
+    assert len(body) == len(out["notification"]["data"]["days"]) == 2

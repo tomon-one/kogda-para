@@ -71,6 +71,17 @@ def test_dates_become_slots_paired_with_times():
     assert days("22.13.2026", "17.40") == []
 
 
+def test_hundreds_of_dates_and_times_stay_text():
+    """Сотни дат и времён через «;» в двух ячейках не размножаются в ответ
+    размером с их произведение: ячейка остаётся текстом."""
+    from whensclass.parser.retakes import parse_slots
+
+    dates = "; ".join(["14.10"] * 500)
+    times = "; ".join(["10.00-11.00"] * 300)
+    assert parse_slots(dates, times, dt.date(2026, 10, 16)) == []
+    assert len(parse_slots("14.10; 16.10", "10.00-14.30; 9.30-17.30", dt.date(2026, 10, 16))) == 2
+
+
 def test_year_is_the_nearest_to_today():
     from whensclass.parser.retakes import parse_slots
 
@@ -228,3 +239,28 @@ def test_google_asking_to_slow_down_keeps_the_previous_list(source, monkeypatch)
     _book(monkeypatch, [SheetInfo("График пересдач октябрь 2026", "3")], text="что-то другое")
     source.refresh()
     assert source.payload == before and source.sent == []
+
+
+def test_freeze_keeps_retakes_away_from_google(tmp_path, monkeypatch):
+    """Рычаг заморозки — в таблицу не ходит никто, пересдачи тоже."""
+    from whensclass.config import settings
+    from whensclass.service.retakes import RetakesSource
+    from whensclass.sources import sheet_index
+
+    monkeypatch.setattr(settings, "freeze", True)
+
+    def touched(*a, **k):
+        raise AssertionError("пошёл в Google")
+
+    monkeypatch.setattr(sheet_index, "list_sheets", touched)
+    RetakesSource(tmp_path).refresh()
+
+
+def test_academic_year_without_month_puts_spring_into_the_second_year():
+    """«2026-2027 уч. год» без месяца: январь и февраль — 2027-й, октябрь — 2026-й."""
+    from whensclass.parser.retakes import _anchor, parse_slots
+
+    for title in ("График пересдач 2026-2027 уч. год", "Пересдачи 2026/2027", "Пересдачи 2026–27"):
+        anchor = _anchor(title, dt.date(2026, 10, 16))
+        assert [s.start for s in parse_slots("25.01; 14.10", "", anchor)] == \
+            [dt.date(2027, 1, 25), dt.date(2026, 10, 14)], title

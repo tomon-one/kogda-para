@@ -81,6 +81,9 @@ class RetakesSource:
             log.warning("retakes.json не читается (%s) — начну с пустого", exc)
 
     def refresh(self) -> None:
+        # Рычаг заморозки: в таблицу не ходит никто, пересдачи тоже.
+        if settings.freeze:
+            return
         # Google просил ходить реже — лист пересдач подождёт, отдаётся прежний.
         if gsheets.throttled() and self.payload is not None:
             log.info("пересдачи: Google недавно ответил 429 — пропускаю заход")

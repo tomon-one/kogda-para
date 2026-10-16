@@ -88,3 +88,14 @@ def test_a_shared_lesson_is_one_sighting_of_a_room():
     snap.schedule["б"][DAY] = snap.schedule["б"][DAY] + [once]
     rooms = [r["room"] for b in rooms_payload(snap, DAY, {})["buildings"] for r in b["rooms"]]
     assert "368" not in rooms
+
+
+def test_dot_before_the_subject_does_not_split_a_stream():
+    """«.Математика» у одной группы потока и «Математика» у другой — одна пара
+    одной строкой, и без преподавателя — не накладка."""
+    snap = _snapshot()
+    snap.schedule["б"][DAY] = [Lesson(number=5, subject="Математика", room="269")]
+    snap.schedule["в"][DAY] = [Lesson(number=5, subject=".Математика", room="269")]
+    body = rooms_payload(snap, DAY, {})
+    assert len(body["busy"]["5"]["269"]) == 1 and body["busy"]["5"]["269"][0]["g"] == "Б, В"
+    assert body["clashes"] == []

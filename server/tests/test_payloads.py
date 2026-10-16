@@ -277,6 +277,28 @@ def test_group_on_practice_does_not_hide_teacher_days():
     assert [x["n"] for x in today_["l"]] == [1]
 
 
+def test_group_leaving_for_practice_next_week_does_not_hide_it():
+    """Группа учится эту неделю, со следующей — практика: колонка пуста там,
+    где колледж уже дописал всем остальным. Это не «ещё не дошёл» — её
+    преподавателю следующая неделя выложена."""
+    from whensclass.api.payloads import teacher_payload
+    from whensclass.domain.models import Lesson
+    from whensclass.domain.teachers import build_index
+
+    snap = _filling({**{d: 10 for d in WEEK}, **{d: 10 for d in NEXT}})
+    for gid in ("g-0", "g-7"):
+        for day in snap.schedule[gid]:
+            snap.schedule[gid][day] = [
+                Lesson(number=1 if gid == "g-0" else 2, subject="Физика", teachers=("Ковач Т.",))
+            ]
+    for day in NEXT:
+        del snap.schedule["g-7"][day]  # g-7 на практике с 28.09
+    index = build_index(snap)
+    tid = next(iter(index.names))
+    body = teacher_payload(snap, index, tid, WEEK[0], 13, GENERATED, today=THURSDAY)
+    assert body["cov"] == ["2026-09-21", "2026-10-03"]
+
+
 def test_teacher_week_not_published_while_his_other_groups_are_not():
     """На этой неделе пары у него только в группе, заполненной вперёд, а его
     другая группа жива (пары у других преподавателей), но дописана лишь до
@@ -312,3 +334,17 @@ def test_without_today_coverage_is_the_whole_sheet(snapshot):
     group = next(g for g in snapshot.groups if g.name == "ИСП-924/2")
     body = schedule_payload(snapshot, group.id, START, 3, GENERATED)
     assert body["cov"] == [snapshot.dates[0].isoformat(), snapshot.dates[-1].isoformat()]
+
+
+def test_two_unread_weeks_stay_in_cov_across_sunday():
+    """Две непрочитанные недели подряд: цепочка не рвётся на воскресенье,
+    которого в листе нет, — обе недели в покрытии с пометкой."""
+    from whensclass.api.payloads import _group_edge
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+
+    days = [dt.date(2026, 10, 5) + dt.timedelta(days=i) for i in range(20) if (dt.date(2026, 10, 5) + dt.timedelta(days=i)).weekday() != 6]
+    read = [d for d in days if d <= dt.date(2026, 10, 10)]
+    snap = Snapshot("лист", groups=[GroupRef("ЛД-1126", "ld-1126", 0)], dates=days,
+                    schedule={"ld-1126": {d: [Lesson(number=1, subject="Право")] for d in read}},
+                    unread={"ld-1126": {d: False for d in days if d > dt.date(2026, 10, 10)}})
+    assert _group_edge(snap, "ld-1126", days, dt.date(2026, 10, 19)) == days[-1]

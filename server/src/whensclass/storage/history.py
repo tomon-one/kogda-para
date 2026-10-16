@@ -48,9 +48,20 @@ def archive(
         path = folder / f"{stamp}-{short}{suffix}.csv.gz"
         if path.exists():
             return path
-        path.write_bytes(gzip.compress(text.encode("utf-8")))
-        if rejected is not None:
-            path.with_suffix("").with_suffix(".txt").write_text(rejected + "\n", "utf-8")
+        # Сначала причина, потом сам лист — через временное имя: на полном
+        # диске обрезанный .csv.gz под окончательным именем отсёк бы как дубль
+        # повтор той же версии, и она пропала бы из архива навсегда.
+        note = path.with_suffix("").with_suffix(".txt")
+        part = path.with_name(path.name + ".part")
+        try:
+            if rejected is not None:
+                note.write_text(rejected + "\n", "utf-8")
+            part.write_bytes(gzip.compress(text.encode("utf-8")))
+            part.replace(path)
+        except OSError:
+            for leftover in (part, note):
+                leftover.unlink(missing_ok=True)
+            raise
         _prune(folder.parent)
         return path
     except OSError as exc:

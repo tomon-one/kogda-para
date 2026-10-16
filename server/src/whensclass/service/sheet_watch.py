@@ -34,6 +34,21 @@ class SheetWatch:
         except OSError as exc:
             log.warning("имена листов для слежки не записались: %s", exc)
 
+    def _load_retry_titles(self) -> dict[str, int]:
+        try:
+            data = json.loads(self._retry_path.read_text("utf-8"))
+        except (OSError, ValueError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {t: n for t, n in data.items() if isinstance(t, str) and isinstance(n, int)}
+
+    def _save_retry_titles(self) -> None:
+        try:
+            write_json(self._retry_path, self._retry_titles)
+        except OSError as exc:
+            log.warning("листы для перепроверки не записались: %s", exc)
+
     def look_for_new_sheet(self) -> bool:
         """Не появился ли в книге лист, которого мы ещё не видели.
 
@@ -65,30 +80,42 @@ class SheetWatch:
             self._save_seen_titles()
             return False
 
-        fresh = (titles - self._seen_titles) | (set(self._retry_titles) & titles)
+        due = {
+            t for t, n in self._retry_titles.items()
+            if t in titles and (n <= RETRY_LOOKS or n % RETRY_LATER == 0)
+        }
+        fresh = (titles - self._seen_titles) | due
         self._seen_titles = titles
         self._save_seen_titles()
         if not fresh:
+            if self._retry_titles:
+                # Счёт идёт и между перепроверками: «реже» — по нему.
+                for title in list(self._retry_titles):
+                    if title in titles:
+                        self._retry_titles[title] += 1
+                    else:
+                        del self._retry_titles[title]
+                self._save_retry_titles()
             return False
 
         log.info("в книге появился лист: %s — ищу заново", ", ".join(sorted(fresh)))
         changed = self.refresh(force=True)
         # Лист «групп», заведённый пустым, поиск отвергает, а заполненный позже
         # нашёлся бы только ночью: такие имена перепроверяются на следующих
-        # слежках, до RETRY_LOOKS раз.
+        # слежках — первые RETRY_LOOKS раз каждый, дальше реже, пока поиск их
+        # не примет. Счёт на диске: перезапуск его не теряет.
         known = set(SheetIndex(self.state_dir).known)
-        for title in fresh:
-            if title in known or not sheet_index.looks_like_groups(title):
-                self._retry_titles.pop(title, None)
-                continue
-            tries = self._retry_titles.get(title, 0) + 1
-            if tries > RETRY_LOOKS:
+        for title in fresh | set(self._retry_titles):
+            if title in known or title not in titles or not sheet_index.looks_like_groups(title):
                 self._retry_titles.pop(title, None)
             else:
-                self._retry_titles[title] = tries
+                self._retry_titles[title] = self._retry_titles.get(title, 0) + 1
+        self._save_retry_titles()
         return changed
 
 
 # Сколько раз слежка (раз в полчаса) перепроверяет новый лист «групп», который
-# поиск ещё не принял: шесть часов.
+# поиск ещё не принял, каждый раз — шесть часов; дальше — каждую RETRY_LATER-ю
+# слежку (раз в два часа), пока не примет.
 RETRY_LOOKS = 12
+RETRY_LATER = 4

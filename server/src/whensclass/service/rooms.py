@@ -58,9 +58,15 @@ def _clash(entries: list[dict]) -> bool:
                 continue
             if (a["t"] or b["t"]) and set(a["t"]) != set(b["t"]):
                 return True
-            if not a["t"] and not b["t"] and a["s"] != b["s"]:
+            if not a["t"] and not b["t"] and _subject_key(a["s"]) != _subject_key(b["s"]):
                 return True
     return False
+
+
+def _subject_key(subject: str) -> str:
+    """Предмет для сравнения: «.Математика» и «Математика» — одна пара (точку
+    колледж ставит перед названием по ошибке, как в листе пересдач)."""
+    return subject.strip(" .,;").casefold()
 
 
 def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]]) -> dict:
@@ -99,7 +105,7 @@ def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]])
         for room, entries in rooms.items():
             merged: dict[tuple, dict] = {}
             for e in entries:
-                key = (e["s"], tuple(e["t"]))
+                key = (_subject_key(e["s"]), tuple(e["t"]))
                 if key in merged:
                     merged[key]["g"] += ", " + e["g"]
                     merged[key]["groups"].add(e["g"])

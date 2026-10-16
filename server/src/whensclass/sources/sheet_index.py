@@ -95,6 +95,14 @@ def list_sheets(max_age: dt.timedelta | None = None) -> list[SheetInfo]:
     if max_age and _last_list and _last_list_at and dt.datetime.now(dt.timezone.utc) - _last_list_at < max_age:
         return _last_list
     if not settings.sheets_api_key:
+        # Без тревоги служба месяцами жила бы памятью листов: слежка, пересдачи
+        # и сверка молча стоят, а заметно станет, только когда память кончится.
+        alerts.notify(
+            "key",
+            "Ключа Sheets API нет в env: слежка за книгой, пересдачи и сверка стоят, "
+            "расписание живёт запомненным листом до конца его покрытия. Вернуть "
+            "WHENSCLASS_SHEETS_API_KEY — руководство по серверу, «Ключ Sheets API».",
+        )
         raise SheetNotFound(
             "ключа Sheets API нет — gid листов взять неоткуда"
         )
@@ -120,9 +128,10 @@ def list_sheets(max_age: dt.timedelta | None = None) -> list[SheetInfo]:
         if _last_list and _last_list_at and now - _last_list_at < _LIST_KEEP:
             log.info("список листов — прежний, от %s", _last_list_at)
             return _last_list
-        if isinstance(exc, httpx.TransportError):
-            # Сеть — это сеть: полчаса льготы и сетевая тревога, а не «не
-            # нашёл лист» со stale сразу.
+        if _is_network(exc):
+            # Сеть — это сеть, и Google на минуту (429, 5xx) тоже: полчаса
+            # льготы и сетевая тревога, как у выгрузки листа, а не «не нашёл
+            # лист» со stale сразу.
             raise
         raise SheetNotFound(f"Sheets API не ответил: {_api_error(exc)}") from exc
     if _api_failures >= API_FAILURES_TO_ALERT:

@@ -109,6 +109,10 @@ class Snapshot:
     # gid листа -> id группы -> её колонка в этом листе. У склеенного снимка
     # двух листов раскладка своя у каждого, а в `groups` — колонки первого.
     sheet_columns: dict[str, dict[str, int]] = field(default_factory=dict)
+    # Дни, прочитанные по повторному заголовку с другой раскладкой: id группы
+    # -> дата -> её колонка там. Ссылке «открыть таблицу»: колонка главного
+    # заголовка в такие дни ведёт в чужой блок.
+    day_columns: dict[str, dict[date, int]] = field(default_factory=dict)
     # Блоки главного заголовка без имени: колонка -> сколько под ней пар.
     # Только для проверки при обновлении, на диск не пишется.
     unnamed: dict[int, int] = field(default_factory=dict)
@@ -145,6 +149,11 @@ class Snapshot:
         в них один и тот же. Если группа встречается в обоих, берём её пары из
         обоих листов; даты, которые есть в первом, вторым не переписываем —
         текущий лист главнее, он свежее правится.
+
+        Кроме дат, на которые в первом только пустой каркас, а пары — во
+        втором: день целиком второго листа — пары, звонки, место в книге и
+        пометки «не прочитан». Иначе пары шли бы из второго, а время звонков,
+        ссылка в таблицу и пометки — из пустого каркаса первого.
         """
         combined = Snapshot(
             sheet_title=f"{self.sheet_title} + {other.sheet_title}",
@@ -153,22 +162,36 @@ class Snapshot:
         known = {g.id for g in self.groups}
         combined.groups += [g for g in other.groups if g.id not in known]
 
-        for gid in {g.id for g in combined.groups}:
-            by_date = dict(other.schedule.get(gid, {}))
-            by_date.update(self.schedule.get(gid, {}))
-            combined.schedule[gid] = by_date
+        def busy(snapshot: "Snapshot") -> set[date]:
+            return {day for by in snapshot.schedule.values() for day, ls in by.items() if ls}
 
-        for gid, days in other.unread.items():
-            kept = {day: v for day, v in days.items() if day not in self.dates}
-            if kept:
-                combined.unread[gid] = kept
-        for gid, days in self.unread.items():
-            combined.unread.setdefault(gid, {}).update(days)
+        mine, theirs = busy(self), busy(other)
+        own = set(self.dates)
+        # Дни второго листа: которых нет в первом или где в первом пустой каркас.
+        second = {day for day in set(other.dates) | theirs
+                  if day not in own or (day not in mine and day in theirs)}
+
+        def pick(first: dict, from_other: dict, fill: bool = True) -> dict:
+            # fill — чего у первого нет, берётся у второго (звонки, которых
+            # первый не прочёл); пометки «не прочитан» — только на днях второго.
+            base = from_other if fill else {day: v for day, v in from_other.items() if day in second}
+            return {**base, **{day: v for day, v in first.items() if day not in second}}
+
+        for gid in {g.id for g in combined.groups}:
+            combined.schedule[gid] = pick(self.schedule.get(gid, {}), other.schedule.get(gid, {}))
+
+        for gid in set(self.unread) | set(other.unread):
+            days = pick(self.unread.get(gid, {}), other.unread.get(gid, {}), fill=False)
+            if days:
+                combined.unread[gid] = days
         combined.unread_why = self.unread_why + other.unread_why
-        combined.dates = sorted(set(self.dates) | set(other.dates))
-        combined.places = {**other.places, **self.places}
-        combined.bells = {**other.bells, **self.bells}
+        combined.dates = sorted(own | set(other.dates))
+        combined.places = pick(self.places, other.places)
+        combined.bells = pick(self.bells, other.bells)
         combined.sheet_columns = {**other.sheet_columns, **self.sheet_columns}
+        for gid in set(self.day_columns) | set(other.day_columns):
+            if cols := pick(self.day_columns.get(gid, {}), other.day_columns.get(gid, {}), fill=False):
+                combined.day_columns[gid] = cols
         return combined
 
     def total_lessons(self) -> int:

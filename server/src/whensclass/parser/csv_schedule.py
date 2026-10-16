@@ -52,8 +52,10 @@ _TIME_RE = re.compile(r"^(\d{1,2})[.:-](\d{2})\s*[-–]\s*(\d{1,2})[.:-](\d{2})$
 # прочитан, остальным лист принимается.
 SPILL_BLOCKS = 3
 # Одна буква в пустой колонке — опечатка, а не сдвиг: за 350 версий листа
-# такая была одна.
-_NOISE = re.compile(r"^\W*\w?\W*$")
+# такая была одна. Счётом, а не регуляркой: ^\W*\w?\W*$ на длинном ряду
+# точек с буквами в конце перебирает за квадратичное время.
+def _noise(text: str) -> bool:
+    return sum(1 for ch in text if ch.isalnum() or ch == "_") <= 1
 
 
 @dataclass(frozen=True)
@@ -89,8 +91,13 @@ def parse_sheet(
     limits: Limits = FULL_SHEET,
     around: date | None = None,
     sheet_rows: list[int] | None = None,
+    previous: Snapshot | None = None,
 ) -> Snapshot:
     """`around` — сегодняшний день: дальше `limits.max_days_ahead` от него пар не ждём.
+
+    `previous` — прежний принятый снимок: предметы групп в нём помогают
+    запасному разбору дней под сдвинутым заголовком (`_settle_moved`), когда
+    в самом листе над заголовком всего неделя.
 
     `sheet_rows[i]` — номер строки листа, как его видит человек в Sheets, для
     строки `i` после схлопывания шапки. С ним сообщения разбора ведут в ту
@@ -151,11 +158,12 @@ def parse_sheet(
     doubt: dict[date, _Doubt] = {}
     section: tuple[dict[str, int], str] = ({}, "")
 
+    blank_sunday: set[int] = set()
     for i, row in enumerate(rows):
         if i in distrust:
             moved, why = distrust[i]
             section = (_section_columns(rows, i, groups) if moved else {}, why)
-        if i in skip:
+        if i in skip or i in blank_sunday:
             continue
 
         cell = _cell(row, 0)
@@ -170,6 +178,14 @@ def parse_sheet(
             log.info("в колонке дат в %s не дата: %r — пропускаю", where(i), cell.strip())
         if found is not None:
             if found.weekday() == 6:
+                # Пустой каркас на воскресенье (колледж вписывает даты заранее
+                # подряд) — не опечатка, а лишний день: пропустить, а не
+                # отвергать из-за него весь лист.
+                block = _blank_day(rows, i)
+                if block is not None:
+                    blank_sunday.update(block)
+                    log.info("в %s пустое воскресенье %s — пропускаю", where(i), f"{found:%d.%m}")
+                    continue
                 # Воскресений в листах колледжа не бывает: это опечатка в числе.
                 raise SourceFormatChanged(f"дата {found:%d.%m.%Y} в {where(i)} — воскресенье")
             if around is not None and found > around + timedelta(days=limits.max_days_ahead):
@@ -267,7 +283,7 @@ def parse_sheet(
     if dateless is not None:
         raise _no_date(*dateless, None)
     _mark_unread(snapshot, spill, row_date, where)
-    _settle_moved(snapshot, doubt)
+    _settle_moved(snapshot, doubt, previous)
     for day, place, cell in unread_days:
         for group in snapshot.groups:
             snapshot.schedule.get(group.id, {}).pop(day, None)
@@ -366,7 +382,20 @@ SETTLE_KNOWN = 0.9
 SETTLE_GAP = 0.2
 
 
-def _settle_moved(snapshot: Snapshot, doubt: dict[date, _Doubt]) -> None:
+def _blank_day(rows: list[list[str]], start: int) -> range | None:
+    """Строки дня с датой в `start` до следующей даты, если в них, кроме
+    номеров и времени, ничего нет; иначе None."""
+    end = start + 1
+    while end < len(rows) and not _LOOKS_LIKE_DATE.search(_cell(rows[end], 0)):
+        end += 1
+    if any(c.strip() for row in rows[start:end] for c in row[2:]):
+        return None
+    return range(start, end)
+
+
+def _settle_moved(
+    snapshot: Snapshot, doubt: dict[date, _Doubt], previous: Snapshot | None = None
+) -> None:
     """Дни под повторным заголовком с другой раскладкой: чьи в них пары.
 
     Основной способ — главный заголовок — здесь не годится: повторный с ним
@@ -377,12 +406,23 @@ def _settle_moved(snapshot: Snapshot, doubt: dict[date, _Doubt]) -> None:
     стоят по главному. Поэтому решение — по каждому дню, а после первого дня
     по главному заголовку повторному больше не верим. Не решилось — день не
     прочитан, как и у группы, которой в повторном заголовке нет.
+
+    Новый лист над заголовком может держать всего неделю — на ней доля своих
+    предметов порога не наберёт. Тогда в «свои» идут и предметы прежнего
+    снимка, только до спорных дней: спорные он сам решал этим же способом.
     """
     if not doubt:
         return
+    first = min(doubt)
     known: dict[str, set[str]] = {}
-    for gid, by_date in snapshot.schedule.items():
-        known[gid] = {_topic(x.subject) for lessons in by_date.values() for x in lessons}
+    for source in (previous, snapshot):
+        if source is None:
+            continue
+        for gid, by_date in source.schedule.items():
+            known.setdefault(gid, set()).update(
+                _topic(x.subject) for day, lessons in by_date.items()
+                if source is snapshot or day < first for x in lessons
+            )
 
     def share(parsed: dict[str, list[Lesson]]) -> tuple[int, float]:
         total = sum(len(lessons) for lessons in parsed.values())
@@ -397,6 +437,7 @@ def _settle_moved(snapshot: Snapshot, doubt: dict[date, _Doubt]) -> None:
     whys: dict[str, None] = {}
     absent: dict[tuple[str, str], list[date]] = {}
     names = {g.id: g.name for g in snapshot.groups}
+    column_of = {g.id: g.column for g in snapshot.groups}
     for day in sorted(doubt):
         d = doubt[day]
         n_main, main = share(d.by_main)
@@ -417,6 +458,8 @@ def _settle_moved(snapshot: Snapshot, doubt: dict[date, _Doubt]) -> None:
             if verdict == "main" or (verdict == "section" and gid in d.columns):
                 if parsed.get(gid):
                     snapshot.schedule[gid][day] = list(parsed[gid])
+                if verdict == "section" and d.columns[gid] != column_of.get(gid):
+                    snapshot.day_columns.setdefault(gid, {})[day] = d.columns[gid]
             else:
                 snapshot.unread.setdefault(gid, {})[day] = False
                 if verdict == "section":
@@ -568,7 +611,7 @@ def _spill(
                 continue
             for extra in (1, 2):
                 text = _cell(row, col + extra).strip()
-                if text and not _NOISE.match(text):
+                if text and not _noise(text):
                     found.append((i, col, col + extra))
     if len({col for _, col, _ in found}) >= SPILL_BLOCKS:
         i, _, col = found[0]

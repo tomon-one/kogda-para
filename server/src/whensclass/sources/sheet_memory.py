@@ -31,8 +31,13 @@ class SheetIndex:
             self.known = {}
 
     def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        write_json(self.path, self.known, indent=1)
+        # Память поиска — подсказка, а не данные: диск не записал её — поиск
+        # всё равно отдаёт найденный лист, а не роняет заход как «сеть».
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            write_json(self.path, self.known, indent=1)
+        except OSError as exc:
+            log.warning("память поиска листов не записалась: %s", exc)
 
     def remember(self, title: str, gid: str | None, first: dt.date, last: dt.date) -> None:
         if gid is not None:

@@ -139,3 +139,33 @@ def test_google_asking_to_slow_down_skips_the_check(tmp_path, monkeypatch):
     snap = _snapshot([Lesson(number=2, subject="История")])
     _run(tmp_path, monkeypatch, snap, lambda gid, title=None: read.append(gid) or SHEET, [])
     assert read == []
+
+
+def test_full_disk_does_not_swallow_the_crosscheck_alert(tmp_path, monkeypatch):
+    """crosscheck.json не записался — сверка не падает до тревоги: запись
+    «о чём сказано» не роняет сам рассказ."""
+    import datetime as dt
+
+    def full(*a, **k):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(crosscheck_service, "write_json", full)
+    check = crosscheck_service.CrossCheck(lambda: None, tmp_path)
+    check.reported = {("ИСП-924/2", dt.date(2026, 9, 3))}
+    check._save()
+
+
+def test_empty_date_frame_of_a_dropped_sheet_is_not_compared():
+    """Следующий лист выпал, в текущем на его даты пустой каркас: листы
+    преподавателей этой недели с ним не сверяются — это не ошибка чтения."""
+    import datetime as dt
+
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+    from whensclass.parser.teacher_sheet import TeacherPair
+
+    today, later = dt.date(2026, 10, 2), dt.date(2026, 10, 5)
+    groups = [GroupRef(name=f"ИСП-9{i:02d}", id=f"isp-9{i:02d}", column=4 * i) for i in range(10)]
+    snap = Snapshot("лист", groups=groups, dates=[today, later],
+                    schedule={g.id: {today: [Lesson(number=1, subject="Физика")]} for g in groups})
+    pairs = [TeacherPair("Ковач Т.", later, n, "Физика", "369", g.name) for g in groups for n in (1, 2, 3)]
+    assert compare(snap, pairs, today) == []

@@ -375,6 +375,8 @@ def test_build_below_the_minimum_is_told_to_update(client, monkeypatch):
         assert client.get(path, headers=new).status_code == 200, path
         assert client.get(path).status_code == 200, path
     assert client.get("/v1/app", headers=old).json()["versionCode"] == 9
+    # «²» — цифра для isdigit, но не для int(): не 500, а как без заголовка.
+    assert client.get("/v1/meta", headers={"X-App-Build": b"\xb2"}).status_code == 200
     assert client.get("/v1/meta", headers=new).json()["min"] == 8
     monkeypatch.setattr(settings, "min_build", 0)
     assert "min" not in client.get("/v1/meta").json()
@@ -396,3 +398,24 @@ def test_rooms_on_a_sunday_are_for_the_next_day_in_the_sheet(client, monkeypatch
     for path in ("/v1/rooms", "/v1/rooms?date=2026-09-06"):
         body = client.get(path).json()
         assert body["date"] == "2026-09-07" and body["days"][0] == "2026-09-07", path
+
+
+def test_rooms_tell_how_many_groups_do_not_have_the_day_yet(fixture_csv, monkeypatch):
+    """Следующую неделю колледж выложил больше чем половине групп, но не всем:
+    их кабинеты не учтены, и ответ говорит, скольких групп это касается."""
+    from whensclass.api import routes
+
+    monkeypatch.setattr(routes, "_today", lambda: dt.date(2026, 9, 3))
+    snapshot = parse_csv(fixture_csv, "лист", FIXTURE)
+    late = [g.id for g in snapshot.groups][:2]
+    for gid in late:
+        for d in list(snapshot.schedule[gid]):
+            if d >= dt.date(2026, 9, 7):
+                del snapshot.schedule[gid][d]
+    app = FastAPI()
+    app.include_router(router)
+    app.state.store = FakeStore(snapshot)
+    app.state.refresher = FakeRefresher()
+    client = TestClient(app)
+    assert client.get("/v1/rooms?date=2026-09-10").json()["unpublished"] == 2
+    assert "unpublished" not in client.get("/v1/rooms?date=2026-09-04").json()

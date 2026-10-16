@@ -67,6 +67,23 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
     """
     if previous is None:
         return
+    # День, вырезанный строками вместе с датой, пропадает из листа целиком, и
+    # сверка пересечения дат ниже его не видит. Только внутри нового листа:
+    # хвост, отрезанный в новый лист, — законный перенос.
+    if current.dates:
+        first, last = min(current.dates), max(current.dates)
+        for day in sorted(set(previous.dates) - set(current.dates)):
+            if day < today or not first < day < last:
+                continue
+            had = [
+                g.id for g in previous.groups
+                if previous.schedule.get(g.id, {}).get(day) and day not in previous.unread.get(g.id, {})
+            ]
+            if len(had) >= DAY_EMPTIED_MIN_GROUPS:
+                raise ChangedAgainstPrevious(
+                    f"{day} пропал из листа вместе с датой, а пары в нём были у {len(had)} "
+                    "групп — похоже на вырезанные строки"
+                )
     for day in sorted(set(previous.dates) & set(current.dates)):
         if day < today:
             continue
@@ -81,7 +98,7 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
         # Следующий лист выпал из окна, а в текущем на его даты — пустой
         # каркас: пары этих дней приходили из выпавшего, и «опустели» они
         # вместе с ним, а не вырезаны.
-        if dropped and not any(current.schedule.get(g.id, {}).get(day) for g in current.groups):
+        if dropped and _from_dropped(previous, current, day):
             continue
         emptied = [gid for gid in had if not current.schedule.get(gid, {}).get(day)]
         if len(emptied) >= max(DAY_EMPTIED_COUNT, DAY_EMPTIED_SHARE * len(had)):
@@ -89,6 +106,16 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
                 f"{day} у {len(emptied)} групп из {len(had)} пропали все пары — похоже на "
                 "вырезанный или очищенный день"
             )
+
+
+def _from_dropped(previous, current, day: dt.date) -> bool:
+    """Пары дня пришли из выпавшего листа: в текущем на него пустой каркас, а
+    прежний снимок брал день из другого листа. День того же листа, стёртый у
+    всех, — не выпавший лист, а вырезанный день."""
+    if any(current.schedule.get(g.id, {}).get(day) for g in current.groups):
+        return False
+    was, now = previous.places.get(day), current.places.get(day)
+    return was is None or now is None or was.gid != now.gid
 
 
 # Сколько учебных дней вперёд должна была держать группа, чтобы «всё пропало»
@@ -112,7 +139,7 @@ def groups_emptied(previous, current, today: dt.date, dropped: bool = False) -> 
     # Выпал следующий лист — дни пустого каркаса в текущем опустели у всех
     # вместе с ним, а не стёрты у группы (как в `_check_days_emptied`).
     if dropped:
-        days = [d for d in days if any(current.schedule.get(g.id, {}).get(d) for g in current.groups)]
+        days = [d for d in days if not _from_dropped(previous, current, d)]
     present = {g.id for g in current.groups}
     out = []
     for g in previous.groups:

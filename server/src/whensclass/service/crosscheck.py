@@ -22,7 +22,9 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from ..api.payloads import published
 from ..config import settings
+from ..storage.atomic import write_json
 from ..domain.ids import group_id
 from ..domain.models import Snapshot
 from ..parser.groups import split_group_names
@@ -75,10 +77,11 @@ def compare(snapshot: Snapshot, pairs: list[TeacherPair], today: dt.date) -> lis
             if gid in names:
                 by_group_day[(gid, p.day)].append(p)
     out = []
-    days = set(snapshot.dates)
+    # Только выложенные дни: дня нет в листе групп или там пустой каркас дат
+    # (следующий лист не дописан или не принят, недописанный хвост) — сверять
+    # не с чем, пустота тут не наша ошибка чтения.
+    days = set(published(snapshot, today))
     for (gid, day), theirs in sorted(by_group_day.items(), key=lambda kv: (kv[0][1], names[kv[0][0]])):
-        # Дня нет в листе групп (следующий лист не дописан или не принят) —
-        # сверять не с чем: пустота тут не наша ошибка чтения.
         if day not in days:
             continue
         ours = snapshot.schedule.get(gid, {}).get(day, [])
@@ -113,14 +116,16 @@ class CrossCheck:
     def _save(self) -> None:
         if not self.path:
             return
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(sorted([g, d.isoformat()] for g, d in self.reported), ensure_ascii=False),
-                       encoding="utf-8")
-        tmp.replace(self.path)
+        # Не записалось (диск) — тревога всё равно уходит: о сказанном помнит
+        # память, а после перезапуска о том же скажут ещё раз — лучше, чем никогда.
+        try:
+            write_json(self.path, sorted([g, d.isoformat()] for g, d in self.reported))
+        except OSError as exc:
+            log.warning("crosscheck.json не записался: %s", exc)
 
     def run(self) -> None:
         snap = self.snapshot()
-        if snap is None:
+        if snap is None or settings.freeze:
             return
         # Листы преподавателей большие: при 429 они отняли бы у расписания последнее.
         if gsheets.throttled():

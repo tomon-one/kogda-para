@@ -385,3 +385,18 @@ def test_google_busy_while_looking_for_the_next_sheet_keeps_the_current(tmp_path
     got = si.resolve_window(dt.date(2026, 9, 28), 12, tmp_path, deep=True)
     assert [gid for _, gid in got] == ["111"]
 
+
+
+def test_search_memory_on_a_full_disk_does_not_fail_the_search(tmp_path, monkeypatch):
+    """Диск не записал память поиска — найденный лист всё равно отдаётся."""
+    import datetime as dt
+
+    from whensclass.sources import sheet_memory
+
+    def full(*a, **k):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(sheet_memory, "write_json", full)
+    index = sheet_memory.SheetIndex(tmp_path)
+    index.remember("лист", "1", dt.date(2026, 9, 2), dt.date(2026, 9, 12))
+    assert index.covering(dt.date(2026, 9, 3)) == ("лист", "1")

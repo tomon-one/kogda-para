@@ -130,3 +130,14 @@ def test_429_goes_up_and_is_remembered(monkeypatch, exit_on):
     assert caught.value.response.status_code == 429
     assert gsheets.throttled()
     assert exit_on.calls == []
+
+
+def test_google_busy_through_exit_quiets_the_optional_requests(monkeypatch, exit_on):
+    """429 от Google через exit — так же «полчаса тишины» для пересдач и сверки."""
+    monkeypatch.setattr(gsheets, "_client", _google(_unreachable))
+    monkeypatch.setattr(gsheets, "_last_429", None)
+    monkeypatch.setattr(gsheets.subprocess, "run",
+                        _Ssh(returncode=22, stderr=b"curl: (22) The requested URL returned error: 429"))
+    with pytest.raises(httpx.HTTPStatusError):
+        gsheets.fetch_sheet_csv(gid="1")
+    assert gsheets.throttled()

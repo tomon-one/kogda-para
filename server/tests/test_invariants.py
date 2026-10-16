@@ -517,3 +517,25 @@ def test_empty_date_skeleton_far_ahead_is_cut_not_rejected(fixture_csv):
     near = dataclasses.replace(FIXTURE, max_days_ahead=5)
     snapshot = parse_csv(buf.getvalue(), "фикстура", near, around=dt.date(2026, 9, 8))
     assert snapshot.dates[-1] == dt.date(2026, 9, 12), "14 и 15.09 — за горизонтом и пусты"
+
+
+def test_history_on_a_full_disk_leaves_no_truncated_copy(tmp_path, monkeypatch):
+    """Диск кончился посреди записи: в архиве не остаётся обрезанной копии под
+    окончательным именем — иначе повтор той же версии отсекался бы как дубль."""
+    import pathlib
+
+    from whensclass.storage import history
+
+    real = pathlib.Path.write_bytes
+
+    def full(self, data):
+        if self.name.endswith(".part"):
+            real(self, data[:10])
+            raise OSError(28, "No space left on device")
+        return real(self, data)
+
+    monkeypatch.setattr(pathlib.Path, "write_bytes", full)
+    assert history.archive(tmp_path, "1", "лист", "a" * 64, rejected="причина") is None
+    assert list((tmp_path / "history" / "1").iterdir()) == []
+    monkeypatch.setattr(pathlib.Path, "write_bytes", real)
+    assert history.archive(tmp_path, "1", "лист", "a" * 64, rejected="причина") is not None

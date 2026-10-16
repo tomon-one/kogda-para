@@ -72,6 +72,25 @@ def test_network_trouble_is_not_blamed_on_the_key(monkeypatch, sent):
     assert len(sent) == 2 and "ключ работает" in sent[1]["message"]
 
 
+def test_google_busy_on_the_sheet_list_is_a_network_blip(monkeypatch):
+    """429 и 5xx от Sheets API на списке листов — как у выгрузки листа: сеть
+    с полчаса льготы, а не «не нашёл лист» со сбоем у всех сразу."""
+    import httpx
+
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
+    monkeypatch.setattr(sheet_index, "_last_list", [])
+    for code in (429, 503):
+        def busy(key, code=code):
+            raise _google_says(code)
+
+        monkeypatch.setattr(gsheets, "list_sheets_via_api", busy)
+        with pytest.raises(httpx.HTTPStatusError):
+            sheet_index.list_sheets()
+    monkeypatch.setattr(gsheets, "list_sheets_via_api", lambda key: (_ for _ in ()).throw(_google_says(403)))
+    with pytest.raises(sheet_index.SheetNotFound):
+        sheet_index.list_sheets()
+
+
 def test_google_asking_to_slow_down_is_not_blamed_on_the_key(monkeypatch, sent):
     """429 — Google просит ходить реже (выгрузке листа он отвечает так же), а не отказ ключа."""
     monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
@@ -168,7 +187,7 @@ def test_failed_api_keeps_the_last_list_and_there_is_no_xlsx(monkeypatch, sent):
     def api(key):
         if state["ok"]:
             return [SheetInfo(title="расписание групп", gid="1")]
-        raise _google_says(503)
+        raise _google_says(403)
 
     monkeypatch.setattr(gsheets, "list_sheets_via_api", api)
     assert [s.gid for s in sheet_index.list_sheets()] == ["1"]
@@ -225,3 +244,39 @@ def test_watch_baseline_survives_restart(tmp_path, monkeypatch):
     monkeypatch.setattr(restarted, "refresh", lambda force=False: calls.append(force) or False)
     restarted.look_for_new_sheet()
     assert calls == [True]
+
+
+def test_rejected_group_sheet_is_retried_after_six_hours_and_after_restart(tmp_path, monkeypatch):
+    """Пустой лист «групп», заполненный позже шести часов, — не до ночи:
+    дальше перепроверка реже, и перезапуск её не теряет."""
+    from whensclass.service import sheet_watch
+    from whensclass.sources.gsheets import SheetInfo
+
+    monkeypatch.setattr(settings, "sheets_api_key", "ключ")
+    books = [[SheetInfo(title="расписание групп 21.-26.09", gid="1", hidden=False)]]
+    monkeypatch.setattr(sheet_index, "list_sheets", lambda: books[-1])
+    monkeypatch.setattr(sheet_index, "candidates", lambda sheets, day: sheets)
+    r = Refresher(SnapshotStore(tmp_path), tmp_path)
+    calls = []
+    monkeypatch.setattr(r, "refresh", lambda force=False: calls.append(force) or False)
+    r.look_for_new_sheet()
+    books.append(books[-1] + [SheetInfo(title="расписание групп 28.09-03.10", gid="2", hidden=False)])
+    looks = sheet_watch.RETRY_LOOKS + 4 * sheet_watch.RETRY_LATER
+    for _ in range(looks):
+        r.look_for_new_sheet()
+    assert sheet_watch.RETRY_LOOKS < len(calls) < looks, "после шести часов — реже, но не никогда"
+
+    again = Refresher(SnapshotStore(tmp_path), tmp_path)
+    monkeypatch.setattr(again, "refresh", lambda force=False: calls.append(force) or False)
+    before = len(calls)
+    for _ in range(sheet_watch.RETRY_LATER):
+        again.look_for_new_sheet()
+    assert len(calls) > before, "перезапуск не забыл непринятый лист"
+
+
+def test_missing_key_is_told_to_the_owner(monkeypatch, sent):
+    """Ключ пропал из env — тревога, а не месяцы тишины на памяти листов."""
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", None)
+    with pytest.raises(sheet_index.SheetNotFound):
+        sheet_index.list_sheets()
+    assert len(sent) == 1 and "Ключа Sheets API нет" in sent[0]["message"]

@@ -378,3 +378,16 @@ def test_reminder_title_names_the_shared_part_once():
                             _l(4, "Иностранный язык, английский", r="467")]})
     plan = changes.reminders(payload, 15, dt.date(2026, 9, 29))
     assert plan[0]["subject"] == "Иностранный язык: немецкий / английский"
+
+
+def test_same_subject_on_huge_names_is_quick_and_exact():
+    """Опечатка в обычном названии — та же пара; название в десятки тысяч
+    знаков сравнивается за доли секунды, без расстояния правки."""
+    import time
+
+    from whensclass.push.changes import same_subject
+
+    assert same_subject("Обествознание", "Обществознание")
+    started = time.monotonic()
+    assert not same_subject("а" * 50_000 + "б", "а" * 50_000 + "в")
+    assert time.monotonic() - started < 1

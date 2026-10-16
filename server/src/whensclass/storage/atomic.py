@@ -21,6 +21,10 @@ def write_json(path: pathlib.Path, data: object, indent: int | None = None) -> N
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as out:
             out.write(json.dumps(data, ensure_ascii=False, indent=indent))
+            # На диск до замены: после обрыва питания иначе на месте файла
+            # мог оказаться пустой — и подписки (push.json) пропали бы молча.
+            out.flush()
+            os.fsync(out.fileno())
         os.replace(name, path)
     except BaseException:
         pathlib.Path(name).unlink(missing_ok=True)

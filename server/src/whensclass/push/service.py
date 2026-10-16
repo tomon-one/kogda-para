@@ -33,6 +33,7 @@ from . import changes, webpush
 from .delivery import MAX_PENDING_RETRIES, TIMEOUT, Delivery, Job, _Delayed
 from .messages import (
     MAX_LINE,
+    MAX_PAYLOAD,
     changes_message,
     changes_ttl,
     gone_message,
@@ -86,6 +87,9 @@ class Push(Delivery):
         self._delivered: dict[str, float] = {}
         # За окно сводки: служба рассылки -> [доставлено, отказов, последний отказ].
         self._stats: dict[str, list] = {}
+        # Отказы подряд по службе рассылки через окна CHECK_EVERY: у служб, где
+        # подписчиков единицы, в одно окно ALARM_MIN_FAILS не набирается никогда.
+        self._fail_streak: dict[str, int] = {}
         self._checked = time.monotonic()
         # Кого нет в снимке: (kind, id) -> с какого часа (monotonic).
         self._missing: dict[tuple[str, str], float] = {}
@@ -201,13 +205,15 @@ class Push(Delivery):
         with self._lock:
             stats, self._stats = self._stats, {}
         for name, (ok, failed, said) in sorted(stats.items()):
-            if failed >= ALARM_MIN_FAILS and ok == 0:
+            streak = 0 if ok else self._fail_streak.get(name, 0) + failed
+            self._fail_streak[name] = streak
+            if streak >= ALARM_MIN_FAILS:
                 # Сплошной отказ (ключ VAPID, 403 FCM, служба лежит) иначе
                 # виден только строками в журнале.
                 alerts.notify(
                     f"push-{name}",
-                    f"Уведомления сайта через {name} не доходят: {failed} отказов за "
-                    f"{CHECK_EVERY // 60} минут и ни одной доставки, последний — {said}.",
+                    f"Уведомления сайта через {name} не доходят: {streak} отказов подряд "
+                    f"и ни одной доставки, последний — {said}.",
                 )
         if fresh and snapshot is not None:
             self._check_gone(snapshot, teachers, today)
@@ -369,12 +375,7 @@ class Push(Delivery):
                 end = alarm["end"].replace(tzinfo=zone).timestamp()
                 jobs.append(Job(
                     sub,
-                    message(sub, "lesson", alarm["title"][:MAX_LINE], alarm["text"][:MAX_LINE], {
-                        "subject": alarm["subject"][:MAX_LINE],
-                        "start": int(start * 1000),
-                        "end": int(end * 1000),
-                        **({"join": alarm["join"]} if alarm.get("join") else {}),
-                    }),
+                    _reminder(sub, alarm, int(start * 1000), int(end * 1000)),
                     max(60, int((alarm["start"] - now).total_seconds())),
                     deadline=start,
                 ))
@@ -382,6 +383,21 @@ class Push(Delivery):
             log.info("напоминания о паре: %d", len(jobs))
             self._save_reminded()
             self._dispatch(jobs)
+
+
+def _reminder(sub: dict, alarm: dict, start: int, end: int) -> dict:
+    """Напоминание, которое влезает в сообщение: больше MAX_PAYLOAD служба
+    рассылки не примет, и напоминание молча не пришло бы никому. Сначала
+    уходит «Войти» (длинная ссылка), потом строки короче."""
+    join = {"join": alarm["join"]} if alarm.get("join") else {}
+    for cut, extra in ((MAX_LINE, join), (MAX_LINE, {}), (100, {}), (40, {})):
+        data = message(sub, "lesson", alarm["title"][:cut], alarm["text"][:cut], {
+            "subject": alarm["subject"][:cut], "start": start, "end": end,
+            "n": alarm["number"], **extra,
+        })
+        if len(json.dumps(data, ensure_ascii=False).encode("utf-8")) <= MAX_PAYLOAD:
+            break
+    return data
 
 
 def _mark(endpoint: str) -> str:

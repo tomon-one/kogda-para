@@ -5,6 +5,7 @@ import datetime as dt
 import pytest
 
 from whensclass.domain.models import SourceFormatChanged
+from whensclass.domain.models import a1_column
 from whensclass.parser.csv_schedule import FIXTURE, parse_sheet
 from whensclass.parser.dates import _parse_date
 from whensclass.parser.export import collapse_export, parse_csv, read_csv
@@ -33,6 +34,12 @@ def test_compound_column_serves_two_groups(snapshot):
 def test_split_group_names():
     assert split_group_names("ДП-923 и ДП-1124") == ["ДП-923", "ДП-1124"]
     assert split_group_names("ИСП-924/2") == ["ИСП-924/2"]
+
+
+def test_long_list_of_names_in_one_header_cell_is_not_groups():
+    """Сотня имён через «и» в одной ячейке не размножает пары колонки:
+    колонка безымянная, как с прочерком вместо имени."""
+    assert split_group_names(" и ".join(f"Ж{i}-1124" for i in range(100))) == []
 
 
 def test_dates_are_the_two_weeks_of_the_sheet(snapshot):
@@ -445,6 +452,24 @@ def test_unknown_name_under_a_shifted_header_is_not_a_rename(fixture_csv):
     _assert_unread_below(snap, honest, rows, _columnar_header(rows)[0], set(ordered[:4]))
 
 
+def test_honest_rename_left_of_a_shifted_header_is_still_read(fixture_csv):
+    """Левее сдвинутого заголовка (и в первой колонке листа) незнакомое имя —
+    честное переименование: колонка читается по главному, а не уходит в
+    непрочитанные вместе со сдвигом."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    groups = build_column_map(rows, min_groups=FIXTURE.min_groups)
+    by_column = {g.column: g.name for g in groups}
+    _, columns, names_row = _columnar_header(rows)
+    ordered = sorted(c for c in columns if c in by_column and c < len(names_row))
+    names_row[ordered[2]] = by_column[ordered[1]]
+    names_row[ordered[3]] = by_column[ordered[2]]
+    names_row[ordered[0]] = "ДП(а)-923"
+    honest = parse_sheet([list(r) for r in collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)],
+                         "фикстура", FIXTURE)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    _assert_unread_below(snap, honest, rows, _columnar_header(rows)[0], set(ordered[1:4]))
+
+
 def test_neighbour_name_in_the_main_header_is_resolved_by_the_repeated_one(fixture_csv):
     """«ИСП-924/1» над ИСП-924/2 в главном заголовке — не отказ у всех: обе
     колонки безымянны в главном, а имена им даёт повторный заголовок."""
@@ -554,6 +579,27 @@ def test_week_pasted_without_one_group_is_read_by_its_own_header(fixture_csv, mo
         assert snap.schedule[group.id] == want, group.name
 
 
+def test_days_read_by_the_repeated_header_remember_their_columns(fixture_csv, monkeypatch):
+    """Ссылка «открыть таблицу» в днях, прочитанных по повторному заголовку,
+    ведёт в колонку группы там, а не в колонку главного заголовка."""
+    import datetime as dt
+
+    from whensclass.api.payloads import schedule_payload
+    from whensclass.parser import csv_schedule
+
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    honest, rows, below = _week_from_another_template(fixture_csv, days=2)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    moved = {gid for gid, days in snap.day_columns.items() if set(days) == set(below[:2])}
+    assert moved
+    gid = sorted(moved)[0]
+    group = next(g for g in snap.groups if g.id == gid)
+    assert snap.day_columns[gid][below[0]] != group.column
+    body = schedule_payload(snap, gid, below[0], 1, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    cols = {x.get("col") for x in body["days"][0]["l"]}
+    assert cols == {a1_column(snap.day_columns[gid][below[0]])}
+
+
 def test_block_erased_under_a_shifted_header_is_unread_not_empty(fixture_csv, monkeypatch):
     """Под сдвинутым заголовком стёрли блок вместе с именем: группа, чья это
     колонка по главному, не прочитана — пустая неделя была бы молчаливой ложью."""
@@ -571,6 +617,29 @@ def test_block_erased_under_a_shifted_header_is_unread_not_empty(fixture_csv, mo
     assert len(whose) == 1
     days = {below[0]: False, below[1]: False}
     assert snap.unread == {"bp-926-1": days, group_id(whose[0]): days}
+
+
+def test_thin_history_above_the_header_is_helped_by_the_previous_snapshot(fixture_csv, monkeypatch):
+    """Новый лист: над сдвинутым заголовком почти нет своих пар, судить по
+    ним не о чем. Предметы групп из прежнего снимка решают, а без него дни
+    остаются непрочитанными у всех."""
+    from whensclass.parser import csv_schedule
+
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    honest, rows, below = _week_from_another_template(fixture_csv, days=99)
+    header = _columnar_header(rows)[0]
+    for i in range(header):
+        if _parse_date(rows[i][0]) is not None:
+            for step in range(12):
+                rows[i + step][2:] = [""] * (len(rows[i + step]) - 2)
+    blind = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+    assert len(blind.unread) > 1
+    snap = parse_sheet(rows, "фикстура", FIXTURE, previous=honest)
+    assert set(snap.unread) == {"bp-926-1"}
+    for group in honest.groups:
+        if group.id != "bp-926-1":
+            assert {d: snap.schedule[group.id].get(d) for d in below} == \
+                {d: honest.schedule[group.id].get(d) for d in below}, group.name
 
 
 def test_too_little_to_judge_leaves_the_days_unread(fixture_csv):

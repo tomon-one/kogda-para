@@ -110,6 +110,9 @@ def _distance(a: str, b: str) -> int:
     return row[-1]
 
 
+MAX_FUZZY = 200
+
+
 def same_subject(a: str, b: str) -> bool:
     """Та же пара под чуть другим названием: исправили опечатку, регистр или
     точку («Обествознание» → «Обществознание»), или у одной записи полное
@@ -123,6 +126,10 @@ def same_subject(a: str, b: str) -> bool:
     head_a, head_b = _norm(a.split("/")[0]), _norm(b.split("/")[0])
     if head_a and head_a == head_b:
         return True
+    # Расстояние правки — квадрат длины: на названии в десятки тысяч знаков
+    # это минуты внутри захода. Опечатки правят в обычных названиях.
+    if max(len(na), len(nb)) > MAX_FUZZY or abs(len(na) - len(nb)) > 2:
+        return False
     return min(len(na), len(nb)) >= 8 and _distance(na, nb) <= 2
 
 

@@ -91,6 +91,11 @@ def test_next_sheet_with_a_format_error_is_left_out_with_an_alarm(
     assert late.refresh(today=dt.date(2026, 9, 14)) is False
     assert "лист 'следующий'" in late.last_error
 
+    # Тот же заход по неизменным листам, когда текущий кончился: короткий
+    # путь по хешам не выдаёт окно, не покрывающее сегодня, за ok.
+    assert r.refresh(today=dt.date(2026, 9, 14)) is False
+    assert r.status == "stale" and "лист 'следующий'" in r.last_error
+
 
 def _weeks_later(fixture_csv: str, weeks: int) -> str:
     """Тот же лист, но даты на `weeks` недель позже (дни недели те же)."""
@@ -218,3 +223,19 @@ def test_one_changed_sheet_of_two_rebuilds_the_whole_window(
     assert r.refresh(today=TODAY) is True
     days = set(store.snapshot.dates)
     assert dt.date(2026, 9, 2) in days and dt.date(2026, 9, 24) in days
+
+
+def test_shortened_sheet_corrects_the_search_memory(tmp_path, sent, fixture_csv, monkeypatch):
+    """Колледж стёр из старого листа недели, перенесённые в новый: память
+    поиска, помнившая старый лист длиннее, поправляется — иначе поиск снова
+    и снова брал бы его, а новый лист не читался бы никогда."""
+    from whensclass.sources.sheet_memory import SheetIndex
+
+    SheetIndex(tmp_path).remember("лист", "1", dt.date(2026, 9, 2), dt.date(2026, 9, 26))
+    monkeypatch.setattr(sheet_index, "resolve_window", lambda *a, **k: [("лист", "1")])
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: fixture_csv)
+    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
+
+    r = Refresher(SnapshotStore(tmp_path), tmp_path)
+    r.refresh(today=dt.date(2026, 9, 15))
+    assert SheetIndex(tmp_path).known["лист"]["to"] == "2026-09-12"

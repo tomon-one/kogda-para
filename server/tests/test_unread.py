@@ -63,20 +63,36 @@ def test_one_letter_is_a_typo_not_an_unread_day(fixture_csv):
     assert parse_csv(buf.getvalue(), "ф", FIXTURE).unread == {}
 
 
+def test_long_run_of_dots_in_empty_column_is_read_quickly(fixture_csv):
+    """Ряд точек на 50 000 знаков с двумя буквами в конце — запись, а не
+    опечатка, и разбирается за доли секунды."""
+    import time
+
+    rows = read_csv(fixture_csv)
+    rows[ROW][BP + 1] = "." * 50_000 + "аб"
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(rows)
+    started = time.monotonic()
+    snapshot = parse_csv(buf.getvalue(), "ф", FIXTURE)
+    assert time.monotonic() - started < 5
+    assert snapshot.unread == {"bp-1126": {DAY: False}}
+
+
 def test_three_blocks_are_a_shift(fixture_csv):
     parse_csv(spilled(fixture_csv, BP, BP2), "ф", FIXTURE)
     with pytest.raises(SourceFormatChanged, match="пустых колонок"):
         parse_csv(spilled(fixture_csv, BP, BP2, GD), "ф", FIXTURE)
 
 
-def test_unread_day_keeps_previous_lessons_and_says_so(tmp_path, sheet, sent, fixture_csv):
+def test_unread_day_keeps_previous_lessons_and_says_so(tmp_path, sheet, sent, fixture_csv, monkeypatch):
+    monkeypatch.setattr(routes, "_today", lambda: DAY)
     store = SnapshotStore(tmp_path)
     r = Refresher(store, tmp_path)
-    assert r.refresh(today=TODAY) is True
+    assert r.refresh(today=DAY) is True
     honest = store.snapshot.schedule["bp-1126"][DAY]
 
     sheet["text"] = spilled(fixture_csv, BP)
-    assert r.refresh(today=TODAY) is True
+    assert r.refresh(today=DAY) is True
     assert store.snapshot.schedule["bp-1126"][DAY] == honest
     assert store.snapshot.unread == {"bp-1126": {DAY: True}}
     assert r.status == "ok"
@@ -98,12 +114,17 @@ def test_unread_day_keeps_previous_lessons_and_says_so(tmp_path, sheet, sent, fi
     again = SnapshotStore(tmp_path)
     assert again.load() and again.snapshot.unread == {"bp-1126": {DAY: True}}
 
+    # День прошёл — колледж его уже не перепишет: сбоем у всех он не держится.
+    monkeypatch.setattr(routes, "_today", lambda: TODAY)
+    assert routes._outward(store, r)[0] == "ok"
+    monkeypatch.setattr(routes, "_today", lambda: DAY)
+
     sent.clear()
     sheet["text"] = fixture_csv
-    assert r.refresh(today=TODAY) is True
+    assert r.refresh(today=DAY) is True
     assert store.snapshot.unread == {}
     assert routes._outward(store, r)[0] == "ok"
-    assert any("снова прочитаны" in b["message"] for b in sent)
+    assert any("больше нет" in b["message"] for b in sent)
 
 
 GEN = dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
@@ -295,14 +316,14 @@ def test_same_unread_days_remind_once_a_day_new_ones_at_once(tmp_path, sheet, se
     store = SnapshotStore(tmp_path)
     refresher = Refresher(store, tmp_path)
     sheet["text"] = spilled(fixture_csv, BP)
-    assert refresher.refresh(force=True)
+    assert refresher.refresh(today=DAY, force=True)
     assert len(sent) == 1
     clock = {"now": alerts.time.monotonic()}
     monkeypatch.setattr(alerts.time, "monotonic", lambda: clock["now"])
     alerts._last_sent["unread"] = clock["now"]
     clock["now"] += 7 * 3600
-    assert refresher.refresh(force=True) and len(sent) == 1
+    assert refresher.refresh(today=DAY, force=True) and len(sent) == 1
     clock["now"] += 18 * 3600
-    assert refresher.refresh(force=True) and len(sent) == 2
+    assert refresher.refresh(today=DAY, force=True) and len(sent) == 2
     sheet["text"] = spilled(fixture_csv, BP, GD)
-    assert refresher.refresh(force=True) and len(sent) == 3
+    assert refresher.refresh(today=DAY, force=True) and len(sent) == 3

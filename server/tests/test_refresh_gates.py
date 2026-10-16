@@ -243,6 +243,28 @@ def test_published_day_emptied_for_many_groups_is_rejected():
     gates._check_days_emptied(before, sheet(12), day)
 
 
+def test_day_cut_out_with_its_date_is_rejected_but_a_cut_tail_is_not():
+    """Строки дня вырезаны вместе с датой: дня нет в листе, и пересечение
+    дат его не видит. Внутри листа — отказ; хвост, перенесённый в новый
+    лист, — законно."""
+    from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Lesson, Snapshot
+
+    days = [dt.date(2026, 9, 28) + dt.timedelta(days=i) for i in range(3)]
+    groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(30)]
+    pair = [Lesson(number=1, subject="Физика")]
+
+    def sheet(kept) -> Snapshot:
+        return Snapshot("лист", groups=groups, dates=list(kept),
+                        schedule={g.id: {d: pair for d in kept} for g in groups})
+
+    before = sheet(days)
+    with pytest.raises(ChangedAgainstPrevious, match="пропал из листа вместе с датой"):
+        gates._check_days_emptied(before, sheet([days[0], days[2]]), days[0])
+    gates._check_days_emptied(before, sheet(days[:2]), days[0])
+    # Прошедший вырезанный день не в счёт.
+    gates._check_days_emptied(before, sheet([days[0], days[2]]), days[2])
+
+
 def test_dropped_next_sheet_over_an_empty_date_frame_is_not_a_cut_day():
     """Текущий лист несёт пустой каркас дат следующего, пары этих дней — из
     следующего. Следующий выпал из окна (недописан или с ошибкой) — его дни
@@ -260,6 +282,18 @@ def test_dropped_next_sheet_over_an_empty_date_frame_is_not_a_cut_day():
     gates._check_days_emptied(before, current, today, dropped=True)
     with pytest.raises(ChangedAgainstPrevious):
         gates._check_days_emptied(before, current, today)
+
+    # День того же листа, стёртый у всех, пока следующий выпал, — вырезан.
+    from whensclass.domain.models import SheetPlace
+
+    same = Snapshot("текущий", groups=groups, dates=[today, later],
+                    schedule={g.id: {today: pair, later: pair} for g in groups},
+                    places={today: SheetPlace("1", 10), later: SheetPlace("1", 30)})
+    cut = Snapshot("текущий", groups=groups, dates=[today, later],
+                   schedule={g.id: {today: pair} for g in groups},
+                   places={today: SheetPlace("1", 10), later: SheetPlace("1", 30)})
+    with pytest.raises(ChangedAgainstPrevious):
+        gates._check_days_emptied(same, cut, today, dropped=True)
 
 
 def test_forgotten_accept_next_lever_is_not_taken(tmp_path, sheet, sent, fixture_csv):

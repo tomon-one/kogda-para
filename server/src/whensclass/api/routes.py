@@ -14,6 +14,7 @@ import urllib.parse
 import zoneinfo
 
 from fastapi import APIRouter, Query, Request, Response
+from starlette.concurrency import run_in_threadpool
 
 from ..config import settings
 from ..push.subscription import BadSubscription, parse_keys, parse_subscription
@@ -23,6 +24,8 @@ from ..service.refresher import state_dir
 from .etag import etag_for, matches
 from .payloads import (
     FILLED_SHARE,
+    _alive_since,
+    _group_edge,
     filling,
     groups_payload,
     meta_payload,
@@ -74,7 +77,8 @@ def _too_old(request: Request) -> Response | None:
     """426, если сборка приложения ниже `min_build`: её форматы служба уже не
     держит. /v1/app и /download/ этим не закрываются — по ним и обновляются."""
     raw = request.headers.get("X-App-Build", "")
-    if settings.min_build <= 0 or not raw.isdigit() or int(raw) >= settings.min_build:
+    # isdigit пропускает «²», а int() на нём падает: только цифры ASCII.
+    if settings.min_build <= 0 or not (raw.isascii() and raw.isdigit()) or int(raw) >= settings.min_build:
         return None
     return Response(
         status_code=426,
@@ -122,7 +126,7 @@ def healthz(request: Request) -> Response:
         reason = "расписание ещё не загружено"
     elif refresher.status != "ok":
         reason = f"не обновляется: {refresher.last_error or refresher.status}"
-    elif snapshot.unread:
+    elif _unread_ahead(snapshot):
         reason = _outward(store, refresher)[2]
     else:
         coverage = snapshot.coverage
@@ -162,9 +166,17 @@ def _outward(store, refresher) -> tuple[str, dt.datetime | None, str | None]:
     без знака. Новые читают `refresh` и `unread` в /v1/meta.
     """
     snapshot = store.snapshot
-    if refresher.status != "ok" or snapshot is None or not snapshot.unread:
+    if refresher.status != "ok" or snapshot is None or not _unread_ahead(snapshot):
         return refresher.status, refresher.failing_since, refresher.last_error
     return "stale", snapshot.unread_since, "не прочитаны дни: " + "; ".join(snapshot.unread_why)
+
+
+def _unread_ahead(snapshot) -> bool:
+    """Есть ли непрочитанные дни сегодня или дальше. Прошедшие колледж уже не
+    перепишет: из-за них сбой у всех и красный /healthz стояли бы до конца
+    листа."""
+    today = _today()
+    return any(day >= today for days in snapshot.unread.values() for day in days)
 
 
 def _not_loaded() -> Response:
@@ -268,6 +280,17 @@ def rooms(request: Request, date: str | None = Query(None)) -> Response:
     bells = own_bells(store.snapshot, day, BELLS) or BELLS
     body = rooms_payload(store.snapshot, day, bells)
     body["days"] = [d.isoformat() for d in sorted(shown) if d >= _today()][:7]
+    # День выложен по листу (больше половины групп), но не всем: кабинеты
+    # групп, до которых колледж ещё не дошёл, показались бы свободными.
+    today, sheet = _today(), sorted(shown)
+    monday = today - dt.timedelta(days=today.weekday())
+    late = sum(
+        1 for g in store.snapshot.groups
+        if _alive_since(store.snapshot, g.id, monday)
+        and (edge := _group_edge(store.snapshot, g.id, sheet, today)) is not None and edge < day
+    )
+    if late:
+        body["unpublished"] = late
     return _json_response(request, body)
 
 
@@ -400,7 +423,9 @@ async def push_subscribe(request: Request) -> Response:
         )
     if not known:
         return _error(404, "группа не найдена" if sub["kind"] == "group" else "преподаватель не найден")
-    if not push.subscribe(sub, _today()):
+    # Запись push.json — на диск, целиком: в потоке, а не в цикле событий,
+    # иначе на тысячах подписок каждый запрос держал бы все остальные.
+    if not await run_in_threadpool(push.subscribe, sub, _today()):
         return _error(503, "подписок слишком много")
     return Response(status_code=204)
 
@@ -431,7 +456,7 @@ async def push_move(request: Request) -> Response:
     except BadSubscription as exc:
         _rejected(body, exc)
         return _error(422, str(exc))
-    if not push.move(body["old"], fresh):
+    if not await run_in_threadpool(push.move, body["old"], fresh):
         # Прежней записи нет (стёрта по 410): сервис-воркер на ответ не
         # смотрит, а страница при первом открытии видит, что адрес подписки
         # не тот, что она пересылала, и перешлёт его с выбором (push.js, sync).
@@ -450,5 +475,5 @@ async def push_remove(request: Request) -> Response:
     endpoint = body.get("endpoint") if isinstance(body, dict) else None
     if not isinstance(endpoint, str):
         return _error(422, "нужен endpoint")
-    push.unsubscribe(endpoint)
+    await run_in_threadpool(push.unsubscribe, endpoint)
     return Response(status_code=204)

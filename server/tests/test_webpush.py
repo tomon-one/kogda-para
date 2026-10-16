@@ -134,3 +134,13 @@ def test_vapid_token_is_reused_until_an_hour_is_left():
     assert vapid.header("https://fcm.googleapis.com/fcm/send/x", now=1_800_000_000) != first
     # До конца меньше часа — новый.
     assert vapid.header(apple, now=1_800_000_000 + 11 * 3600 + 1) != first
+
+
+def test_vapid_token_cache_does_not_grow_with_every_subdomain():
+    """Поддомен на подписку (Windows, Apple) не копит токены без предела."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    vapid = webpush.Vapid(b64encode(key.private_numbers().private_value.to_bytes(32, "big")),
+                          "https://kogda-para-nsk.ru")
+    for i in range(vapid.MAX_AUDIENCES * 2 + 5):
+        vapid.header(f"https://h{i}.notify.windows.com/w/?token=x", now=1_800_000_000)
+    assert len(vapid._tokens) <= vapid.MAX_AUDIENCES

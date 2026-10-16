@@ -30,6 +30,9 @@ _SPLIT_RE = re.compile(r"\s+и\s+")
 MIN_GROUPS = 100
 
 
+MAX_GROUPS_PER_COLUMN = 4
+
+
 def split_group_names(tail: str) -> list[str]:
     """'ДП-923 и ДП-1124' -> обе группы: одна колонка обслуживает две.
 
@@ -38,7 +41,17 @@ def split_group_names(tail: str) -> list[str]:
     разбор ValueError.
     """
     parts = [p.strip() for p in _SPLIT_RE.split(tail.strip())]
-    return [p for p in parts if p and _has_id(p)]
+    names = [p for p in parts if p and _has_id(p)]
+    # Одну колонку в листе делят самое большее две группы. Длинный список
+    # «А и Б и В …» — не группы: каждое имя получило бы копию всех пар
+    # колонки, и снимок вырос бы во столько же раз.
+    if len(names) > MAX_GROUPS_PER_COLUMN:
+        _warn_once(
+            ("список", tail[:60]),
+            "в заголовке колонки %d имён групп — считаю колонку безымянной", len(names),
+        )
+        return []
+    return names
 
 
 def _has_id(name: str) -> bool:
@@ -275,6 +288,19 @@ def _warn_once(key: tuple, message: str, *args, logger: logging.Logger | None = 
     (logger or log).warning(message, *args)
 
 
+def _warn_renamed(renamed: list[tuple[int, list[str], set[str]]]) -> None:
+    """В журнал — только переименования, которым правда верим: под сдвинутым
+    заголовком незнакомое имя колонкой не считается (`_check_columnar`)."""
+    for col, declared, known in renamed:
+        _warn_once(
+            ("rename", col, tuple(declared)),
+            "повторный заголовок: в колонке %s стоит %s, а по главному заголовку там "
+            "%s — такого имени нет больше нигде, считаю переименованием и верю "
+            "главному заголовку",
+            a1_column(col), declared, sorted(known),
+        )
+
+
 def _check_columnar(
     where: str,
     cells: set[int],
@@ -315,7 +341,7 @@ def _check_columnar(
         column_of[group.id] = group.column
 
     strangers: list[tuple[int, list[str], str, set[str] | None]] = []
-    renamed: list[int] = []
+    renamed: list[tuple[int, list[str], set[str]]] = []
     for col in sorted(cells):
         declared = split_group_names((names_row[col] if col < len(names_row) else "") or "")
         if not declared:
@@ -335,14 +361,7 @@ def _check_columnar(
             continue
         if ids == known:
             continue
-        renamed.append(col)
-        _warn_once(
-            ("rename", col, tuple(declared)),
-            "повторный заголовок: в колонке %s стоит %s, а по главному заголовку там "
-            "%s — такого имени нет больше нигде, считаю переименованием и верю "
-            "главному заголовку",
-            a1_column(col), declared, sorted(known),
-        )
+        renamed.append((col, declared, known))
 
     if len(strangers) >= COLUMNAR_STRANGERS_TO_REJECT:
         col, declared, gid, known = strangers[0]
@@ -358,8 +377,12 @@ def _check_columnar(
         moved = {col for col, _, _, _ in strangers}
         # Под сдвинутым заголовком незнакомое имя — уже не переименование:
         # сдвиг мог принести сюда прежнее имя соседа, и пары под колонкой —
-        # его, а не группы главного заголовка.
-        moved.update(renamed)
+        # его, а не группы главного заголовка. Левее сдвинутого — нет: туда
+        # сдвиг имён не приносит, и честное переименование там (и в первой
+        # колонке листа) читается по главному.
+        start = min(moved)
+        moved.update(col for col, _, _ in renamed if col >= start)
+        renamed = [r for r in renamed if r[0] < start]
         for _, declared, _, _ in strangers:
             moved.update(
                 column_of[gid] for gid in map(group_id, declared) if gid in column_of
@@ -370,7 +393,9 @@ def _check_columnar(
             col for col in by_column
             if not split_group_names((names_row[col] if col < len(names_row) else "") or "")
         )
+        _warn_renamed(renamed)
         return moved, message
+    _warn_renamed(renamed)
     for col, declared, gid, known in strangers:
         _warn_once(
             ("stranger", col, tuple(declared)),

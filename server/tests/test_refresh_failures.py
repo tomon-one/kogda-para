@@ -54,6 +54,22 @@ def test_unexpected_error_in_refresh_is_loud(tmp_path, sheet, sent, monkeypatch)
     assert any("RuntimeError" in b["message"] for b in sent)
 
 
+def test_crash_trace_in_the_log_hides_the_api_key(tmp_path, sheet, sent, monkeypatch, caplog):
+    """Ключ Sheets из цепочки исключений не попадает в журнал."""
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+
+    def boom(*args, **kwargs):
+        try:
+            raise ValueError("GET https://sheets.googleapis.com/v4/x?key=СЕКРЕТ&fields=y")
+        except ValueError as inner:
+            raise RuntimeError("список листов") from inner
+
+    monkeypatch.setattr(refresher_mod, "build_index", boom)
+    r.refresh(today=TODAY)
+    assert "заход обновления упал" in caplog.text and "СЕКРЕТ" not in caplog.text
+
+
 def test_bad_snapshot_on_disk_does_not_break_teachers(tmp_path, fixture_csv):
     """Снимок, записанный старой службой с именем «.», поднимается и отвечает."""
     snapshot = parse_csv(fixture_csv, "ф", FIXTURE)
@@ -192,6 +208,49 @@ def test_closed_sheet_alerts_at_once(tmp_path, sheet, sent, monkeypatch, fixture
     monkeypatch.setattr(gsheets, "fetch_sheet_csv", closed)
     r.refresh(today=TODAY, force=True)
     assert r.status == "stale" and "закрыта" in r.last_error and len(sent) == 1
+
+
+def test_huge_sheet_is_refused_before_parsing(monkeypatch):
+    """Лист больше предела не разбирается: в 512 МБ службы разбор такого
+    упал бы на каждом заходе."""
+
+    class Resp:
+        status_code = 200
+        headers = {"content-type": "text/csv"}
+        text = "Дата,ИСП-924/1\n" + "x" * 200
+
+        def raise_for_status(self):
+            return None
+
+    class Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, *a, **k):
+            return Resp()
+
+    monkeypatch.setattr(gsheets, "MAX_SHEET_CHARS", 100)
+    monkeypatch.setattr(gsheets, "_client", lambda: Client())
+    with pytest.raises(gsheets.SheetTooLarge):
+        gsheets.fetch_sheet_csv(gid="1", title="лист")
+
+
+def test_huge_sheet_keeps_the_snapshot_and_alerts(tmp_path, sheet, sent, monkeypatch):
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    assert r.refresh(today=TODAY) is True
+    before = store.snapshot
+
+    def huge(gid=None, title=None):
+        raise gsheets.SheetTooLarge("лист — 30 000 000 знаков", title)
+
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", huge)
+    assert r.refresh(today=TODAY, force=True) is False
+    assert r.status == "stale" and "формат" in r.last_error and len(sent) == 1
+    assert store.snapshot is before
 
 
 # --- Смерть посреди разбора -------------------------------------------------

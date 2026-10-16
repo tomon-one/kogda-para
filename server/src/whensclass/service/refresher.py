@@ -13,6 +13,7 @@ import hashlib
 import logging
 import pathlib
 import threading
+import traceback
 
 import httpx
 
@@ -90,7 +91,8 @@ class Refresher(Failing, SheetWatch):
         self._seen_titles: set[str] | None = self._load_seen_titles()
         # Новые листы «групп», которые поиск пока не принял (пустые, одна
         # шапка): слежка перепроверяет их, а не забывает до ночи.
-        self._retry_titles: dict[str, int] = {}
+        self._retry_path = state_dir / "retry_titles.json"
+        self._retry_titles: dict[str, int] = self._load_retry_titles()
         # Задачи планировщика идут в разных потоках и в начале каждого часа
         # совпадают: обновление раз в 20 минут и проверка книги раз в 30.
         # Без замка они переписывают друг другу status и набор листов.
@@ -118,7 +120,10 @@ class Refresher(Failing, SheetWatch):
             except Exception as exc:
                 # Страховка на весь заход: неожиданное исключение, ушедшее в
                 # планировщик, молча сорвало бы заход при status ok и без тревоги.
-                log.exception("заход обновления упал")
+                # Трассировка — без ключа: в цепочке исключений httpx несёт
+                # адрес запроса к Sheets API вместе с ?key=.
+                log.error("заход обновления упал:\n%s", sheet_index.hide_key(
+                    "".join(traceback.format_exception(exc))))
                 self._fail(
                     f"служба споткнулась при обновлении: {type(exc).__name__}: "
                     f"{sheet_index.hide_key(exc)}",
@@ -186,11 +191,15 @@ class Refresher(Failing, SheetWatch):
                     raise
                 texts.append((title, gid, text, hashlib.sha256(text.encode("utf-8")).hexdigest()))
 
-            if not force and all(self._source_hashes.get(t) == h for t, _, _, h in texts):
+            coverage = self.store.snapshot.coverage if self.store.snapshot else None
+            # Выпавший из окна лист (отвергнутый или недописанный) стал нужен
+            # сегодня — без него окно кончилось вчера. Короткий путь по хешам
+            # сказал бы ok: разбор ниже решает, отказ это или «ещё не выложено».
+            needed = bool(self._dropped) and coverage is not None and coverage[1] < today
+            if not force and not needed and all(self._source_hashes.get(t) == h for t, _, _, h in texts):
                 # Не изменился ни один лист — перерисовывать нечего. Но если
                 # сегодня уже за краем прежнего снимка, набор листов пора
                 # пересобрать — как и при разборе ниже.
-                coverage = self.store.snapshot.coverage if self.store.snapshot else None
                 if coverage and not (coverage[0] <= today <= coverage[1]):
                     self._sheets = None
                 self.status = "ok"
@@ -271,6 +280,15 @@ class Refresher(Failing, SheetWatch):
                 snapshot.sheet_title, today,
             )
             self._sheets = None
+            # Память поиска могла запомнить лист длиннее, чем он теперь: колледж
+            # перенёс недели в новый лист и стёр их из старого. Не поправить её —
+            # поиск снова возьмёт старый лист, и новый не прочтётся никогда.
+            memory = SheetIndex(self.state_dir)
+            for title, gid, _, _ in texts:
+                days = [day for day, place in snapshot.places.items() if place.gid == gid]
+                known = memory.known.get(title or "")
+                if days and known and known.get("to", "") >= today.isoformat() > max(days).isoformat():
+                    memory.remember(title, gid, min(days), max(days))
 
         self._accepted()
         old = self.store.snapshot
@@ -299,7 +317,7 @@ class Refresher(Failing, SheetWatch):
             # не лёг на диск: о диске своя тревога выше.
             self.status = "ok"
             self._recovered()
-            self._tell_unread(old, snapshot)
+            self._tell_unread(old, snapshot, today)
             self._tell_bells(old, snapshot)
             self._tell_emptied(old, snapshot, today)
             self._announce(before, snapshot, teachers, today)
@@ -316,7 +334,7 @@ class Refresher(Failing, SheetWatch):
             history.archive(self.state_dir, gid, text, digest, rejected=dropped)
         self.status = "ok"
         self._recovered()
-        self._tell_unread(old, snapshot)
+        self._tell_unread(old, snapshot, today)
         self._tell_bells(old, snapshot)
         self._tell_emptied(old, snapshot, today)
         self._announce(before, snapshot, teachers, today)
@@ -341,11 +359,11 @@ class Refresher(Failing, SheetWatch):
         )
         return True
 
-    def _tell_unread(self, old, snapshot) -> None:
+    def _tell_unread(self, old, snapshot, today: dt.date) -> None:
         """Непрочитанные дни — владельцу сразу, как появились новые; прочитались
-        все — что снова всё."""
-        was = {(g, d) for g, days in (old.unread if old else {}).items() for d in days}
-        now = {(g, d) for g, days in snapshot.unread.items() for d in days}
+        все — что снова всё. Прошедшие не в счёт: их колледж уже не перепишет."""
+        was = {(g, d) for g, days in (old.unread if old else {}).items() for d in days if d >= today}
+        now = {(g, d) for g, days in snapshot.unread.items() for d in days if d >= today}
         if now:
             alerts.notify(
                 "unread",
@@ -360,7 +378,7 @@ class Refresher(Failing, SheetWatch):
             )
         elif was:
             alerts.forget("unread")
-            alerts.notify("unread-ok", "Все дни листа снова прочитаны.", force=True, good=True)
+            alerts.notify("unread-ok", "Непрочитанных дней на сегодня и вперёд больше нет.", force=True, good=True)
 
     def _tell_emptied(self, old, snapshot, today) -> None:
         """Группа потеряла все будущие пары — владельцу, сразу как появилась новая."""
@@ -428,7 +446,9 @@ class Refresher(Failing, SheetWatch):
             for title, gid, text, _ in texts:
                 name = title or f"gid {gid}"
                 try:
-                    current = parse_export(text, name, gid, limits=_limits(), around=today)
+                    current = parse_export(
+                        text, name, gid, limits=_limits(), around=today, previous=self.store.snapshot
+                    )
                     _hold_unread(current, self.store.snapshot)
                     # Сдвиг ищется по порядку колонок, а он у каждого листа
                     # свой: проверять лист отдельно, до склейки. Историю даёт

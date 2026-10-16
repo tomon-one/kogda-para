@@ -141,6 +141,10 @@ def _to_dict(snapshot: Snapshot) -> dict:
             for day, place in snapshot.places.items()
         },
         "sheet_columns": snapshot.sheet_columns,
+        "day_columns": {
+            gid: {day.isoformat(): col for day, col in days.items()}
+            for gid, days in snapshot.day_columns.items()
+        },
         "schedule": {
             gid: {
                 day.isoformat(): [_lesson_to_dict(x) for x in lessons]
@@ -188,6 +192,10 @@ def _from_dict(data: dict) -> Snapshot:
     snapshot.sheet_columns = {
         gid: {group: int(column) for group, column in columns.items()}
         for gid, columns in data.get("sheet_columns", {}).items()
+    }
+    snapshot.day_columns = {
+        gid: {dt.date.fromisoformat(day): int(col) for day, col in days.items()}
+        for gid, days in data.get("day_columns", {}).items()
     }
     snapshot.schedule = {
         gid: {
