@@ -90,22 +90,31 @@ def _names(cell: str) -> list[str]:
     return [part for part in (_clean(p) for p in cell.split(",")) if part]
 
 
-_RANGE = re.compile(r"(\d{1,2})\.?\s*[-–]\s*(\d{1,2})\.(\d{1,2})\.?")
-_DAY = re.compile(r"(\d{1,2})\.(\d{1,2})\.?")
+# Год у даты бывает («22.10.2026»): тогда он и берётся, а не ближайший.
+_YEAR = r"(?:\.(\d{4}|\d{2}))?"
+_RANGE = re.compile(r"(\d{1,2})\.?\s*[-–]\s*(\d{1,2})\.(\d{1,2})" + _YEAR + r"\.?")
+_DAY = re.compile(r"(\d{1,2})\.(\d{1,2})" + _YEAR + r"\.?")
 _CLOCK = re.compile(r"(\d{1,2})[.:](\d{2})\s*[-–]\s*(\d{1,2})[.:](\d{2})")
+_ONE_CLOCK = re.compile(r"(\d{1,2})[.:](\d{2})")
 
 
 def _clock(text: str) -> str:
-    """«16.00-17.30» -> «16:00–17:30»; не время — как есть."""
-    m = _CLOCK.fullmatch(text.strip())
-    if not m:
-        return text.strip()
-    return f"{int(m[1])}:{m[2]}–{int(m[3])}:{m[4]}"
+    """«16.00-17.30» -> «16:00–17:30», «17.40» -> «17:40»; не время — как есть."""
+    if m := _CLOCK.fullmatch(text.strip()):
+        return f"{int(m[1])}:{m[2]}–{int(m[3])}:{m[4]}"
+    if m := _ONE_CLOCK.fullmatch(text.strip()):
+        return f"{int(m[1])}:{m[2]}"
+    return text.strip()
 
 
-def _day(day: int, month: int, today: dt.date) -> dt.date | None:
+def _day(day: int, month: int, today: dt.date, year: str | None = None) -> dt.date | None:
     """День без года — ближайший к сегодня: в декабре «14.01» — январь
-    следующего года, в январе «22.12» — прошлого."""
+    следующего года, в январе «22.12» — прошлого. С годом — он."""
+    if year:
+        try:
+            return dt.date(int(year) if len(year) == 4 else 2000 + int(year), month, day)
+        except ValueError:
+            return None
     found = []
     for year in (today.year - 1, today.year, today.year + 1):
         try:
@@ -127,13 +136,13 @@ def parse_slots(dates: str, time: str, today: dt.date) -> list[Slot]:
     spans: list[tuple[dt.date, dt.date]] = []
     for part in parts:
         if m := _RANGE.fullmatch(part):
-            start = _day(int(m[1]), int(m[3]), today)
+            start = _day(int(m[1]), int(m[3]), today, m[4])
             try:
                 end = start.replace(day=int(m[2])) if start else None
             except ValueError:
                 end = None
         elif m := _DAY.fullmatch(part):
-            start = end = _day(int(m[1]), int(m[2]), today)
+            start = end = _day(int(m[1]), int(m[2]), today, m[3])
         else:
             return []
         if start is None or end is None or end < start:

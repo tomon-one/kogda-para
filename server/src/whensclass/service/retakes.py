@@ -51,8 +51,8 @@ def _who(index: TeacherIndex | None, name: str) -> tuple[str | None, list[str]]:
     if len(found) != 1:
         return None, []
     tid = found[0]
-    # «Физическая культура.» и без точки — один предмет.
-    counts = Counter(x.lesson.subject.rstrip(" .") for lessons in index.schedule[tid].values() for x in lessons)
+    # «Физическая культура.», «.Математика» и без точки — один предмет.
+    counts = Counter(x.lesson.subject.strip(" .,;") for lessons in index.schedule[tid].values() for x in lessons)
     return tid, [subject for subject, _ in counts.most_common(SUBJECTS_SHOWN)]
 
 
