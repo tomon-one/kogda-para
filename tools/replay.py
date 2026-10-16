@@ -98,7 +98,7 @@ class Bench:
         gsheets.fetch_sheet_csv = lambda gid=None, title=None: self.text
         history.archive = lambda *a, **k: None
 
-        def notify(kind, text, force=False, good=False):
+        def notify(kind, text, force=False, good=False, **_):
             SENT.append((kind, text))
             return True
 
