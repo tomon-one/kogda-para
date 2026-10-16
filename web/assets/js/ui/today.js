@@ -91,12 +91,30 @@ export function refreshLabel(app) {
 }
 
 function topbar(app, own) {
-  var s = app.state;
   var title = h('h1', { class: 'topbar-title name' }, own ? own.name : '');
   onLongPress(title, function () { showTally(app); });
+  var refresh = refreshButton(app);
 
+
+  return h('header', { class: 'topbar' },
+    h('div', { class: 'title-block' },
+      title,
+      h('div', { class: 'fetched' }, formatFetchedAt(app.fetchedAt()))),
+    refresh,
+    h('button', {
+      type: 'button', class: 'icon-button', 'aria-label': 'Настройки', title: 'Настройки',
+      onclick: function () { app.go('settings'); },
+    }, icon('settings')));
+}
+
+/**
+ * ⟳ в шапке. Отдельно от шапки: докрутка, галочка и её угасание меняют только
+ * её (render.js, redrawRefresh) — перестройка всего экрана в эти полторы секунды
+ * съедала нажатия, пришедшиеся на неё.
+ */
+export function refreshButton(app) {
+  var s = app.state;
   var broken = refreshLabel(app);
-
   var spinning = s.refreshing || s.spinningDown;
   var refreshIcon;
   var label;
@@ -122,16 +140,7 @@ function topbar(app, own) {
     'aria-disabled': spinning ? 'true' : null,
     onclick: function () { if (!spinning) app.refresh(true, true); },
   }, refreshIcon);
-
-  return h('header', { class: 'topbar' },
-    h('div', { class: 'title-block' },
-      title,
-      h('div', { class: 'fetched' }, formatFetchedAt(app.fetchedAt()))),
-    refresh,
-    h('button', {
-      type: 'button', class: 'icon-button', 'aria-label': 'Настройки', title: 'Настройки',
-      onclick: function () { app.go('settings'); },
-    }, icon('settings')));
+  return refresh;
 }
 
 function tabs(app, current, teacherMode) {

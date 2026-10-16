@@ -53,7 +53,7 @@ function retakeCard(app, row, today) {
     name,
     slotLines(row, today),
     line('Кабинет:', row.room),
-    row.subjects && row.subjects.length ? line('Ведёт сейчас:', row.subjects.slice(0, 3).join(', '), 'subjects') : null);
+    row.subjects && row.subjects.length ? line('Ведёт сейчас:', row.subjects.slice(0, 3).join('; '), 'subjects') : null);
 }
 
 function redirectCard(name, to) {
@@ -82,7 +82,7 @@ export function retakesView(app) {
   }
   if (data === 'failed') {
     wrap.appendChild(h('div', { class: 'load-failed' },
-      h('p', null, 'Пересдачи не загрузились. Проверьте интернет.'),
+      h('p', null, 'Пересдачи не загрузились. ' + failureText(app.state.failedBy.retakes)),
       h('div', null, actionButton('Повторить', function () { app.loadRetakes(true); }))));
     return wrap;
   }
@@ -116,7 +116,7 @@ export function retakesView(app) {
       });
     }
     if (!rows.length && !moved.length) {
-      results.appendChild(h('p', { class: 'nothing' }, 'Ничего не нашлось. Вопросы о задолженностях — куратору или в учебный офис, каб. 267.'));
+      results.appendChild(h('p', { class: 'nothing' }, 'Ничего не нашлось. Вопросы — куратору, декану или руководителю направления, в учебный офис (каб. 267).'));
       return;
     }
     var cards = moved.map(function (m) { return redirectCard(m.name, m.to); })
@@ -150,4 +150,9 @@ export function retakesView(app) {
   wrap.appendChild(results);
   fill();
   return wrap;
+}
+
+/** Почему раздел не загрузился (data.js, failedBy) — те же слова, что в приложении. */
+export function failureText(why) {
+  return why === 'server' ? 'Сервер не смог их отдать. Повторите позже.' : 'Нет связи с сервером. Проверьте интернет.';
 }

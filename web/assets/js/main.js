@@ -14,6 +14,7 @@ import { state, app } from './state.js';
 import { render, focusKey } from './render.js';
 import { parseRoute, go, back, home, onRoute, stepsNow } from './route.js';
 import { emptyList, loadLists, loadRetakes, loadRooms, refresh } from './data.js';
+import { mixedBuild } from './version.js';
 import { applyTheme, checkWorkerUpdate, countOpen, registerWorker, testNotice, workerUpdated } from './site.js';
 
 var installEvent = null;
@@ -273,6 +274,17 @@ window.addEventListener('beforeinstallprompt', function (e) {
 // ——— запуск ———
 
 window.__whensclassStarted = true;
+// Страница и скрипты разных сборок — один раз перезагрузить: новый воркер
+// отдаст целую новую. Один раз на сборку, чтобы не крутиться при поломке.
+var mixed = mixedBuild();
+if (mixed) {
+  try {
+    if (sessionStorage.getItem('mixed-reload') !== mixed) {
+      sessionStorage.setItem('mixed-reload', mixed);
+      location.reload();
+    }
+  } catch (e) { /* без хранилища — не рисковать петлёй */ }
+}
 // Открыли по уведомлению «выберите заново» (sw.js, notificationclick).
 if (/[?&]gone=1(&|$)/.test(location.search)) {
   repo.expectGone();
