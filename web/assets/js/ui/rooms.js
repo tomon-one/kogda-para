@@ -107,6 +107,13 @@ export function roomsView(app) {
   var wrap = h('div', { class: 'rooms' });
   var now = app.now();
   var st = app.state.roomsUi || (app.state.roomsUi = { date: null, pair: null, changedAt: 0 });
+  // Выбор дня и пары — на тот день, когда сделан: назавтра вкладка снова на
+  // сегодня и идущей паре (как в приложении, chosenOn), а не на прошедшем дне.
+  if (st.on && st.on !== now.date) {
+    st.date = null;
+    st.pair = null;
+  }
+  st.on = now.date;
   var date = st.date || now.date;
   var body = app.state.rooms[date];
 
@@ -155,7 +162,10 @@ export function roomsView(app) {
   var numbers = Object.keys(body.bells || {}).map(Number).sort(function (a, b) { return a - b; });
   var days = (body.days && body.days.length ? body.days : [body.date]).slice(0, DAYS_SHOWN);
   // Поздно вечером сегодняшние пары кончились — сразу к следующему дню.
-  if (!st.date && body.date === now.date && days.length > 1 && numbers.length) {
+  // Завтрашнего дня уже нет в таблице (колледж его убрал) — остаться на
+  // сегодня: иначе «дня нет» вернуло бы сюда, а отсюда снова туда, без конца.
+  if (!st.date && body.date === now.date && days.length > 1 && numbers.length &&
+      app.state.rooms[days[1]] !== 'missing') {
     var lastEnd = minutes((body.bells[numbers[numbers.length - 1]] || [])[1]);
     if (lastEnd != null && Math.floor(now.sec / 60) >= lastEnd) {
       st.date = days[1];
@@ -233,6 +243,8 @@ export function roomsView(app) {
   wrap.appendChild(h('p', { class: 'room-note' },
     'Показано по расписанию колледжа. В списке — кабинеты, где по нему бывают пары; переносов и мероприятий в нём нет.' +
     (body.unread && body.unread.length ? ' Не учтены кабинеты ' + plural(body.unread.length, 'группы', 'групп', 'групп') +
-      ', у которых день не прочитан: ' + body.unread.join(', ') + '.' : '')));
+      ', у которых день не прочитан: ' + body.unread.join(', ') + '.' : '') +
+    (body.unpublished ? ' Не учтены кабинеты ' + plural(body.unpublished, 'группы', 'групп', 'групп') +
+      ', которым колледж ещё не выложил этот день.' : '')));
   return wrap;
 }

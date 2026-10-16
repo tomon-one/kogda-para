@@ -58,6 +58,8 @@ var FILES = [
 ];
 
 var URLS = FILES.map(function (f) { return new URL(f, self.registration.scope).href; });
+// Отметка «кэш собран целиком»: огрызок сорвавшейся установки прежним не считается.
+var COMPLETE = new URL('__complete__', self.registration.scope).href;
 
 self.addEventListener('install', function (event) {
   event.waitUntil(caches.open(CACHE).then(function (cache) {
@@ -75,7 +77,17 @@ self.addEventListener('install', function (event) {
           return cache.put(url, response);
         });
       });
-    }));
+    })).then(function () {
+      // Выкладка могла подменить каталог посреди установки: страница пришла
+      // этой сборки, а стили — уже следующей. Страница всё ещё этой сборки —
+      // значит, и остальное пришло до подмены; иначе установка не удалась.
+      return fetch(new Request(URLS[0], { cache: 'no-cache' })).then(function (response) {
+        return response.text();
+      }).then(function (html) {
+        if (html.indexOf('content="' + BUILD + '"') < 0) throw new Error('сборка сменилась посреди установки');
+        return cache.put(COMPLETE, new Response(BUILD));
+      });
+    });
   }).then(function () { return self.skipWaiting(); }));
 });
 
@@ -89,10 +101,24 @@ var oldPages = null;
 
 self.addEventListener('activate', function (event) {
   event.waitUntil(caches.keys().then(function (keys) {
-    // Кэши перечисляются в порядке создания: последний чужой — прежней сборки.
     var others = keys.filter(function (k) { return k.indexOf(PREFIX) === 0 && k !== CACHE; });
-    var prev = others.length ? others[others.length - 1] : null;
-    return Promise.all(others.filter(function (k) { return k !== prev; }).map(function (k) { return caches.delete(k); }))
+    // Кэши перечисляются в порядке создания: последний собранный целиком чужой
+    // — прежней, работавшей сборки. Огрызок сорвавшейся установки — не он:
+    // иначе кэш работающей удалился бы. Кэши сборок до отметки её не знают —
+    // тогда последний, как раньше.
+    return Promise.all(others.map(function (k) {
+      return caches.open(k).then(function (c) { return c.match(COMPLETE); }).then(function (r) { return !!r; });
+    })).then(function (complete) {
+      var whole = others.filter(function (k, i) { return complete[i]; });
+      var pool = whole.length ? whole : others;
+      return pool.length ? pool[pool.length - 1] : null;
+    });
+  }).then(function (prev) {
+    return caches.keys().then(function (keys) {
+      return keys.filter(function (k) { return k.indexOf(PREFIX) === 0 && k !== CACHE && k !== prev; });
+    }).then(function (stale) {
+      return Promise.all(stale.map(function (k) { return caches.delete(k); }));
+    })
       .then(function () { return self.clients.matchAll({ type: 'window', includeUncontrolled: true }); })
       .then(function (list) {
         oldPages = { cache: prev, ids: prev ? list.map(function (c) { return c.id; }) : [] };
@@ -126,7 +152,10 @@ self.addEventListener('fetch', function (event) {
   // Только свои файлы. /v1/, /download/ и сайт tested под основным воркером
   // идут в сеть как есть.
   if (URLS.indexOf(key) < 0) return;
-  event.respondWith(cacheFor(event.clientId).then(function (name) {
+  // Переход (перезагрузка, ссылка) — новая страница, и она своей сборки:
+  // clientId перехода — у страницы-инициатора, и прежний кэш отдал бы ей
+  // старую страницу с новыми файлами.
+  event.respondWith(cacheFor(request.mode === 'navigate' ? null : event.clientId).then(function (name) {
     return caches.open(name).then(function (cache) { return cache.match(key); }).then(function (hit) {
       if (hit || name === CACHE) return hit;
       // Файла в прежнем кэше нет (файл новый) — из своего.
@@ -185,6 +214,7 @@ function showChanges(data) {
   var days = data.days || [];
   var who = data.who || '';
   var fresh = String(data.body || '').split('\n').map(function (text, i) { return [days[i] || '', text]; });
+  closeChangedReminders(fresh);
   // Непрочитанное прежнее не затирать: новые строки — к старым, прошедшие
   // дни — прочь (announceChanges в приложении). Прежнее закрыть: на айфоне
   // тот же tag не заменяет уведомление, а ставит второе рядом (WebKit 258922).
@@ -247,9 +277,29 @@ function showLesson(data) {
     // «Войти» — ссылка на вебинар, если она есть у пары (служба кладёт только
     // известные площадки). Кнопки у уведомлений есть не везде — на айфоне,
     // похоже, нет; тогда нажатие ведёт на сайт, как раньше.
-    return show(title || 'Скоро пара', data.body, 'lesson', { end: data.end, join: data.join || null },
+    return show(title || 'Скоро пара', data.body, 'lesson', { end: data.end, join: data.join || null, n: data.n || null },
       data.join ? [{ action: 'join', title: 'Войти' }] : null);
   });
+}
+
+/**
+ * Пару, о которой висит напоминание, отменили, перенесли или сменили ссылку —
+ * напоминание прочь: строка об изменении пришла рядом, а «Войти» вёл бы на
+ * старую комнату (приложение так же снимает или переписывает своё).
+ */
+function closeChangedReminders(lines) {
+  var today = collegeToday();
+  var numbers = [];
+  lines.forEach(function (l) {
+    var m = l[0] === today && /(?:^|\D)(\d) пар/.exec(l[1]);
+    if (m) numbers.push(Number(m[1]));
+  });
+  if (!numbers.length) return;
+  self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
+    open.forEach(function (n) {
+      if (n.data && numbers.indexOf(n.data.n) >= 0) n.close();
+    });
+  }, function () { /* нечего закрывать */ });
 }
 
 /** Закрыть напоминания о закончившихся парах — при любом приходе. */

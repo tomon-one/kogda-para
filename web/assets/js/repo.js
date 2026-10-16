@@ -111,6 +111,9 @@ export function selectSelf(teacher) {
  * влезает MAX_GROUPS. Их пары придут с обновлением.
  */
 export function addExtras(groups) {
+  // Роль сменили в другой вкладке: у преподавателя других групп нет, и список
+  // от пустого extras() стёр бы сохранённые группы студента.
+  if (isTeacher()) return;
   var list = extras();
   var own = chosen();
   (groups || []).forEach(function (g) {
@@ -123,6 +126,7 @@ export function addExtras(groups) {
 
 /** Убрать группу из остальных — вместе с её парами, сразу и без сети. */
 export function removeExtra(id) {
+  if (isTeacher()) return;
   setExtras(extras().filter(function (g) { return g.id !== id; }));
 }
 
@@ -258,6 +262,9 @@ function noteUnreachable(now) {
  */
 export function expectGone() {
   store.set('goneHint', Date.now());
+  // Свой — запросить в этом же заходе, даже если таблица не менялась: иначе
+  // подсказка пролежала бы сутки и подтвердила бы любое будущее 404 сразу.
+  store.remove('gen');
 }
 
 /** Отметить 404; true — подтверждено повтором через час. */
@@ -353,10 +360,18 @@ function writeExtras(answers) {
  * не пришедшая в заходе с новым gen, держала бы прежние пары до следующей
  * правки таблицы.
  */
-function extrasMissing() {
+function extrasMissing(from) {
   var schedules = store.get('extraSchedules') || {};
   var gen = store.get('gen');
-  return extras().some(function (g) { return !g.gone && (!schedules[g.id] || schedules[g.id].gen !== gen); });
+  // Gen тот же, а снимок — прошлой недели: в понедельник своё окно пришло, а
+  // запрос другой группы сорвался — без этой сверки её неделя ждала бы правки.
+  return extras().some(function (g) {
+    var one = schedules[g.id];
+    if (g.gone) return false;
+    if (!one || one.gen !== gen) return true;
+    var first = one.days && one.days[0];
+    return !!(first && from && first.d < from);
+  });
 }
 
 // Сохранённое прежней версией расписание без нынешних полей (пометки
@@ -389,7 +404,7 @@ function refreshOnce(force) {
   var outdated = !coversDay(saved(), today) ||
     store.get('window') !== windowMark(from) ||
     // Группу только что добавили или её снимок не дошёл: gen тот же.
-    extrasMissing();
+    extrasMissing(from);
   var meta = null;
 
   var busy = null;
@@ -517,7 +532,13 @@ export function otherSchedule(kind, id) {
   var from = weekStart(collegeNow().date);
   var request = kind === 'teachers' ? api.teacher(id, from, DAYS) : api.schedule(id, from, DAYS);
   return request.then(function (body) {
-    return { schedule: cleanSchedule(body) };
+    // Ответ не того вида (прокси, портал Wi-Fi) — «не загрузилось», как у
+    // своего, а не вечная крутилка.
+    try {
+      return { schedule: cleanSchedule(body) };
+    } catch (e) {
+      return {};
+    }
   }, function (error) {
     return isNotFound(error) ? { notFound: true } : {};
   });

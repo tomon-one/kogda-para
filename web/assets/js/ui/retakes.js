@@ -42,13 +42,24 @@ function slotLines(row, today) {
   });
 }
 
+/**
+ * Имя полностью — из списка преподавателей по id: в листе пересдач колледж
+ * пишет «Фамилия И.О.», и инициалы читаются хуже. Нет в списке — как в листе.
+ */
+function fullName(app, row) {
+  var list = Array.isArray(app.state.teachers) ? app.state.teachers : [];
+  for (var i = 0; i < list.length; i++) if (row.teacher_id && list[i].id === row.teacher_id) return list[i].name;
+  return row.teacher;
+}
+
 function retakeCard(app, row, today) {
+  var full = fullName(app, row);
   var name = row.teacher_id
     ? h('button', {
       type: 'button', class: 'retake-name link', title: 'Расписание преподавателя',
       onclick: function () { app.state.viaRetakes = row.teacher_id; app.go('teachers/' + row.teacher_id); },
-    }, row.teacher)
-    : h('div', { class: 'retake-name' }, row.teacher);
+    }, full)
+    : h('div', { class: 'retake-name' }, full);
   return h('div', { class: 'retake' },
     name,
     slotLines(row, today),
@@ -100,7 +111,7 @@ export function retakesView(app) {
   });
 
   function matches(row, query) {
-    return matchesQuery(row.teacher, query) ||
+    return matchesQuery(row.teacher, query) || matchesQuery(fullName(app, row), query) ||
       (row.subjects || []).some(function (s) { return matchesQuery(s, query); });
   }
 

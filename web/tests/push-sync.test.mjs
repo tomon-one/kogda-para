@@ -4,7 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 let current = null;
+globalThis.location = { href: 'https://kogda-para-nsk.ru/' };
 const registration = {
+  scope: 'https://kogda-para-nsk.ru/',
   pushManager: {
     getSubscription: () => Promise.resolve(current),
     subscribe: () => Promise.resolve(current),
@@ -81,4 +83,22 @@ test('браузер сменил подписку сам — новый адр�
   calls = [];
   assert.equal(await push.sync({ kind: 'group', id: 'isp-1' }), false);
   assert.deepEqual(calls, []);
+});
+
+test('на /tested/ до своего воркера подписка основного сайта не трогается', async () => {
+  // Пока воркер /tested/ не встал, браузер отдаёт регистрацию основного
+  // сайта (scope /): выключение здесь не должно снимать её подписку.
+  globalThis.location = { href: 'https://kogda-para-nsk.ru/tested/' };
+  try {
+    store.set('push', { changes: true, remind: 0, kind: 'group', id: 'isp-1', site: 'tested', sent: Date.now(),
+      endpoint: 'https://fcm.googleapis.com/main', key: 'AAAA' });
+    current = browserSubscription('https://fcm.googleapis.com/main');
+    calls = [];
+    down = false;
+    await push.disable();
+    assert.deepEqual(calls, []);
+    assert.notEqual(current, null, 'подписка основного сайта цела');
+  } finally {
+    globalThis.location = { href: 'https://kogda-para-nsk.ru/' };
+  }
 });

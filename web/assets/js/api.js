@@ -82,10 +82,6 @@ export function teacher(id, from, days) {
 }
 
 /** Короткий ответ `days=1` — чтобы узнать, под каким id сервер знает старый. */
-export function scheduleOne(id) {
-  return getJson('/v1/schedule/' + encodeURIComponent(id) + '?days=1');
-}
-
 export function teacherOne(id) {
   return getJson('/v1/teacher/' + encodeURIComponent(id) + '?days=1');
 }

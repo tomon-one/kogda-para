@@ -76,7 +76,10 @@ export function registerWorker() {
     return;
   }
   // Сменился воркер при уже работавшем — вышла новая сборка; первый — нет.
-  var hadController = !!navigator.serviceWorker.controller;
+  // Только свой: /tested/ до установки своего воркера обслуживает воркер
+  // основного сайта, и его смена на свой — первый воркер, а не новая сборка.
+  var controller = navigator.serviceWorker.controller;
+  var hadController = !!controller && controller.scriptURL === new URL('sw.js', location.href).href;
   // Первое открытие после выкладки отдаёт прежняя сборка из кэша, а новая
   // встаёт за ним через секунды. Пока страницу не трогали — показать новую
   // сразу: иначе она дойдёт только при следующем открытии, а при быстрой

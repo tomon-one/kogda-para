@@ -165,6 +165,12 @@ function failText(result) {
   var error = result.error;
   if (error instanceof HttpError) {
     if (error.status === 429) return 'Сервер занят, попробуйте через минуту';
+    if (error.status === 404) {
+      // Первый час после пропажи: код ответа выглядел бы поломкой (как в
+      // приложении, refreshFailure).
+      return repo.isTeacher() ? 'Вас не нашлось в таблице. Не вернётся за час — выберите себя заново'
+        : 'Группы не нашлось в таблице. Не вернётся за час — выберите её заново';
+    }
     if (error.status === 503) {
       return 'Сервер сейчас не отдаёт это расписание, на экране прежнее. ' +
         'Не пройдёт за час — напишите автору в Telegram: @toomonn';

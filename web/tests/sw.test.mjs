@@ -98,6 +98,17 @@ test('напоминание одно: новое закрывает прежн�
   assert.deepEqual(ended.live().map((n) => n.tag), ['changes']);
 });
 
+test('напоминание о паре, которую отменили или сменили ссылку, закрывается строкой об изменении', async () => {
+  const w = worker();
+  await w.push({ t: 'lesson', title: '10:40 — Химия', body: 'Каб. 102', n: 2, end: Date.now() + 3600000 });
+  await w.push(changes([[TODAY, 'отменили 3 пару: Право']], 'group:a'));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(w.live().map((n) => n.tag).sort(), ['changes', 'lesson'], 'чужая пара — напоминание висит');
+  await w.push(changes([[TODAY, 'отменили 2 пару: Химия']], 'group:a'));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(w.live().map((n) => n.tag), ['changes']);
+});
+
 test('«выберите заново» открывает сайт с подсказкой, что служба уже ждала час', async () => {
   const w = worker();
   await w.push({ t: 'gone', title: 'Группы больше нет в таблице', body: 'Откройте сайт…' });

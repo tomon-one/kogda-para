@@ -146,10 +146,13 @@ export function sheetLink(schedule, day, fallback) {
     // Дня в ответе нет (воскресенье, каникулы) — ближайший следующий.
     for (var j = 0; j < days.length && !found; j++) if (days[j].d > day) found = days[j];
   }
-  var column = schedule.col || null;
-  if (!column && found) {
+  // Колонка пары — у преподавателя и в днях, прочитанных по повторному
+  // заголовку с другой раскладкой; иначе — колонка группы.
+  var column = null;
+  if (found) {
     for (var k = 0; k < (found.l || []).length && !column; k++) column = found.l[k].col || null;
   }
+  column = column || schedule.col || null;
   var row = found && found.row != null ? found.row : null;
   var pairs = 0;
   Object.keys(schedule.bells || {}).forEach(function (key) {

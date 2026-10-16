@@ -323,15 +323,16 @@ test('поле не того типа не ломает страницу: при
   assert.equal(repo.saved().gn, 'ИСП-1');
 });
 
-test('закреплённые за переименованием — без повторов', async () => {
+test('закреплённые преподаватели — за исправленным именем, без повторов; группы не спрашиваются', async () => {
   reset();
-  store.set('pinnedGroups', ['old', 'new']);
-  store.set('pinnedTeachers', []);
-  server = healthy('G1', [['/v1/schedule/old?', [200, schedule('new', 'Новое', 'G1')]]]);
-  await repo.followRenamedPins([{ id: 'new', name: 'Новое' }], []);
-  assert.deepEqual(repo.pinned('groups'), ['new']);
-  repo.togglePin('groups', 'new');
-  assert.deepEqual(repo.pinned('groups'), []);
+  store.set('pinnedTeachers', ['old', 'new']);
+  store.set('pinnedGroups', ['gone']);
+  server = healthy('G1', [['/v1/teacher/old?', [200, schedule('new', 'Новое', 'G1')]]]);
+  await repo.followRenamedPins([], [{ id: 'new', name: 'Новое' }]);
+  assert.deepEqual(repo.pinned('teachers'), ['new']);
+  assert.deepEqual(repo.pinned('groups'), ['gone'], 'группа осталась закреплённой — вернётся, будет видна');
+  repo.togglePin('teachers', 'new');
+  assert.deepEqual(repo.pinned('teachers'), []);
 });
 
 test('редкие заходы: сбой — от последнего ответа сервера, а не от цепочки неудач', async () => {

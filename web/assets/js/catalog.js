@@ -34,8 +34,11 @@ export function freshTeachers() {
 }
 
 /**
- * Закреплённые — за переименованием: id, которого нет в свежем списке,
- * спрашиваем у сервера, и он по памяти о старом имени отвечает под новым.
+ * Закреплённые преподаватели — за исправленным именем: id, которого нет в
+ * свежем списке, спрашиваем у сервера, и он отвечает расписанием
+ * исправленного (docs/api.md). Групп сервер так не сводит — переименованная
+ * отвечает 404, — поэтому их не спрашиваем: закреплённая остаётся в памяти и
+ * снова видна, если группа вернётся.
  */
 export function followRenamedPins(groups, teachers) {
   function follow(key, list, ask) {
@@ -55,8 +58,7 @@ export function followRenamedPins(groups, teachers) {
       });
     }, Promise.resolve());
   }
-  return follow('pinnedGroups', groups, api.scheduleOne)
-    .then(function () { return follow('pinnedTeachers', teachers, api.teacherOne); });
+  return follow('pinnedTeachers', teachers, api.teacherOne);
 }
 
 export function pinned(kind) {

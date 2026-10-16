@@ -135,8 +135,20 @@ function askPermission() {
   });
 }
 
-function worker() {
+/**
+ * Регистрация воркера этого сайта. На /tested/, пока свой воркер не встал,
+ * getRegistration отдаёт регистрацию основного сайта (scope /): подписка с
+ * неё — подписка основного сайта, и служба переписала бы её на выбор tested.
+ */
+function ownRegistration() {
+  var scope = new URL('./', location.href).href;
   return navigator.serviceWorker.getRegistration().then(function (registration) {
+    return registration && registration.scope === scope ? registration : null;
+  });
+}
+
+function worker() {
+  return ownRegistration().then(function (registration) {
     return registration || navigator.serviceWorker.register('sw.js');
   }).then(function () {
     return withTimeout(navigator.serviceWorker.ready);
@@ -239,7 +251,7 @@ export function disable() {
     // Минуты — помнить для следующего включения.
     store.set(KEY, { last: lastRemind() });
     if (!supported()) return choice();
-    return navigator.serviceWorker.getRegistration().then(function (registration) {
+    return ownRegistration().then(function (registration) {
       return registration ? registration.pushManager.getSubscription() : null;
     }).then(function (sub) {
       if (!sub) return null;
@@ -290,7 +302,7 @@ export function sync(who) {
   var due = moved || Date.now() - (saved.sent || 0) >= RESYNC_MS;
   // Браузер сменил подписку сам, а перенос у службы не вышел (прежней записи
   // уже не было) — адрес не тот, что записан: переслать сразу.
-  var changed = navigator.serviceWorker.getRegistration().then(function (registration) {
+  var changed = ownRegistration().then(function (registration) {
     return registration ? registration.pushManager.getSubscription() : null;
   }).then(function (sub) {
     return !sub || !saved.endpoint || sub.endpoint !== saved.endpoint;
