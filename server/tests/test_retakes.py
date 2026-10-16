@@ -65,6 +65,10 @@ def test_dates_become_slots_paired_with_times():
     # Хоть одна дата не разобралась — показывать текст как есть.
     assert days("на неделе; 16.10", "16.00-17.00") == []
     assert days("31.02", "16.00-17.00") == []
+    # Дата с годом и одно время без конца.
+    assert days("22.10.2026", "17.40") == [("2026-10-22", "2026-10-22", "17:40")]
+    assert days("12-23.10.26", "16.00-17.00") == [("2026-10-12", "2026-10-23", "16:00–17:00")]
+    assert days("22.13.2026", "17.40") == []
 
 
 def test_year_is_the_nearest_to_today():
@@ -115,7 +119,7 @@ def test_teacher_found_by_initials_with_current_subjects():
     index = TeacherIndex(
         names={"ivanov-ivan-ivanovich": "Иванов Иван Иванович", "petrova-p": "Петрова Полина Павловна",
                "petrov-p": "Петрова Пелагея Петровна"},
-        schedule={"ivanov-ivan-ivanovich": {day: [lesson("Физика."), lesson("Физика"), lesson("Химия")]},
+        schedule={"ivanov-ivan-ivanovich": {day: [lesson("Физика."), lesson(".Физика"), lesson("Химия")]},
                   "petrova-p": {day: [lesson("Химия")]}, "petrov-p": {day: [lesson("Химия")]}},
     )
     assert retakes_service._who(index, "Иванов И.И.") == ("ivanov-ivan-ivanovich", ["Физика", "Химия"])
