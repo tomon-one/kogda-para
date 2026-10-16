@@ -79,13 +79,42 @@ self.addEventListener('install', function (event) {
   }).then(function () { return self.skipWaiting(); }));
 });
 
+// Новый воркер встаёт сразу, и открытые страницы прежней сборки дальше
+// спрашивают файлы у него. Отдать им новые — получить смесь: старая страница
+// без новых стилей, с новыми скриптами. Поэтому страницам, открытым до смены,
+// он отдаёт файлы их кэша, пока они не перезагрузятся (site.js). Прежний кэш
+// живёт до следующей смены; кэши ещё старше удаляются.
+var OLD_PAGES = new URL('__old-pages__', self.registration.scope).href;
+var oldPages = null;
+
 self.addEventListener('activate', function (event) {
   event.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) {
-      return k.indexOf(PREFIX) === 0 && k !== CACHE;
-    }).map(function (k) { return caches.delete(k); }));
+    // Кэши перечисляются в порядке создания: последний чужой — прежней сборки.
+    var others = keys.filter(function (k) { return k.indexOf(PREFIX) === 0 && k !== CACHE; });
+    var prev = others.length ? others[others.length - 1] : null;
+    return Promise.all(others.filter(function (k) { return k !== prev; }).map(function (k) { return caches.delete(k); }))
+      .then(function () { return self.clients.matchAll({ type: 'window', includeUncontrolled: true }); })
+      .then(function (list) {
+        oldPages = { cache: prev, ids: prev ? list.map(function (c) { return c.id; }) : [] };
+        return caches.open(CACHE).then(function (cache) {
+          return cache.put(OLD_PAGES, new Response(JSON.stringify(oldPages), { headers: { 'Content-Type': 'application/json' } }));
+        });
+      });
   }).then(function () { return self.clients.claim(); }));
 });
+
+/** Кэш, из которого отдавать файлы этой странице: прежней сборки — её, иначе свой. */
+function cacheFor(clientId) {
+  if (!clientId) return Promise.resolve(CACHE);
+  var known = oldPages ? Promise.resolve(oldPages) : caches.open(CACHE).then(function (cache) {
+    return cache.match(OLD_PAGES).then(function (r) { return r ? r.json() : { cache: null, ids: [] }; });
+  }).then(function (memo) { oldPages = memo; return memo; }, function () { return { cache: null, ids: [] }; });
+  return known.then(function (memo) {
+    if (!memo.cache || memo.ids.indexOf(clientId) < 0) return CACHE;
+    // caches.open создал бы пустой кэш на месте удалённого.
+    return caches.has(memo.cache).then(function (has) { return has ? memo.cache : CACHE; });
+  });
+}
 
 self.addEventListener('fetch', function (event) {
   var request = event.request;
@@ -97,10 +126,14 @@ self.addEventListener('fetch', function (event) {
   // Только свои файлы. /v1/, /download/ и сайт tested под основным воркером
   // идут в сеть как есть.
   if (URLS.indexOf(key) < 0) return;
-  event.respondWith(caches.open(CACHE).then(function (cache) {
-    return cache.match(key).then(function (hit) {
-      return hit || fetch(request);
+  event.respondWith(cacheFor(event.clientId).then(function (name) {
+    return caches.open(name).then(function (cache) { return cache.match(key); }).then(function (hit) {
+      if (hit || name === CACHE) return hit;
+      // Файла в прежнем кэше нет (файл новый) — из своего.
+      return caches.open(CACHE).then(function (cache) { return cache.match(key); });
     });
+  }).then(function (hit) {
+    return hit || fetch(request);
   }));
 });
 

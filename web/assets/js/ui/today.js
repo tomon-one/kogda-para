@@ -28,7 +28,11 @@ export function mainScreen(app) {
     : route.kind === 'groups' ? 'students'
     : teacherMode ? 'teachers' : 'students';
   // С ролью — своя память: своя вкладка преподавателя — не то, что смотрел студент.
-  app.state.opened[teacherMode + tab] = route.kind ? route.kind + (route.id ? '/' + route.id : '') : '';
+  // Открытый из «Пересдач» — не память вкладки: её нажатие ведёт к тому, что
+  // открывали на ней самой.
+  var viaRetakes = route.kind === 'teachers' && route.id && app.state.viaRetakes === route.id;
+  if (!viaRetakes) app.state.viaRetakes = null;
+  if (!viaRetakes) app.state.opened[teacherMode + tab] = route.kind ? route.kind + (route.id ? '/' + route.id : '') : '';
 
   // Пересдачи идут — их ряд не уезжает при листании и горит: о них должны
   // узнать и те, кто вкладку не открывал.

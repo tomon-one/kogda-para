@@ -46,7 +46,7 @@ function retakeCard(app, row, today) {
   var name = row.teacher_id
     ? h('button', {
       type: 'button', class: 'retake-name link', title: 'Расписание преподавателя',
-      onclick: function () { app.go('teachers/' + row.teacher_id); },
+      onclick: function () { app.state.viaRetakes = row.teacher_id; app.go('teachers/' + row.teacher_id); },
     }, row.teacher)
     : h('div', { class: 'retake-name' }, row.teacher);
   return h('div', { class: 'retake' },

@@ -10,7 +10,8 @@ var SCRIPT_BUILD = '__BUILD__';
 export function build() {
   var meta = document.querySelector('meta[name="build"]');
   var value = meta ? meta.getAttribute('content') : '';
-  return value && value !== '__BUILD__' ? value : 'разработка';
+  // По частям: скрипт выкладки вписывает номер сборки вместо каждого целого маркера.
+  return value && value !== '__' + 'BUILD__' ? value : 'разработка';
 }
 
 /**

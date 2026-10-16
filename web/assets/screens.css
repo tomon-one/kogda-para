@@ -501,6 +501,10 @@
 .room-note.top { margin-top: 0; }
 .room-busy:last-child { border-bottom: 0; }
 .room-name { font-weight: 600; color: var(--primary); }
-.room-taken summary { cursor: pointer; }
+.room-taken summary { cursor: pointer; list-style: none; }
+/* Свой значок, как в приложении: у браузеров треугольник свой и разный. */
+.room-taken summary::-webkit-details-marker { display: none; }
+.room-taken summary::before { content: '▸ '; }
+.room-taken[open] summary::before { content: '▾ '; }
 /* Заголовки разделов аудиторий — по одной линии с пояснениями. */
 .rooms .section-title { padding: 16px 4px 4px; font-size: 14px; font-weight: 600; color: var(--fg); }
