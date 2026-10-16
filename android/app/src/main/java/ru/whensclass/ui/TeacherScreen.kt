@@ -62,6 +62,9 @@ fun TeacherScreen(
     startDay: String? = null,
     startKey: Int = 0,
     ownScheduleTitle: String = "Посмотреть других преподавателей",
+    /** Открыть этого преподавателя ([openKey] — новое нажатие, а не поворот). */
+    openId: String? = null,
+    openKey: Int = 0,
     othersTitle: String = "Другие преподаватели",
     // Дно списка — без утверждений про колледж: листы преподавателей в книге
     // есть, скрытые и с именами длиннее 31 символа, и сервер их не читает.
@@ -80,6 +83,17 @@ fun TeacherScreen(
         if (startKey != handledKey) {
             handledKey = startKey
             if (ownSchedule != null) browsing = false
+        }
+    }
+    var pickedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickedName by rememberSaveable { mutableStateOf("") }
+    var handledOpen by rememberSaveable { mutableStateOf(openKey) }
+    LaunchedEffect(openKey) {
+        if (openKey != handledOpen && openId != null) {
+            handledOpen = openKey
+            browsing = true
+            pickedId = openId
+            pickedName = teachers?.firstOrNull { it.id == openId }?.name.orEmpty()
         }
     }
     if (ownSchedule != null && !browsing) {
@@ -101,8 +115,6 @@ fun TeacherScreen(
         return
     }
 
-    var pickedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var pickedName by rememberSaveable { mutableStateOf("") }
     val picked = pickedId?.let { GroupDto(it, pickedName) }
     fun pick(teacher: GroupDto?) {
         pickedId = teacher?.id

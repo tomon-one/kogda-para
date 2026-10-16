@@ -1,6 +1,7 @@
 package ru.whensclass.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,6 +49,8 @@ internal fun RetakesScreen(
     failed: Boolean,
     today: LocalDate,
     onRetry: () -> Unit,
+    /** Преподаватель найден в расписании — нажатие на имя открывает его расписание. */
+    onOpenTeacher: (String) -> Unit = {},
 ) {
     if (retakes == null) {
         if (failed) {
@@ -114,7 +117,7 @@ internal fun RetakesScreen(
                     }
                     rows.forEachIndexed { i, row ->
                         if (i > 0 || moved.isNotEmpty()) Divider()
-                        RetakeRow(row, today)
+                        RetakeRow(row, today, onOpenTeacher)
                     }
                 }
             }
@@ -189,9 +192,21 @@ private fun Line(label: String, text: String, muted: Boolean = false) {
 }
 
 @Composable
-private fun RetakeRow(row: RetakeDto, today: LocalDate) {
+private fun RetakeRow(row: RetakeDto, today: LocalDate, onOpenTeacher: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text(row.teacher, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        // Нашёлся в расписании — имя цветом и ведёт к его парам, как на сайте.
+        val id = row.teacherId
+        Text(
+            row.teacher,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = if (id != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            modifier = if (id != null) {
+                Modifier.clickable(onClickLabel = "Расписание преподавателя") { onOpenTeacher(id) }
+            } else {
+                Modifier
+            },
+        )
         if (row.slots.isEmpty()) {
             // Даты не разобрались — как в таблице.
             Line("Дата:", row.dates)

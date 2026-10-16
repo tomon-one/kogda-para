@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -123,6 +124,9 @@ fun TodayScreen(
 
     // Преподаватель открывает приложение на своём разделе. Вкладка переживает
     // поворот экрана.
+    // Имя в «Пересдачах» нажали — открыть его во вкладке преподавателей (только на новое нажатие).
+    var openTeacher by rememberSaveable { mutableStateOf<String?>(null) }
+    var openTeacherKey by rememberSaveable { mutableIntStateOf(0) }
     var tab by rememberSaveable(teacherMode) {
         mutableStateOf(if (teacherMode) Tab.TEACHERS else Tab.STUDENTS)
     }
@@ -309,6 +313,8 @@ fun TodayScreen(
                                 // Себя отмечаем, только когда человек и правда
                                 // преподаватель: у студента это просто чужая фамилия.
                                 selfId = if (teacherMode) selfTeacherId else null,
+                                openId = openTeacher,
+                                openKey = openTeacherKey,
                             )
                         }
                         return@ScheduleTabs
@@ -323,7 +329,11 @@ fun TodayScreen(
 
                     Tab.RETAKES -> {
                         tabStates.SaveableStateProvider("retakes") {
-                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes)
+                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes, onOpenTeacher = { id ->
+                                openTeacher = id
+                                openTeacherKey++
+                                tab = Tab.TEACHERS
+                            })
                         }
                         return@ScheduleTabs
                     }

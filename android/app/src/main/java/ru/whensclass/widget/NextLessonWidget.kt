@@ -141,15 +141,6 @@ class NextLessonWidget : GlanceAppWidget() {
                 // Про завтрашнюю пару тоже говорим: «пар больше нет» легко
                 // прочесть как «пар нет вообще».
                 val when_ = nextLessonWhen(next.day, now, ongoing, time)
-                // Сегодня своих пар нет (или воскресенье), а виджет уже о
-                // следующей — сказать первым словом: иначе её легко принять за сегодняшнюю.
-                val todayDto = schedule?.days?.firstOrNull { it.date == today.toString() }
-                val freeToday = when {
-                    next.day == today || now.hour < NIGHT_END_HOUR -> null
-                    today.dayOfWeek == java.time.DayOfWeek.SUNDAY -> "выходной"
-                    todayDto != null && schedule != null && ru.whensclass.ui.freeOwnDay(todayDto, schedule.groupNames) -> "пар нет"
-                    else -> null
-                }
                 // Сбой и пропажа — красным и первым словом: в хвосте
                 // однострочной шапки причина ушла бы в многоточие. Старые данные
                 // без сбоя (телефон долго без сети) не красные.
@@ -171,20 +162,18 @@ class NextLessonWidget : GlanceAppWidget() {
                 // тогда место пары переезжает в шапку.
                 val scale = fontScale()
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
-                // Длинное название (а короткие у колледжа редки) — в две строки.
-                // Хватает высоты на четыре строки — место под ним, как обычно; нет —
-                // место в шапку, как в тесной клетке.
+                // Длинное название (а короткие у колледжа редки) — в две строки, если
+                // хватает высоты на четыре: место пары остаётся своей строкой.
                 val subject = joinSubjects(distinctSubjects(next.lessons))
                 val perLine = ((LocalSize.current.width.value - 20f) / (SUBJECT_SP * CHAR_EM * scale)).toInt()
                 val long = subject.length > perLine
                 val roomy = LocalSize.current.height >= (ROOMY_HEIGHT_SP * scale + 14).dp
-                val placeInHead = tight || (long && !roomy)
                 // Группы всех пар номера: у преподавателя одна пара в двух залах.
                 val groups = next.lessons.mapNotNull { it.groups }.distinct().joinToString(", ").ifEmpty { null }
-                val head = status + listOfNotNull(freeToday).joinToString("") { "$it · " } + nextLessonHead(
+                val head = status + nextLessonHead(
                     time, when_, ongoing, groups, unread = unread,
                     // Без «⧉»: нажатие на шапку открывает приложение, а не копирует.
-                    place = if (placeInHead) places(next) else null,
+                    place = if (tight) places(next) else null,
                 )
                 Text(
                     head,
@@ -200,7 +189,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 )
                 Text(
                     subject,
-                    maxLines = if (long && !tight) 2 else 1,
+                    maxLines = if (long && roomy) 2 else 1,
                     style = TextStyle(
                         fontSize = SUBJECT_SP.sp,
                         fontWeight = FontWeight.Bold,
@@ -216,7 +205,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 // Две пары одного номера — оба места, без копирования ссылки:
                 // нажатие открывает день, где у каждой пары своя.
                 val pair = next.also.isNotEmpty() || next.off.isNotEmpty()
-                if (!placeInHead) Text(
+                if (!tight) Text(
                     when {
                         pair -> places(next)
                         foreign -> "⚠ чужая ссылка · " + place(lesson).removeSuffix("  ⧉")
@@ -405,8 +394,11 @@ internal fun nextLessonHead(
 /** Три строки маленького виджета — в sp, без отступов. */
 private const val TIGHT_HEIGHT_SP = 52
 
-/** Четыре строки (название в две) — в sp, без отступов. */
-private const val ROOMY_HEIGHT_SP = 69
+/**
+ * Четыре строки (название в две) — в sp, без отступов. По снимку экрана с TECNO
+ * LF7n: в клетке высотой около 80 dp четыре строки помещаются.
+ */
+private const val ROOMY_HEIGHT_SP = 63
 
 /** Кегль названия пары и средняя ширина жирной кириллической буквы в его долях. */
 private const val SUBJECT_SP = 13

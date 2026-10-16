@@ -181,10 +181,12 @@ internal fun RoomsScreen(
                 ) { _ ->
                 Card {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(building.name, fontWeight = FontWeight.SemiBold)
+                        // Из тех, где по таблице бывают пары: других кабинетов колледжа в ней нет (пояснение внизу).
                         Text(
-                            // Из тех, где по таблице бывают пары: других кабинетов колледжа в ней нет.
-                            building.name + " · свободно ${free.size} из ${building.rooms.size}, где бывают пары",
-                            fontWeight = FontWeight.SemiBold,
+                            "свободно ${free.size} из " + plural(building.rooms.size, "кабинета", "кабинетов", "кабинетов"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         if (free.isEmpty()) Note("Свободных по расписанию нет.")
                         free.groupBy { it.floor }.toSortedMap().forEach { (floor, rooms) ->
@@ -228,7 +230,7 @@ internal fun RoomsScreen(
         }
         item(key = "пояснение") {
             Note(
-                "Свободны по расписанию: ключей, переносов и мероприятий таблица колледжа не знает." +
+                "Показано по расписанию колледжа. В списке — кабинеты, где по нему бывают пары; переносов и мероприятий в нём нет." +
                     if (shown.unread.isEmpty()) "" else " Не учтены кабинеты " +
                         plural(shown.unread.size, "группы", "групп", "групп") +
                         ", у которых день не прочитан: " + shown.unread.joinToString(", ") + ".",
