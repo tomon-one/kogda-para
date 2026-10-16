@@ -65,6 +65,8 @@ fun TeacherScreen(
     /** Открыть этого преподавателя ([openKey] — новое нажатие, а не поворот). */
     openId: String? = null,
     openKey: Int = 0,
+    /** Вкладку открыли нажатием на неё: открытый из «Пересдач» уступает тому, что было на ней. */
+    enterKey: Int = 0,
     othersTitle: String = "Другие преподаватели",
     // Дно списка — без утверждений про колледж: листы преподавателей в книге
     // есть, скрытые и с именами длиннее 31 символа, и сервер их не читает.
@@ -90,12 +92,36 @@ fun TeacherScreen(
     // С нуля, а не с нынешнего [openKey]: вкладку открывает само нажатие на имя,
     // и при первом входе на неё ключ уже новый — его надо исполнить.
     var handledOpen by rememberSaveable { mutableStateOf(0) }
+    // Открытый из «Пересдач» — не память вкладки: нажатие на саму вкладку
+    // возвращает то, что было открыто на ней (как на сайте).
+    var viaOpen by rememberSaveable { mutableStateOf(false) }
+    var beforeId by rememberSaveable { mutableStateOf<String?>(null) }
+    var beforeName by rememberSaveable { mutableStateOf("") }
+    var beforeBrowsing by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(openKey) {
         if (openKey != handledOpen && openId != null) {
             handledOpen = openKey
+            if (!viaOpen) {
+                beforeId = pickedId
+                beforeName = pickedName
+                beforeBrowsing = browsing
+            }
+            viaOpen = true
             browsing = true
             pickedId = openId
             pickedName = teachers?.firstOrNull { it.id == openId }?.name.orEmpty()
+        }
+    }
+    var handledEnter by rememberSaveable { mutableStateOf(enterKey) }
+    LaunchedEffect(enterKey) {
+        if (enterKey != handledEnter) {
+            handledEnter = enterKey
+            if (viaOpen) {
+                viaOpen = false
+                pickedId = beforeId
+                pickedName = beforeName
+                browsing = beforeBrowsing
+            }
         }
     }
     if (ownSchedule != null && !browsing) {
@@ -119,6 +145,7 @@ fun TeacherScreen(
 
     val picked = pickedId?.let { GroupDto(it, pickedName) }
     fun pick(teacher: GroupDto?) {
+        viaOpen = false
         pickedId = teacher?.id
         pickedName = teacher?.name.orEmpty()
     }

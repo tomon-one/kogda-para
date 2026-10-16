@@ -129,6 +129,8 @@ fun TodayScreen(
     // Имя в «Пересдачах» нажали — открыть его во вкладке преподавателей (только на новое нажатие).
     var openTeacher by rememberSaveable { mutableStateOf<String?>(null) }
     var openTeacherKey by rememberSaveable { mutableIntStateOf(0) }
+    // Нажали на саму вкладку преподавателей — к тому, что было открыто на ней.
+    var teachersEnterKey by rememberSaveable { mutableIntStateOf(0) }
     var tab by rememberSaveable(teacherMode) {
         mutableStateOf(if (teacherMode) Tab.TEACHERS else Tab.STUDENTS)
     }
@@ -269,6 +271,7 @@ fun TodayScreen(
                 live = retakes?.activeOn(today) == true,
                 onPick = { picked ->
                     if (picked.ready) {
+                        if (picked == Tab.TEACHERS && tab != Tab.TEACHERS) teachersEnterKey++
                         tab = picked
                     } else {
                         // Раздел откроется, когда колледж опубликует эти листы.
@@ -324,6 +327,7 @@ fun TodayScreen(
                                 selfId = if (teacherMode) selfTeacherId else null,
                                 openId = openTeacher,
                                 openKey = openTeacherKey,
+                                enterKey = teachersEnterKey,
                             )
                         }
                         return@ScheduleTabs
