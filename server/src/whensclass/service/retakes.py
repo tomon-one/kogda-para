@@ -19,7 +19,7 @@ from dataclasses import asdict
 
 from ..config import settings
 from ..domain.teachers import TeacherIndex, _surname_initials
-from ..parser.retakes import Retake, parse_retakes
+from ..parser.retakes import Redirect, Retake, parse_retakes
 from ..sources import gsheets, sheet_index
 from . import alerts
 
@@ -62,6 +62,15 @@ def _row(row: Retake, index: TeacherIndex | None) -> dict:
         "teacher": row.teacher, "dates": row.dates, "time": row.time, "room": row.room,
         "slots": [{"from": s.start.isoformat(), "to": s.end.isoformat(), "time": s.time} for s in row.slots],
         "teacher_id": tid, "subjects": subjects,
+    }
+
+
+def _redirect(redirect: Redirect, index: TeacherIndex | None) -> dict:
+    # id — чтобы клиенты написали имя полностью, как в строках выше.
+    return {
+        **asdict(redirect),
+        "to_id": _who(index, redirect.to)[0],
+        "teacher_ids": [_who(index, name)[0] for name in redirect.teachers],
     }
 
 
@@ -119,11 +128,12 @@ class RetakesSource:
             return
         self._network_since = None
         alerts.forget("retakes")
+        index = self.teachers()
         self._put({
             "title": parsed.title,
             "sheet": sheet.title,
-            "rows": [_row(r, self.teachers()) for r in parsed.rows],
-            "redirects": [asdict(r) for r in parsed.redirects],
+            "rows": [_row(r, index) for r in parsed.rows],
+            "redirects": [_redirect(r, index) for r in parsed.redirects],
         })
 
     def _put(self, body: dict) -> None:

@@ -136,6 +136,14 @@ def test_teacher_found_by_initials_with_current_subjects():
     assert retakes_service._who(index, "Иванов И.И.") == ("ivanov-ivan-ivanovich", ["Физика", "Химия"])
     # Двое с теми же фамилией и инициалами — не угадываем.
     assert retakes_service._who(index, "Петрова П.П.") == (None, [])
+    # Во второй таблице — те же id: клиенты пишут имена полностью.
+    redirect = retakes_service.Redirect(to="Иванов И.И.", teachers=["Петрова П.П.", "Иванов И.И.", "Ершов"])
+    assert retakes_service._redirect(redirect, index) == {
+        "to": "Иванов И.И.", "teachers": ["Петрова П.П.", "Иванов И.И.", "Ершов"],
+        "to_id": "ivanov-ivan-ivanovich", "teacher_ids": [None, "ivanov-ivan-ivanovich", None],
+    }
+    room = retakes_service.Redirect(to="каб.263 (онлайн-тестирование)", teachers=[])
+    assert retakes_service._redirect(room, index)["to_id"] is None
 
 
 def test_redirects_collect_names_by_line_and_by_comma():
