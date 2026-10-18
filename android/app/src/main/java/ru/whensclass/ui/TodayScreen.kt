@@ -152,11 +152,11 @@ fun TodayScreen(
             tab = if (teacherMode) Tab.TEACHERS else Tab.STUDENTS
         }
     }
-    // «Назад» с «Пересдач» и «Аудиторий» — к своему расписанию, как на сайте,
-    // а не из приложения.
-    BackHandler(enabled = tab == Tab.RETAKES || tab == Tab.ROOMS) {
-        tab = if (teacherMode) Tab.TEACHERS else Tab.STUDENTS
-    }
+    // «Назад» с любой вкладки, кроме своей, — к своему расписанию, а не из
+    // приложения. Открытого на вкладке преподавателя или группу закрывает
+    // раньше сам их экран: его обработчик зарегистрирован позже.
+    val home = if (teacherMode) Tab.TEACHERS else Tab.STUDENTS
+    BackHandler(enabled = tab != home) { tab = home }
     val snackbar = remember { SnackbarHostState() }
     // Неудачу показываем плашкой, чтобы человек не ушёл уверенным в свежих
     // данных.

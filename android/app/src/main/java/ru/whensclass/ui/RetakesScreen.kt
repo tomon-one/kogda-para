@@ -61,7 +61,8 @@ internal fun RetakesScreen(
     teachers: List<GroupDto>? = null,
 ) {
     val fullNames = remember(teachers) { teachers.orEmpty().associate { it.id to it.name } }
-    fun nameOf(row: RetakeDto) = row.teacherId?.let { fullNames[it] } ?: row.teacher
+    fun named(id: String?, written: String) = id?.let { fullNames[it] } ?: written
+    fun nameOf(row: RetakeDto) = named(row.teacherId, row.teacher)
     if (retakes == null) {
         if (failed) {
             Explanation("Пересдачи не загрузились", failureText(answered), onRetry = onRetry)
@@ -80,12 +81,18 @@ internal fun RetakesScreen(
     var query by rememberSaveable { mutableStateOf("") }
     // Ищут того, у кого долг: если его долги принимает другой, найдётся и
     // строка «долги принимает», и сам принимающий.
-    val redirects = remember(retakes) { retakes.redirects.flatMap { r -> r.teachers.map { it to r.to } } }
+    val redirects = remember(retakes) {
+        retakes.redirects.flatMap { r ->
+            r.teachers.mapIndexed { i, name -> Moved(name, r.teacherIds.getOrNull(i), r.to, r.toId) }
+        }
+    }
     val q = query.trim()
-    val moved = if (q.isEmpty()) emptyList() else redirects.filter { matchesQuery(it.first, q) }
+    val moved = if (q.isEmpty()) emptyList() else redirects.filter {
+        matchesQuery(it.name, q) || matchesQuery(named(it.id, it.name), q)
+    }
     val rows = if (q.isEmpty()) retakes.rows else retakes.rows.filter { row ->
         matchesQuery(row.teacher, q) || matchesQuery(nameOf(row), q) || row.subjects.any { matchesQuery(it, q) } ||
-            moved.any { matchesQuery(row.teacher, it.second) }
+            moved.any { matchesQuery(row.teacher, it.to) }
     }
 
     LazyColumn(contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp)) {
@@ -122,8 +129,8 @@ internal fun RetakesScreen(
             // Строка — свой элемент списка: одной карточкой семьдесят строк
             // строились бы разом, и вкладка открывалась бы с заминкой.
             val count = moved.size + rows.size
-            moved.forEachIndexed { i, (name, to) ->
-                item(key = "перенос:$i") { Piece(i, count) { RedirectRow(name, to) } }
+            moved.forEachIndexed { i, m ->
+                item(key = "перенос:$i") { Piece(i, count) { RedirectRow(named(m.id, m.name), named(m.toId, m.to)) } }
             }
             rows.forEachIndexed { i, row ->
                 item(key = "строка:$i") { Piece(moved.size + i, count) { RetakeRow(row, nameOf(row), today, onOpenTeacher) } }
@@ -142,9 +149,9 @@ internal fun RetakesScreen(
                         modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp),
                     )
                     Card {
-                        redirects.forEachIndexed { i, (name, to) ->
+                        redirects.forEachIndexed { i, m ->
                             if (i > 0) Divider()
-                            RedirectRow(name, to)
+                            RedirectRow(named(m.id, m.name), named(m.toId, m.to))
                         }
                     }
                 }
@@ -267,6 +274,9 @@ private fun RetakeRow(row: RetakeDto, name: String, today: LocalDate, onOpenTeac
         if (row.subjects.isNotEmpty()) Line("Ведёт сейчас:", row.subjects.take(3).joinToString("; "), muted = true)
     }
 }
+
+/** Строка второй таблицы: как написано в листе и id людей, если нашлись. */
+private data class Moved(val name: String, val id: String?, val to: String, val toId: String?)
 
 @Composable
 private fun RedirectRow(name: String, to: String) {

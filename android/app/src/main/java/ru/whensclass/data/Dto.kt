@@ -252,6 +252,10 @@ data class RetakeSlotDto(
 data class RetakeRedirectDto(
     @SerialName("to") val to: String,
     @SerialName("teachers") val teachers: List<String> = emptyList(),
+    /** Тот же человек в списке преподавателей; null — не нашёлся или это кабинет. */
+    @SerialName("to_id") val toId: String? = null,
+    /** id к [teachers] по порядку. */
+    @SerialName("teacher_ids") val teacherIds: List<String?> = emptyList(),
 )
 
 @Serializable

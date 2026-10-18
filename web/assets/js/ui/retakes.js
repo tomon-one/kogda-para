@@ -47,9 +47,13 @@ function slotLines(row, today) {
  * пишет «Фамилия И.О.», и инициалы читаются хуже. Нет в списке — как в листе.
  */
 function fullName(app, row) {
+  return teacherName(app, row.teacher_id, row.teacher);
+}
+
+function teacherName(app, id, written) {
   var list = Array.isArray(app.state.teachers) ? app.state.teachers : [];
-  for (var i = 0; i < list.length; i++) if (row.teacher_id && list[i].id === row.teacher_id) return list[i].name;
-  return row.teacher;
+  for (var i = 0; i < list.length; i++) if (id && list[i].id === id) return list[i].name;
+  return written;
 }
 
 function retakeCard(app, row, today) {
@@ -67,10 +71,10 @@ function retakeCard(app, row, today) {
     row.subjects && row.subjects.length ? line('Ведёт сейчас:', row.subjects.slice(0, 3).join('; '), 'subjects') : null);
 }
 
-function redirectCard(name, to) {
+function redirectCard(app, m) {
   return h('div', { class: 'retake' },
-    h('div', { class: 'retake-name' }, name),
-    h('div', { class: 'retake-line' }, h('span', { class: 'muted' }, 'Долги принимает '), to));
+    h('div', { class: 'retake-name' }, teacherName(app, m.id, m.name)),
+    h('div', { class: 'retake-line' }, h('span', { class: 'muted' }, 'Долги принимает '), teacherName(app, m.toId, m.to)));
 }
 
 function memo() {
@@ -107,7 +111,10 @@ export function retakesView(app) {
   // «долги принимает», и сам принимающий.
   var redirects = [];
   (data.redirects || []).forEach(function (r) {
-    r.teachers.forEach(function (name) { redirects.push({ name: name, to: r.to }); });
+    var ids = r.teacher_ids || [];
+    r.teachers.forEach(function (name, i) {
+      redirects.push({ name: name, id: ids[i], to: r.to, toId: r.to_id });
+    });
   });
 
   function matches(row, query) {
@@ -121,7 +128,9 @@ export function retakesView(app) {
     var rows = data.rows;
     var moved = [];
     if (query) {
-      moved = redirects.filter(function (r) { return matchesQuery(r.name, query); });
+      moved = redirects.filter(function (r) {
+        return matchesQuery(r.name, query) || matchesQuery(teacherName(app, r.id, r.name), query);
+      });
       rows = rows.filter(function (r) {
         return matches(r, query) || moved.some(function (m) { return matchesQuery(r.teacher, m.to); });
       });
@@ -130,7 +139,7 @@ export function retakesView(app) {
       results.appendChild(h('p', { class: 'nothing' }, 'Ничего не нашлось. Вопросы — куратору, декану или руководителю направления, в учебный офис (каб. 267).'));
       return;
     }
-    var cards = moved.map(function (m) { return redirectCard(m.name, m.to); })
+    var cards = moved.map(function (m) { return redirectCard(app, m); })
       .concat(rows.map(function (r) { return retakeCard(app, r, today); }));
     results.appendChild(h('div', { class: 'list-card' }, cards));
     if (!query) {
@@ -139,7 +148,7 @@ export function retakesView(app) {
       if (redirects.length) {
         results.appendChild(h('h3', { class: 'section-title' }, 'Долги принимает другой преподаватель'));
         results.appendChild(h('div', { class: 'list-card' },
-          redirects.map(function (m) { return redirectCard(m.name, m.to); })));
+          redirects.map(function (m) { return redirectCard(app, m); })));
       }
     }
   }
