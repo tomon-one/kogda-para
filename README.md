@@ -17,7 +17,7 @@
 · [сайт](https://kogda-para-nsk.ru) · [все версии](https://github.com/tomon-one/kogda-para/releases)
 · [как поставить](docs/install.md) · вопросы — [@toomonn](https://t.me/toomonn)
 
-> **Версия 1.2.0.** Проверено на телефоне автора с Android 12, на других пока
+> **Версия 1.2.1.** Проверено на телефоне автора с Android 12, на других пока
 > нет.
 >
 > **Код писал ИИ** — Claude, по задачам автора и с его правками.
