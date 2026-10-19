@@ -72,6 +72,12 @@ def test_one_late_edit_is_not_a_mismatch():
     assert compare(_snapshot(edited), parse_teacher_sheet(SHEET), MON) == []
 
 
+def test_group_sheet_mark_after_the_subject_is_the_same_lesson():
+    """В листе групп «Физика ЗАЧЕТ», в листе преподавателей «Физика (Лек)»."""
+    marked = [Lesson(number=2, subject="Физика ЗАЧЕТ"), Lesson(number=3, subject="Химия ЗАЧЕТ")]
+    assert compare(_snapshot(marked), parse_teacher_sheet(SHEET), MON) == []
+
+
 def test_day_missing_from_the_group_sheet_is_not_checked():
     """Следующий лист групп не принят — его дни сверять не с чем."""
     snap = _snapshot([Lesson(number=2, subject="История"), Lesson(number=3, subject="Литература")])

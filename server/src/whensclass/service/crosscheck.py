@@ -57,9 +57,11 @@ def _norm(text: str) -> str:
 
 
 def _same_subject(theirs: str, ours: str) -> bool:
-    # У них «Физика (Лек)», у нас «Физика» и вид отдельно.
+    # У них «Физика (Лек)», у нас «Физика» и вид отдельно. Лист групп бывает
+    # подробнее: «… ЗАЧЕТ» после предмета, которого в листе преподавателей нет.
     a, b = _norm(theirs), _norm(ours)
-    return bool(b) and a.startswith(b)
+    base = _norm(re.sub(r"\s*\([^()]*\)\s*$", "", theirs))
+    return bool(b) and (a.startswith(b) or bool(base) and b.startswith(base))
 
 
 def compare(snapshot: Snapshot, pairs: list[TeacherPair], today: dt.date) -> list[Mismatch]:
