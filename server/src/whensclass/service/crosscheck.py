@@ -39,6 +39,10 @@ log = logging.getLogger(__name__)
 # вместо пары), а не сдвиг.
 MIN_PAIRS = 2
 MIN_SHARE = 0.5
+# Сдвиг колонки задевает весь день группы или соседние группы разом; одна
+# группа с двумя парами — обычно колледж поправил один лист без другого.
+# Такое приходит без звука.
+LOUD_PAIRS = 3
 # Насколько вперёд смотреть листы: дальше колледж их ещё не выкладывает.
 AHEAD = dt.timedelta(days=14)
 
@@ -62,6 +66,16 @@ def _same_subject(theirs: str, ours: str) -> bool:
     a, b = _norm(theirs), _norm(ours)
     base = _norm(re.sub(r"\s*\([^()]*\)\s*$", "", theirs))
     return bool(b) and (a.startswith(b) or bool(base) and b.startswith(base))
+
+
+def loud(found: list[Mismatch], fresh: list[Mismatch]) -> bool:
+    """Будить ли владельца: похоже ли новое расхождение на сдвиг колонки."""
+    if any(m.total >= LOUD_PAIRS for m in fresh):
+        return True
+    groups: dict[dt.date, set[str]] = defaultdict(set)
+    for m in found:
+        groups[m.day].add(m.group)
+    return any(len(groups[m.day]) >= 2 for m in fresh)
 
 
 def compare(snapshot: Snapshot, pairs: list[TeacherPair], today: dt.date) -> list[Mismatch]:
@@ -200,4 +214,5 @@ class CrossCheck:
             "там или колледж правил один лист без другого. Присмотреться (руководство по "
             "серверу, «Когда что-то не так»).",
             force=True,
+            quiet=not loud(found, shown),
         )

@@ -95,13 +95,18 @@ def test_week_names_as_the_college_writes_them():
         dt.date(2026, 12, 28), dt.date(2027, 1, 2))
 
 
-def _run(tmp_path, monkeypatch, snap, text, sent):
+def _run(tmp_path, monkeypatch, snap, text, sent, quiet=None):
     from whensclass.sources.gsheets import SheetInfo
 
     monkeypatch.setattr(crosscheck_service.sheet_index, "list_sheets",
                         lambda **_: [SheetInfo("расписание преподавателей 19.10-24.10", "5")])
     monkeypatch.setattr(crosscheck_service.gsheets, "fetch_sheet_csv", text)
-    monkeypatch.setattr(crosscheck_service.alerts, "notify", lambda kind, *a, **k: sent.append(kind))
+    def notify(kind, *a, **k):
+        sent.append(kind)
+        if quiet is not None:
+            quiet.append(k.get("quiet", False))
+
+    monkeypatch.setattr(crosscheck_service.alerts, "notify", notify)
     monkeypatch.setattr(crosscheck_service.alerts, "forget", lambda *a: None)
 
     class Now(dt.datetime):
@@ -175,3 +180,25 @@ def test_empty_date_frame_of_a_dropped_sheet_is_not_compared():
                     schedule={g.id: {today: [Lesson(number=1, subject="Физика")]} for g in groups})
     pairs = [TeacherPair("Ковач Т.", later, n, "Физика", "369", g.name) for g in groups for n in (1, 2, 3)]
     assert compare(snap, pairs, today) == []
+
+
+def test_one_group_with_two_pairs_comes_without_sound(tmp_path, monkeypatch):
+    """Колледж поправил один лист без другого — сказать, но не будить."""
+    snap = _snapshot([Lesson(number=2, subject="История"), Lesson(number=3, subject="Литература")])
+    sent, quiet = [], []
+    _run(tmp_path, monkeypatch, snap, lambda gid, title=None: SHEET, sent, quiet)
+    assert sent == ["crosscheck"] and quiet == [True]
+
+
+def test_shifted_column_wakes_the_owner():
+    """Весь день группы или две группы в один день — похоже на сдвиг колонки."""
+    m = crosscheck_service.Mismatch
+    one = m("А-1", MON, 0, 2, False)
+    assert not crosscheck_service.loud([one], [one])
+    whole_day = m("А-1", MON, 0, 3, False)
+    assert crosscheck_service.loud([whole_day], [whole_day])
+    neighbour = m("Б-1", MON, 0, 2, False)
+    assert crosscheck_service.loud([one, neighbour], [neighbour])
+    # Другая группа в другой день — не соседи.
+    other_day = m("Б-1", TUE, 0, 2, False)
+    assert not crosscheck_service.loud([one, other_day], [other_day])
