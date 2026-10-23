@@ -301,6 +301,24 @@ def _warn_renamed(renamed: list[tuple[int, list[str], set[str]]]) -> None:
         )
 
 
+def _subgroups_of(declared: list[str], known: set[str]) -> bool:
+    """Все имена — «группа/N» одной из групп колонки."""
+    bases = []
+    for name in declared:
+        m = SUBGROUP_RE.fullmatch(name)
+        if not m:
+            return False
+        try:
+            bases.append(group_id(m.group(1)))
+        except ValueError:
+            return False
+    return bool(bases) and all(b in known for b in bases)
+
+
+# «С-926/1»: группа и номер подгруппы.
+SUBGROUP_RE = re.compile(r"(.+?)\s*/\s*\d+")
+
+
 def _check_columnar(
     where: str,
     cells: set[int],
@@ -363,6 +381,11 @@ def _check_columnar(
             continue
         renamed.append((col, declared, known))
 
+    # «С-926/1» над колонкой С-926 — не переименование: группу разделили, и
+    # пары под колонкой — подгруппы, а не её.
+    split = {col for col, declared, known in renamed if _subgroups_of(declared, known)}
+    renamed = [r for r in renamed if r[0] not in split]
+
     if len(strangers) >= COLUMNAR_STRANGERS_TO_REJECT:
         col, declared, gid, known = strangers[0]
         here = f"здесь же {sorted(known)}" if known else "здесь в главном заголовке пусто"
@@ -382,6 +405,7 @@ def _check_columnar(
         # колонке листа) читается по главному.
         start = min(moved)
         moved.update(col for col, _, _ in renamed if col >= start)
+        moved.update(split)
         for _, declared, _, _ in strangers:
             moved.update(
                 column_of[gid] for gid in map(group_id, declared) if gid in column_of
@@ -396,6 +420,16 @@ def _check_columnar(
         _warn_renamed([r for r in renamed if r[0] not in moved])
         return moved, message
     _warn_renamed(renamed)
+    if split:
+        col = min(split)
+        message = (
+            f"повторный заголовок в {where}: в колонке {a1_column(col)} подгруппы "
+            f"{split_group_names((names_row[col] if col < len(names_row) else '') or '')} "
+            f"вместо {sorted(by_column[col])}"
+        )
+        if reject:
+            raise SourceFormatChanged(message)
+        return split, message
     for col, declared, gid, known in strangers:
         _warn_once(
             ("stranger", col, tuple(declared)),

@@ -649,3 +649,70 @@ def test_too_little_to_judge_leaves_the_days_unread(fixture_csv):
     assert set(snap.unread) >= {"bp-926-1", "gd-1125", "dp-923", "isp-924-2"}
     assert all(set(days) == set(below) for days in snap.unread.values())
     assert "повторный заголовок" in snap.unread_why[0]
+
+
+def test_group_split_into_subgroups_under_the_header_is_read_by_their_names(fixture_csv, monkeypatch):
+    """Под повторным заголовком колледж разделил группу на подгруппы («С-926» на
+    «С-926/1» и «С-926/2»), и всё правее съехало на блок. Пары подгрупп — под
+    их именами и только в днях под заголовком; сама группа там не прочитана, а
+    не получает молча пары первой подгруппы."""
+    from whensclass.parser import csv_schedule
+
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    header = _columnar_header(rows)[0]
+    # Дни под заголовком повторяют дни над ним — как в листе, где недель много.
+    above = [i for i, r in enumerate(rows) if i < header and _parse_date(r[0]) is not None]
+    starts = [i for i, r in enumerate(rows) if i > header and _parse_date(r[0]) is not None]
+    for k, start in enumerate(starts):
+        for step in range(12):
+            rows[start + step][2:] = list(rows[above[k % len(above)] + step][2:])
+    honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+    below = [_parse_date(rows[i][0]) for i in starts]
+    # ГД-1125 — колонка 10: две подгруппы вместо неё, у второй те же пары.
+    for row in rows[header:]:
+        row += [""] * (26 - len(row))
+        row[10:14] = row[10:14] * 2
+    rows[header + 2][10], rows[header + 2][14] = "ГД-1125/1", "ГД-1125/2"
+    snap = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+
+    # Дни, которые запасной способ прочитал по повторному заголовку (день с
+    # малым числом пар он не решает — тот не прочитан у всех съехавших).
+    read = [day for day in below if day not in snap.unread.get("dp-923", {})]
+    assert len(read) >= 4
+    gd = honest.schedule["gd-1125"]
+    for k in (1, 2):
+        gid = f"gd-1125-{k}"
+        assert any(g.id == gid and g.name == f"ГД-1125/{k}" for g in snap.groups)
+        assert snap.schedule[gid] == {day: gd[day] for day in read if gd.get(day)}
+    ids = [g.id for g in snap.groups]
+    assert ids[ids.index("gd-1125") + 1:ids.index("gd-1125") + 3] == ["gd-1125-1", "gd-1125-2"]
+    assert set(snap.unread["gd-1125"]) == set(below)
+    assert snap.schedule["gd-1125"] == {d: x for d, x in gd.items() if d not in below}
+    for group in honest.groups:
+        if group.id != "gd-1125":
+            for day in read:
+                assert snap.schedule[group.id].get(day) == honest.schedule[group.id].get(day), group.name
+
+
+def test_unknown_name_that_is_not_a_subgroup_is_not_a_new_group(fixture_csv, monkeypatch):
+    """Под сдвинутым заголовком незнакомое имя без «/N» его группы — не новая
+    группа: старое имя из чужого шаблона дало бы двойника."""
+    from whensclass.parser import csv_schedule
+
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    _, rows, below = _week_from_another_template(fixture_csv, days=2)
+    header = _columnar_header(rows)[0]
+    end = next(i for i, r in enumerate(rows) if _parse_date(r[0]) == below[2])
+    for row in rows[header:end]:
+        block = row[6:10]
+        row[6:10] = block * 3
+    for k, name in enumerate(("ГД(а)-1125", "ГД-1125/2", "ДП-777/1"), 1):
+        rows[header + 2][2 + 4 * k] = name
+    for row in rows:
+        row += [""] * (30 - len(row))
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+
+    names = {g.name for g in snap.groups}
+    assert "ГД(а)-1125" not in names and "ДП-777/1" not in names
+    assert "ГД-1125/2" in names

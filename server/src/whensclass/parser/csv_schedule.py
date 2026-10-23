@@ -28,6 +28,7 @@ from ..domain.models import (
 from .cells import _HAS_LETTER, _ROOM_RE, parse_lesson, replaced_of
 from .dates import _parse_date
 from .groups import (
+    SUBGROUP_RE,
     _warn_once,
     build_column_map,
     find_header_rows,
@@ -156,13 +157,14 @@ def parse_sheet(
     # главному заголовку и по повторному, — а какой из разборов верен, решает
     # содержимое (`_settle_moved`).
     doubt: dict[date, _Doubt] = {}
-    section: tuple[dict[str, int], str] = ({}, "")
+    section: tuple[dict[str, int], str, dict[str, tuple[str, int]]] = ({}, "", {})
 
     blank_sunday: set[int] = set()
     for i, row in enumerate(rows):
         if i in distrust:
             moved, why = distrust[i]
-            section = (_section_columns(rows, i, groups) if moved else {}, why)
+            placed, split = _section_columns(rows, i, groups) if moved else ({}, {})
+            section = (placed, why, split)
         if i in skip or i in blank_sunday:
             continue
 
@@ -264,7 +266,7 @@ def parse_sheet(
         for group in groups:
             col = group.column
             if col in moved:
-                day = doubt.setdefault(current, _Doubt(section[0], section[1]))
+                day = doubt.setdefault(current, _Doubt(section[0], section[1], section[2]))
                 day.by_main.setdefault(group.id, []).extend(
                     _lessons_at(row, teacher_row, col, number)
                 )
@@ -276,6 +278,10 @@ def parse_sheet(
             found_here = _lessons_at(row, teacher_row, col, number)
             if found_here:
                 snapshot.schedule[group.id].setdefault(current, []).extend(found_here)
+        if current in doubt:
+            day = doubt[current]
+            for gid, (_, col) in day.new.items():
+                day.by_new.setdefault(gid, []).extend(_lessons_at(row, teacher_row, col, number))
         for col in unnamed:
             if _cell(row, col).strip():
                 unnamed[col] += 1
@@ -336,16 +342,27 @@ class _Doubt:
     # Группа -> её колонка по повторному заголовку; группы там нет — нет и здесь.
     columns: dict[str, int]
     why: str
+    # Подгруппы, на которые заголовок разделил группу: id -> (имя, колонка).
+    new: dict[str, tuple[str, int]] = field(default_factory=dict)
     by_main: dict[str, list[Lesson]] = field(default_factory=dict)
     by_section: dict[str, list[Lesson]] = field(default_factory=dict)
+    by_new: dict[str, list[Lesson]] = field(default_factory=dict)
 
 
-def _section_columns(rows: list[list[str]], i: int, groups: list[GroupRef]) -> dict[str, int]:
-    """Где какая группа по повторному заголовку в строке `i` (имена — в `i + 2`).
+def _section_columns(
+    rows: list[list[str]], i: int, groups: list[GroupRef]
+) -> tuple[dict[str, int], dict[str, tuple[str, int]]]:
+    """Где какая группа по повторному заголовку в строке `i` (имена — в `i + 2`),
+    и подгруппы, на которые он разделил группу: id -> (имя, колонка).
 
     Имя, которого главный заголовок не знает («СИС(а)-926/1» у «СИС-926/1»), —
     прежнее имя группы: её место видно по соседям. Если слева и справа группы
     стоят с одним и тем же шагом от своих колонок, с тем же шагом стоит и она.
+
+    Шаг не сошёлся, а имя — «группа/N» той группы, которой в заголовке нет, —
+    колледж разделил группу на подгруппы («С-926» на «С-926/1» и «С-926/2»):
+    их пары — под их именами. Другие незнакомые имена так не читаются: старое
+    имя из чужого шаблона дало бы группу-двойника.
     """
     names_row = rows[i + 2] if i + 2 < len(rows) else []
     main_col = {g.id: g.column for g in groups}
@@ -365,14 +382,30 @@ def _section_columns(rows: list[list[str]], i: int, groups: list[GroupRef]) -> d
             step[col] = col - main_col[known[0]]
         elif ids:
             unknown.append(col)
+    unplaced: list[int] = []
     for col in unknown:
         left = next((step[c] for c in reversed(heads[: heads.index(col)]) if c in step), None)
         right = next((step[c] for c in heads[heads.index(col) + 1:] if c in step), None)
         if left is None or left != right:
+            unplaced.append(col)
             continue
         for gid in at_main.get(col - left, []):
             placed.setdefault(gid, col)
-    return placed
+    new: dict[str, tuple[str, int]] = {}
+    for col in unplaced:
+        for name in split_group_names(_cell(names_row, col)):
+            m = SUBGROUP_RE.fullmatch(name)
+            if not m:
+                continue
+            try:
+                base = group_id(m.group(1))
+            except ValueError:
+                continue
+            gid = group_id(name)
+            if base in main_col and base not in placed and gid not in main_col:
+                new.setdefault(gid, (name, col))
+    return placed, new
+
 
 
 # Запасной способ верит разбору дня, только если предметы почти все знакомы
@@ -433,6 +466,7 @@ def _settle_moved(
         return total, (hits / total if total else 0.0)
 
     back_to_main = False
+    added: dict[str, GroupRef] = {}
     read: dict[str, list[date]] = {"section": [], "main": [], "": []}
     whys: dict[str, None] = {}
     absent: dict[tuple[str, str], list[date]] = {}
@@ -466,6 +500,27 @@ def _settle_moved(
                     absent.setdefault((gid, d.why), []).append(day)
                 else:
                     whys[d.why] = None
+        if verdict != "section":
+            continue
+        for gid, (name, col) in d.new.items():
+            lessons = d.by_new.get(gid, [])
+            if gid not in added and not lessons:
+                # Пустая колонка шаблона — ещё не группа.
+                continue
+            if gid not in added:
+                added[gid] = GroupRef(name=name, id=gid, column=col)
+                # В списке выбора — сразу за группой, которую разделили.
+                base = group_id(SUBGROUP_RE.fullmatch(name).group(1))
+                at = max(
+                    (k for k, g in enumerate(snapshot.groups) if g.id == base or g.id in added),
+                    default=len(snapshot.groups) - 1,
+                )
+                snapshot.groups.insert(at + 1, added[gid])
+            if lessons:
+                snapshot.schedule.setdefault(gid, {})[day] = list(lessons)
+            if col != added[gid].column:
+                snapshot.day_columns.setdefault(gid, {})[day] = col
+            names[gid] = name
     for (gid, why), days in absent.items():
         snapshot.unread_why.append(
             f"{names.get(gid, gid)} {days[0]:%d.%m}–{days[-1]:%d.%m}: группы нет в повторном "
@@ -476,6 +531,12 @@ def _settle_moved(
     def span(days: list[date]) -> str:
         return f"{days[0]:%d.%m}–{days[-1]:%d.%m} ({len(days)})" if days else "нет"
 
+    if added:
+        _warn_once(
+            ("подгруппы", tuple(sorted(added))),
+            "повторный заголовок разделил группы на подгруппы — читаю их пары под ним: %s",
+            ", ".join(g.name for g in added.values()), logger=log,
+        )
     _warn_once(
         ("запасной", tuple(sorted(doubt)), tuple(read["section"]), tuple(read["main"])),
         "повторный заголовок спорит с главным: по повторному прочитаны дни %s, по главному — "
