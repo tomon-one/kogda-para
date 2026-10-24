@@ -204,6 +204,15 @@ def build_column_map(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> lis
     return groups
 
 
+# Слова шапки «столбиком» и сколько строк она занимает самое большее.
+HEAD_WORDS = frozenset({"Дисциплина", "Преподаватель"})
+_HEAD_ROWS = 4
+
+
+def _word(row: list[str], col: int) -> str:
+    return ((row[col] if col < len(row) else "") or "").strip()
+
+
 def find_header_rows(
     rows: list[list[str]],
     groups: list[GroupRef],
@@ -211,6 +220,7 @@ def find_header_rows(
     where: Callable[[int], str] = lambda i: f"строке {i}",
     adopt: dict[int, list[str]] | None = None,
     distrust: dict[int, tuple[set[int], str]] | None = None,
+    names_at: dict[int, int] | None = None,
 ) -> set[int]:
     """Индексы строк, которые надо пропустить при обходе.
 
@@ -225,7 +235,8 @@ def find_header_rows(
     местах. Без `distrust` расхождение — отказ листа.
 
     В `adopt` складываются имена, которые повторный заголовок даёт колонке,
-    безымянной в главном: их подбирает `parse_sheet`.
+    безымянной в главном: их подбирает `parse_sheet`. В `names_at` — строка
+    имён каждого трёхстрочного заголовка.
     """
     # Раскладка — по главному заголовку, а не по группам: колонка с именем,
     # повторённым в двух местах, группой не стала (`build_column_map`), но
@@ -246,26 +257,34 @@ def find_header_rows(
                     )
             continue
 
-        cells = {c for c, v in enumerate(row) if (v or "").strip() == "Дисциплина"}
+        if i in skip:
+            continue
+        cells = {c for c, v in enumerate(row) if (v or "").strip() in HEAD_WORDS}
         if len(cells) < min_groups:
             # «Дисциплина» / «Преподаватель» в клетке одной группы — заготовка
             # шаблона, а не заголовок, и выкидывать три строки у всех групп
             # нельзя. Такую клетку разбор ячеек считает пустой.
             continue
-        below = rows[i + 1] if i + 1 < len(rows) else []
-        if any(
-            (below[c] or "").strip() == "Преподаватель"
-            for c in cells
-            if c < len(below)
+        # Заголовок «столбиком»: Дисциплина / Преподаватель / имя группы. Строка
+        # имён — первая, где слов шапки уже нет: колледж то повторяет строку
+        # «Дисциплина», то теряет её, а имена и пары под ними стоят на местах.
+        names = next(
+            (k for k in range(i + 1, min(i + 1 + _HEAD_ROWS, len(rows)))
+             if not any(_word(rows[k], c) in HEAD_WORDS for c in cells)),
+            None,
+        )
+        if names is None or not any(
+            _word(rows[k], c) == "Преподаватель" for k in range(i, names) for c in cells
         ):
-            # Заголовок «столбиком»: Дисциплина / Преподаватель / имя группы.
-            moved = _check_columnar(
-                where(i), cells, rows[i + 2] if i + 2 < len(rows) else [], groups, adopt,
-                reject=distrust is None,
-            )
-            if distrust is not None:
-                distrust[i] = moved
-            skip.update({i, i + 1, i + 2})
+            continue
+        moved = _check_columnar(
+            where(i), cells, rows[names], groups, adopt, reject=distrust is None,
+        )
+        if distrust is not None:
+            distrust[i] = moved
+        if names_at is not None:
+            names_at[i] = names
+        skip.update(range(i, names + 1))
 
     return skip
 

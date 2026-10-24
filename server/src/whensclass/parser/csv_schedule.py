@@ -25,9 +25,10 @@ from ..domain.models import (
     SourceFormatChanged,
     a1_column,
 )
-from .cells import _HAS_LETTER, _ROOM_RE, parse_lesson, replaced_of
+from .cells import _HAS_LETTER, _ROOM_RE, _online_room, parse_lesson, replaced_of
 from .dates import _parse_date
 from .groups import (
+    HEAD_WORDS,
     SUBGROUP_RE,
     _warn_once,
     build_column_map,
@@ -114,8 +115,10 @@ def parse_sheet(
     groups = build_column_map(rows, limits.min_groups)
     adopt: dict[int, list[str]] = {}
     distrust: dict[int, tuple[set[int], str]] = {}
+    names_at: dict[int, int] = {}
     skip = find_header_rows(
-        rows, groups, limits.min_groups, where=where, adopt=adopt, distrust=distrust
+        rows, groups, limits.min_groups, where=where, adopt=adopt, distrust=distrust,
+        names_at=names_at,
     )
     groups, unnamed = _adopt_names(rows, groups, adopt, limits.min_groups)
     spill = _spill(rows, groups, skip, where)
@@ -163,7 +166,7 @@ def parse_sheet(
     for i, row in enumerate(rows):
         if i in distrust:
             moved, why = distrust[i]
-            placed, split = _section_columns(rows, i, groups) if moved else ({}, {})
+            placed, split = _section_columns(rows, i, names_at[i], groups) if moved else ({}, {})
             section = (placed, why, split)
         if i in skip or i in blank_sunday:
             continue
@@ -350,9 +353,9 @@ class _Doubt:
 
 
 def _section_columns(
-    rows: list[list[str]], i: int, groups: list[GroupRef]
+    rows: list[list[str]], i: int, names_i: int, groups: list[GroupRef]
 ) -> tuple[dict[str, int], dict[str, tuple[str, int]]]:
-    """Где какая группа по повторному заголовку в строке `i` (имена — в `i + 2`),
+    """Где какая группа по повторному заголовку в строке `i` (имена — в `names_i`),
     и подгруппы, на которые он разделил группу: id -> (имя, колонка).
 
     Имя, которого главный заголовок не знает («СИС(а)-926/1» у «СИС-926/1»), —
@@ -364,12 +367,12 @@ def _section_columns(
     их пары — под их именами. Другие незнакомые имена так не читаются: старое
     имя из чужого шаблона дало бы группу-двойника.
     """
-    names_row = rows[i + 2] if i + 2 < len(rows) else []
+    names_row = rows[names_i]
     main_col = {g.id: g.column for g in groups}
     at_main: dict[int, list[str]] = {}
     for g in groups:
         at_main.setdefault(g.column, []).append(g.id)
-    heads = sorted(c for c, v in enumerate(rows[i]) if (v or "").strip() == "Дисциплина")
+    heads = sorted(c for c, v in enumerate(rows[i]) if (v or "").strip() in HEAD_WORDS)
     placed: dict[str, int] = {}
     step: dict[int, int] = {}
     unknown: list[int] = []
@@ -637,6 +640,16 @@ def _halves(row: list[str], col: int, teacher_row: list[str]) -> bool:
     return bool(_HAS_LETTER.search(left) and _HAS_LETTER.search(_cell(teacher_row, col + 2)))
 
 
+def _leftover(rows: list[list[str]], i: int, col: int, text: str) -> bool:
+    """Одна аудитория («онлайн», «255») в пустой колонке блока, у которого ни в
+    строке пары, ни в строке преподавателей рядом нет предмета, — остаток
+    удалённой пары. Пары из неё не собрать, и вставка ячеек так не выглядит:
+    та уводит из колонки предмета сам предмет."""
+    if _online_room(text) is None and not _ROOM_RE.match(text):
+        return False
+    return not any(_cell(rows[j], col).strip() for j in (i - 1, i, i + 1) if 0 <= j < len(rows))
+
+
 def _spill(
     rows: list[list[str]], groups: list[GroupRef], skip: set[int], where
 ) -> list[tuple[int, int, int]]:
@@ -672,7 +685,7 @@ def _spill(
                 continue
             for extra in (1, 2):
                 text = _cell(row, col + extra).strip()
-                if text and not _noise(text):
+                if text and not _noise(text) and not _leftover(rows, i, col, text):
                     found.append((i, col, col + extra))
     if len({col for _, col, _ in found}) >= SPILL_BLOCKS:
         i, _, col = found[0]

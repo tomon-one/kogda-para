@@ -63,6 +63,33 @@ def test_one_letter_is_a_typo_not_an_unread_day(fixture_csv):
     assert parse_csv(buf.getvalue(), "ф", FIXTURE).unread == {}
 
 
+def test_lone_room_under_an_empty_lesson_is_a_leftover(fixture_csv):
+    """Пару удалили, а «онлайн» или номер кабинета в пустой колонке остался:
+    пары из него не собрать, день читается. Рядом с предметом — по-прежнему
+    незнакомая запись."""
+    honest = parse_csv(fixture_csv, "ф", FIXTURE)
+    rows = read_csv(fixture_csv)
+    empty = next(
+        i for i in range(ROW, len(rows) - 1)
+        if (rows[i][1] or "").strip().isdigit() and not any(
+            (rows[j][BP] or "").strip() for j in (i - 1, i, i + 1)
+        )
+    )
+    for text in ("онлайн", "онлайн 8", "255"):
+        rows[empty + 1][BP + 1] = text
+        buf = io.StringIO()
+        csv.writer(buf, lineterminator="\n").writerows(rows)
+        snapshot = parse_csv(buf.getvalue(), "ф", FIXTURE)
+        assert snapshot.unread == {}, text
+        assert snapshot.schedule == honest.schedule, text
+    rows[empty + 1][BP + 1] = ""
+    rows[ROW][BP + 1] = "онлайн"
+    assert (rows[ROW][BP] or "").strip()
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="\n").writerows(rows)
+    assert set(parse_csv(buf.getvalue(), "ф", FIXTURE).unread) == {"bp-1126"}
+
+
 def test_long_run_of_dots_in_empty_column_is_read_quickly(fixture_csv):
     """Ряд точек на 50 000 знаков с двумя буквами в конце — запись, а не
     опечатка, и разбирается за доли секунды."""

@@ -716,3 +716,21 @@ def test_unknown_name_that_is_not_a_subgroup_is_not_a_new_group(fixture_csv, mon
     names = {g.name for g in snap.groups}
     assert "ГД(а)-1125" not in names and "ДП-777/1" not in names
     assert "ГД-1125/2" in names
+
+
+@pytest.mark.parametrize("shape", ["Дисциплина повторена", "без «Дисциплина»"])
+def test_repeated_header_with_an_extra_or_missing_head_row_is_still_a_header(fixture_csv, shape):
+    """Колледж то повторяет в шапке недели строку «Дисциплина» (Дисциплина /
+    Преподаватель / Дисциплина / имена), то теряет её (Преподаватель / имена):
+    строка имён — первая без слов шапки, а «№» в ней — не номер пары."""
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    header = _columnar_header(rows)[0]
+    rows[header + 2][1] = "№"
+    honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
+    if shape == "Дисциплина повторена":
+        rows.insert(header + 2, list(rows[header]))
+    else:
+        del rows[header]
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    assert snap.schedule == honest.schedule
+    assert snap.unread == honest.unread
