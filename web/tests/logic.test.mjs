@@ -11,7 +11,7 @@ import {
   shiftColumn, shortenName, tileLabel,
 } from '../assets/js/format.js';
 import {
-  bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daySummary, daysWithGaps, freeDay, freeOwnDay,
+  bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daySummary, openingDay, daysWithGaps, freeDay, freeOwnDay,
   lessonTime, ownOnly,
   onlyAt, shortLabels, subgroupsOf, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
@@ -343,4 +343,14 @@ test('сводка дня: свои неотменённые пары по но�
   assert.equal(daySummary([{ n: 3, s: 'А' }], [], bells), '1 пара');
   assert.equal(daySummary([{ n: 1, s: 'А', x: 1 }], [], bells), null);
   assert.equal(daySummary([], [], bells), null);
+});
+
+test('открыть список: сегодня, после последнего звонка — завтра', () => {
+  const bells = { 1: ['09:00', '10:30'], 6: ['17:40', '19:10'] };
+  const at = (h, m) => ({ date: '2026-10-29', sec: h * 3600 + m * 60 });
+  assert.equal(openingDay(bells, at(12, 0)), '2026-10-29');
+  assert.equal(openingDay(bells, at(19, 9)), '2026-10-29');
+  assert.equal(openingDay(bells, at(19, 10)), '2026-10-30');
+  // Сетки нет — сегодня.
+  assert.equal(openingDay({}, at(23, 0)), '2026-10-29');
 });

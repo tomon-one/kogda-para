@@ -47,6 +47,7 @@ import ru.whensclass.data.UnreadDay
 import ru.whensclass.widget.collegeToday
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
+import ru.whensclass.widget.parseTime
 import ru.whensclass.widget.plural
 
 /**
@@ -73,7 +74,7 @@ fun ScheduleDays(
     // при создании списка, а не прокруткой после первого кадра: прокрутка
     // успевает показать понедельник и уехать с него на глазах. Дня нет —
     // ближайший к нему ([dayIndex]).
-    val target = startDay ?: today.toString()
+    val target = startDay ?: openingDay(schedule.bellsOn(today), now).toString()
     val opening = remember(days, target) { dayIndex(days, target) + shift }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = opening)
 
@@ -109,7 +110,7 @@ fun ScheduleDays(
     LaunchedEffect(startKey) {
         if (startKey != handledStart) {
             handledStart = startKey
-            wanted = startDay ?: today.toString()
+            wanted = startDay ?: openingDay(schedule.bellsOn(today), now).toString()
         }
     }
     // Человек сам повёл список — ждать обещанного дня больше не надо, иначе
@@ -368,6 +369,18 @@ internal fun freeDay(
     }
     val phrases = if (teacher) FREE else FREE + FREE_STUDENT
     return phrases[day.dayOfYear % phrases.size]
+}
+
+/**
+ * С какого дня открыть список (openingDay в schedule.js сайта): сегодня, а когда
+ * последний звонок сегодня уже прозвенел — завтра, как «Аудитории».
+ * Сегодняшние пары остаются выше.
+ */
+internal fun openingDay(todayBells: Map<String, List<String>>, now: LocalDateTime): LocalDate {
+    val today = now.toLocalDate()
+    val last = todayBells.keys.mapNotNull { it.toIntOrNull() }.maxOrNull() ?: return today
+    val end = parseTime(todayBells[last.toString()]?.getOrNull(1)) ?: return today
+    return if (!now.toLocalTime().isBefore(end)) today.plusDays(1) else today
 }
 
 /**

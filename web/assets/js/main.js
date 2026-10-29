@@ -40,7 +40,7 @@ Object.assign(app, {
   goneSuspected: repo.goneSuspected,
   pinned: repo.pinned,
   now: function () { return collegeNow(); },
-  scrollTarget: function () { return collegeNow().date; },
+  scrollTarget: function () { return repo.openingDate(); },
   togglePin: function (kind, id) { repo.togglePin(kind, id); },
   theme: function () { return store.get('theme') || 'system'; },
   /** Подписи выбранных групп у пар: названиями (по умолчанию) или номерами. */
@@ -170,7 +170,7 @@ function pick(mode, row) {
   } else {
     if (mode === 'self') repo.selectSelf(row);
     else repo.selectGroup(row);
-    state.wanted = collegeNow().date;
+    state.wanted = repo.openingDate();
     // Уведомления — о новой своей группе, а не о прежней.
     pushTries = 0;
     syncPush();
@@ -307,7 +307,7 @@ applyTheme();
 countOpen();
 // К сегодняшнему дню и на первом заходе, а не только при смене экрана, иначе
 // наверху стоял бы понедельник.
-state.wanted = collegeNow().date;
+state.wanted = repo.openingDate();
 if (repo.cachedGroups().length) state.groups = repo.cachedGroups();
 if (repo.cachedTeachers().length) state.teachers = repo.cachedTeachers();
 onRoute();
@@ -322,7 +322,7 @@ syncPush();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', function (event) {
     if (event.data && event.data.t === 'own' && repo.chosen()) {
-      state.wanted = collegeNow().date;
+      state.wanted = repo.openingDate();
       home();
       if (event.data.gone) {
         repo.expectGone();

@@ -6,7 +6,7 @@
 import * as api from './api.js';
 import * as store from './store.js';
 import { collegeNow, weekStart } from './time.js';
-import { DAYS, MAX_GROUPS, cleanSchedule, combineGroups, coversDay, ownOnly, windowMark } from './schedule.js';
+import { DAYS, MAX_GROUPS, bellsOn, cleanSchedule, combineGroups, coversDay, openingDay, ownOnly, windowMark } from './schedule.js';
 
 // Списки и закреплённые — в catalog.js; экраны и тесты берут их отсюда.
 export { cachedGroups, cachedTeachers, freshGroups, freshTeachers, followRenamedPins, pinned, togglePin } from './catalog.js';
@@ -165,6 +165,12 @@ export function forgetSchedule() {
 }
 
 /** Сохранённое расписание, приведённое к форме; испорченное — забыть. */
+/** День, с которого открыть список: сегодня, а после последнего звонка — завтра. */
+export function openingDate() {
+  var now = collegeNow();
+  return openingDay(bellsOn(saved(), now.date), now);
+}
+
 export function saved() {
   var body = store.get('schedule');
   if (!body) return null;

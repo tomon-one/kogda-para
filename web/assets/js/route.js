@@ -3,7 +3,6 @@
 import * as repo from './repo.js';
 import * as store from './store.js';
 import { closeDialog } from './ui/dom.js';
-import { collegeNow } from './time.js';
 import { MAX_GROUPS } from './schedule.js';
 import { state, nav, app } from './state.js';
 import { render } from './render.js';
@@ -125,7 +124,7 @@ export function onRoute() {
   // Дни всплывают после выбора группы; при переходах внутри экрана хватает сдвига.
   nav.appear = nav.depth != null && nav.depth < 2 && depth >= 2;
   nav.depth = depth;
-  if ((isOwn && !wasOwn) || (route.id && enteredList)) state.wanted = collegeNow().date;
+  if ((isOwn && !wasOwn) || (route.id && enteredList)) state.wanted = repo.openingDate();
   if (route.id) loadOther(route.kind, route.id);
   // Экран выбора — всегда за свежими (ответ по ETag, без изменений — пустой):
   // после «Выбрать заново» в старом списке нет новой группы.

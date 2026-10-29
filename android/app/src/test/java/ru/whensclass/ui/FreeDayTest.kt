@@ -70,4 +70,13 @@ class FreeDayTest {
         assertEquals("1 пара", daySummary(listOf(lesson(3)), emptyList(), bells))
         assertEquals(null, daySummary(listOf(lesson(1, x = 1)), emptyList(), bells))
     }
+
+    @Test
+    fun `открыть список — сегодня, после последнего звонка завтра`() {
+        val bells = mapOf("1" to listOf("09:00", "10:30"), "6" to listOf("17:40", "19:10"))
+        val day = LocalDate.of(2026, 10, 29)
+        assertEquals(day, openingDay(bells, day.atTime(19, 9)))
+        assertEquals(day.plusDays(1), openingDay(bells, day.atTime(19, 10)))
+        assertEquals(day, openingDay(emptyMap(), day.atTime(23, 0)))
+    }
 }

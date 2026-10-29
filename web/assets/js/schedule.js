@@ -247,6 +247,18 @@ export function dayBells(schedule, day) {
   return (day && day.bl) || (schedule && schedule.bells) || {};
 }
 
+/**
+ * С какого дня открыть список (openingDay в DayList.kt): сегодня, а когда
+ * последний звонок сегодня уже прозвенел — завтра, как «Аудитории».
+ * Сегодняшние пары остаются выше. `now` — {date, sec} (collegeNow).
+ */
+export function openingDay(bells, now) {
+  var last = Object.keys(bells || {}).map(Number).filter(function (n) { return !isNaN(n); })
+    .sort(function (a, b) { return b - a; })[0];
+  var end = last != null ? parseTime((bells[String(last)] || [])[1]) : null;
+  return end != null && now.sec >= end ? addDays(now.date, 1) : now.date;
+}
+
 /** Звонки дня по дате: дня в расписании нет — обычные. */
 export function bellsOn(schedule, date) {
   var days = (schedule && schedule.days) || [];
