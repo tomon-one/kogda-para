@@ -232,9 +232,9 @@
 .link-button,
 .action.link-button {
   display: inline-block;
-  height: 32px;
+  height: 28px;
   margin: 0 6px 0 0;
-  padding: 0 12px;
+  padding: 0 10px;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -244,9 +244,9 @@
   border-radius: 10px;
   background: var(--foreign-bg);
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 32px;
+  line-height: 28px;
 }
 
 /* «Открыть» у онлайн-пары — зелёная: заметна среди красного. */

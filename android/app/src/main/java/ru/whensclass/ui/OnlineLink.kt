@@ -87,8 +87,8 @@ private fun LinkButton(label: String, color: Color, onClick: () -> Unit) {
         onClick = onClick,
         // Поля и высота меньше обычных, чтобы пара с вебинаром не распухала;
         // область нажатия Compose сам держит не меньше 48 dp.
-        modifier = Modifier.height(32.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+        modifier = Modifier.height(28.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
         // Залитая плашка своего цвета: кнопку видно и без рамки.
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = color, containerColor = color.copy(alpha = 0.14f)),
@@ -96,7 +96,7 @@ private fun LinkButton(label: String, color: Color, onClick: () -> Unit) {
         // В одну строку с многоточием: кнопка остаётся своей высоты.
         Text(
             label,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
