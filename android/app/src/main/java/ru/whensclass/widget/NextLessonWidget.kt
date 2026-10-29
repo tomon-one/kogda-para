@@ -72,7 +72,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 modifier = GlanceModifier
                     .fillMaxSize()
                     .background(colors.background)
-                    .cornerRadius(16.dp)
+                    .cornerRadius(20.dp)
                     .padding(horizontal = 10.dp, vertical = 7.dp)
                     .clickable(
                         // Приложение — сразу на том дне, о котором говорит виджет.

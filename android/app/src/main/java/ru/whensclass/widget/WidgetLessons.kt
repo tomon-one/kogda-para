@@ -38,6 +38,8 @@ internal fun Lessons(
     fit: Fit,
     colors: Palette,
     modifier: GlanceModifier = GlanceModifier.fillMaxWidth(),
+    /** Занято над парами сверх шапки (сводка дня). */
+    reserved: Dp = 0.dp,
 ) {
     if (lessons.isEmpty()) {
         // Подстраховка: без строк виджет остался бы одной шапкой.
@@ -55,7 +57,7 @@ internal fun Lessons(
     val scale = fontScale()
     val rowHeight = if (fit.dense) (13 + 28 * scale).dp else (14 + 31 * scale).dp
     // Место под шапкой; строки «прошло/ещё N» вычитаются ниже, отдельно.
-    val free = LocalSize.current.height - if (fit.dense) (12 + 30 * scale).dp else (15 + 35 * scale).dp
+    val free = LocalSize.current.height - reserved - if (fit.dense) (12 + 30 * scale).dp else (15 + 35 * scale).dp
     // Строки «прошло N пар» и «ещё N пар» занимают место, а нужны ли они —
     // видно только после выбора окна. Поэтому прикидка, потом уточнение:
     // одного круга хватает.
@@ -131,7 +133,7 @@ private fun LessonRow(
         modifier = GlanceModifier
             .fillMaxWidth()
             .background(if (isNow) colors.nowSurface else colors.surface)
-            .cornerRadius(10.dp)
+            .cornerRadius(14.dp)
             .padding(horizontal = 8.dp, vertical = if (fit.dense) 3.dp else 4.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -158,12 +160,25 @@ private fun LessonRow(
             } else {
                 lessonTime(bells, lesson.number)
             }
+            // Начало — жирнее и крупнее, конец мельче, как на экране. Одной строкой:
+            // высота пары не меняется (её шаг снят со снимка, см. выше).
             time?.let { time ->
-                Text(
-                    time,
-                    maxLines = 1,
-                    style = TextStyle(fontSize = 11.sp, color = colors.text),
-                )
+                val start = time.substringBefore('–')
+                val end = time.substringAfter('–', "")
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        start,
+                        maxLines = 1,
+                        style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (isNow) colors.accent else colors.text),
+                    )
+                    if (end.isNotEmpty()) {
+                        Text(
+                            "–$end",
+                            maxLines = 1,
+                            style = TextStyle(fontSize = 10.sp, color = colors.textDim),
+                        )
+                    }
+                }
             }
         }
         Spacer(GlanceModifier.width(6.dp))

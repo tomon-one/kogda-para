@@ -73,7 +73,7 @@ class WeekWidget : GlanceAppWidget() {
                     // Нажатие по пустому месту открывает приложение.
                     .clickable(actionStartActivity(openDay(context, today)))
                     .background(colors.background)
-                    .cornerRadius(16.dp)
+                    .cornerRadius(20.dp)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
                 // С дырами, как на экране: воскресенье и будень без строки

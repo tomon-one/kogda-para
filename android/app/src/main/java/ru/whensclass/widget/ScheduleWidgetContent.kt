@@ -75,7 +75,7 @@ fun ScheduleWidgetContent(
             // у Glance ближний обработчик выигрывает у дальнего.
             .clickable(actionStartActivity(openDay(context, day)))
             .background(colors.background)
-            .cornerRadius(16.dp)
+            .cornerRadius(20.dp)
             .padding(horizontal = if (fit.narrow) 6.dp else 10.dp)
             .padding(vertical = if (fit.dense) 4.dp else 8.dp),
     ) {
@@ -85,8 +85,9 @@ fun ScheduleWidgetContent(
             offset,
             fetchedAt,
             millisOf(now),
-            firstOffset(schedule, now.toLocalDate()),
-            lastOffset(schedule, now.toLocalDate()),
+            // Шаги листания — от дня, с которого виджет открыт (вечером это завтра).
+            firstOffset(schedule, day.minusDays(offset.toLong())),
+            lastOffset(schedule, day.minusDays(offset.toLong())),
             busy,
             done,
             failed,
@@ -142,15 +143,29 @@ fun ScheduleWidgetContent(
                 ),
                 colors, open = actionStartActivity(openDay(context, day)),
             )
-            else -> Lessons(
-                today.lessons,
-                schedule.bellsOf(today),
-                day,
-                now,
-                fit,
-                colors,
-                modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
-            )
+            else -> {
+                // Сводка дня, как на экране: «2 пары · до 12:10». На низком виджете
+                // места под неё нет — пары важнее.
+                val summary = if (fit.dense) null else ru.whensclass.ui.daySummary(today.lessons, schedule.groupNames, schedule.bellsOf(today))
+                if (summary != null) {
+                    Text(
+                        summary,
+                        maxLines = 1,
+                        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                        modifier = GlanceModifier.padding(start = 4.dp, bottom = 4.dp),
+                    )
+                }
+                Lessons(
+                    today.lessons,
+                    schedule.bellsOf(today),
+                    day,
+                    now,
+                    fit,
+                    colors,
+                    modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+                    reserved = if (summary != null) (4 + 15 * fit.scale).dp else 0.dp,
+                )
+            }
         }
     }
 }

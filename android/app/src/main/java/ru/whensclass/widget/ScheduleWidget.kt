@@ -104,7 +104,8 @@ class ScheduleWidget : GlanceAppWidget() {
             sourceUrl = sourceUrl,
             colors = colors,
             now = now,
-            day = now.toLocalDate().plusDays(offset.toLong()),
+            // После последнего звонка — с завтрашнего дня, как список в приложении.
+            day = ru.whensclass.ui.openingDay(schedule?.bellsOn(now.toLocalDate()).orEmpty(), now).plusDays(offset.toLong()),
             offset = offset,
             modifier = GlanceModifier,
         )
