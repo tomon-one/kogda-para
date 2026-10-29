@@ -382,11 +382,15 @@ internal fun App(
         }
     }
 
-    // «Стекло» — только у тёмной: в светлой красный свет за белыми карточками не виден.
-    val glowing = glow && dark
-    MaterialTheme(colorScheme = if (glowing) GlowScheme else if (dark) DarkScheme else LightScheme) {
+    val scheme = when {
+        glow && dark -> GlassDarkScheme
+        glow -> GlassLightScheme
+        dark -> DarkScheme
+        else -> LightScheme
+    }
+    MaterialTheme(colorScheme = scheme) {
         Surface(
-            modifier = if (glowing) Modifier.fillMaxSize().drawBehind { glowBackdrop() } else Modifier.fillMaxSize(),
+            modifier = if (glow) Modifier.fillMaxSize().drawBehind { glowBackdrop(dark) } else Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
         ) {
             // Пустой фон, пока настройки читаются с диска: это доли секунды,

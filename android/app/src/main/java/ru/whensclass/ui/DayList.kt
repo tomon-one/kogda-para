@@ -13,12 +13,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import dev.chrisbanes.haze.blur.hazeBlur
-import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
@@ -203,12 +202,13 @@ fun ScheduleDays(
 
     // «Стекло»: список уходит под полоску дней, и она размывает то, что под ней.
     val glass = weekStrip && MaterialTheme.colorScheme.background.alpha < 1f && !rememberPowerSave()
-    val haze = dev.chrisbanes.haze.rememberHazeState()
+    val sourceLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val source = remember(sourceLayer) { GlassSource(sourceLayer) }
     var stripHeight by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val strip: @Composable (Modifier) -> Unit = { stripModifier ->
         WeekStrip(
             modifier = stripModifier,
-            glass = if (glass) haze else null,
+            glass = if (glass) source else null,
             // Лямбдой: день читается внутри полоски, и при листании перерисовывается
             // только она, а не весь список.
             shownDay = { (picked ?: shownDay)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today },
@@ -266,14 +266,7 @@ fun ScheduleDays(
     if (glass) {
         Box(modifier = modifier.fillMaxSize()) {
             val density = androidx.compose.ui.platform.LocalDensity.current
-            list(
-                // Список начинается под верхним полем полоски: над ней он выглядывал бы
-                // полуразмытыми строками.
-                Modifier.fillMaxSize()
-                    .padding(top = STRIP_TOP)
-                    .hazeSource(haze),
-                with(density) { (stripHeight.toDp() - STRIP_TOP).coerceAtLeast(0.dp) },
-            )
+            list(Modifier.fillMaxSize().glassSource(source), with(density) { stripHeight.toDp() })
             strip(Modifier.onSizeChanged { stripHeight = it.height })
         }
     } else {
@@ -321,7 +314,7 @@ private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", 
 private fun WeekStrip(
     modifier: Modifier = Modifier,
     /** «Стекло»: размывать список под полоской. */
-    glass: dev.chrisbanes.haze.HazeState? = null,
+    glass: GlassSource? = null,
     shownDay: () -> LocalDate,
     today: LocalDate,
     onPick: (LocalDate) -> Unit,
@@ -341,15 +334,32 @@ private fun WeekStrip(
         )
     }
     val pillColor = MaterialTheme.colorScheme.primary
+    val dark = MaterialTheme.colorScheme.isDark
+    val blur = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    // Где полоса на экране — для света под стеклом; меняется только при раскладке.
+    var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val screen = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val glow = remember(dark, screen, origin) {
+        glowTopBrush(dark, androidx.compose.ui.geometry.Size(screen.width.toFloat(), screen.height.toFloat()), origin)
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
-            // У «Стекла» размыта вся полоса во всю ширину, с полями: иначе в полях
-            // и в скруглённых углах проступали чёткие строки и рамки карточек.
-            .then(if (glass != null) Modifier.frosted(glass) else Modifier)
             .padding(start = 12.dp, end = 12.dp, top = STRIP_TOP, bottom = 8.dp)
+            // У «Стекла» полоска висит над списком: размыто только под ней самой,
+            // вокруг список виден как есть — без отдельной полосы во всю ширину.
+            .then(
+                if (glass != null) {
+                    Modifier
+                        .onGloballyPositioned { origin = it.positionInRoot() }
+                        .clip(RoundedCornerShape(14.dp))
+                        .frosted(glass, blur, glassBase(dark), glow) { origin }
+                } else {
+                    Modifier
+                },
+            )
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-            .then(if (glass != null) Modifier.border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(14.dp)) else Modifier)
+            .then(if (glass != null) Modifier.border(1.dp, if (dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f), RoundedCornerShape(14.dp)) else Modifier)
             .padding(4.dp)
             // Одно касание на всю полоску вместо семи кнопок: при листании
             // полоска перестраивается дешевле. Чтецу экрана — каждый день отдельно (ниже).
@@ -703,24 +713,44 @@ private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, su
 }
 
 /**
- * Матовое стекло: размытое содержимое [state] под элементом, слегка притемнённое,
- * чтобы подписи читались над любой парой. До Android 12 размытия нет — тогда
- * почти сплошной тёмный фон.
+ * Источник матового стекла: список рисует себя в слой [layer], а полоска рисует
+ * тот же слой у себя размытым. [origin] — где список на экране.
  */
-internal fun Modifier.frosted(state: dev.chrisbanes.haze.HazeState): Modifier =
-    hazeBlur(
-        dev.chrisbanes.haze.HazeInput.Sources(state),
-        style = dev.chrisbanes.haze.blur.HazeBlurStyle {
-            blurRadius(32.dp)
-            // Сплошная подложка под размытым: экран под списком прозрачный (свет
-            // рисует корень), и без неё сквозь размытое проступал бы чёткий текст.
-            // Тон — как у света на высоте полоски, чтобы полоса не выделялась.
-            backgroundColor(Color(0xFF1C0101))
-            // Без зерна: оно серит тон, и полоса отличалась от света вокруг.
-            noiseFactor(0f)
-            colorEffects(listOf(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.15f))))
-            fallbackColorEffect(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.88f)))
-            // Низ полосы (её нижнее поле) сходит на нет: размытое переходит в чёткий список плавно, без черты.
-            mask(androidx.compose.ui.graphics.Brush.verticalGradient(0.9f to Color.Black, 1f to Color.Transparent))
-        },
-    )
+internal class GlassSource(val layer: androidx.compose.ui.graphics.layer.GraphicsLayer) {
+    var origin = androidx.compose.ui.geometry.Offset.Zero
+}
+
+/** Рисовать содержимое через слой [source], чтобы стекло над ним могло его повторить. */
+internal fun Modifier.glassSource(source: GlassSource): Modifier =
+    onGloballyPositioned { source.origin = it.positionInRoot() }
+        .drawWithContent {
+            source.layer.record { this@drawWithContent.drawContent() }
+            drawLayer(source.layer)
+        }
+
+/**
+ * Матовое стекло: сплошной лист [base] со светом [glow] того же места экрана,
+ * что рисует корень (так полоса не отделяется от фона и закрывает чёткий список
+ * под собой), а поверх — список из [source], размытый. Список рисует слой заново
+ * на каждом кадре листания, и размытое под стеклом едет вместе с ним. До
+ * Android 12 размытия нет — тогда только лист со светом.
+ */
+internal fun Modifier.frosted(
+    source: GlassSource,
+    blur: androidx.compose.ui.graphics.layer.GraphicsLayer,
+    base: Color,
+    glow: androidx.compose.ui.graphics.Brush,
+    origin: () -> androidx.compose.ui.geometry.Offset,
+): Modifier = drawBehind {
+    drawRect(base)
+    drawRect(glow)
+    if (android.os.Build.VERSION.SDK_INT >= 31) {
+        val radius = 24.dp.toPx()
+        blur.renderEffect = androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Clamp)
+        blur.record {
+            val here = origin()
+            translate(source.origin.x - here.x, source.origin.y - here.y) { drawLayer(source.layer) }
+        }
+        drawLayer(blur)
+    }
+}

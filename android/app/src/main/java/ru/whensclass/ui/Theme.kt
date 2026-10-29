@@ -17,13 +17,13 @@ private val BRAND_ON_LIGHT = Color(0xFFC20302)
 
 /** Зелёный «Открыть» у онлайн-пары: в схеме Material своего зелёного нет. */
 internal val ColorScheme.online: Color
-    get() = if (background.luminance() < 0.5f) Color(0xFF4CC38A) else Color(0xFF086B35)
+    get() = if (isDark) Color(0xFF4CC38A) else Color(0xFF086B35)
 
 /** Плитка пары внутри карточки дня (--tile сайта). У «Стекла» — полупрозрачная, как карточка. */
 internal val ColorScheme.tile: Color
     get() = when {
-        background.alpha < 1f -> Color.White.copy(alpha = 0.06f)
-        background.luminance() < 0.5f -> Color(0xFF1C1C1C)
+        background.alpha < 1f -> if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.55f)
+        isDark -> Color(0xFF1C1C1C)
         else -> Color(0xFFF4F5F7)
     }
 
@@ -32,7 +32,11 @@ internal val ColorScheme.tile: Color
  * прозрачный, и щель пропала бы: там она тёмная.
  */
 internal val ColorScheme.divider: Color
-    get() = if (background.alpha < 1f) Color.Black.copy(alpha = 0.55f) else background
+    get() = when {
+        background.alpha == 1f -> background
+        isDark -> Color.Black.copy(alpha = 0.55f)
+        else -> Color.Black.copy(alpha = 0.06f)
+    }
 
 /** Тёмная схема в тон виджету: чистый чёрный не светится на OLED. */
 internal val DarkScheme = darkColorScheme(
@@ -90,46 +94,63 @@ internal val LightScheme = lightColorScheme(
 )
 
 /**
- * «Стекло» (beta): тёмная схема, у которой фон экрана прозрачный — под ним
- * красный свет ([glowBackdrop]), — а карточки полупрозрачные, как стекло.
- * Окна (диалоги) остаются непрозрачными: у них свои surfaceContainer*.
+ * «Стекло» (beta): у схемы прозрачный фон экрана — под ним красный свет
+ * ([glowBackdrop]), — а карточки полупрозрачные, как стекло. Окна (диалоги)
+ * остаются непрозрачными: у них свои surfaceContainer*.
  */
-internal val GlowScheme = DarkScheme.copy(
+internal val GlassDarkScheme = DarkScheme.copy(
     background = Color.Transparent,
     surface = Color.White.copy(alpha = 0.07f),
     // Подложки сегментов и дорожки выключателя: сплошной тёмный на подсвеченной
     // карточке выглядел дырой.
     surfaceVariant = Color.White.copy(alpha = 0.08f),
-    outlineVariant = Color.White.copy(alpha = 0.22f),
 )
+
+/** «Стекло» в светлой теме: молочные карточки на сером листе с розовым светом сверху. */
+internal val GlassLightScheme = LightScheme.copy(
+    background = Color.Transparent,
+    surface = Color.White.copy(alpha = 0.5f),
+    surfaceVariant = Color.Black.copy(alpha = 0.05f),
+)
+
+/** Тёмная ли схема. По фону не понять: у «Стекла» он прозрачный. */
+internal val ColorScheme.isDark: Boolean
+    get() = onBackground.luminance() > 0.5f
+
+/** Лист под светом «Стекла». */
+internal fun glassBase(dark: Boolean): Color = if (dark) Color.Black else Color(0xFFF1F2F4)
+
+/**
+ * Верхний свет «Стекла» кистью в координатах элемента, левый верхний угол
+ * которого стоит в [origin] экрана размером [screen]: так полоса дней рисует у
+ * себя тот же свет, что корень за ней, и не отделяется от экрана.
+ */
+internal fun glowTopBrush(
+    dark: Boolean,
+    screen: androidx.compose.ui.geometry.Size,
+    origin: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset.Zero,
+): androidx.compose.ui.graphics.Brush =
+    androidx.compose.ui.graphics.Brush.radialGradient(
+        if (dark) listOf(BRAND.copy(alpha = 0.42f), BRAND.copy(alpha = 0.12f), Color.Transparent)
+        else listOf(BRAND.copy(alpha = 0.32f), BRAND.copy(alpha = 0.10f), Color.Transparent),
+        center = androidx.compose.ui.geometry.Offset(screen.width * 0.55f - origin.x, -screen.height * 0.04f - origin.y),
+        radius = maxOf(screen.width * 1.05f, 1f),
+    )
 
 /**
  * Свет за экраном «Стекла»: красное пятно сверху и слабое снизу слева. Рисуется
  * один раз, без анимации: при листании корень не перерисовывается, батарею не ест.
  */
-internal fun androidx.compose.ui.graphics.drawscope.DrawScope.glowBackdrop(
-    /** Размер экрана: свет рисуется и под списком (для размытия), сдвинутым на его место. */
-    area: androidx.compose.ui.geometry.Size = size,
-) {
-    drawRect(Color.Black, size = area)
-    val w = area.width
-    val h = area.height
-    drawRect(
-        androidx.compose.ui.graphics.Brush.radialGradient(
-            listOf(BRAND.copy(alpha = 0.42f), BRAND.copy(alpha = 0.12f), Color.Transparent),
-            center = androidx.compose.ui.geometry.Offset(w * 0.55f, -h * 0.04f),
-            radius = maxOf(w * 1.05f, 1f),
-        ),
-        size = area,
-    )
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.glowBackdrop(dark: Boolean) {
+    drawRect(glassBase(dark))
+    drawRect(glowTopBrush(dark, size))
     drawRect(
         androidx.compose.ui.graphics.Brush.radialGradient(
             // Слабый: сильнее — серые подписи на плитках внизу теряли контраст 4,5:1.
-            listOf(BRAND.copy(alpha = 0.08f), Color.Transparent),
-            center = androidx.compose.ui.geometry.Offset(0f, h),
-            radius = maxOf(w * 0.9f, 1f),
+            listOf(BRAND.copy(alpha = if (dark) 0.08f else 0.10f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(0f, size.height),
+            radius = maxOf(size.width * 0.9f, 1f),
         ),
-        size = area,
     )
 }
 

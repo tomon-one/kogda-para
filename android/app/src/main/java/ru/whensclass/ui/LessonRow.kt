@@ -92,7 +92,7 @@ internal fun LessonRow(
                 isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
                 // В тёмной теме — белый 7 % поверх карточки, как на сайте:
                 // surfaceVariant от неё почти не отличим.
-                foreign -> if (MaterialTheme.colorScheme.background.luminance() < 0.5f)
+                foreign -> if (MaterialTheme.colorScheme.isDark)
                     Color.White.copy(alpha = 0.07f).compositeOver(MaterialTheme.colorScheme.surface)
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                 else -> MaterialTheme.colorScheme.tile

@@ -1,5 +1,16 @@
 package ru.whensclass.ui
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -225,18 +236,7 @@ fun SettingsScreen(
                 selected = theme,
                 onPick = onTheme,
             )
-            // В светлой теме «Стекло» ничего не меняет — выключатель недоступен.
-            val dark = when (theme) {
-                ThemeChoice.DARK -> true
-                ThemeChoice.LIGHT -> false
-                ThemeChoice.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
-            }
-            SwitchRow("Стекло · beta", glow, onGlow, enabled = dark)
-            Text(
-                "Только в тёмной теме: красный свет за расписанием, полупрозрачные карточки, полоска дней — матовое стекло.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            GlassToggle(glow, onGlow)
         }
 
         VersionSection(
@@ -254,5 +254,67 @@ fun SettingsScreen(
 
         AboutSections(teacherMode, loadDiagnostics)
     }
+    }
+}
+
+/**
+ * Плашка «Стекла»: слева — как оно выглядит (лист со светом, матовая полоска,
+ * карточки), справа — название с меткой beta, пояснение и тумблер. Нажимается целиком.
+ */
+@Composable
+private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
+    val dark = MaterialTheme.colorScheme.isDark
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .toggleable(value = on, onValueChange = onChange, role = androidx.compose.ui.semantics.Role.Switch)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val glass = if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.75f)
+        Box(
+            modifier = Modifier
+                .size(width = 56.dp, height = 64.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                .drawBehind {
+                    glowBackdrop(dark)
+                    val side = 6.dp.toPx()
+                    val corner = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
+                    listOf(10.dp to 10.dp, 26.dp to 14.dp, 44.dp to 14.dp).forEach { (top, height) ->
+                        drawRoundRect(
+                            glass,
+                            topLeft = androidx.compose.ui.geometry.Offset(side, top.toPx()),
+                            size = androidx.compose.ui.geometry.Size(size.width - side * 2, height.toPx()),
+                            cornerRadius = corner,
+                        )
+                    }
+                },
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Стекло", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "beta",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+            }
+            Text(
+                "Красный свет за расписанием, полупрозрачные карточки, матовая полоска дней.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        MinimalSwitch(checked = on, onCheckedChange = null)
     }
 }
