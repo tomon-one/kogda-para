@@ -364,9 +364,10 @@ private fun RoomChip(room: String) = Text(
     room,
     style = MaterialTheme.typography.bodyMedium,
     fontWeight = FontWeight.SemiBold,
-    color = MaterialTheme.colorScheme.primary,
+    // Свободный кабинет — зелёным: красный читался как «занято».
+    color = MaterialTheme.colorScheme.online,
     modifier = Modifier
-        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), RoundedCornerShape(8.dp))
+        .background(MaterialTheme.colorScheme.online.copy(alpha = 0.14f), RoundedCornerShape(10.dp))
         .padding(horizontal = 8.dp, vertical = 3.dp),
 )
 

@@ -148,7 +148,7 @@ internal fun LessonRow(
                 }
             }
 
-            lesson.url?.let { OnlineLink(it) }
+            lesson.url?.let { OnlineLink(it, muted = past) }
 
             // Подпись группы — вместо преподавателя: в своём расписании
             // преподавателю важно, кому читается пара.
@@ -301,7 +301,7 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
             .background(
                 if (muted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
                 else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                RoundedCornerShape(8.dp),
+                RoundedCornerShape(10.dp),
             )
             .padding(horizontal = 8.dp, vertical = 1.dp),
     )

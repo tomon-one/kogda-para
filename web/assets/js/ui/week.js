@@ -103,19 +103,15 @@ function headBottom() {
 }
 
 /**
- * День наверху — тот, чья карточка на восьмой части видимого под шапкой: по
- * самому краю шапки выделение перескакивало от каждого миллиметра прокрутки.
+ * День наверху — первый, который виден под шапкой хотя бы наполовину: край
+ * прошлого дня, торчащий из-под полоски, не перехватывает выделение.
  */
 function topDay() {
   var top = headBottom();
-  var probe = top + (window.innerHeight - top) / 8;
   var cards = document.querySelectorAll('[data-day]');
-  var last = null;
   for (var i = 0; i < cards.length; i++) {
     var rect = cards[i].getBoundingClientRect();
-    if (rect.top > probe) break;
-    last = cards[i];
-    if (rect.bottom > probe) break;
+    if (rect.bottom - Math.max(rect.top, top) >= rect.height / 2) return cards[i].getAttribute('data-day');
   }
-  return last ? last.getAttribute('data-day') : (cards[0] ? cards[0].getAttribute('data-day') : null);
+  return cards.length ? cards[cards.length - 1].getAttribute('data-day') : null;
 }

@@ -68,7 +68,7 @@ private fun ShareDialog(onDismiss: () -> Unit) {
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .size(200.dp)
-                        .clip(RoundedCornerShape(8.dp)),
+                        .clip(RoundedCornerShape(10.dp)),
                 )
                 Text(
                     "Наведите камеру — откроется страница приложения: оттуда и файл, и сайт.",

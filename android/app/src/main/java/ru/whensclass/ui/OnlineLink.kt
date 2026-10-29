@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
  * нужна чаще; «Копировать» — чтобы переслать.
  */
 @Composable
-internal fun OnlineLink(url: String) {
+internal fun OnlineLink(url: String, muted: Boolean = false) {
     val context = LocalContext.current
     Column(modifier = Modifier.fillMaxWidth()) {
         // Куда ведёт кнопка: ссылку вписывает руками любой, кто правит таблицу.
@@ -59,7 +59,8 @@ internal fun OnlineLink(url: String) {
         }
         // Отступ от строки «Онлайн»: без него плашка места садилась на кнопку.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
-            LinkButton("Открыть", MaterialTheme.colorScheme.online) { openLink(context, url) }
+            // Прошедшая пара: ссылка ещё работает, но не зовёт.
+            LinkButton("Открыть", if (muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.online) { openLink(context, url) }
             LinkButton("Копировать", MaterialTheme.colorScheme.onSurfaceVariant) { copyLink(context, url) }
         }
     }

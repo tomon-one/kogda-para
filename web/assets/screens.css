@@ -36,7 +36,7 @@
   margin-top: 4px;
   padding: 14px 16px;
   border: 1px solid var(--divider);
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--surface);
   color: var(--primary);
   font-weight: 500;
@@ -90,7 +90,7 @@
   align-items: stretch;
   margin-top: 6px;
   border: 1px solid var(--divider);
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--surface);
   overflow: hidden;
 }
@@ -197,7 +197,7 @@
   display: inline-block;
   padding: 0 6px;
   border: 1px solid var(--primary);
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
   line-height: 16px;
@@ -255,7 +255,7 @@
   display: flex;
   height: 44px;
   padding: 3px;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface-variant);
 }
 
@@ -272,7 +272,8 @@
   text-overflow: ellipsis;
 }
 
-.segment.on { background: var(--selected-bg); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary); }
+/* Выбранное — плашкой цвета карточки: на подложке с оттенком красный текст недотягивал до 4,5:1. */
+.segment.on { background: var(--surface); color: var(--primary); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary); }
 
 /* Переключателю тесно и в 10 px (fitLabels) — столбиком. */
 .segmented.fit-stack { flex-direction: column; height: auto; }
@@ -342,7 +343,7 @@
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   padding: 20px 20px 8px;
-  border-radius: 24px;
+  border-radius: 20px;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -391,7 +392,7 @@
   min-width: 0;
   height: 44px;
   padding: 0 14px;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface-variant);
   box-shadow: inset 0 0 0 1.5px transparent;
   cursor: text;
@@ -419,7 +420,7 @@
 .report {
   margin: 0;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--surface-variant);
   font: 12px/1.45 ui-monospace, Menlo, Consolas, "Roboto Mono", monospace;
   white-space: pre-wrap;
@@ -436,7 +437,7 @@
   width: calc(100% - 32px);
   max-width: 600px;
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface-variant);
   color: var(--fg);
   font-size: 14px;
@@ -467,7 +468,7 @@
   display: inline-block;
   max-width: 100%;
   padding: 3px 6px;
-  border-radius: 999px;
+  border-radius: 10px;
   background: var(--today-bg);
   color: var(--primary);
   font-weight: 600;
@@ -483,7 +484,7 @@
 .rooms .chips .chip { flex: 1 1 0; min-width: 0; margin: 0 3px 6px; padding-left: 4px; padding-right: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rooms .chips .chip.now { padding-left: 3px; padding-right: 3px; }
 .room-when { margin: 2px 4px 4px; font-size: 14px; font-weight: 600; }
-.chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--button-border); font-size: 14px; color: var(--fg); }
+.chip { padding: 6px 12px; border-radius: 10px; border: 1px solid var(--outline); font-size: 14px; color: var(--fg); }
 .chip.on { background: var(--selected-bg); border-color: var(--primary); color: var(--primary); font-weight: 600; }
 /* Идущая сейчас пара в «Аудиториях» — рамкой потолще, видна и при другой выбранной. */
 .chip.now { border: 2px solid var(--primary); padding: 5px 11px; font-weight: 700; }
@@ -498,7 +499,8 @@
 .room-card .nothing { padding: 0; margin-top: 6px; font-size: 13px; }
 .room-free { display: flex; flex-wrap: wrap; margin-bottom: -6px; }
 .room-free .room-chip { margin: 0 5px 6px 0; }
-.room-chip { padding: 3px 8px; border-radius: 8px; background: var(--today-bg); color: var(--primary); font-weight: 600; font-size: 14px; }
+/* Свободный кабинет — зелёным: красный читался как «занято». */
+.room-chip { padding: 3px 8px; border-radius: 10px; background: var(--online-bg); color: var(--online); font-weight: 600; font-size: 14px; }
 .room-busy { padding: 10px 16px; border-bottom: 1px solid var(--bg); font-size: 14px; }
 .room-use { margin-top: 2px; }
 .room-group { font-weight: 500; }

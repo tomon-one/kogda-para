@@ -2,6 +2,8 @@ package ru.whensclass.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.draggable
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.drawBehind
@@ -155,14 +157,14 @@ fun ScheduleDays(
         }
     }
 
-    // Какой день наверху — для выделения в полоске: тот, чья карточка на восьмой
-    // высоты списка. По самому верхнему краю выделение перескакивало от малейшей прокрутки.
+    // Какой день наверху — для выделения в полоске: первый, который виден хотя бы
+    // наполовину; край прошлого дня, торчащий сверху, выделение не перехватывает.
     val shownDay by remember(days, shift) {
         derivedStateOf {
             val info = listState.layoutInfo
-            val probe = info.viewportStartOffset + (info.viewportEndOffset - info.viewportStartOffset) / 8
-            val item = info.visibleItemsInfo.firstOrNull { it.offset + it.size > probe && it.index >= shift }
-                ?: info.visibleItemsInfo.firstOrNull { it.index >= shift }
+            val item = info.visibleItemsInfo.firstOrNull {
+                it.index >= shift && it.offset + it.size - maxOf(it.offset, info.viewportStartOffset) >= it.size / 2
+            } ?: info.visibleItemsInfo.lastOrNull { it.index >= shift }
             item?.let { days.getOrNull(it.index - shift)?.date }
         }
     }
@@ -212,6 +214,10 @@ fun ScheduleDays(
                         listState.animateScrollToItem(index + shift)
                     }
                 }
+            },
+            onDrag = { delta ->
+                picked = null
+                listState.dispatchRawDelta(-delta)
             },
         )
     }
@@ -274,7 +280,13 @@ private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", 
  * выделен, точка — сегодня. Выделение — одна плашка, она переезжает от дня к дню.
  */
 @Composable
-private fun WeekStrip(shownDay: () -> LocalDate, today: LocalDate, onPick: (LocalDate) -> Unit) {
+private fun WeekStrip(
+    shownDay: () -> LocalDate,
+    today: LocalDate,
+    onPick: (LocalDate) -> Unit,
+    /** Палец повёл полоску вверх-вниз — листать список под ней. */
+    onDrag: (Float) -> Unit,
+) {
     val shown = shownDay()
     val monday = shown.minusDays((shown.dayOfWeek.value - 1).toLong())
     val index = shown.dayOfWeek.value - 1
@@ -296,6 +308,10 @@ private fun WeekStrip(shownDay: () -> LocalDate, today: LocalDate, onPick: (Loca
             .padding(4.dp)
             // Одно касание на всю полоску вместо семи кнопок: при листании
             // полоска перестраивается дешевле. Чтецу экрана — каждый день отдельно (ниже).
+            .draggable(
+                rememberDraggableState { onDrag(it) },
+                androidx.compose.foundation.gestures.Orientation.Vertical,
+            )
             .pointerInput(monday) {
                 detectTapGestures { offset ->
                     val i = (offset.x / (size.width / 7f)).toInt().coerceIn(0, 6)

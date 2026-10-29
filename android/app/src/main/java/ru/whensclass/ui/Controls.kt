@@ -10,6 +10,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -202,7 +203,7 @@ fun <T> Segmented(
         modifier = modifier
             .fillMaxWidth()
             .height(BUTTON_HEIGHT)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(3.dp)
             .selectableGroup(),
@@ -213,9 +214,13 @@ fun <T> Segmented(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent,
+                    .clip(RoundedCornerShape(10.dp))
+                    // Выбранное — плашкой цвета карточки с красной рамкой: на подложке с
+                    // оттенком красный текст недотягивал до 4,5:1 (как на сайте).
+                    .background(if (on) MaterialTheme.colorScheme.surface else Color.Transparent)
+                    .then(
+                        if (on) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                        else Modifier,
                     )
                     .selectable(selected = on, role = Role.RadioButton, onClick = { onPick(value) }),
                 contentAlignment = Alignment.Center,

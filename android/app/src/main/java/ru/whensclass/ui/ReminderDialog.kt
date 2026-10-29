@@ -116,7 +116,7 @@ internal fun ReminderDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
                 .padding(horizontal = 16.dp)
@@ -230,7 +230,7 @@ private fun QuickTile(minutes: Int, selected: Boolean, onClick: () -> Unit, modi
     Column(
         modifier = modifier
             .height(64.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
             .semantics { contentDescription = formatDurationLong(minutes) }
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),

@@ -9,10 +9,11 @@ import androidx.compose.ui.graphics.luminance
 /** Красный колледжа — из его же логотипа. */
 private val BRAND = Color(0xFFD60403)
 private val BRAND_LIGHT = Color(0xFFFF6B70)
+private val BRAND_ON_LIGHT = Color(0xFFC20302)
 
 /** Зелёный «Открыть» у онлайн-пары: в схеме Material своего зелёного нет. */
 internal val ColorScheme.online: Color
-    get() = if (background.luminance() < 0.5f) Color(0xFF4CC38A) else Color(0xFF0A7A3E)
+    get() = if (background.luminance() < 0.5f) Color(0xFF4CC38A) else Color(0xFF086B35)
 
 /** Плитка пары внутри карточки дня (--tile сайта). */
 internal val ColorScheme.tile: Color
@@ -56,9 +57,10 @@ internal val LightScheme = lightColorScheme(
     onSurface = Color(0xFF15171A),
     surfaceVariant = Color(0xFFE7E8EA),
     onSurfaceVariant = Color(0xFF5E6266),
-    primary = BRAND,
+    // Чуть темнее красного логотипа: на плашках с его оттенком текст держит 4,5:1 (как на сайте).
+    primary = BRAND_ON_LIGHT,
     onPrimary = Color(0xFFFFFFFF),
-    error = BRAND,
+    error = BRAND_ON_LIGHT,
     secondaryContainer = Color(0xFFFADADB),
     onSecondaryContainer = Color(0xFF15171A),
     surfaceContainerLowest = Color(0xFFFFFFFF),

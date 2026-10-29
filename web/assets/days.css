@@ -186,7 +186,7 @@
   min-width: 0;
   margin-right: 8px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--mark-bg);
   font-size: 13px;
   font-weight: 600;
@@ -255,3 +255,6 @@
   background: var(--online-bg);
   color: var(--online);
 }
+
+/* Прошедшая пара: ссылка ещё работает, но не зовёт. */
+.past .link-button.open { background: var(--foreign-bg); color: var(--muted); }

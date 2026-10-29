@@ -108,7 +108,7 @@ internal fun RoleSwitchRow(text: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .heightIn(min = 48.dp)

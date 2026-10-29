@@ -25,9 +25,9 @@
   --foreign-bg: rgba(0, 0, 0, 0.05);
   --selected-bg: rgba(194, 3, 2, 0.16);
   --button-border: rgba(194, 3, 2, 0.4);
-  --online: #0a7a3e;
+  --online: #086b35;
   --tile: #f4f5f7;
-  --online-bg: rgba(10, 122, 62, 0.12);
+  --online-bg: rgba(8, 107, 53, 0.12);
   --divider: #e2e3e5;
   --outline: #808387;
   --overlay: rgba(0, 0, 0, 0.45);
@@ -91,7 +91,7 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   /* Фокус с клавиатуры не прячется под липкой шапкой. */
-  scroll-padding-top: 120px;
+  scroll-padding-top: 180px;
   /* Место под полосу прокрутки — всегда: окно запрещает прокрутку страницы,
      и без запаса полоса пропадала бы, а страница съезжала вбок. */
   scrollbar-gutter: stable;
@@ -392,7 +392,7 @@ p a, .point a { text-decoration: underline; }
   height: 44px;
   margin-top: 6px;
   padding: 0 14px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface-variant);
   color: var(--primary);
   font-size: 14px;
@@ -434,7 +434,7 @@ p a, .point a { text-decoration: underline; }
   color: var(--primary);
   font-size: 14px;
   font-weight: 500;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .text-button:active { background: var(--surface-variant); }

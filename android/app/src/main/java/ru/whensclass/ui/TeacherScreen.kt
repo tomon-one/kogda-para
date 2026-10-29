@@ -134,6 +134,7 @@ fun TeacherScreen(
                 modifier = Modifier.weight(1f),
                 startDay = startDay,
                 startKey = startKey,
+                weekStrip = true,
             )
             TextButton(
                 onClick = { browsing = true },
@@ -364,6 +365,7 @@ private fun ChosenTeacher(
                 ScheduleDays(
                     schedule = schedule,
                     today = rememberToday(),
+                    weekStrip = true,
                 )
             }
         }
@@ -392,7 +394,7 @@ private fun TeacherRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surface),
     ) {
             Column(
