@@ -167,7 +167,10 @@ internal fun ScheduleTabs(
             shown.animateTo(1f, androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
         }
         Column(
-            Modifier.weight(1f).nestedScroll(collapse).graphicsLayer { alpha = shown.value },
+            // Слой прозрачности — только пока идёт проявление: оставленный на списке,
+            // он утяжелял листание и сворачивание ряда вкладок.
+            Modifier.weight(1f).nestedScroll(collapse)
+                .then(if (shown.value < 1f) Modifier.graphicsLayer { alpha = shown.value } else Modifier),
             content = content,
         )
     }

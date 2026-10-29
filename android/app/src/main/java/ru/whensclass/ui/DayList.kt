@@ -178,6 +178,9 @@ fun ScheduleDays(
     val scope = rememberCoroutineScope()
     // Дни всплывают по очереди один раз — когда список только появился (как на сайте).
     val appearing = remember { mutableStateOf(true) }
+    // Номер первой видимой строки при появлении — один раз: следить за ним при
+    // листании значило бы перерисовывать каждую карточку на каждом шаге.
+    val firstAtStart = remember { listState.firstVisibleItemIndex }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(APPEAR_MILLIS)
         appearing.value = false
@@ -186,7 +189,9 @@ fun ScheduleDays(
     Column(modifier = modifier.fillMaxSize()) {
     if (weekStrip) {
         WeekStrip(
-            shown = (picked ?: shownDay)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today,
+            // Лямбдой: день читается внутри полоски, и при листании перерисовывается
+            // только она, а не весь список.
+            shownDay = { (picked ?: shownDay)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today },
             today = today,
             onPick = { date ->
                 wanted = null
@@ -222,7 +227,7 @@ fun ScheduleDays(
     ) {
         header?.let { item(key = "header") { it() } }
         itemsIndexed(days, key = { _, day -> day.date }) { index, day ->
-            Box(modifier = Modifier.appear(appearing.value, index - listState.firstVisibleItemIndex + shift)) {
+            Box(modifier = Modifier.appear(appearing.value, index + shift - firstAtStart)) {
             DayCard(
                 day, schedule.bellsOf(day), now, teacher = schedule.isTeacher,
                 groups = schedule.groupNames, groupsByName = groupsByName,
@@ -263,78 +268,73 @@ private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", 
  * выделен, точка — сегодня. Выделение — одна плашка, она переезжает от дня к дню.
  */
 @Composable
-private fun WeekStrip(shown: LocalDate, today: LocalDate, onPick: (LocalDate) -> Unit) {
+private fun WeekStrip(shownDay: () -> LocalDate, today: LocalDate, onPick: (LocalDate) -> Unit) {
+    val shown = shownDay()
     val monday = shown.minusDays((shown.dayOfWeek.value - 1).toLong())
     val index = shown.dayOfWeek.value - 1
-    androidx.compose.foundation.layout.BoxWithConstraints(
+    // Плашка едет только в отрисовке: при листании полоска не пересчитывается на
+    // каждом кадре, а цвет подписи меняется сразу — под плашкой это не видно.
+    val pill = remember { androidx.compose.animation.core.Animatable(index.toFloat()) }
+    LaunchedEffect(index) {
+        pill.animateTo(
+            index.toFloat(),
+            androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        )
+    }
+    val pillColor = MaterialTheme.colorScheme.primary
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(4.dp),
-    ) {
-        val cell = maxWidth / 7
-        val pill by androidx.compose.animation.core.animateDpAsState(
-            cell * index,
-            androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-            label = "выделение дня",
-        )
-        val pillColor = MaterialTheme.colorScheme.primary
-        Row(
-            modifier = Modifier.fillMaxWidth().drawBehind {
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+            .padding(4.dp)
+            .drawBehind {
+                val cell = size.width / 7
                 drawRoundRect(
                     pillColor,
-                    topLeft = androidx.compose.ui.geometry.Offset(pill.toPx(), 0f),
-                    size = androidx.compose.ui.geometry.Size(cell.toPx(), size.height),
+                    topLeft = androidx.compose.ui.geometry.Offset(cell * pill.value, 0f),
+                    size = androidx.compose.ui.geometry.Size(cell, size.height),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()),
                 )
             },
-        ) {
-            for (i in 0 until 7) {
-                val date = monday.plusDays(i.toLong())
-                val on = i == index
-                val fg by androidx.compose.animation.animateColorAsState(
-                    if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                    androidx.compose.animation.core.tween(300),
-                    label = "день",
-                )
-                val muted by androidx.compose.animation.animateColorAsState(
-                    if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    androidx.compose.animation.core.tween(300),
-                    label = "день недели",
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(onClickLabel = "Перейти к дню") { onPick(date) }
-                        .semantics { contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" },
-                    contentAlignment = Alignment.Center,
+    ) {
+        for (i in 0 until 7) {
+            val date = monday.plusDays(i.toLong())
+            val on = i == index
+            val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(onClickLabel = "Перейти к дню") { onPick(date) }
+                    .semantics { contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 7.dp),
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 7.dp),
-                    ) {
-                        Text(WEEK_NAMES[i], style = MaterialTheme.typography.labelSmall, color = muted)
-                        Text(
-                            date.dayOfMonth.toString(),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = fg,
-                        )
-                    }
-                    if (date == today) {
-                        // Точка — сегодня.
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 2.dp)
-                                .size(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(if (on) fg else MaterialTheme.colorScheme.primary)
-                        )
-                    }
+                    Text(
+                        WEEK_NAMES[i],
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (on) fg else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        date.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = fg,
+                    )
+                }
+                if (date == today) {
+                    // Точка — сегодня.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 2.dp)
+                            .size(4.dp)
+                            .background(if (on) fg else MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
+                    )
                 }
             }
         }

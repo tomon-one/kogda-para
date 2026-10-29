@@ -87,7 +87,8 @@ internal fun LessonRow(
     val background = Modifier
         .padding(start = 6.dp, end = 6.dp, bottom = 4.dp)
         .fillMaxWidth()
-        .clip(RoundedCornerShape(14.dp))
+        // Скруглённый фон без обрезки: обрезка по форме на каждом кадре заметно
+        // утяжеляла листание, а содержимое за край плитки и так не выходит.
         .background(
             when {
                 isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
@@ -98,6 +99,7 @@ internal fun LessonRow(
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                 else -> MaterialTheme.colorScheme.tile
             },
+            RoundedCornerShape(14.dp),
         )
     val subject: @Composable () -> Unit = {
         Column {
@@ -298,10 +300,10 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
             .padding(end = 8.dp)
-            .clip(RoundedCornerShape(8.dp))
             .background(
                 if (muted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
-                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                RoundedCornerShape(8.dp),
             )
             .padding(horizontal = 8.dp, vertical = 1.dp),
     )
