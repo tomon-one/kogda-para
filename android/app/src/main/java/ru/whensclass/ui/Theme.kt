@@ -1,12 +1,18 @@
 package ru.whensclass.ui
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 /** Красный колледжа — из его же логотипа. */
 private val BRAND = Color(0xFFD60403)
 private val BRAND_LIGHT = Color(0xFFFF6B70)
+
+/** Зелёный «Открыть» у онлайн-пары: в схеме Material своего зелёного нет. */
+internal val ColorScheme.online: Color
+    get() = if (background.luminance() < 0.5f) Color(0xFF4CC38A) else Color(0xFF0A7A3E)
 
 /** Тёмная схема в тон виджету: чистый чёрный не светится на OLED. */
 internal val DarkScheme = darkColorScheme(

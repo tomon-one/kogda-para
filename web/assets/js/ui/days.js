@@ -180,6 +180,6 @@ function onlineLink(url, key) {
       end ? ' ' : null,
       end ? h('span', { class: 'link-end' }, '· …/' + end) : null),
     h('div', { class: 'link-buttons' },
-      isWebLink(url) ? keyed(actionLink('Открыть', url, 'link-button'), 'open-link:' + key) : null,
+      isWebLink(url) ? keyed(actionLink('Открыть', url, 'link-button open'), 'open-link:' + key) : null,
       copy));
 }

@@ -229,3 +229,10 @@
   font-weight: 500;
   line-height: 26px;
 }
+
+/* «Открыть» у онлайн-пары — зелёная: заметна среди красного. */
+.link-button.open,
+.action.link-button.open {
+  border-color: var(--online-border);
+  color: var(--online);
+}

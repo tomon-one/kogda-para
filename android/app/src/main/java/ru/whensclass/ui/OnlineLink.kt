@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,8 +58,8 @@ internal fun OnlineLink(url: String) {
         // Волосок между кнопками: вплотную рамки сливаются, а широкий зазор
         // разносит пару кнопок.
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            LinkButton("Открыть") { openLink(context, url) }
-            LinkButton("Копировать") { copyLink(context, url) }
+            LinkButton("Открыть", MaterialTheme.colorScheme.online) { openLink(context, url) }
+            LinkButton("Копировать", MaterialTheme.colorScheme.primary) { copyLink(context, url) }
         }
     }
 }
@@ -79,7 +81,7 @@ private fun host(url: String): String =
     runCatching { Uri.parse(url).host }.getOrNull()?.removePrefix("www.") ?: url
 
 @Composable
-private fun LinkButton(label: String, onClick: () -> Unit) {
+private fun LinkButton(label: String, color: Color, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
         // Поля и высота меньше обычных, чтобы пара с вебинаром не распухала;
@@ -87,7 +89,8 @@ private fun LinkButton(label: String, onClick: () -> Unit) {
         modifier = Modifier.height(28.dp),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
         // Тонкая рамка: без неё текст кнопки неотличим от подписи рядом.
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.35f)),
+        colors = ButtonDefaults.textButtonColors(contentColor = color),
     ) {
         // В одну строку с многоточием: кнопка остаётся своей высоты.
         Text(
