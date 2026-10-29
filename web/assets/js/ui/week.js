@@ -99,7 +99,11 @@ window.addEventListener('scroll', function () {
 function headBottom() {
   var head = document.querySelector('.head');
   var strip = document.querySelector('.week-strip');
-  return (head ? head.getBoundingClientRect().bottom : 0) + (strip ? strip.offsetHeight + 14 : 0);
+  var top = head ? head.getBoundingClientRect().bottom : 0;
+  if (!strip) return top;
+  // Прилипает полоска не вплотную к шапке, а на свой top (у «Стекла» с зазором).
+  var stuck = parseFloat(window.getComputedStyle(strip).top);
+  return (isNaN(stuck) ? top : Math.max(top, stuck)) + strip.offsetHeight + 14;
 }
 
 /**

@@ -65,26 +65,37 @@
   background:
     radial-gradient(circle 105vw at 55% -4%, var(--glow-top), var(--glow-mid) 50%, transparent 100%),
     radial-gradient(circle 90vw at 0 100%, var(--glow-bottom), transparent 100%);
+  /* На широком экране — не шире колонки расписания: во всю ширину окна свет слепил. */
+  background:
+    radial-gradient(circle min(105vw, 560px) at 50% -4%, var(--glow-top), var(--glow-mid) 50%, transparent 100%),
+    radial-gradient(circle min(90vw, 480px) at 0 100%, var(--glow-bottom), transparent 100%);
 }
 
 :root[data-glass] .topbar { background: transparent; }
 
+/* Только размытие, без тона: с тоном шапка выделялась на свете полосой, а
+   так её не видно, пока под ней ничего не проезжает. */
 :root[data-glass] .head,
 :root[data-glass] .screen.picker .topbar,
 :root[data-glass] .screen.settings .topbar,
 :root[data-glass] .chosen-head,
 :root[data-glass] .bottom-bar {
-  background: var(--glass-bar);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  backdrop-filter: blur(20px) saturate(150%);
+  background: transparent;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 
-/* Полоска висит над списком, как в приложении: без кольца цвета фона вокруг. */
+:root[data-glass] .bottom-bar { border-top-color: transparent; }
+
+/* Полоска висит над списком, как в приложении: без кольца цвета фона вокруг
+   и с зазором под вкладками. */
 :root[data-glass] .week-strip {
+  top: calc(var(--head-h, 0px) + 8px);
+  margin-top: 10px;
   background: var(--glass-bar);
   box-shadow: inset 0 0 0 1px var(--glass-edge);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 
 /* Окна и всплывающее — сплошные: сквозь них читать нечего. */
