@@ -351,10 +351,21 @@ export function daySummary(lessons, groups, bells) {
     if (groups && groups.length && (l.slots || []).indexOf(0) < 0) return;
     if (numbers.indexOf(l.n) < 0) numbers.push(l.n);
   });
-  if (!numbers.length) return null;
+  if (!numbers.length) return othersOnly(lessons, groups);
   var range = bells && bells[String(Math.max.apply(null, numbers))];
   var count = plural(numbers.length, 'пара', 'пары', 'пар');
   return range && range[1] ? count + ' · до ' + range[1] : count;
+}
+
+/** Своих пар нет, у других выбранных есть: «Пары только у /2». */
+function othersOnly(lessons, groups) {
+  if (!groups || !groups.length) return null;
+  var slots = [];
+  (lessons || []).forEach(function (l) {
+    if (isCancelled(l)) return;
+    (l.slots || []).forEach(function (i) { if (i !== 0 && slots.indexOf(i) < 0) slots.push(i); });
+  });
+  return slots.length ? 'Пары т' + onlyAt(slots, groups).slice(1) : null;
 }
 
 /** День будний, пришёл с сервера и без своих пар — для «повезло дважды». */

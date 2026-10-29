@@ -69,6 +69,7 @@ class FreeDayTest {
         )
         assertEquals("1 пара", daySummary(listOf(lesson(3)), emptyList(), bells))
         assertEquals(null, daySummary(listOf(lesson(1, x = 1)), emptyList(), bells))
+        assertEquals("Пары только у /2", daySummary(listOf(lesson(1, slots = listOf(1))), listOf("ИСП-924/1", "ИСП-924/2"), bells))
     }
 
     @Test

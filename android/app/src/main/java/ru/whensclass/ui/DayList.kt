@@ -486,7 +486,7 @@ private fun DayCard(
                         freeDay(day.date, teacher, nextFree, now, idle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 10.dp),
                     )
                 }
                 day.lessons.forEach { lesson ->
@@ -566,7 +566,12 @@ internal fun daySummary(lessons: List<LessonDto>, groups: List<String>, bells: M
         .filter { !it.isCancelled && (groups.isEmpty() || 0 in it.slots) }
         .map { it.number }
         .distinct()
-    if (numbers.isEmpty()) return null
+    if (numbers.isEmpty()) {
+        // Своих пар нет, у других выбранных есть: «Пары только у /2».
+        if (groups.isEmpty()) return null
+        val slots = lessons.filter { !it.isCancelled }.flatMap { it.slots }.filter { it != 0 }.distinct()
+        return if (slots.isEmpty()) null else "Пары т" + onlyAt(slots, groups).drop(1)
+    }
     val end = bells[numbers.max().toString()]?.getOrNull(1)?.takeIf { it.isNotEmpty() }
     val count = plural(numbers.size, "пара", "пары", "пар")
     return if (end != null) "$count · до $end" else count

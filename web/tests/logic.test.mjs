@@ -343,6 +343,8 @@ test('сводка дня: свои неотменённые пары по но�
   assert.equal(daySummary([{ n: 3, s: 'А' }], [], bells), '1 пара');
   assert.equal(daySummary([{ n: 1, s: 'А', x: 1 }], [], bells), null);
   assert.equal(daySummary([], [], bells), null);
+  // Своих нет, у другой выбранной есть — чья.
+  assert.equal(daySummary([{ n: 1, s: 'А', slots: [1] }], ['ИСП-924/1', 'ИСП-924/2'], bells), 'Пары только у /2');
 });
 
 test('открыть список: сегодня, после последнего звонка — завтра', () => {

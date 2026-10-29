@@ -57,6 +57,9 @@
   color: var(--muted);
 }
 
+/* Над серыми парами других групп — сразу под сводкой «Пары только у …». */
+.day-empty.under { padding: 2px 16px 10px; }
+
 .day-note {
   padding: 6px 16px 10px;
   font-size: 13px;
