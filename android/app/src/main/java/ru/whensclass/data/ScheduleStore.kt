@@ -417,6 +417,13 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_THEME] = value }
     }
 
+    /** «Свечение» (beta): красный свет за экраном тёмной темы. По умолчанию выключено. */
+    val glow: Flow<Boolean> = context.dataStore.data.map { it[KEY_GLOW] == "1" }
+
+    suspend fun setGlow(on: Boolean) {
+        context.dataStore.edit { it[KEY_GLOW] = if (on) "1" else "0" }
+    }
+
     suspend fun currentGroupId(): String? = groupId.first()
 
     /**
@@ -794,6 +801,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_UNSUPPORTED_BUILD = stringPreferencesKey("unsupported_build")
         const val FORMAT = "2"
         val KEY_THEME = stringPreferencesKey("theme")
+        val KEY_GLOW = stringPreferencesKey("glow")
         val KEY_WIDGET_DAY = stringPreferencesKey("widget_day")
         val KEY_WELCOME = stringPreferencesKey("welcome_seen")
         val KEY_GROUP2_ID = stringPreferencesKey("group2_id")

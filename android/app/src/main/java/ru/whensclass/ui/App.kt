@@ -14,6 +14,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -99,6 +100,7 @@ internal fun App(
     val shownSchedule by container.repository.shownSchedule.collectAsState(initial = null)
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
+    val glow by container.store.glow.collectAsState(initial = false)
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
     val loaded by container.store.loaded.collectAsState(initial = false)
     val notifyBefore by container.store.notifyBefore
@@ -378,9 +380,11 @@ internal fun App(
         }
     }
 
-    MaterialTheme(colorScheme = if (dark) DarkScheme else LightScheme) {
+    // «Свечение» — только у тёмной: в светлой красный свет за белыми карточками не виден.
+    val glowing = glow && dark
+    MaterialTheme(colorScheme = if (glowing) GlowScheme else if (dark) DarkScheme else LightScheme) {
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            modifier = if (glowing) Modifier.fillMaxSize().drawBehind { glowBackdrop() } else Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
         ) {
             // Пустой фон, пока настройки читаются с диска: это доли секунды,
@@ -475,6 +479,8 @@ internal fun App(
                         groupName = chosenName,
                         teacherMode = teacherMode,
                         theme = theme,
+                        glow = glow,
+                        onGlow = { on -> scope.launch { container.store.setGlow(on) } },
                         update = update,
                         installing = installing,
                         notifyBefore = notifyBefore,

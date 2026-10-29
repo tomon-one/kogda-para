@@ -79,6 +79,9 @@ fun SettingsScreen(
     updateError: String?,
     onCheckUpdate: () -> Unit,
     onTheme: (ThemeChoice) -> Unit,
+    /** «Свечение» (beta) у тёмной темы. */
+    glow: Boolean = false,
+    onGlow: (Boolean) -> Unit = {},
     onChangeGroup: () -> Unit,
     onAddGroup: () -> Unit = {},
     onAddSubgroup: (ru.whensclass.data.GroupDto) -> Unit = {},
@@ -221,6 +224,12 @@ fun SettingsScreen(
                 ),
                 selected = theme,
                 onPick = onTheme,
+            )
+            SwitchRow("Свечение · beta", glow, onGlow)
+            Text(
+                "Только в тёмной теме: красный свет за расписанием, карточки полупрозрачные.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 

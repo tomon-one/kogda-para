@@ -15,9 +15,13 @@ private val BRAND_ON_LIGHT = Color(0xFFC20302)
 internal val ColorScheme.online: Color
     get() = if (background.luminance() < 0.5f) Color(0xFF4CC38A) else Color(0xFF086B35)
 
-/** Плитка пары внутри карточки дня (--tile сайта). */
+/** Плитка пары внутри карточки дня (--tile сайта). При свечении — стекло, как карточка. */
 internal val ColorScheme.tile: Color
-    get() = if (background.luminance() < 0.5f) Color(0xFF1C1C1C) else Color(0xFFF4F5F7)
+    get() = when {
+        background.alpha < 1f -> Color.White.copy(alpha = 0.06f)
+        background.luminance() < 0.5f -> Color(0xFF1C1C1C)
+        else -> Color(0xFFF4F5F7)
+    }
 
 /** Тёмная схема в тон виджету: чистый чёрный не светится на OLED. */
 internal val DarkScheme = darkColorScheme(
@@ -73,3 +77,38 @@ internal val LightScheme = lightColorScheme(
     inverseSurface = Color(0xFF2B2D30),
     inverseOnSurface = Color(0xFFF5F5F5),
 )
+
+/**
+ * «Свечение» (beta): тёмная схема, у которой фон экрана прозрачный — под ним
+ * красный свет ([glowBackdrop]), — а карточки полупрозрачные, как стекло.
+ * Окна (диалоги) остаются непрозрачными: у них свои surfaceContainer*.
+ */
+internal val GlowScheme = DarkScheme.copy(
+    background = Color.Transparent,
+    surface = Color.White.copy(alpha = 0.07f),
+    outlineVariant = Color.White.copy(alpha = 0.22f),
+)
+
+/**
+ * Свет за экраном «свечения»: красное пятно сверху и слабое снизу слева. Рисуется
+ * один раз, без анимации: при листании корень не перерисовывается, батарею не ест.
+ */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.glowBackdrop() {
+    drawRect(Color.Black)
+    val w = size.width
+    val h = size.height
+    drawRect(
+        androidx.compose.ui.graphics.Brush.radialGradient(
+            listOf(BRAND.copy(alpha = 0.42f), BRAND.copy(alpha = 0.12f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(w * 0.55f, -h * 0.04f),
+            radius = maxOf(w * 1.05f, 1f),
+        ),
+    )
+    drawRect(
+        androidx.compose.ui.graphics.Brush.radialGradient(
+            listOf(BRAND.copy(alpha = 0.16f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(0f, h),
+            radius = maxOf(w * 0.9f, 1f),
+        ),
+    )
+}

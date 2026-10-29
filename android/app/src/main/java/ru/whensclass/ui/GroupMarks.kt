@@ -57,7 +57,7 @@ fun GroupMark(label: String, own: Boolean, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     // В светлой теме подпись бледного значка — темнее фирменного красного, как
     // на сайте (#C20302): иначе на бледно-розовом не набирается контраст 4,5:1.
-    val ink = if (colors.surface.luminance() > 0.5f) MARK_INK_LIGHT else colors.primary
+    val ink = if (colors.background.luminance() > 0.5f) MARK_INK_LIGHT else colors.primary
     val shape = RoundedCornerShape(4.dp)
     // Растёт со шрифтом, как колонка времени: подпись в sp, значок в dp.
     val side = MARK * LocalDensity.current.fontScale.coerceAtLeast(1f)
