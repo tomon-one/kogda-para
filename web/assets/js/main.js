@@ -205,6 +205,7 @@ function clockKeyOf() {
   });
   var key = now.date + '|' + passed + '|' + currentLessonNumber(bells, now.date, now) +
     '|' + new Date().toDateString();
+  if (navigator.onLine === false) key += '|offline';
   var server = repo.serverState();
   if (repo.serverBroken() && server.since) {
     key += '|' + Math.floor((Date.now() - parseIso(server.since)) / 60000);
@@ -253,6 +254,13 @@ document.addEventListener('visibilitychange', function () {
   // Вернулись на страницу — сверить, не прошло ли и минуты.
   if (Date.now() - state.lastRefresh > 60000) refresh(false, false);
   if (push.behind(pushSubject())) syncPush(true);
+});
+
+// Сеть пропала или вернулась — плашка сразу, а с сетью и свежее расписание.
+window.addEventListener('offline', tick);
+window.addEventListener('online', function () {
+  tick();
+  refresh(false, false);
 });
 
 // Поворот, увеличение текста в браузере — надписи кнопок подгоняются заново.

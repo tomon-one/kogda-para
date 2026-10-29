@@ -217,6 +217,12 @@ function plates(app) {
         : 'Их пары не показываются и вернутся сами, когда они появятся. Если их переименовали — выберите заново в настройках.'),
       actionButton('Настройки', function () { app.go('settings'); })));
   }
+  // Без сети — сказать, что на экране не обновится: сам сбой сервера тут ни при чём.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    out.push(h('div', { class: 'plate' },
+      h('div', { class: 'plate-title' }, 'Нет сети'),
+      h('div', { class: 'plate-text' }, 'Расписание не обновляется. На экране — последнее, что было скачано.')));
+  }
   if (app.serverBroken()) {
     var server = app.server();
     var unreachable = server.status === STATUS_UNREACHABLE;
