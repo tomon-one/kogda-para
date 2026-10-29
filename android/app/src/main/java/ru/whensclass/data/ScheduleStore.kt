@@ -676,31 +676,15 @@ class ScheduleStore(private val context: Context) {
     }
 
     /**
-     * Сколько раз приложение ответило вместо таблицы колледжа. Два счётчика:
-     * приложение человек открывает сам, а виджет отвечает и без него.
+     * Сколько раз приложение ответило вместо таблицы колледжа: открытия и
+     * возвращения к нему. Перерисовки виджетов не в счёт — смотрел ли на них
+     * кто-то, не узнать.
      */
     suspend fun countOpen() = bump(KEY_TALLY_OPENS)
-
-    /**
-     * Показ виджета — не чаще раза в три часа: технические перерисовки
-     * (звонок, полночь, часовой заход) набирали бы десятки в сутки, даже если
-     * на телефон никто не смотрел.
-     */
-    suspend fun countWidgetDraw() {
-        val now = System.currentTimeMillis()
-        var due = false
-        context.dataStore.edit {
-            val last = it[KEY_DRAW_COUNTED]?.toLongOrNull()
-            due = last == null || now - last >= DRAW_COUNT_GAP_MILLIS
-            if (due) it[KEY_DRAW_COUNTED] = now.toString()
-        }
-        if (due) bump(KEY_TALLY_DRAWS)
-    }
 
     suspend fun tally(): Tally = context.dataStore.data.first().let {
         Tally(
             opens = it[KEY_TALLY_OPENS]?.toLongOrNull() ?: 0L,
-            draws = it[KEY_TALLY_DRAWS]?.toLongOrNull() ?: 0L,
             since = it[KEY_TALLY_SINCE]?.toLongOrNull() ?: 0L,
         )
     }
@@ -715,8 +699,8 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
-    /** Счёт ответов: открытия приложения, перерисовки виджетов и с какого дня. */
-    data class Tally(val opens: Long, val draws: Long, val since: Long)
+    /** Счёт ответов: открытия приложения и с какого дня. */
+    data class Tally(val opens: Long, val since: Long)
 
     data class WidgetState(
         val groupName: String?,
@@ -754,15 +738,12 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUP2_GONE = stringPreferencesKey("group2_gone")
         val KEY_UNREACHABLE_LAST = stringPreferencesKey("unreachable_last")
         val KEY_UNREACHABLE_RUN = stringPreferencesKey("unreachable_run")
-        val KEY_DRAW_COUNTED = stringPreferencesKey("draw_counted")
         /**
          * Неудачи, разделённые таким перерывом, — не одна беда. Три часа, а не
          * час: фоновый заход бывает раз в час с хвостиком, и при часе цепочка
          * рвалась бы каждый раз.
          */
         val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(3)
-        /** Счёт показов виджета — не чаще раза в столько. */
-        const val DRAW_COUNT_GAP_MILLIS = 3L * 60 * 60 * 1000
         val KEY_GROUP_NAME = stringPreferencesKey("group_name")
         val KEY_SCHEDULE = stringPreferencesKey("schedule_json")
         val KEY_GROUPS = stringPreferencesKey("groups_json")
@@ -790,7 +771,6 @@ class ScheduleStore(private val context: Context) {
         val KEY_TEACHER_ID = stringPreferencesKey("teacher_id")
         val KEY_TEACHER_NAME = stringPreferencesKey("teacher_name")
         val KEY_TALLY_OPENS = stringPreferencesKey("tally_opens")
-        val KEY_TALLY_DRAWS = stringPreferencesKey("tally_draws")
         val KEY_TALLY_SINCE = stringPreferencesKey("tally_since")
         val KEY_SERVER_STATUS = stringPreferencesKey("server_status")
         val KEY_SOURCE_URL = stringPreferencesKey("source_url")

@@ -172,9 +172,6 @@ private const val SHEET_SECONDS = 8
 /**
  * Счёт ответов: сколько раз таблицу открывать не пришлось. Прячется под
  * долгим нажатием на название группы, нарочно без подсказки.
- *
- * Два счётчика показаны отдельно ([ScheduleStore.countOpen]): виджет
- * отвечает и без человека.
  */
 @Composable
 internal fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss: () -> Unit) {
@@ -184,8 +181,6 @@ internal fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss
     // поломкой.
     val counted = tally ?: return
 
-    // Крупное число — только открытия приложения: виджеты перерисовываются и
-    // тогда, когда на них никто не смотрит.
     val total = counted.opens
     val seconds = total * SHEET_SECONDS
     val spent = if (seconds < 60) {
@@ -206,9 +201,7 @@ internal fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Столько раз вместо неё ответило приложение. Виджеты сверх того " +
-                        "перерисовывались ${plural(counted.draws.toInt(), "раз", "раза", "раз")} — " +
-                        "смотрели на них или нет.",
+                    "Столько раз вместо неё ответило приложение.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))

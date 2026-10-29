@@ -29,6 +29,8 @@ class MainActivity : ComponentActivity() {
     // Первый onResume идёт сразу за onCreate, где расписание уже запрошено:
     // второй запрос подряд там ни к чему.
     private var started = false
+    /** Экран пересоздан поворотом: ближайший onStart — не открытие. */
+    private var rotated = false
 
     /**
      * С чем открыли: день из виджета, настройки из уведомления о версии.
@@ -48,7 +50,19 @@ class MainActivity : ComponentActivity() {
             intent.getBooleanExtra(EXTRA_UPDATE, false),
             opened.value.seq + 1,
         )
-        // Ответ — тот же, что при открытии заново.
+        // Нажатие поверх открытого экрана: onStart не будет, считаем здесь.
+        // Из фона — посчитает onStart.
+        if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) countOpen()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Каждое появление на экране — открытие, возвращение из фона тоже;
+        // поворот — нет.
+        if (rotated) rotated = false else countOpen()
+    }
+
+    private fun countOpen() {
         lifecycleScope.launch { runCatching { AppContainer.get(applicationContext).store.countOpen() } }
     }
 
@@ -77,10 +91,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // За свежим расписанием сходит сам экран (App): он же и покажет
         // результат, второй заход отсюда был бы лишним.
-        // Счёт ответов — только на настоящем открытии, не на повороте.
-        if (savedInstanceState == null) {
-            lifecycleScope.launch { runCatching { AppContainer.get(applicationContext).store.countOpen() } }
-        }
+        rotated = savedInstanceState != null
 
         // Виджет мог попросить открыть конкретный день, а уведомление о
         // новой версии — сразу настройки с кнопкой установки.

@@ -40,7 +40,8 @@ export function testNotice() {
 /**
  * Счёт — только настоящее открытие: переход на страницу, а не перезагрузка и
  * не возврат «назад» (как поворот экрана у приложения). По виду перехода, а
- * не раз за сеанс: вкладку держат открытой месяцами.
+ * не раз за сеанс: вкладку держат открытой месяцами — возвращение к ней
+ * считает countReturn.
  */
 export function countOpen() {
   var type = 'navigate';
@@ -50,6 +51,11 @@ export function countOpen() {
     else if (performance.navigation) type = ['navigate', 'reload', 'back_forward'][performance.navigation.type] || 'navigate';
   } catch (e) { /* старый браузер — считать */ }
   if (type !== 'navigate') return;
+  countReturn();
+}
+
+/** Вкладка снова на экране — тоже ответ вместо таблицы. */
+export function countReturn() {
   var tally = app.tally();
   store.set('tally', { opens: tally.opens + 1, since: tally.since || Date.now() });
 }

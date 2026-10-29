@@ -15,7 +15,7 @@ import { render, focusKey } from './render.js';
 import { parseRoute, go, back, home, onRoute, stepsNow } from './route.js';
 import { emptyList, loadLists, loadRetakes, loadRooms, refresh } from './data.js';
 import { mixedBuild } from './version.js';
-import { applyTheme, checkWorkerUpdate, countOpen, registerWorker, testNotice, workerUpdated } from './site.js';
+import { applyTheme, checkWorkerUpdate, countOpen, countReturn, registerWorker, testNotice, workerUpdated } from './site.js';
 
 var installEvent = null;
 
@@ -241,6 +241,7 @@ setInterval(function () {
 
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'hidden') return;
+  countReturn();
   // Сайт обновился, пока вкладка была открыта, — показать новый, пока человек
   // ничего не делает на странице.
   if (workerUpdated && !document.querySelector('.overlay')) {

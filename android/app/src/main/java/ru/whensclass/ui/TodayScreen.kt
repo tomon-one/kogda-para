@@ -100,7 +100,7 @@ fun TodayScreen(
     refreshFailed: Boolean = false,
     refreshError: String? = null,
     onErrorShown: () -> Unit = {},
-    loadTally: suspend () -> ScheduleStore.Tally = { ScheduleStore.Tally(0, 0, 0) },
+    loadTally: suspend () -> ScheduleStore.Tally = { ScheduleStore.Tally(0, 0) },
     serverBroken: Boolean = false,
     /** Сервер не отвечает телефону — не то же, что «не прочитал таблицу». */
     unreachable: Boolean = false,

@@ -1,7 +1,6 @@
 package ru.whensclass.data
 
 import android.content.Context
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -22,9 +21,6 @@ import kotlinx.serialization.json.Json
 import ru.whensclass.BuildConfig
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.notify.Notifications
-import ru.whensclass.widget.NextLessonWidget
-import ru.whensclass.widget.ScheduleWidget
-import ru.whensclass.widget.WeekWidget
 import ru.whensclass.work.MidnightUpdater
 
 class ScheduleRepository(
@@ -179,20 +175,7 @@ class ScheduleRepository(
 
     private suspend fun updateWidgets() {
         ru.whensclass.widget.redrawWidgets(context)
-        // Считаем, только когда виджет и правда стоит на экране: перерисовка
-        // пустого места — не показ. Счётчик — не повод падать: при забитой
-        // памяти запись бросает, а виджеты уже перерисованы.
-        if (widgetsPlaced()) runCatching { store.countWidgetDraw() }
     }
-
-    private suspend fun widgetsPlaced(): Boolean = runCatching {
-        val manager = GlanceAppWidgetManager(context)
-        listOf(
-            ScheduleWidget::class.java,
-            WeekWidget::class.java,
-            NextLessonWidget::class.java,
-        ).any { manager.getGlanceIds(it).isNotEmpty() }
-    }.getOrDefault(false)
 
     /**
      * Расписания остальных выбранных групп — разом. Не достучались до какой-то
