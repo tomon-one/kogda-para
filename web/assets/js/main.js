@@ -100,6 +100,8 @@ Object.assign(app, {
     focusKey(next ? 'remove:' + next.id : 'add-group');
   },
   tally: function () { return store.get('tally') || { opens: 0, since: 0 }; },
+  channelSeen: function () { return !!store.get('channelSeen'); },
+  setChannelSeen: function () { store.set('channelSeen', 1); render(); },
   render: function () { render(); },
   pushBlocker: push.blocker,
   pushBehind: function () { return push.behind(pushSubject()); },

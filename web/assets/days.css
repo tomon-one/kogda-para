@@ -13,6 +13,9 @@
 .plate-title { font-weight: 600; color: var(--primary); }
 .plate-text { font-size: 13px; color: var(--muted); }
 .plate-since { font-size: 13px; color: var(--primary); margin-top: 4px; }
+/* Плашка-новость, не беда: заголовок обычным цветом и крестик справа. */
+.plate-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -6px -10px 0 0; }
+.plate-head .plate-title { color: var(--fg); }
 
 /* ——— дни ——— */
 

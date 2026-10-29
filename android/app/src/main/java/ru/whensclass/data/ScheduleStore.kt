@@ -474,6 +474,13 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_GROUP_LABELS] = if (byName) "names" else "numbers" }
     }
 
+    /** Плашку о канале новостей уже видели (открыли канал или закрыли её). */
+    val channelSeen: Flow<Boolean> = context.dataStore.data.map { it[KEY_CHANNEL_SEEN] == "1" }
+
+    suspend fun setChannelSeen() {
+        context.dataStore.edit { it[KEY_CHANNEL_SEEN] = "1" }
+    }
+
     /**
      * Остальные выбранные группы по порядку выбора — их пары видны на экране
      * рядом со своими ([combineGroups]). Своя группа сюда не входит.
@@ -733,6 +740,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_EXTRA_GROUPS = stringPreferencesKey("extra_groups")
         val KEY_EXTRA_SCHEDULES = stringPreferencesKey("extra_schedules")
         val KEY_GROUP_LABELS = stringPreferencesKey("group_labels")
+        val KEY_CHANNEL_SEEN = stringPreferencesKey("channel_seen")
         val KEY_WINDOW_FROM = stringPreferencesKey("window_from")
         val KEY_GROUP2_GONE_SINCE = stringPreferencesKey("group2_gone_since")
         val KEY_GROUP2_GONE = stringPreferencesKey("group2_gone")

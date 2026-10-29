@@ -114,6 +114,9 @@ fun TodayScreen(
     onRepick: () -> Unit = {},
     /** Подписи выбранных групп у пар: названиями или номерами (настройки). */
     groupsByName: Boolean = true,
+    /** Показать один раз плашку о канале новостей. */
+    channelNotice: Boolean = false,
+    onChannelSeen: () -> Unit = {},
     /** Лист пересдач; null — грузится или не загрузился ([retakesFailed]). */
     retakes: RetakesDto? = null,
     retakesFailed: Boolean = false,
@@ -270,6 +273,7 @@ fun TodayScreen(
         // рассказал, где они; иначе просто в книгу.
         val plates: @Composable () -> Unit = {
             if (gone) Gone(groupName, teacherMode, onRepick)
+            if (channelNotice) ChannelNotice(onChannelSeen)
             if (unsupported) {
                 Unsupported(onUpdateBadge)
             } else if (serverBroken) {

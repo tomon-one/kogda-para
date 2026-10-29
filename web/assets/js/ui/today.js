@@ -15,6 +15,8 @@ var SOON = {
   exams: ['Экзамены', 'Появятся к сессии — колледж выкладывает их в декабре'],
 };
 
+var CHANNEL_URL = 'https://t.me/kogda_para_news';
+
 /** За сколько грузится таблица колледжа. Перемерено 8 сентября 2026 года. */
 var SHEET_SECONDS = 8;
 
@@ -216,6 +218,19 @@ function plates(app) {
         ? 'Её пары не показываются и вернутся сами, когда она появится. Если её переименовали — выберите заново в настройках.'
         : 'Их пары не показываются и вернутся сами, когда они появятся. Если их переименовали — выберите заново в настройках.'),
       actionButton('Настройки', function () { app.go('settings'); })));
+  }
+  // Один раз, когда расписание уже выбрано: у сайта есть канал новостей.
+  // И кнопка, и крестик убирают плашку насовсем.
+  if (own && !app.channelSeen()) {
+    var channel = actionLink('Открыть канал', CHANNEL_URL);
+    channel.addEventListener('click', function () { app.setChannelSeen(); });
+    out.push(h('div', { class: 'plate' },
+      h('div', { class: 'plate-head' },
+        h('div', { class: 'plate-title' }, 'Канал новостей'),
+        h('button', { type: 'button', class: 'icon-button dialog-close', 'aria-label': 'Закрыть',
+          onclick: function () { app.setChannelSeen(); } }, icon('close'))),
+      h('div', { class: 'plate-text' }, 'У «Когда пара?» есть канал в Telegram: обновления, сбои и их починка.'),
+      channel));
   }
   // Без сети — сказать, что на экране не обновится: сам сбой сервера тут ни при чём.
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {

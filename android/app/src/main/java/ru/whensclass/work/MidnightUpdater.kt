@@ -84,7 +84,7 @@ class MidnightReceiver : BroadcastReceiver() {
                 // Сбой записи (память телефона забита) не должен отменить звонки
                 // и напоминания ниже.
                 if (night) runCatching { ScheduleWidget().resetDayOffset(app) }
-                // Все три виджета — через репозиторий: там вшит счёт показов.
+                // Все три виджета — через репозиторий, общим путём.
                 // Сбой перерисовки не должен отменить следующий звонок.
                 runCatching { AppContainer.get(app).repository.redrawWidgets() }
                 MidnightUpdater.schedule(app)

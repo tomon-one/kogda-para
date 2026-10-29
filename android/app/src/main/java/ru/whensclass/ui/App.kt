@@ -91,6 +91,8 @@ internal fun App(
     val groupId by container.store.groupId.collectAsState(initial = null)
     val extraGroups by container.repository.extraGroups.collectAsState(initial = emptyList())
     val groupsByName by container.store.groupsByName.collectAsState(initial = true)
+    // Пока не прочитано — считаем увиденной: плашка не мигает при каждом запуске.
+    val channelSeen by container.store.channelSeen.collectAsState(initial = true)
     val schedule by container.repository.schedule.collectAsState(initial = null)
     // Для экрана — вместе с парами остальных выбранных групп; виджеты и
     // напоминания — по своему расписанию.
@@ -550,8 +552,7 @@ internal fun App(
                             chosenTheme = choice
                             scope.launch {
                                 container.store.setTheme(ThemeChoice.toStored(choice))
-                                // Виджет перекрашивается сразу. Через репозиторий:
-                                // там вшит счёт показов.
+                                // Виджет перекрашивается сразу.
                                 container.repository.redrawWidgets()
                             }
                         },
@@ -608,6 +609,8 @@ internal fun App(
                         },
                         schedule = shownSchedule,
                         groupsByName = groupsByName,
+                        channelNotice = !channelSeen,
+                        onChannelSeen = { scope.launch { container.store.setChannelSeen() } },
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,
                         refreshing = refreshing,

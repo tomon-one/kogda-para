@@ -1,6 +1,12 @@
 package ru.whensclass.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -129,6 +135,52 @@ internal fun Unsupported(
         }
     }
 }
+
+/**
+ * Один раз, когда расписание уже выбрано: у приложения есть канал новостей.
+ * И кнопка, и крестик убирают плашку насовсем.
+ */
+@Composable
+internal fun ChannelNotice(onDone: () -> Unit) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    ) {
+        Column(modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Канал новостей",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onDone) {
+                    Icon(Icons.Default.Close, contentDescription = "Закрыть")
+                }
+            }
+            Text(
+                "У «Когда пара?» есть канал в Telegram: обновления, сбои и их починка.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 10.dp),
+            )
+            ActionButton(
+                label = "Открыть канал",
+                onClick = {
+                    openLink(context, CHANNEL_URL)
+                    onDone()
+                },
+                modifier = Modifier.fillMaxWidth().padding(end = 10.dp),
+            )
+        }
+    }
+}
+
+internal const val CHANNEL_URL = "https://t.me/kogda_para_news"
 
 /**
  * Плашка «группы в таблице больше нет»: сервер отвечает 404 при здоровом
