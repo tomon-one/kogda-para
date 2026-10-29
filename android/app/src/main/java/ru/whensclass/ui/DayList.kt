@@ -330,10 +330,12 @@ private fun WeekStrip(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            // У «Стекла» сверху без поля: список уходит под полоску, а не выглядывает над ней.
-            .padding(start = 12.dp, end = 12.dp, top = if (glass != null) 0.dp else 6.dp, bottom = 8.dp)
-            .then(if (glass != null) Modifier.frosted(glass, RoundedCornerShape(14.dp)) else Modifier)
+            // У «Стекла» размыта вся полоса во всю ширину, с полями: иначе в полях
+            // и в скруглённых углах проступали чёткие строки и рамки карточек.
+            .then(if (glass != null) Modifier.frosted(glass) else Modifier)
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+            .then(if (glass != null) Modifier.border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(14.dp)) else Modifier)
             .padding(4.dp)
             // Одно касание на всю полоску вместо семи кнопок: при листании
             // полоска перестраивается дешевле. Чтецу экрана — каждый день отдельно (ниже).
@@ -687,22 +689,20 @@ private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, su
 }
 
 /**
- * Матовое стекло: размытое содержимое [state] под элементом, притемнённое, чтобы
- * подписи читались над любой парой. До Android 12 размытия нет — тогда почти
- * сплошной тёмный фон.
+ * Матовое стекло: размытое содержимое [state] под элементом, слегка притемнённое,
+ * чтобы подписи читались над любой парой. До Android 12 размытия нет — тогда
+ * почти сплошной тёмный фон.
  */
-internal fun Modifier.frosted(state: dev.chrisbanes.haze.HazeState, shape: androidx.compose.ui.graphics.Shape): Modifier =
-    clip(shape)
-        .hazeBlur(
-            dev.chrisbanes.haze.HazeInput.Sources(state),
-            style = dev.chrisbanes.haze.blur.HazeBlurStyle {
-                blurRadius(24.dp)
-                // Сплошная подложка под размытым: экран под списком прозрачный (свет
-                // рисует корень), и без неё сквозь размытое проступал бы чёткий текст.
-                // Тон — как у света в этом месте экрана.
-                backgroundColor(Color(0xFF240707))
-                colorEffects(listOf(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.45f))))
-                fallbackColorEffect(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.88f)))
-            },
-        )
-        .border(1.dp, Color.White.copy(alpha = 0.14f), shape)
+internal fun Modifier.frosted(state: dev.chrisbanes.haze.HazeState): Modifier =
+    hazeBlur(
+        dev.chrisbanes.haze.HazeInput.Sources(state),
+        style = dev.chrisbanes.haze.blur.HazeBlurStyle {
+            blurRadius(24.dp)
+            // Сплошная подложка под размытым: экран под списком прозрачный (свет
+            // рисует корень), и без неё сквозь размытое проступал бы чёткий текст.
+            // Тон — как у света в этом месте экрана.
+            backgroundColor(Color(0xFF1C0606))
+            colorEffects(listOf(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.2f))))
+            fallbackColorEffect(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.88f)))
+        },
+    )

@@ -204,7 +204,7 @@ private fun Piece(index: Int, count: Int, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Divider() = HorizontalDivider(color = MaterialTheme.colorScheme.background)
+private fun Divider() = HorizontalDivider(color = MaterialTheme.colorScheme.divider)
 
 @Composable
 private fun Line(label: String, text: String, muted: Boolean = false) {

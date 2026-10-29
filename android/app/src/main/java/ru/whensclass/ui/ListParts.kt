@@ -90,7 +90,7 @@ internal fun <T> LazyListScope.lettered(
                 if (index != rows.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 16.dp),
-                        color = MaterialTheme.colorScheme.background,
+                        color = MaterialTheme.colorScheme.divider,
                     )
                 }
             }

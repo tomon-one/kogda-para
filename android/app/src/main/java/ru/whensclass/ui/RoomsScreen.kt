@@ -357,7 +357,7 @@ private fun Card(content: @Composable () -> Unit) = Surface(
 ) { Column { content() } }
 
 @Composable
-private fun Divider() = HorizontalDivider(color = MaterialTheme.colorScheme.background)
+private fun Divider() = HorizontalDivider(color = MaterialTheme.colorScheme.divider)
 
 @Composable
 private fun RoomChip(room: String) = Text(

@@ -23,6 +23,13 @@ internal val ColorScheme.tile: Color
         else -> Color(0xFFF4F5F7)
     }
 
+/**
+ * Разделитель строк внутри карточки — цветом фона, будто щель. У «Стекла» фон
+ * прозрачный, и щель пропала бы: там она тёмная.
+ */
+internal val ColorScheme.divider: Color
+    get() = if (background.alpha < 1f) Color.Black.copy(alpha = 0.55f) else background
+
 /** Тёмная схема в тон виджету: чистый чёрный не светится на OLED. */
 internal val DarkScheme = darkColorScheme(
     background = Color(0xFF000000),
@@ -86,6 +93,9 @@ internal val LightScheme = lightColorScheme(
 internal val GlowScheme = DarkScheme.copy(
     background = Color.Transparent,
     surface = Color.White.copy(alpha = 0.07f),
+    // Подложки сегментов и дорожки выключателя: сплошной тёмный на подсвеченной
+    // карточке выглядел дырой.
+    surfaceVariant = Color.White.copy(alpha = 0.08f),
     outlineVariant = Color.White.copy(alpha = 0.22f),
 )
 
@@ -106,7 +116,8 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.glowBackdrop() {
     )
     drawRect(
         androidx.compose.ui.graphics.Brush.radialGradient(
-            listOf(BRAND.copy(alpha = 0.16f), Color.Transparent),
+            // Слабый: сильнее — серые подписи на плитках внизу теряли контраст 4,5:1.
+            listOf(BRAND.copy(alpha = 0.08f), Color.Transparent),
             center = androidx.compose.ui.geometry.Offset(0f, h),
             radius = maxOf(w * 0.9f, 1f),
         ),
