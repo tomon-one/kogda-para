@@ -19,6 +19,8 @@ import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.layout.Row
+import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
@@ -175,18 +177,29 @@ class NextLessonWidget : GlanceAppWidget() {
                     // Без «⧉»: нажатие на шапку открывает приложение, а не копирует.
                     place = if (tight) places(next) else null,
                 )
-                Text(
-                    head,
-                    maxLines = 1,
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        color = when {
-                            broken || gone -> colors.error
-                            ongoing -> colors.accent
-                            else -> colors.textDim
-                        },
-                    ),
-                )
+                val headColor = when {
+                    broken || gone -> colors.error
+                    ongoing -> colors.accent
+                    else -> colors.textDim
+                }
+                // Время начала — крупнее и жирным, как в «Дне» и на экране; остальное
+                // шапки мелко следом. Шапка с другим первым словом — одной строкой.
+                if (head.startsWith(time)) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            time,
+                            maxLines = 1,
+                            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = colors.text),
+                        )
+                        Text(
+                            head.removePrefix(time),
+                            maxLines = 1,
+                            style = TextStyle(fontSize = 11.sp, color = headColor),
+                        )
+                    }
+                } else {
+                    Text(head, maxLines = 1, style = TextStyle(fontSize = 11.sp, color = headColor))
+                }
                 Text(
                     subject,
                     maxLines = if (long && roomy) 2 else 1,
@@ -205,6 +218,9 @@ class NextLessonWidget : GlanceAppWidget() {
                 // Две пары одного номера — оба места, без копирования ссылки:
                 // нажатие открывает день, где у каждой пары своя.
                 val pair = next.also.isNotEmpty() || next.off.isNotEmpty()
+                // Своё место — плашкой, как кабинет на экране; две пары и чужая ссылка —
+                // простой строкой: это предупреждение, а не место.
+                val chip = !pair && !foreign
                 if (!tight) Text(
                     when {
                         pair -> places(next)
@@ -222,12 +238,29 @@ class NextLessonWidget : GlanceAppWidget() {
                             else -> colors.accent
                         },
                     ),
-                    modifier = lesson.url?.takeUnless { foreign || pair }?.let { url ->
-                        val context = LocalContext.current
-                        GlanceModifier.fillMaxWidth()
-                            .clickable(actionStartActivity(CopyLinkActivity.intent(context, url)))
-                    } ?: GlanceModifier.fillMaxWidth(),
+                    modifier = (
+                        if (chip) {
+                            // Поля только по бокам: высота строки та же, по ней посчитаны пороги выше.
+                            GlanceModifier.background(colors.nowSurface).cornerRadius(10.dp).padding(horizontal = 6.dp)
+                        } else {
+                            GlanceModifier.fillMaxWidth()
+                        }
+                        ).let { base ->
+                        lesson.url?.takeUnless { foreign || pair }?.let { url ->
+                            base.clickable(actionStartActivity(CopyLinkActivity.intent(LocalContext.current, url)))
+                        } ?: base
+                    },
                 )
+                // Следующая за ней пара того же дня — мелко, если для строки есть место.
+                val then = next.then
+                if (then != null && !tight && roomy && !long) {
+                    Text(
+                        "потом " + (lessonStart(bells, then.number) ?: "${then.number} пара") + " · " + then.subject,
+                        maxLines = 1,
+                        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                        modifier = GlanceModifier.padding(top = 2.dp),
+                    )
+                }
             }
         }
     }
@@ -248,6 +281,8 @@ data class NextLesson(
      * у её дня пары прежние, у дня раньше — пар может не хватать.
      */
     val unreadOn: LocalDate? = null,
+    /** Следующая своя пара того же дня. */
+    val then: LessonDto? = null,
 ) {
     val lessons: List<LessonDto> get() = listOf(lesson) + also
 }
@@ -279,7 +314,10 @@ private fun findNext(schedule: ScheduleDto, now: LocalDateTime): NextLesson? {
         // Отменённая половинка того же номера — её подгруппе эта пара не своя.
         val off = schedule.days.firstOrNull { it.date == date.toString() }?.lessons.orEmpty()
             .filter { it.number == lesson.number && it.isCancelled && !schedule.isNeighbours(it) }
-        return NextLesson(date, lesson, day.filter { it !== lesson && it.number == lesson.number }, off = off)
+        return NextLesson(
+            date, lesson, day.filter { it !== lesson && it.number == lesson.number }, off = off,
+            then = day.filter { it.number > lesson.number }.minByOrNull { it.number },
+        )
     }
 
     currentLessonNumber(bells, today, now)
@@ -392,13 +430,14 @@ internal fun nextLessonHead(
 }
 
 /** Три строки маленького виджета — в sp, без отступов. */
-private const val TIGHT_HEIGHT_SP = 52
+private const val TIGHT_HEIGHT_SP = 55
 
 /**
  * Четыре строки (название в две) — в sp, без отступов. По снимку экрана с TECNO
- * LF7n: в клетке высотой около 80 dp четыре строки помещаются.
+ * LF7n: в клетке высотой около 80 dp четыре строки помещаются. Время в шапке
+ * крупнее остального — на 3 sp больше, чем было при снимке.
  */
-private const val ROOMY_HEIGHT_SP = 63
+private const val ROOMY_HEIGHT_SP = 66
 
 /** Кегль названия пары и средняя ширина жирной кириллической буквы в его долях. */
 private const val SUBJECT_SP = 13

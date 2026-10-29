@@ -158,16 +158,7 @@ private fun DayTitle(day: WeekDay, colors: Palette) {
             .clickable(actionStartActivity(openDay(context, day.date))),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            day.title,
-            maxLines = 1,
-            style = TextStyle(
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                // Сегодняшний день выделен цветом.
-                color = if (day.isToday) colors.accent else colors.text,
-            ),
-        )
+        DayName(day, colors)
         // Пары прежние или неполные: сервер этот день не прочитал. Пустой
         // такой день говорит это своей строкой.
         if (day.unread != null && day.lessons.isNotEmpty()) {
@@ -178,6 +169,29 @@ private fun DayTitle(day: WeekDay, colors: Palette) {
             )
         }
     }
+}
+
+/**
+ * Название дня. Сегодняшний — на плашке, как выбранный день в полоске
+ * приложения; поля только по бокам, высота строки та же (по ней считается,
+ * сколько дней влезает).
+ */
+@Composable
+private fun DayName(day: WeekDay, colors: Palette) {
+    Text(
+        day.title,
+        maxLines = 1,
+        style = TextStyle(
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (day.isToday) colors.accent else colors.text,
+        ),
+        modifier = if (day.isToday) {
+            GlanceModifier.background(colors.nowSurface).cornerRadius(10.dp).padding(horizontal = 6.dp)
+        } else {
+            GlanceModifier
+        },
+    )
 }
 
 /** День, на пары которого не хватило высоты: сколько их и с какого по какое. */
@@ -191,15 +205,7 @@ private fun DaySummary(day: WeekDay, bells: Map<String, List<String>>, colors: P
             .clickable(actionStartActivity(openDay(context, day.date))),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            day.title,
-            maxLines = 1,
-            style = TextStyle(
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (day.isToday) colors.accent else colors.text,
-            ),
-        )
+        DayName(day, colors)
         Text(
             if (day.lessons.isEmpty()) {
                 when {
@@ -272,7 +278,7 @@ private fun LessonLine(
         modifier = GlanceModifier
             .fillMaxWidth()
             .background(if (isNow) colors.nowSurface else NO_SURFACE)
-            .cornerRadius(6.dp)
+            .cornerRadius(10.dp)
             .padding(horizontal = 4.dp)
             .padding(bottom = 2.dp)
             .clickable(actionStartActivity(openDay(context, date))),
@@ -281,8 +287,10 @@ private fun LessonLine(
         Text(
             lessonStart(bells, lesson.number) ?: "${lesson.number}",
             maxLines = 1,
+            // Начало пары жирным, как в «Дне» и на экране.
             style = TextStyle(
                 fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
                 color = if (dim) colors.textDim else colors.text,
             ),
             // Колонка растёт со шрифтом: «09:00» в sp, колонка в dp.
