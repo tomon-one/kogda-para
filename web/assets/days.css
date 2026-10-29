@@ -19,25 +19,26 @@
 
 /* ——— дни ——— */
 
+/* День — карточка, пары в ней — плитки: видно, где кончается одна пара и
+   начинается другая, без линеек. */
 .day {
   background: var(--surface);
-  border-radius: 16px;
+  border: 1px solid var(--divider);
+  border-radius: 20px;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 6px;
 }
+
+.day.today { border-color: var(--button-border); }
 
 .day-title {
-  padding: 12px 16px;
-  font-size: 15px;
-  font-weight: 600;
-  background: var(--surface-variant);
+  padding: 14px 16px 10px;
+  font-size: 17px;
+  font-weight: 700;
 }
 
-.day.today .day-title {
-  background: var(--today-bg);
-  color: var(--primary);
-  box-shadow: inset 4px 0 0 var(--primary);
-}
+.day.today .day-title { color: var(--primary); }
 
 .day.past .day-title { color: var(--muted); }
 
@@ -56,28 +57,30 @@
 }
 
 .day-note {
-  padding: 10px 16px;
+  padding: 6px 16px 10px;
   font-size: 13px;
   color: var(--muted);
-  border-top: 1px solid var(--divider);
 }
 
 .lesson {
   display: flex;
-  padding: 12px 16px;
-  border-top: 1px solid var(--divider);
+  margin: 0 8px 6px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 14px;
+  background: var(--tile);
 }
 
-.day-title + .lesson { border-top: 0; }
-.lesson.now { background: var(--now-bg); }
+.lesson.now { background: var(--now-bg); box-shadow: inset 0 0 0 1px var(--button-border); }
 
 /* В em, а не px: с крупным шрифтом «09:00–10:30» должно помещаться, как в
    приложении, где колонка растёт с масштабом шрифта. */
 .lesson-time { width: 5.75em; flex: none; }
 .pair { font-size: 11px; color: var(--muted); }
-.time { font-size: 14px; font-weight: 500; white-space: nowrap; }
-.past .time, .past .subject { color: var(--muted); }
-.lesson.now .time { font-weight: 700; color: var(--primary); }
+.time { white-space: nowrap; }
+.time-start { display: block; font-size: 19px; font-weight: 700; line-height: 24px; }
+.time-end { display: block; font-size: 13px; color: var(--muted); }
+.past .time-start, .past .subject { color: var(--muted); }
+.lesson.now .time-start { color: var(--primary); }
 .now-label { font-size: 11px; color: var(--primary); }
 
 .now-label::before {
@@ -124,7 +127,7 @@
 
 /* Пара только у других групп: видно сразу, а не только по значкам. */
 .lesson.foreign { background: var(--foreign-bg); }
-.lesson.foreign .time, .lesson.foreign .subject { color: var(--muted); }
+.lesson.foreign .time-start, .lesson.foreign .subject { color: var(--muted); }
 
 .group-name { display: flex; align-items: center; min-width: 0; }
 /* Длинное название без пробелов переносится внутри строки, а не уходит под кнопку. */
@@ -138,9 +141,7 @@
 .lesson-body {
   flex: 1;
   min-width: 0;
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid var(--divider);
+  margin-left: 10px;
 }
 
 /* Узко (телефон 320 px или страница увеличена): время строкой над парой,
@@ -150,17 +151,20 @@
   .lesson { flex-direction: column; }
   .lesson-time { width: auto; }
   .lesson-time .pair, .lesson-time .time, .lesson-time .now-label { display: inline; margin-right: 6px; }
+  .lesson-time .time-start, .lesson-time .time-end { display: inline; font-size: 15px; color: inherit; }
+  .lesson-time .time-end::before { content: "–"; }
   .lesson-time .marks { display: inline-flex; width: auto; margin-top: 0; vertical-align: middle; }
   /* Длинное название в значке — в пределах строки, с многоточием: иначе при
      увеличении 200 % оно уходит за край карточки. */
   .lesson-time .marks.names { display: flex; flex-wrap: wrap; max-width: 100%; }
   .lesson-time .mark { margin-bottom: 0; }
-  .lesson-body { margin: 4px 0 0; padding: 0; border-left: 0; }
+  .lesson-body { margin: 4px 0 0; }
 }
 
 .subject {
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.3;
   overflow-wrap: break-word;
   word-wrap: break-word;
 }
@@ -179,8 +183,12 @@
 .place {
   min-width: 0;
   margin-right: 8px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--mark-bg);
   font-size: 13px;
   font-weight: 600;
+  line-height: 22px;
   color: var(--primary);
   overflow: hidden;
   display: -webkit-box;

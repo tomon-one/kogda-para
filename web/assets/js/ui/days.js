@@ -75,6 +75,14 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   return card;
 }
 
+/** «09:00–10:30»: начало крупно, конец под ним. */
+function timeBlock(time) {
+  var parts = time.split('–');
+  return h('div', { class: 'time', 'aria-label': time },
+    h('span', { class: 'time-start' }, parts[0]),
+    parts[1] ? h('span', { class: 'time-end' }, parts[1]) : null);
+}
+
 function summaryLine(text) {
   return text ? h('span', { class: 'day-summary' }, text) : null;
 }
@@ -111,7 +119,7 @@ function lessonRow(lesson, bells, isNow, key, groups, byName) {
   return h('div', { class: 'lesson' + (isNow ? ' now' : '') + (foreign ? ' foreign' : '') },
     h('div', { class: 'lesson-time' },
       h('div', { class: 'pair' }, lesson.n + ' пара'),
-      time ? h('div', { class: 'time' }, time) : null,
+      time ? timeBlock(time) : null,
       isNow ? nowLabel() : null,
       groups.length ? groupMarks(lesson.slots || [], groups, byName) : null),
     body);

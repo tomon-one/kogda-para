@@ -26,6 +26,7 @@
   --selected-bg: rgba(194, 3, 2, 0.16);
   --button-border: rgba(194, 3, 2, 0.4);
   --online: #0a7a3e;
+  --tile: #f4f5f7;
   --online-border: rgba(10, 122, 62, 0.4);
   --divider: #e2e3e5;
   --outline: #808387;
@@ -50,6 +51,7 @@
     --selected-bg: rgba(255, 107, 112, 0.18);
     --button-border: rgba(255, 107, 112, 0.35);
     --online: #4cc38a;
+    --tile: #1c1c1c;
     --online-border: rgba(76, 195, 138, 0.35);
     --divider: #262626;
     --outline: #6e6e6e;
@@ -74,6 +76,7 @@
   --selected-bg: rgba(255, 107, 112, 0.18);
   --button-border: rgba(255, 107, 112, 0.35);
   --online: #4cc38a;
+  --tile: #1c1c1c;
   --online-border: rgba(76, 195, 138, 0.35);
   --divider: #262626;
   --outline: #6e6e6e;
