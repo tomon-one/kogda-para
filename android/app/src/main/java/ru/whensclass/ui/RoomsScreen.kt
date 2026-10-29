@@ -351,8 +351,9 @@ private fun Section(text: String) = Text(
 
 @Composable
 private fun Card(content: @Composable () -> Unit) = Surface(
-    shape = RoundedCornerShape(12.dp),
+    shape = RoundedCornerShape(20.dp),
     color = MaterialTheme.colorScheme.surface,
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
 ) { Column { content() } }
 

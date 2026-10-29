@@ -87,7 +87,7 @@ fun GroupPickerScreen(
                 label = { Text("Поиск по названию") },
                 trailingIcon = { ClearSearch(query) { query = "" } },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),

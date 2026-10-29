@@ -221,7 +221,7 @@ fun TeacherScreen(
             label = { Text(searchLabel) },
             trailingIcon = { ClearSearch(query) { query = "" } },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         )
 
@@ -392,7 +392,7 @@ private fun TeacherRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface),
     ) {
             Column(

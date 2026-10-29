@@ -70,8 +70,8 @@ internal fun <T> LazyListScope.lettered(
             )
         }
         itemsIndexed(rows, key = { _, row -> key(row) }) { index, row ->
-            val top = if (index == 0) 12.dp else 0.dp
-            val bottom = if (index == rows.lastIndex) 12.dp else 0.dp
+            val top = if (index == 0) 20.dp else 0.dp
+            val bottom = if (index == rows.lastIndex) 20.dp else 0.dp
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -108,7 +108,7 @@ internal fun RoleSwitchRow(text: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .heightIn(min = 48.dp)
