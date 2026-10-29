@@ -181,15 +181,11 @@ internal fun App(
         val done = download as? AppUpdate.Download.Done ?: return@LaunchedEffect
         when (val result = done.result) {
             is AppUpdate.Result.Failed -> updateError = result.why
-            is AppUpdate.Result.Ready -> {
-                lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) {}
-                // Сессия не открылась — прежний путь: окно системного установщика.
-                runCatching { container.updates.install(result) }.onFailure {
-                    lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) {
-                        runCatching { context.startActivity(result.intent) }
-                            .onFailure { updateError = "установщик Android не найден" }
-                    }
-                }
+            is AppUpdate.Result.Ready -> container.updates.install(result)
+            // Сессия не открылась — прежний путь: окно системного установщика.
+            is AppUpdate.Result.Manual -> lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) {
+                runCatching { context.startActivity(result.intent) }
+                    .onFailure { updateError = "установщик Android не найден" }
             }
         }
         container.updates.taken()

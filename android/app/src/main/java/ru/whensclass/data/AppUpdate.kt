@@ -260,6 +260,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
          * Открывает экран: из фона Android 10+ запуск молча отбрасывает.
          */
         data class Ready(val file: File, val versionCode: Int, val intent: Intent) : Result
+        /** Сессия установщика не открылась — [intent] открывает его окно, как раньше. */
+        data class Manual(val intent: Intent) : Result
         data class Failed(val why: String) : Result
     }
 
@@ -346,9 +348,20 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     /**
      * Отдаёт проверенный файл установщику Android. Итог придёт в
      * [InstallResultReceiver]; до него кнопка показывает, что обновление идёт.
-     * Бросает, если сессию открыть не удалось: тогда экран откроет [Result.Ready.intent].
+     * Сессия не открылась — итог [Result.Manual]. Здесь, а не в экране: смена
+     * [download] перезапускает экран, и установка из него отменила бы сама себя.
      */
-    suspend fun install(ready: Result.Ready) = withContext(Dispatchers.IO) {
+    fun install(ready: Result.Ready) {
+        // Сразу: экран, забирая итог ([taken]), не должен стереть неудачу ниже.
+        _download.value = Download.Running
+        scope.launch {
+            runCatching { session(ready) }.onFailure {
+                _download.value = Download.Done(Result.Manual(ready.intent))
+            }
+        }
+    }
+
+    private suspend fun session(ready: Result.Ready) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
@@ -369,14 +382,11 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
                 val result = Intent(context, InstallResultReceiver::class.java)
                     .putExtra(EXTRA_VERSION, ready.versionCode)
-                // До commit: итог может прийти раньше, чем отсюда вернутся.
-                _download.value = Download.Running
                 runCatching { AppContainer.get(context).store.setInstalling(ready.versionCode) }
                 session.commit(PendingIntent.getBroadcast(context, id, result, flags).intentSender)
             }
         } catch (error: Exception) {
             runCatching { installer.abandonSession(id) }
-            if (_download.value == Download.Running) _download.value = null
             throw error
         }
     }
