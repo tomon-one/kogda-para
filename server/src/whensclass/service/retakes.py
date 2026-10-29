@@ -77,6 +77,7 @@ def _redirect(redirect: Redirect, index: TeacherIndex | None) -> dict:
 class RetakesSource:
     def __init__(self, directory: pathlib.Path, teachers: Callable[[], TeacherIndex | None] = lambda: None):
         self.teachers = teachers
+        self.now = lambda: dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone))
         self.path = directory / "retakes.json"
         # Тело ответа /v1/retakes; None — ещё ни разу не читали.
         self.payload: dict | None = None
@@ -110,7 +111,7 @@ class RetakesSource:
             return
         # Листов несколько — берём последний в книге: новые колледж добавляет в конец.
         sheet = sheets[-1]
-        now = dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone))
+        now = self.now()
         try:
             parsed = parse_retakes(gsheets.fetch_sheet_csv(sheet.gid, sheet.title), now.date())
         except Exception as exc:
@@ -128,6 +129,10 @@ class RetakesSource:
             return
         self._network_since = None
         alerts.forget("retakes")
+        # Все даты листа прошли — пересдачи закончились, хоть лист и висит в книге.
+        if parsed.last is not None and parsed.last < now.date():
+            self._put({"title": None, "sheet": None, "rows": [], "redirects": []})
+            return
         index = self.teachers()
         self._put({
             "title": parsed.title,

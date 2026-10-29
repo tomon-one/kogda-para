@@ -53,6 +53,9 @@ class Retakes:
     title: str
     rows: list[Retake]
     redirects: list[Redirect]
+    # Последний день листа: позже него пересдач по нему нет. None — не знаем
+    # (у строки нет ни одной даты, а в заголовке нет месяца).
+    last: dt.date | None = None
 
 
 _HEADS = {
@@ -66,6 +69,19 @@ _TITLE = re.compile(r"пересдач|задолженност", re.IGNORECASE)
 _MONTHS = ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
 
 
+def _title_month(title: str) -> tuple[int, int] | None:
+    """Год и месяц из заголовка («График пересдач, октябрь 2026 г.»), если есть оба."""
+    year = re.search(r"\b(20\d{2})\b", title)
+    if not year:
+        return None
+    words = re.findall(r"[а-яё]+", title.lower())
+    month = next(
+        (i + 1 for i, stem in enumerate(_MONTHS) for w in words if w.startswith(stem) and (stem != "ма" or w in ("май", "мая"))),
+        None,
+    )
+    return (int(year[1]), month) if month else None
+
+
 def _anchor(title: str, today: dt.date) -> dt.date:
     """От какого дня считать год дат без года: месяц и год из заголовка листа
     («График пересдач, октябрь 2026 г.»), если они там есть, иначе сегодня.
@@ -73,13 +89,8 @@ def _anchor(title: str, today: dt.date) -> dt.date:
     year = re.search(r"\b(20\d{2})\b", title)
     if not year:
         return today
-    words = re.findall(r"[а-яё]+", title.lower())
-    month = next(
-        (i + 1 for i, stem in enumerate(_MONTHS) for w in words if w.startswith(stem) and (stem != "ма" or w in ("май", "мая"))),
-        None,
-    )
-    if month:
-        return dt.date(int(year[1]), month, 15)
+    if found := _title_month(title):
+        return dt.date(found[0], found[1], 15)
     # Учебный год без месяца («2026-2027 уч. год», «2026/27»): сентябрь —
     # первого года, январь — второго; середина — новый год между ними.
     span = re.search(r"\b(20\d{2})\s*[-–/]\s*(?:20)?(\d{2})\b", title)
@@ -225,4 +236,33 @@ def parse_retakes(text: str, today: dt.date | None = None) -> Retakes:
         if whose and redirects:
             redirects[-1].teachers.extend(_names(whose))
     redirects = [r for r in redirects if r.teachers]
-    return Retakes(title, retakes, redirects)
+    return Retakes(title, retakes, redirects, _last_day(title, retakes, anchor))
+
+
+_ANY_DAY = re.compile(r"(?<![\d.])(\d{1,2})\.(\d{1,2})" + _YEAR)
+
+
+def _last_day(title: str, rows: list[Retake], anchor: dt.date) -> dt.date | None:
+    """Последний день листа — самая поздняя дата его строк.
+
+    Строка, чьи даты не разобрались («19.10; 21.10 перенос на 26.10»), идёт
+    до самой поздней даты в её тексте; без единой даты («по договорённости») —
+    до конца месяца из заголовка, а без месяца в заголовке конец листа неизвестен.
+    """
+    month = _title_month(title)
+    month_end = None
+    if month:
+        first_next = dt.date(month[0] + month[1] // 12, month[1] % 12 + 1, 1)
+        month_end = first_next - dt.timedelta(days=1)
+    last = None
+    for row in rows:
+        if row.slots:
+            end = max(s.end for s in row.slots)
+        else:
+            days = [_day(int(m[1]), int(m[2]), anchor, m[3]) for m in _ANY_DAY.finditer(row.dates)]
+            days = [d for d in days if d]
+            end = max(days) if days else month_end
+        if end is None:
+            return None
+        last = end if last is None else max(last, end)
+    return last

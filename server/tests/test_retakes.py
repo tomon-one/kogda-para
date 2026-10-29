@@ -165,6 +165,7 @@ def source(tmp_path, monkeypatch):
     monkeypatch.setattr(retakes_service.alerts, "notify", lambda *a, **k: sent.append(a))
     monkeypatch.setattr(retakes_service.alerts, "forget", lambda *a: None)
     src = retakes_service.RetakesSource(tmp_path)
+    src.now = lambda: dt.datetime(2026, 10, 15, 12, 0)
     src.sent = sent
     return src
 
@@ -272,3 +273,35 @@ def test_academic_year_without_month_puts_spring_into_the_second_year():
         anchor = _anchor(title, dt.date(2026, 10, 16))
         assert [s.start for s in parse_slots("25.01; 14.10", "", anchor)] == \
             [dt.date(2027, 1, 25), dt.date(2026, 10, 14)], title
+
+
+def test_last_day_counts_moved_and_undated_rows():
+    def last(*rows, title="График пересдач, октябрь 2026 г."):
+        sheet = _sheet([
+            ["", title, "", ""],
+            ["ФИО преподавателя", "Дата пересдачи", "Время пересдачи", "Кабинет"],
+            *[["Иванов И.И.", dates, "16.00-17.00", "265"] for dates in rows],
+        ])
+        return parse_retakes(sheet, dt.date(2026, 10, 15)).last
+
+    assert last("14.10; 16.10", "12-23.10") == dt.date(2026, 10, 23)
+    # Перенос не разбирается в дни, но конец строки — дата переноса.
+    assert last("14.10", "19.10; 21.10 перенос на 26.10 по расписани.") == dt.date(2026, 10, 26)
+    assert last("20.10.2026 перенос на 26.10") == dt.date(2026, 10, 26)
+    # Без дат — до конца месяца из заголовка, без месяца — неизвестно.
+    assert last("14.10", "по договорённости") == dt.date(2026, 10, 31)
+    assert last("по договорённости", title="График пересдач 2026-2027") is None
+    assert last("по договорённости", title="График пересдач, декабрь 2026") == dt.date(2026, 12, 31)
+
+
+def test_sheet_whose_days_all_passed_is_closed(source, monkeypatch):
+    _book(monkeypatch, [SheetInfo("График пересдач октябрь 2026", "3")])
+    source.refresh()
+    assert len(source.payload["rows"]) == 3
+    # 23.10 — последний день листа: в него пересдачи ещё идут, на следующий — нет.
+    source.now = lambda: dt.datetime(2026, 10, 23, 20, 0)
+    source.refresh()
+    assert len(source.payload["rows"]) == 3
+    source.now = lambda: dt.datetime(2026, 10, 24, 8, 0)
+    source.refresh()
+    assert source.payload["rows"] == [] and source.payload["title"] is None
