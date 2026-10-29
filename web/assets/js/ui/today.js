@@ -42,7 +42,7 @@ export function mainScreen(app) {
   app.loadRetakes(false);
   var live = retakesActive(app.state.retakes, app.now().date);
   // Полоска дней — у своего расписания, когда оно есть.
-  var strip = !route.kind && app.saved() ? weekStrip(app.scrollTarget(), app.now().date, app.showDay) : null;
+  var strip = !route.kind && app.saved() ? weekStrip(app.scrollTarget(), app.now().date) : null;
   var head = h('div', { class: 'head' }, topbar(app, own), tabs(app, tab, teacherMode),
     live ? secondTabs(app, tab, true) : null, strip);
   var content = h('main', { class: 'content' });

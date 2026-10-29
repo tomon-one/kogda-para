@@ -21,6 +21,10 @@
   }
 
   .switch { transition: background 0.15s; }
+
+  /* Полоска дней: выделение перетекает с дня на день. */
+  .week-day { transition: background-color 0.22s ease-out, color 0.22s ease-out; }
+  .week-day .week-name { transition: color 0.22s ease-out; }
   .switch::after { transition: transform 0.15s; }
 
   .screen.enter-forward > :not(.bottom-bar) {

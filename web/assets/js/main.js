@@ -41,11 +41,6 @@ Object.assign(app, {
   pinned: repo.pinned,
   now: function () { return collegeNow(); },
   scrollTarget: function () { return repo.openingDate(); },
-  /** Полоска дней: к этому дню. */
-  showDay: function (date) {
-    state.wanted = date;
-    render();
-  },
   togglePin: function (kind, id) { repo.togglePin(kind, id); },
   theme: function () { return store.get('theme') || 'system'; },
   /** Подписи выбранных групп у пар: названиями (по умолчанию) или номерами. */

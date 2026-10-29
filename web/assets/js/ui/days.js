@@ -106,8 +106,9 @@ function lessonRow(lesson, bells, isNow, key, groups, byName) {
   }
   var kind = kindName(lesson.k);
   var body = h('div', { class: 'lesson-body' },
-    h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, lesson.s),
+    // Чья пара — первой строкой: сначала видно, что она не своя.
     foreign ? h('div', { class: 'sub only-at' }, onlyAt(lesson.slots, groups)) : null,
+    h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, lesson.s),
     h('div', { class: 'lesson-meta' }, place, kind ? h('span', { class: 'kind' }, kind) : null),
     lesson.u ? onlineLink(lesson.u, key) : null,
     // Подпись группы — вместо преподавателя: у преподавателя важно, кому

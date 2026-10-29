@@ -200,7 +200,7 @@
 .place.muted, .past .place, .foreign .place { color: var(--muted); }
 .kind { font-size: 13px; color: var(--muted); flex: none; }
 .sub { font-size: 13px; color: var(--muted); }
-.only-at { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.only-at { margin-bottom: 2px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .cancel-note {
   font-size: 13px;

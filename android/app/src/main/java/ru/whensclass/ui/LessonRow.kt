@@ -98,6 +98,16 @@ internal fun LessonRow(
         )
     val subject: @Composable () -> Unit = {
         Column {
+            // Чья пара — первой строкой: сначала видно, что она не своя.
+            if (foreign) {
+                Text(
+                    onlyAt(lesson.slots, groups),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 lesson.subject,
                 // Перенос — по слогам с дефисом и по дефису в слове, а не
@@ -110,15 +120,6 @@ internal fun LessonRow(
                 color = main,
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
             )
-            if (foreign) {
-                Text(
-                    onlyAt(lesson.slots, groups),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
 
             Spacer(Modifier.height(4.dp))
             // Тип занятия и аудитория — то, ради чего сюда заглядывают: сразу

@@ -28,6 +28,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberUpdatedState
@@ -155,12 +158,34 @@ fun ScheduleDays(
         derivedStateOf { days.getOrNull((listState.firstVisibleItemIndex - shift).coerceAtLeast(0))?.date }
     }
 
+    // Нажатый в полоске день: пока список к нему едет, выделение стоит на нём,
+    // а не бежит по промежуточным.
+    var picked by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    // Дни всплывают по очереди один раз — когда список только появился (как на сайте).
+    val appearing = remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(APPEAR_MILLIS)
+        appearing.value = false
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
     if (weekStrip) {
         WeekStrip(
-            shown = shownDay?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today,
+            shown = (picked ?: shownDay)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today,
             today = today,
-            onPick = { wanted = it.toString() },
+            onPick = { date ->
+                wanted = null
+                val index = dayIndex(days, date.toString())
+                picked = days.getOrNull(index)?.date
+                scope.launch {
+                    try {
+                        listState.animateScrollToItem(index + shift)
+                    } finally {
+                        picked = null
+                    }
+                }
+            },
         )
     }
     LazyColumn(
@@ -178,14 +203,37 @@ fun ScheduleDays(
     ) {
         header?.let { item(key = "header") { it() } }
         itemsIndexed(days, key = { _, day -> day.date }) { index, day ->
+            Box(modifier = Modifier.appear(appearing.value, index - listState.firstVisibleItemIndex + shift)) {
             DayCard(
                 day, schedule.bellsOf(day), now, teacher = schedule.isTeacher,
                 groups = schedule.groupNames, groupsByName = groupsByName,
                 nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
                 idle = idle,
             )
+            }
         }
     }
+    }
+}
+
+/** Сколько длится всплытие дней при появлении списка. */
+private const val APPEAR_MILLIS = 700L
+
+/**
+ * Всплытие карточки: снизу и из прозрачного, по очереди с шагом 45 мс (motion.css
+ * сайта, `.days.appear`). Только видимые при появлении; потом — как есть.
+ */
+@Composable
+private fun Modifier.appear(active: Boolean, order: Int): Modifier {
+    if (!active || order < 0 || order > 6) return this
+    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(order * 45L)
+        progress.animateTo(1f, androidx.compose.animation.core.tween(340, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+    }
+    return graphicsLayer {
+        alpha = progress.value
+        translationY = (1f - progress.value) * 16.dp.toPx()
     }
 }
 
@@ -205,12 +253,18 @@ private fun WeekStrip(shown: LocalDate, today: LocalDate, onPick: (LocalDate) ->
         for (i in 0 until 7) {
             val date = monday.plusDays(i.toLong())
             val on = date == shown
-            val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            // Выделение перетекает с дня на день, а не перескакивает.
+            val fg by androidx.compose.animation.animateColorAsState(
+                if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "день",
+            )
+            val bg by androidx.compose.animation.animateColorAsState(
+                if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, label = "фон дня",
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                    .background(bg)
                     .clickable(onClickLabel = "Перейти к дню") { onPick(date) }
                     .semantics { contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" },
                 contentAlignment = Alignment.Center,

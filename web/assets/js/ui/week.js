@@ -7,10 +7,9 @@ import { addDays, weekStart } from '../time.js';
 var NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 /** `day` — с какого дня неделя (тот, к которому открыт список), `today` — дата колледжа. */
-export function weekStrip(day, today, onPick) {
+export function weekStrip(day, today) {
   var strip = h('nav', { class: 'week-strip', 'aria-label': 'Дни недели' });
   strip.__today = today;
-  strip.__onPick = onPick;
   fill(strip, weekStart(day));
   mark(strip, day);
   // Экран перестроен и прокручен — выделить день, который на самом деле наверху.
@@ -29,7 +28,7 @@ function fill(strip, monday) {
       'data-date': date,
       'aria-label': name + ', ' + Number(date.slice(8)),
     }, h('span', { class: 'week-name' }, name), h('span', { class: 'week-num' }, String(Number(date.slice(8)))));
-    button.addEventListener('click', function () { strip.__onPick(date); });
+    button.addEventListener('click', function () { go(strip, date); });
     strip.appendChild(button);
   });
 }
@@ -48,6 +47,31 @@ export function mark(strip, day) {
   }
 }
 
+// Пока список едет к выбранному дню, выделение стоит на нём, а не бежит по
+// промежуточным.
+var heading = null;
+var headingUntil = 0;
+
+/** К дню — плавной прокруткой (без неё, если в системе «уменьшить движение»). */
+function go(strip, date) {
+  var cards = document.querySelectorAll('[data-day]');
+  var card = null;
+  for (var i = 0; i < cards.length && !card; i++) if (cards[i].getAttribute('data-day') >= date) card = cards[i];
+  card = card || cards[cards.length - 1];
+  if (!card) return;
+  var head = document.querySelector('.head');
+  var y = card.getBoundingClientRect().top + window.pageYOffset - (head ? head.getBoundingClientRect().bottom : 0) - 8;
+  var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  heading = card.getAttribute('data-day');
+  headingUntil = Date.now() + 900;
+  mark(strip, heading);
+  try {
+    window.scrollTo({ top: Math.max(0, y), behavior: calm ? 'auto' : 'smooth' });
+  } catch (e) {
+    window.scrollTo(0, Math.max(0, y));
+  }
+}
+
 // Листают — выделение идёт за днём, который наверху под шапкой.
 var pending = false;
 window.addEventListener('scroll', function () {
@@ -56,7 +80,11 @@ window.addEventListener('scroll', function () {
   window.requestAnimationFrame(function () {
     pending = false;
     var strip = document.querySelector('.week-strip');
-    if (strip) mark(strip, topDay());
+    if (!strip) return;
+    var top = topDay();
+    if (heading && Date.now() < headingUntil && top !== heading) return;
+    heading = null;
+    mark(strip, top);
   });
 }, { passive: true });
 
