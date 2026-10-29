@@ -14,6 +14,10 @@ private val BRAND_LIGHT = Color(0xFFFF6B70)
 internal val ColorScheme.online: Color
     get() = if (background.luminance() < 0.5f) Color(0xFF4CC38A) else Color(0xFF0A7A3E)
 
+/** Плитка пары внутри карточки дня (--tile сайта). */
+internal val ColorScheme.tile: Color
+    get() = if (background.luminance() < 0.5f) Color(0xFF1C1C1C) else Color(0xFFF4F5F7)
+
 /** Тёмная схема в тон виджету: чистый чёрный не светится на OLED. */
 internal val DarkScheme = darkColorScheme(
     background = Color(0xFF000000),

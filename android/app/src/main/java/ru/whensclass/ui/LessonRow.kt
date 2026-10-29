@@ -6,15 +6,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import android.provider.Settings as SystemSettings
@@ -80,8 +80,11 @@ internal fun LessonRow(
     // Тесно (крупный шрифт или масштаб экрана) — время строкой над названием:
     // сбоку оно оставляет названию слишком мало, и длинные слова рвутся.
     val stacked = LocalConfiguration.current.screenWidthDp / scale < STACK_BELOW_DP
+    // Пара — плитка внутри карточки дня: видно, где кончается одна и начинается другая.
     val background = Modifier
+        .padding(start = 8.dp, end = 8.dp, bottom = 6.dp)
         .fillMaxWidth()
+        .clip(RoundedCornerShape(14.dp))
         .background(
             when {
                 isNow -> MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
@@ -90,7 +93,7 @@ internal fun LessonRow(
                 foreign -> if (MaterialTheme.colorScheme.surface.luminance() < 0.5f)
                     Color.White.copy(alpha = 0.07f).compositeOver(MaterialTheme.colorScheme.surface)
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                else -> MaterialTheme.colorScheme.surface
+                else -> MaterialTheme.colorScheme.tile
             },
         )
     val subject: @Composable () -> Unit = {
@@ -103,7 +106,7 @@ internal fun LessonRow(
                     hyphens = Hyphens.Auto,
                     lineBreak = LineBreak.Paragraph,
                 ),
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
                 color = main,
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
             )
@@ -225,7 +228,7 @@ internal fun LessonRow(
         Row(
             modifier = background
                 .height(IntrinsicSize.Min)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.Top,
         ) {
             Column(modifier = Modifier.width(timeColumn)) {
@@ -235,16 +238,23 @@ internal fun LessonRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
-                lessonTime(bells, lesson.number)?.let {
+                // Начало крупно, конец под ним.
+                bells[lesson.number.toString()]?.getOrNull(0)?.takeIf { it.isNotEmpty() }?.let { start ->
                     Text(
-                        it,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
+                        start,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
                         color = if (isNow) MaterialTheme.colorScheme.primary else main,
                         maxLines = 1,
-                        // Обрыв без многоточия читался бы как другое время.
-                        overflow = TextOverflow.Ellipsis,
                     )
+                    bells[lesson.number.toString()]?.getOrNull(1)?.takeIf { it.isNotEmpty() }?.let { end ->
+                        Text(
+                            end,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
                 }
                 if (isNow) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -260,9 +270,7 @@ internal fun LessonRow(
                 if (groups.isNotEmpty()) GroupMarks(lesson.slots, groups, groupsByName, Modifier.padding(top = 6.dp))
             }
 
-            VerticalDivider(
-                modifier = Modifier.fillMaxHeight().padding(start = 12.dp, end = 12.dp),
-            )
+            Spacer(Modifier.width(10.dp))
 
             Box(modifier = Modifier.weight(1f)) { subject() }
         }
@@ -284,7 +292,14 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
         // самостоятельным названием.
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
-        modifier = modifier.padding(end = 8.dp),
+        modifier = modifier
+            .padding(end = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (muted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
+                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            )
+            .padding(horizontal = 8.dp, vertical = 1.dp),
     )
 }
 

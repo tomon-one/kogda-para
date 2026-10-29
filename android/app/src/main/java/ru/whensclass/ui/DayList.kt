@@ -1,5 +1,6 @@
 package ru.whensclass.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -21,7 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -344,8 +344,12 @@ private fun DayCard(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        ),
     ) {
         // Прошедший день не выбрасываем, но приглушаем — цветом, а не
         // прозрачностью: при прозрачности контраст падает так, что вчерашнюю
@@ -385,11 +389,8 @@ private fun DayCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
                     )
-                    HorizontalDivider()
                 }
-                day.lessons.forEachIndexed { index, lesson ->
-                    // Линия во всю ширину карточки — расписание, а не плитки.
-                    if (index > 0) HorizontalDivider()
+                day.lessons.forEach { lesson ->
                     // Отменённая пара в своё время — не «идёт сейчас». Пара
                     // только у других групп — тоже: человек на ней не сидит.
                     val foreign = groups.isNotEmpty() && 0 !in lesson.slots
@@ -506,50 +507,24 @@ internal const val IDLE_MILLIS = (5 * 60 + 8) * 1000L
 
 @Composable
 private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, summary: String? = null) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                else MaterialTheme.colorScheme.surfaceVariant
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (isToday) {
-            // Красная метка слева: сегодняшний день находится взглядом сразу.
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(40.dp)
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-        }
-        Column(
-            modifier = Modifier.padding(
-                start = if (isToday) 12.dp else 16.dp,
-                end = 16.dp,
-                top = 12.dp,
-                bottom = 12.dp,
-            ),
-        ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp)) {
+        Text(
+            title.replaceFirstChar { it.uppercase() },
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = when {
+                isToday -> MaterialTheme.colorScheme.primary
+                past -> MaterialTheme.colorScheme.onSurfaceVariant
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+        )
+        if (summary != null) {
             Text(
-                title.replaceFirstChar { it.uppercase() },
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = when {
-                    isToday -> MaterialTheme.colorScheme.primary
-                    past -> MaterialTheme.colorScheme.onSurfaceVariant
-                    else -> MaterialTheme.colorScheme.onSurface
-                },
+                summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
             )
-            if (summary != null) {
-                Text(
-                    summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
         }
     }
 }
