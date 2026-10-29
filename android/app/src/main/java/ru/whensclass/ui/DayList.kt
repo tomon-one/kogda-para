@@ -1,6 +1,11 @@
 package ru.whensclass.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +70,8 @@ fun ScheduleDays(
     header: (@Composable () -> Unit)? = null,
     /** Подписи выбранных групп у пар: названиями или номерами. */
     groupsByName: Boolean = true,
+    /** Полоска дней недели над списком ([WeekStrip]) — у своего расписания. */
+    weekStrip: Boolean = false,
 ) {
     val now = rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
@@ -143,9 +150,22 @@ fun ScheduleDays(
         }
     }
 
+    // Какой день наверху — для выделения в полоске.
+    val shownDay by remember(days, shift) {
+        derivedStateOf { days.getOrNull((listState.firstVisibleItemIndex - shift).coerceAtLeast(0))?.date }
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+    if (weekStrip) {
+        WeekStrip(
+            shown = shownDay?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today,
+            today = today,
+            onPick = { wanted = it.toString() },
+        )
+    }
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxSize().pointerInput(Unit) {
+        modifier = Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
                     awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
@@ -164,6 +184,60 @@ fun ScheduleDays(
                 nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
                 idle = idle,
             )
+        }
+    }
+    }
+}
+
+private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+/**
+ * Полоска дней недели (week.js сайта): неделя дня, который наверху списка, он же
+ * выделен, точка — сегодня. Нажатие ведёт к дню.
+ */
+@Composable
+private fun WeekStrip(shown: LocalDate, today: LocalDate, onPick: (LocalDate) -> Unit) {
+    val monday = shown.minusDays((shown.dayOfWeek.value - 1).toLong())
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        for (i in 0 until 7) {
+            val date = monday.plusDays(i.toLong())
+            val on = date == shown
+            val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                    .clickable(onClickLabel = "Перейти к дню") { onPick(date) }
+                    .semantics { contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+                ) {
+                    Text(
+                        WEEK_NAMES[i],
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (on) fg else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(date.dayOfMonth.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = fg)
+                }
+                if (date == today) {
+                    // Точка — сегодня.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 2.dp)
+                            .size(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(if (on) fg else MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
         }
     }
 }

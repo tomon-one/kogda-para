@@ -390,6 +390,7 @@ fun TodayScreen(
                     startKey = startKey,
                     header = if (platesInList) plates else null,
                     groupsByName = groupsByName,
+                    weekStrip = true,
                 )
             }
         }
