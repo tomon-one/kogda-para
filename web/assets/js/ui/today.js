@@ -44,10 +44,11 @@ export function mainScreen(app) {
   // Полоска дней — у своего расписания, когда оно есть.
   var strip = !route.kind && app.saved() ? weekStrip(app.scrollTarget(), app.now().date) : null;
   var head = h('div', { class: 'head' }, topbar(app, own), tabs(app, tab, teacherMode),
-    live ? secondTabs(app, tab, true) : null, strip);
+    live ? secondTabs(app, tab, true) : null);
   var content = h('main', { class: 'content' });
+  // Полоска — под вторым рядом вкладок, как в приложении, и прилипает под шапкой.
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
-    head, live ? null : secondTabs(app, tab, false), content);
+    head, live ? null : secondTabs(app, tab, false), strip, content);
 
   // Сбой и пропажа — на любой вкладке, как в приложении: иначе чужое
   // расписание во время сбоя выглядело бы свежим. На своём — у сегодняшнего

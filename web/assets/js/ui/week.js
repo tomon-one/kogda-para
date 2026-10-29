@@ -92,9 +92,14 @@ window.addEventListener('scroll', function () {
   });
 }, { passive: true });
 
+/**
+ * Низ того, что прилипает сверху: шапка и под ней полоска с полями. Считается
+ * как у прилипшей, даже пока страница в самом верху и полоска ниже.
+ */
 function headBottom() {
   var head = document.querySelector('.head');
-  return head ? head.getBoundingClientRect().bottom : 0;
+  var strip = document.querySelector('.week-strip');
+  return (head ? head.getBoundingClientRect().bottom : 0) + (strip ? strip.offsetHeight + 14 : 0);
 }
 
 /**

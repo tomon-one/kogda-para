@@ -226,31 +226,32 @@
 /* Чужой хост бывает любой длины: рвётся, только если не влез в строку целиком. */
 .link-where.foreign .link-host { white-space: normal; overflow-wrap: anywhere; }
 
-.link-buttons { margin: 6px 0 2px; }
+.link-buttons { margin: 8px 0 2px; }
 
+/* Залитые плашки без рамок: «Открыть» зелёная, «Копировать» серая. */
 .link-button,
 .action.link-button {
   display: inline-block;
-  height: 28px;
-  margin: 0 4px 0 0;
-  padding: 0 10px;
+  height: 32px;
+  margin: 0 6px 0 0;
+  padding: 0 12px;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: middle;
-  border: 1px solid var(--button-border);
-  border-radius: 14px;
-  background: none;
-  color: var(--primary);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 26px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--foreign-bg);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 32px;
 }
 
 /* «Открыть» у онлайн-пары — зелёная: заметна среди красного. */
 .link-button.open,
 .action.link-button.open {
-  border-color: var(--online-border);
+  background: var(--online-bg);
   color: var(--online);
 }

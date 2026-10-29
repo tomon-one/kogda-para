@@ -163,7 +163,9 @@ export function redrawRefresh() {
 function headHeight() {
   var head = root.querySelector('.head') || root.querySelector('.topbar');
   var chosen = root.querySelector('.chosen-head');
-  return stuck(head) + (chosen ? chosen.getBoundingClientRect().height : 0);
+  // Полоска дней прилипает под шапкой — вместе с полями.
+  var strip = root.querySelector('.week-strip');
+  return stuck(head) + (chosen ? chosen.getBoundingClientRect().height : 0) + (strip ? strip.offsetHeight + 14 : 0);
 }
 
 /** Высота прилипшей шапки; не прилипает (альбомная, app.css) — ноль. */

@@ -4,12 +4,13 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,11 +57,10 @@ internal fun OnlineLink(url: String) {
                 )
             }
         }
-        // Волосок между кнопками: вплотную рамки сливаются, а широкий зазор
-        // разносит пару кнопок.
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Отступ от строки «Онлайн»: без него плашка места садилась на кнопку.
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
             LinkButton("Открыть", MaterialTheme.colorScheme.online) { openLink(context, url) }
-            LinkButton("Копировать", MaterialTheme.colorScheme.primary) { copyLink(context, url) }
+            LinkButton("Копировать", MaterialTheme.colorScheme.onSurfaceVariant) { copyLink(context, url) }
         }
     }
 }
@@ -87,16 +87,17 @@ private fun LinkButton(label: String, color: Color, onClick: () -> Unit) {
         onClick = onClick,
         // Поля и высота меньше обычных, чтобы пара с вебинаром не распухала;
         // область нажатия Compose сам держит не меньше 48 dp.
-        modifier = Modifier.height(28.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-        // Тонкая рамка: без неё текст кнопки неотличим от подписи рядом.
-        border = BorderStroke(1.dp, color.copy(alpha = 0.35f)),
-        colors = ButtonDefaults.textButtonColors(contentColor = color),
+        modifier = Modifier.height(32.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+        // Залитая плашка своего цвета: кнопку видно и без рамки.
+        shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.textButtonColors(contentColor = color, containerColor = color.copy(alpha = 0.14f)),
     ) {
         // В одну строку с многоточием: кнопка остаётся своей высоты.
         Text(
             label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
