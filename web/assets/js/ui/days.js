@@ -54,17 +54,15 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
     if (!unknown) card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
     return card;
   }
-  // Своих пар нет, а у выбранных групп есть: «пар нет» — над их серыми
-  // строками, как пишет виджет приложения.
-  if (!unknown && groups.length && lessons.every(function (l) { return isForeign(l, groups); })) {
-    card.appendChild(h('p', { class: 'day-empty under' }, freeDay(day, teacher, nextFree, now)));
-  }
+  // Своих пар нет, а у выбранных групп есть: это уже сказала сводка под датой
+  // («Пары только у …»), у самих пар подпись не повторяем.
+  var allForeign = groups.length > 0 && lessons.every(function (l) { return isForeign(l, groups); });
   lessons.forEach(function (lesson, index) {
     // Пара только у других групп — не «идёт сейчас»: человек на ней не сидит.
     var foreign = isForeign(lesson, groups);
     // С порядком: у одного номера бывают две пары — подгруппы в разных кабинетах.
     var key = day.d + ':' + lesson.n + ':' + (lesson.gr || (lesson.slots || []).join('-')) + ':' + index;
-    card.appendChild(lessonRow(lesson, bells, lesson.n === current && !isCancelled(lesson) && !foreign, key, groups, byName));
+    card.appendChild(lessonRow(lesson, bells, lesson.n === current && !isCancelled(lesson) && !foreign, key, groups, byName, allForeign));
   });
   // Считаются только свои пары.
   var own = groups.length ? lessons.filter(function (l) { return !isForeign(l, groups); }) : lessons;
@@ -91,7 +89,7 @@ function isForeign(lesson, groups) {
   return groups.length > 0 && (lesson.slots || []).indexOf(0) < 0;
 }
 
-function lessonRow(lesson, bells, isNow, key, groups, byName) {
+function lessonRow(lesson, bells, isNow, key, groups, byName, saidAbove) {
   // Пара только у других выбранных групп: её видно сразу, а не только по
   // значкам — серый фон, приглушённый текст и подпись.
   var foreign = isForeign(lesson, groups);
@@ -107,7 +105,7 @@ function lessonRow(lesson, bells, isNow, key, groups, byName) {
   var kind = kindName(lesson.k);
   var body = h('div', { class: 'lesson-body' },
     // Чья пара — первой строкой: сначала видно, что она не своя.
-    foreign ? h('div', { class: 'sub only-at' }, onlyAt(lesson.slots, groups)) : null,
+    foreign && !saidAbove ? h('div', { class: 'sub only-at' }, onlyAt(lesson.slots, groups)) : null,
     h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, lesson.s),
     h('div', { class: 'lesson-meta' }, place, kind ? h('span', { class: 'kind' }, kind) : null),
     lesson.u ? onlineLink(lesson.u, key) : null,
@@ -186,9 +184,10 @@ function onlineLink(url, key) {
       snackbar(ok ? 'Ссылка скопирована' : 'Скопировать не вышло');
     });
   });
+  // Адрес — только чужой, как предупреждение; у площадки колледжа хватает кнопок.
   return h('div', { class: 'online-link' },
-    h('div', { class: 'link-where' + (known ? '' : ' foreign') },
-      known ? null : 'чужой адрес: ',
+    known ? null : h('div', { class: 'link-where foreign' },
+      'чужой адрес: ',
       h('span', { class: 'link-host' }, linkHost(url)),
       // Обычный пробел: перенос — между хостом и хвостом, а не посреди хоста.
       end ? ' ' : null,

@@ -27,14 +27,14 @@
   border: 1px solid var(--divider);
   border-radius: 20px;
   overflow: hidden;
-  margin-bottom: 14px;
-  padding-bottom: 6px;
+  margin-bottom: 12px;
+  padding-bottom: 2px;
 }
 
 .day.today { border-color: var(--button-border); }
 
 .day-title {
-  padding: 14px 16px 10px;
+  padding: 12px 16px 8px;
   font-size: 17px;
   font-weight: 700;
 }
@@ -52,13 +52,11 @@
 }
 
 .day-empty {
-  padding: 16px;
+  padding: 0 16px 14px;
   font-size: 14px;
   color: var(--muted);
 }
 
-/* Над серыми парами других групп — сразу под сводкой «Пары только у …». */
-.day-empty.under { padding: 2px 16px 10px; }
 
 .day-note {
   padding: 6px 16px 10px;
@@ -68,8 +66,8 @@
 
 .lesson {
   display: flex;
-  margin: 0 8px 6px;
-  padding: 12px 12px 12px 14px;
+  margin: 0 6px 4px;
+  padding: 10px 12px;
   border-radius: 14px;
   background: var(--tile);
 }
@@ -81,7 +79,7 @@
 .lesson-time { width: 5.75em; flex: none; }
 .pair { font-size: 11px; color: var(--muted); }
 .time { white-space: nowrap; }
-.time-start { display: block; font-size: 19px; font-weight: 700; line-height: 24px; }
+.time-start { display: block; font-size: 18px; font-weight: 700; line-height: 22px; }
 .time-end { display: block; font-size: 13px; color: var(--muted); }
 .past .time-start, .past .subject { color: var(--muted); }
 .lesson.now .time-start { color: var(--primary); }
@@ -228,7 +226,7 @@
 /* Чужой хост бывает любой длины: рвётся, только если не влез в строку целиком. */
 .link-where.foreign .link-host { white-space: normal; overflow-wrap: anywhere; }
 
-.link-buttons { margin: 4px 0 2px; }
+.link-buttons { margin: 6px 0 2px; }
 
 .link-button,
 .action.link-button {

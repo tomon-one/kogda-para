@@ -475,20 +475,12 @@ private fun DayCard(
                     if (day.absent) absentDay(day.date) else freeDay(day.date, teacher, nextFree, now, idle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                 )
             } else {
-                // Своих пар нет, а у выбранных групп есть: «пар нет» — над их
-                // серыми строками, как пишет виджет, иначе беглый взгляд видит
-                // свои пары.
-                if (!unknown && groups.isNotEmpty() && day.lessons.none { 0 in it.slots }) {
-                    Text(
-                        freeDay(day.date, teacher, nextFree, now, idle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 10.dp),
-                    )
-                }
+                // Своих пар нет, а у выбранных групп есть: это уже сказала сводка под
+                // датой («Пары только у …»), у самих пар подпись не повторяем.
+                val allForeign = groups.isNotEmpty() && day.lessons.none { 0 in it.slots }
                 day.lessons.forEach { lesson ->
                     // Отменённая пара в своё время — не «идёт сейчас». Пара
                     // только у других групп — тоже: человек на ней не сидит.
@@ -499,6 +491,7 @@ private fun DayCard(
                         past = past,
                         groups = groups,
                         groupsByName = groupsByName,
+                        saidAbove = allForeign,
                     )
                 }
                 // День, в котором отменили все свои пары.
@@ -611,7 +604,7 @@ internal const val IDLE_MILLIS = (5 * 60 + 8) * 1000L
 
 @Composable
 private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, summary: String? = null) {
-    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)) {
         Text(
             title.replaceFirstChar { it.uppercase() },
             style = MaterialTheme.typography.titleMedium,

@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.whensclass.data.LessonDto
 import ru.whensclass.widget.kindName
 import ru.whensclass.widget.onlineLabel
@@ -69,6 +70,8 @@ internal fun LessonRow(
     /** Выбранные группы: значки под временем ([GroupMarks]); пусто — их нет. */
     groups: List<String> = emptyList(),
     groupsByName: Boolean = true,
+    /** «Пары только у …» уже сказано под датой — у пары не повторять. */
+    saidAbove: Boolean = false,
 ) {
     // Пара только у других выбранных групп: её видно сразу, а не только по
     // значкам — приглушённая строка на сером фоне и подпись.
@@ -82,7 +85,7 @@ internal fun LessonRow(
     val stacked = LocalConfiguration.current.screenWidthDp / scale < STACK_BELOW_DP
     // Пара — плитка внутри карточки дня: видно, где кончается одна и начинается другая.
     val background = Modifier
-        .padding(start = 8.dp, end = 8.dp, bottom = 6.dp)
+        .padding(start = 6.dp, end = 6.dp, bottom = 4.dp)
         .fillMaxWidth()
         .clip(RoundedCornerShape(14.dp))
         .background(
@@ -99,7 +102,7 @@ internal fun LessonRow(
     val subject: @Composable () -> Unit = {
         Column {
             // Чья пара — первой строкой: сначала видно, что она не своя.
-            if (foreign) {
+            if (foreign && !saidAbove) {
                 Text(
                     onlyAt(lesson.slots, groups),
                     style = MaterialTheme.typography.bodySmall,
@@ -229,7 +232,7 @@ internal fun LessonRow(
         Row(
             modifier = background
                 .height(IntrinsicSize.Min)
-                .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top,
         ) {
             Column(modifier = Modifier.width(timeColumn)) {
@@ -243,7 +246,7 @@ internal fun LessonRow(
                 bells[lesson.number.toString()]?.getOrNull(0)?.takeIf { it.isNotEmpty() }?.let { start ->
                     Text(
                         start,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 22.sp),
                         fontWeight = FontWeight.Bold,
                         color = if (isNow) MaterialTheme.colorScheme.primary else main,
                         maxLines = 1,

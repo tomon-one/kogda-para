@@ -35,8 +35,9 @@ internal fun OnlineLink(url: String) {
         // Хост не с площадки вебинаров колледжа — предупреждаем прямо.
         val known = remember(url) { ru.whensclass.data.isKnownWebinar(url) }
         val color = if (known) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
-        // Хост ужимается, хвост — нет: ради последних цифр хвост и показан.
-        Row {
+        // Адрес — только чужой, как предупреждение; у площадки колледжа хватает
+        // кнопок. Хост ужимается, хвост — нет: ради последних цифр он и показан.
+        if (!known) Row {
             Text(
                 if (known) host(url) else "чужой адрес: " + host(url),
                 style = MaterialTheme.typography.bodySmall,
