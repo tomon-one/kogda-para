@@ -88,6 +88,19 @@ class MidnightReceiver : BroadcastReceiver() {
                 // Сбой перерисовки не должен отменить следующий звонок.
                 runCatching { AppContainer.get(app).repository.redrawWidgets() }
                 MidnightUpdater.schedule(app)
+                // Встала сборка, которую ставили из приложения: без окна
+                // установщика оно просто закрылось — сказать, что это обновление.
+                if (intent?.action == Intent.ACTION_MY_PACKAGE_REPLACED) runCatching {
+                    val store = AppContainer.get(app).store
+                    if (store.takeInstalling(ru.whensclass.BuildConfig.VERSION_CODE)) {
+                        store.setLastInstall("сборка ${ru.whensclass.BuildConfig.VERSION_CODE}: установлена")
+                        ru.whensclass.notify.Notifications.newVersion(
+                            app,
+                            "Приложение обновлено",
+                            "Установлена версия ${ru.whensclass.BuildConfig.VERSION_NAME}.",
+                        )
+                    }
+                }
                 // Напоминания живут в абсолютном времени: после перевода часов
                 // или смены пояса (TIME_SET, TIMEZONE_CHANGED) их надо
                 // переставить. На своём звонке — незачем, только на смене суток.

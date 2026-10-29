@@ -1,9 +1,12 @@
 package ru.whensclass.data
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.FileProvider
@@ -20,6 +23,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import ru.whensclass.AppContainer
 import ru.whensclass.BuildConfig
 import ru.whensclass.notify.Notifications
 
@@ -134,11 +138,26 @@ internal fun updateFailure(error: Throwable): String {
 }
 
 /**
+ * Почему установщик Android не поставил сборку — словами человека. Статусы —
+ * [PackageInstaller.STATUS_FAILURE] и соседние.
+ */
+internal fun installFailure(status: Int): String = when (status) {
+    PackageInstaller.STATUS_FAILURE_ABORTED -> "установку отменили"
+    PackageInstaller.STATUS_FAILURE_BLOCKED -> "телефон не дал поставить — проверьте защиту от неизвестных приложений"
+    PackageInstaller.STATUS_FAILURE_CONFLICT -> "файл не встаёт поверх установленного: другая подпись или сборка старее"
+    PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "сборка не подходит этому телефону"
+    PackageInstaller.STATUS_FAILURE_INVALID -> "файл повреждён — попробуйте ещё раз"
+    PackageInstaller.STATUS_FAILURE_STORAGE -> "на телефоне не хватает места"
+    else -> "установщик Android отказал"
+}
+
+/**
  * Проверка и установка обновлений.
  *
- * Android всегда спрашивает подтверждение на установку файла, поэтому здесь
- * автоматические только проверка и загрузка, а последний шаг открывает
- * системный установщик.
+ * Проверка и загрузка — автоматические, установка — по кнопке, сессией
+ * установщика Android: она возвращает итог, и неудача видна в настройках. На
+ * Android 12+ своё обновление ставится без окна (USER_ACTION_NOT_REQUIRED);
+ * попросит телефон подтверждения — открывается его окно.
  */
 class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
@@ -240,11 +259,11 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
          * Файл скачан и проверен; [intent] открывает системный установщик.
          * Открывает экран: из фона Android 10+ запуск молча отбрасывает.
          */
-        data class Ready(val intent: Intent) : Result
+        data class Ready(val file: File, val versionCode: Int, val intent: Intent) : Result
         data class Failed(val why: String) : Result
     }
 
-    /** Загрузка идёт; null — не идёт. Иначе — чем кончилась, пока экран не забрал. */
+    /** Загрузка или установка идёт; null — не идёт. Иначе — чем кончилась, пока экран не забрал. */
     sealed interface Download {
         data object Running : Download
         data class Done(val result: Result) : Download
@@ -321,7 +340,53 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             return Result.Failed(why)
         }
         sweep(file)
-        return Result.Ready(installIntent(file))
+        return Result.Ready(file, release.versionCode, installIntent(file))
+    }
+
+    /**
+     * Отдаёт проверенный файл установщику Android. Итог придёт в
+     * [InstallResultReceiver]; до него кнопка показывает, что обновление идёт.
+     * Бросает, если сессию открыть не удалось: тогда экран откроет [Result.Ready.intent].
+     */
+    suspend fun install(ready: Result.Ready) = withContext(Dispatchers.IO) {
+        val installer = context.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+            setAppPackageName(context.packageName)
+            setSize(ready.file.length())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+            }
+        }
+        val id = installer.createSession(params)
+        try {
+            installer.openSession(id).use { session ->
+                session.openWrite("base.apk", 0, ready.file.length()).use { out ->
+                    ready.file.inputStream().use { it.copyTo(out) }
+                    session.fsync(out)
+                }
+                // Изменяемый: установщик дописывает в него статус и окно подтверждения.
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+                val result = Intent(context, InstallResultReceiver::class.java)
+                    .putExtra(EXTRA_VERSION, ready.versionCode)
+                // До commit: итог может прийти раньше, чем отсюда вернутся.
+                _download.value = Download.Running
+                runCatching { AppContainer.get(context).store.setInstalling(ready.versionCode) }
+                session.commit(PendingIntent.getBroadcast(context, id, result, flags).intentSender)
+            }
+        } catch (error: Exception) {
+            runCatching { installer.abandonSession(id) }
+            if (_download.value == Download.Running) _download.value = null
+            throw error
+        }
+    }
+
+    /** Итог от установщика ([InstallResultReceiver]). Удачный приходит уже новой сборке. */
+    internal fun installed(status: Int) {
+        _download.value = when (status) {
+            PackageInstaller.STATUS_SUCCESS -> null
+            else -> Download.Done(Result.Failed(installFailure(status)))
+        }
     }
 
     /** null — файл наш: тот же пакет, та же подпись, объявленный номер. Иначе — почему нет. */
@@ -432,5 +497,40 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             .firstOrNull { it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0 }
             ?.let { intent.setClassName(it.packageName, it.name) }
         return intent
+    }
+}
+
+internal const val EXTRA_VERSION = "ru.whensclass.update.VERSION"
+
+/**
+ * Итог сессии установщика. Попросил подтверждения — открыть его окно: человек
+ * только что нажал «Обновить», приложение на экране. Остальное — в [AppUpdate].
+ */
+class InstallResultReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        val updates = AppContainer.get(context).updates
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            @Suppress("DEPRECATION")
+            val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+            val opened = confirm != null && runCatching {
+                context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
+            if (!opened) updates.installed(PackageInstaller.STATUS_FAILURE)
+            return
+        }
+        updates.installed(status)
+        // Сборку поставили — об этом скажет уже новая (MidnightReceiver, MY_PACKAGE_REPLACED).
+        if (status == PackageInstaller.STATUS_SUCCESS) return
+        val code = intent.getIntExtra(EXTRA_VERSION, 0)
+        val why = installFailure(status)
+        val finish = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                runCatching { AppContainer.get(context).store.setLastInstall("сборка $code: $why") }
+            } finally {
+                finish.finish()
+            }
+        }
     }
 }

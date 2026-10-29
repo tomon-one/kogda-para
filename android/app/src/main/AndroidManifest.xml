@@ -3,9 +3,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Обновление приложения: файл скачивается с нашего сервера, а установку
-         всё равно подтверждает человек — молча поставить APK нельзя. -->
+    <!-- Обновление приложения: файл скачивается с сервера приложения и ставится
+         по кнопке «Обновить приложение». Первый раз телефон спрашивает разрешение
+         ставить из этого приложения; на Android 12+ своё обновление дальше
+         встаёт без окна установщика (второе разрешение). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Напоминания о парах и сообщения об изменениях. Оба вида можно
          выключить в настройках приложения. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -130,6 +133,11 @@
 
         <receiver
             android:name=".notify.LessonAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Итог установки обновления от установщика Android. -->
+        <receiver
+            android:name=".data.InstallResultReceiver"
             android:exported="false" />
 
         <!-- Смена суток, перезагрузка, перевод часов и обновление приложения:

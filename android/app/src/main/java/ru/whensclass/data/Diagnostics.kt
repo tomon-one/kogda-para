@@ -72,6 +72,7 @@ internal suspend fun collectDiagnostics(
         lines += "Дней на телефоне: ${schedule.days.size}"
     }
     lines += "Сервер: ${store.serverStatus.first()}"
+    store.lastInstall()?.let { lines += "Последняя установка из приложения: $it" }
     lines += widgets(context)
     lines += reminders(context, store)
     // Выключатели сообщений — первая причина «не приходят сообщения об отменах».

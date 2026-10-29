@@ -247,7 +247,7 @@ internal fun VersionSection(
                 )
             }
             ActionButton(
-                label = if (installing) "Скачивается…" else "Обновить приложение",
+                label = if (installing) "Обновляется…" else "Обновить приложение",
                 onClick = onUpdate,
                 enabled = !installing,
                 modifier = Modifier.fillMaxWidth(),

@@ -265,6 +265,28 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_UPDATE_ANNOUNCED] = code.toString() }
     }
 
+    /** Сборка, отданная установщику из приложения: после замены сказать, что встала. */
+    suspend fun setInstalling(code: Int) {
+        context.dataStore.edit { it[KEY_INSTALL_PENDING] = code.toString() }
+    }
+
+    /** Ждали эту сборку — забыть ожидание; true — её и ставили из приложения. */
+    suspend fun takeInstalling(code: Int): Boolean {
+        var mine = false
+        context.dataStore.edit {
+            mine = it[KEY_INSTALL_PENDING]?.toIntOrNull() == code
+            it.remove(KEY_INSTALL_PENDING)
+        }
+        return mine
+    }
+
+    /** Чем кончилась последняя установка из приложения — для «Сведений для отчёта». */
+    suspend fun lastInstall(): String? = context.dataStore.data.first()[KEY_LAST_INSTALL]
+
+    suspend fun setLastInstall(text: String) {
+        context.dataStore.edit { it[KEY_LAST_INSTALL] = text }
+    }
+
     /** Сообщать ли об изменениях в расписании. */
     val notifyChanges: Flow<Boolean> = context.dataStore.data.map {
         it[KEY_NOTIFY_CHANGES] != "0"
@@ -768,6 +790,8 @@ class ScheduleStore(private val context: Context) {
         val KEY_GROUP2_NAME = stringPreferencesKey("group2_name")
         val KEY_NOTIFY_UPDATES = stringPreferencesKey("notify_updates")
         val KEY_UPDATE_ANNOUNCED = stringPreferencesKey("update_announced")
+        val KEY_INSTALL_PENDING = stringPreferencesKey("install_pending")
+        val KEY_LAST_INSTALL = stringPreferencesKey("last_install")
         val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
         val KEY_NOTIFY_ON = stringPreferencesKey("notify_on")
         val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")
