@@ -98,6 +98,19 @@ fun shortLabels(names: List<String>): List<String> {
     }
 }
 
+/**
+ * Подпись пары, которой нет у своей группы: «Только у /4», «Только у /2, БД-1125».
+ * Длинный список в узкой строке не читается — тогда «Только у других групп»:
+ * кто именно, видно по значкам под временем.
+ */
+fun onlyAt(slots: List<Int>, names: List<String>): String {
+    val labels = shortLabels(names)
+    val whose = slots.sorted().mapNotNull { labels.getOrNull(it) }.joinToString(", ")
+    return if (whose.isEmpty() || whose.length > ONLY_AT_MAX) "Только у других групп" else "Только у $whose"
+}
+
+private const val ONLY_AT_MAX = 20
+
 /** «Вторая группа», «Третья группа» — заголовок выбора следующей. */
 fun ordinalGroup(number: Int): String =
     (ORDINALS.getOrNull(number - 1) ?: "$number-я") + " группа"

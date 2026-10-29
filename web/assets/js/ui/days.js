@@ -3,7 +3,7 @@
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
 import { dayTitle, capitalize } from '../time.js';
-import { currentLessonNumber, dayBells, daysWithGaps, freeDay, freeOwnDay, lessonTime, shortLabels, unreadNotes } from '../schedule.js';
+import { currentLessonNumber, dayBells, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, unreadNotes } from '../schedule.js';
 import {
   isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
@@ -94,7 +94,7 @@ function lessonRow(lesson, bells, isNow, key, groups, byName) {
   var kind = kindName(lesson.k);
   var body = h('div', { class: 'lesson-body' },
     h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, lesson.s),
-    foreign ? h('div', { class: 'sub' }, 'Не у вашей группы') : null,
+    foreign ? h('div', { class: 'sub only-at' }, onlyAt(lesson.slots, groups)) : null,
     h('div', { class: 'lesson-meta' }, place, kind ? h('span', { class: 'kind' }, kind) : null),
     lesson.u ? onlineLink(lesson.u, key) : null,
     // Подпись группы — вместо преподавателя: у преподавателя важно, кому

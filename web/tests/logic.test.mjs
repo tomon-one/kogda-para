@@ -13,7 +13,7 @@ import {
 import {
   bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daysWithGaps, freeDay, freeOwnDay,
   lessonTime, ownOnly,
-  shortLabels, subgroupsOf, unreadNotes, windowMark,
+  onlyAt, shortLabels, subgroupsOf, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
 import { letterOf, lettered, matchesQuery } from '../assets/js/search.js';
 
@@ -256,6 +256,12 @@ test('другие группы: склейка, значки, подгрупп�
   // Подписи у пар: подгруппы той же группы, что своя, — коротко.
   assert.deepEqual(shortLabels(['ИСП-924/1', 'ИСП-924/2', 'ИСП-925/1']), ['/1', '/2', 'ИСП-925/1']);
   assert.deepEqual(shortLabels(['ДИ-926', 'ИСП-924/2']), ['ДИ-926', 'ИСП-924/2']);
+  // Пара не у своей — у кого именно; длинный список не влез бы в строку.
+  const four = ['ИСП-924/1', 'ИСП-924/2', 'ИСП-924/3', 'ИСП-924/4'];
+  assert.equal(onlyAt([3], four), 'Только у /4');
+  assert.equal(onlyAt([3, 1], four), 'Только у /2, /4');
+  assert.equal(onlyAt([1], ['ДИ-926', 'БД-1125']), 'Только у БД-1125');
+  assert.equal(onlyAt([1, 2, 3], ['ДИ-926', 'БД-1125', 'ИСП-924/2', 'ПК-926']), 'Только у других групп');
   // Снимок до веб-0.2.0 лежал склеенным с подписями — свои обратно.
   const old = { g: 'isp-924-1', gn: 'ИСП-924/1', days: [{ d: '2026-09-28', l: [
     { n: 1, s: 'Физика', r: '101' },

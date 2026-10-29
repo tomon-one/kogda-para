@@ -109,9 +109,11 @@ internal fun LessonRow(
             )
             if (foreign) {
                 Text(
-                    "Не у вашей группы",
+                    onlyAt(lesson.slots, groups),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 

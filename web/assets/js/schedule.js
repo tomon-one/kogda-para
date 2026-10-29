@@ -151,6 +151,20 @@ export function shortLabels(names) {
   });
 }
 
+/**
+ * Подпись пары, которой нет у своей группы: «Только у /4», «Только у /2, БД-1125».
+ * Длинный список в узкой строке не читается — тогда «Только у других групп»:
+ * кто именно, видно по значкам под временем.
+ */
+export function onlyAt(slots, names) {
+  var labels = shortLabels(names);
+  var whose = (slots || []).slice().sort(function (a, b) { return a - b; }).map(function (i) { return labels[i]; })
+    .filter(Boolean).join(', ');
+  return !whose || whose.length > ONLY_AT_MAX ? 'Только у других групп' : 'Только у ' + whose;
+}
+
+var ONLY_AT_MAX = 20;
+
 /** Остальные подгруппы своей группы по номеру: для «ИСП-924/1» — «ИСП-924/2», … */
 export function subgroupsOf(name, groups) {
   var m = /^(.+)\/(\d+)$/.exec(String(name || '').trim());
