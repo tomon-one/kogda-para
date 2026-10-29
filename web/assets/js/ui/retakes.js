@@ -103,7 +103,7 @@ export function retakesView(app) {
   }
   app.loadRetakes(false);
   if (!data.rows || !data.rows.length) {
-    wrap.appendChild(h('p', { class: 'nothing' }, 'Графика пересдач в таблице колледжа сейчас нет.'));
+    wrap.appendChild(h('p', { class: 'nothing' }, 'Действующего графика пересдач в таблице колледжа нет.'));
     return wrap;
   }
 

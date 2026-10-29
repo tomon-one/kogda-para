@@ -74,7 +74,7 @@ internal fun RetakesScreen(
         return
     }
     if (retakes.rows.isEmpty()) {
-        Explanation("Пересдач нет", "Графика пересдач в таблице колледжа сейчас нет.")
+        Explanation("Пересдач нет", "Действующего графика пересдач в таблице колледжа нет.")
         return
     }
 
