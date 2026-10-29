@@ -11,7 +11,7 @@ import {
   shiftColumn, shortenName, tileLabel,
 } from '../assets/js/format.js';
 import {
-  bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daysWithGaps, freeDay, freeOwnDay,
+  bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daySummary, daysWithGaps, freeDay, freeOwnDay,
   lessonTime, ownOnly,
   onlyAt, shortLabels, subgroupsOf, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
@@ -330,4 +330,17 @@ test('дни пересдачи: один день с днём недели, д�
   assert.equal(dayRange('2026-10-16', '2026-10-16'), '16 октября, пятница');
   assert.equal(dayRange('2026-10-12', '2026-10-23'), '12–23 октября');
   assert.equal(dayRange('2026-10-28', '2026-11-03'), '28 октября – 3 ноября');
+});
+
+test('сводка дня: свои неотменённые пары по номерам и конец последней', () => {
+  const bells = { 1: ['09:00', '10:30'], 2: ['10:40', '12:10'], 5: ['16:00', '17:30'] };
+  assert.equal(daySummary([{ n: 1, s: 'А' }, { n: 2, s: 'Б' }], [], bells), '2 пары · до 12:10');
+  // Две подгруппы в одну пару — одна пара; отменённая не считается.
+  assert.equal(daySummary([{ n: 1, s: 'А' }, { n: 1, s: 'Б' }, { n: 2, s: 'В', x: 1 }], [], bells), '1 пара · до 10:30');
+  // Чужие (только у других выбранных групп) — не свои.
+  assert.equal(daySummary([{ n: 1, s: 'А', slots: [0] }, { n: 5, s: 'Б', slots: [1] }], ['А', 'Б'], bells), '1 пара · до 10:30');
+  // Конца в сетке нет — только счёт; своих нет — ничего.
+  assert.equal(daySummary([{ n: 3, s: 'А' }], [], bells), '1 пара');
+  assert.equal(daySummary([{ n: 1, s: 'А', x: 1 }], [], bells), null);
+  assert.equal(daySummary([], [], bells), null);
 });

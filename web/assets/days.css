@@ -41,6 +41,14 @@
 
 .day.past .day-title { color: var(--muted); }
 
+.day-summary {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .day-empty {
   padding: 16px;
   font-size: 14px;

@@ -41,11 +41,13 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlinx.coroutines.delay
 import ru.whensclass.data.DayDto
+import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.UnreadDay
 import ru.whensclass.widget.collegeToday
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
+import ru.whensclass.widget.plural
 
 /**
  * Дни расписания списком. Общий для вкладок «Студентам» и «Преподавателям»:
@@ -274,7 +276,7 @@ private fun DayCard(
         // прозрачностью: при прозрачности контраст падает так, что вчерашнюю
         // аудиторию не прочесть.
         Column {
-            DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday, past)
+            DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday, past, daySummary(day.lessons, groups, bells))
 
             val notes = unreadNotes(day)
             // Свой день не прочитан — «пар нет» тут было бы неправдой.
@@ -368,6 +370,21 @@ internal fun freeDay(
     return phrases[day.dayOfYear % phrases.size]
 }
 
+/**
+ * Под названием дня: «2 пары · до 12:10» (daySummary в schedule.js сайта). Свои и
+ * не отменённые; считаются номера — две подгруппы в одну пару дают одну.
+ */
+internal fun daySummary(lessons: List<LessonDto>, groups: List<String>, bells: Map<String, List<String>>): String? {
+    val numbers = lessons
+        .filter { !it.isCancelled && (groups.isEmpty() || 0 in it.slots) }
+        .map { it.number }
+        .distinct()
+    if (numbers.isEmpty()) return null
+    val end = bells[numbers.max().toString()]?.getOrNull(1)?.takeIf { it.isNotEmpty() }
+    val count = plural(numbers.size, "пара", "пары", "пар")
+    return if (end != null) "$count · до $end" else count
+}
+
 /** День будний, пришёл с сервера и без своих пар — для «повезло дважды». */
 internal fun freeOwnDay(day: DayDto, groups: List<String>): Boolean {
     val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: return false
@@ -401,7 +418,7 @@ private val FREE_STUDENT = listOf("Пар нет. Можно одичать")
 internal const val IDLE_MILLIS = (5 * 60 + 8) * 1000L
 
 @Composable
-private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false) {
+private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, summary: String? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -420,21 +437,32 @@ private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false) {
                     .background(MaterialTheme.colorScheme.primary)
             )
         }
-        Text(
-            title.replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = when {
-                isToday -> MaterialTheme.colorScheme.primary
-                past -> MaterialTheme.colorScheme.onSurfaceVariant
-                else -> MaterialTheme.colorScheme.onSurface
-            },
+        Column(
             modifier = Modifier.padding(
                 start = if (isToday) 12.dp else 16.dp,
                 end = 16.dp,
                 top = 12.dp,
                 bottom = 12.dp,
             ),
-        )
+        ) {
+            Text(
+                title.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = when {
+                    isToday -> MaterialTheme.colorScheme.primary
+                    past -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+            )
+            if (summary != null) {
+                Text(
+                    summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
     }
 }

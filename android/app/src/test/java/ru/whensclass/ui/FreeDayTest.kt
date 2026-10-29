@@ -55,4 +55,19 @@ class FreeDayTest {
         assertTrue(freeDay("2026-09-30", now = now, idle = true) != idle)
         assertTrue(freeDay(tuesday, now = now) != idle)
     }
+
+    @Test
+    fun `сводка дня — свои неотменённые пары по номерам и конец последней`() {
+        val bells = mapOf("1" to listOf("09:00", "10:30"), "2" to listOf("10:40", "12:10"), "5" to listOf("16:00", "17:30"))
+        fun lesson(n: Int, x: Int = 0, slots: List<Int> = emptyList()) =
+            LessonDto(number = n, subject = "П", cancelled = x, slots = slots)
+        assertEquals("2 пары · до 12:10", daySummary(listOf(lesson(1), lesson(2)), emptyList(), bells))
+        assertEquals("1 пара · до 10:30", daySummary(listOf(lesson(1), lesson(1), lesson(2, x = 1)), emptyList(), bells))
+        assertEquals(
+            "1 пара · до 10:30",
+            daySummary(listOf(lesson(1, slots = listOf(0)), lesson(5, slots = listOf(1))), listOf("А", "Б"), bells),
+        )
+        assertEquals("1 пара", daySummary(listOf(lesson(3)), emptyList(), bells))
+        assertEquals(null, daySummary(listOf(lesson(1, x = 1)), emptyList(), bells))
+    }
 }

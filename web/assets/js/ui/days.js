@@ -3,7 +3,7 @@
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
 import { dayTitle, capitalize } from '../time.js';
-import { currentLessonNumber, dayBells, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, unreadNotes } from '../schedule.js';
+import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, unreadNotes } from '../schedule.js';
 import {
   isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
@@ -42,7 +42,8 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   var card = h('section', {
     class: 'day' + (isToday ? ' today' : '') + (past ? ' past' : ''),
     'data-day': day.d,
-  }, h('h3', { class: 'day-title' }, dayTitle(day.d, now.date)));
+  }, h('h3', { class: 'day-title' }, dayTitle(day.d, now.date),
+    summaryLine(daySummary(lessons, groups, bells))));
 
   unreadNotes(day).forEach(function (note) {
     card.appendChild(h('p', { class: 'day-note' }, note));
@@ -72,6 +73,10 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
     card.appendChild(h('p', { class: 'day-note' }, teacher ? 'Все пары отменены' : 'Всё отменили. Повезло'));
   }
   return card;
+}
+
+function summaryLine(text) {
+  return text ? h('span', { class: 'day-summary' }, text) : null;
 }
 
 function isForeign(lesson, groups) {

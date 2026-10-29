@@ -2,7 +2,7 @@
 // Правила — как в приложении (ScheduleRepository.kt, ScheduleMerge.kt,
 // DayList.kt, DayFormat.kt).
 
-import { addDays, dayOfYear, isDate, weekday } from './time.js';
+import { addDays, dayOfYear, isDate, plural, weekday } from './time.js';
 import { isCancelled, isOnline } from './format.js';
 
 /** Дней в окне: эта неделя и следующая, с понедельника. */
@@ -326,6 +326,23 @@ function joinNames(names) {
   var n = names.length;
   if (n > 3) return n + (n % 10 === 1 && n % 100 !== 11 ? ' группы' : ' групп');
   return n > 1 ? names.slice(0, -1).join(', ') + ' и ' + names[n - 1] : names[0];
+}
+
+/**
+ * Под названием дня: «2 пары · до 12:10» (daySummary в DayList.kt). Свои и не
+ * отменённые; считаются номера — две подгруппы в одну пару дают одну.
+ */
+export function daySummary(lessons, groups, bells) {
+  var numbers = [];
+  (lessons || []).forEach(function (l) {
+    if (isCancelled(l)) return;
+    if (groups && groups.length && (l.slots || []).indexOf(0) < 0) return;
+    if (numbers.indexOf(l.n) < 0) numbers.push(l.n);
+  });
+  if (!numbers.length) return null;
+  var range = bells && bells[String(Math.max.apply(null, numbers))];
+  var count = plural(numbers.length, 'пара', 'пары', 'пар');
+  return range && range[1] ? count + ' · до ' + range[1] : count;
 }
 
 /** День будний, пришёл с сервера и без своих пар — для «повезло дважды». */
