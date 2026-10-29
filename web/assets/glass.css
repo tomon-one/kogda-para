@@ -74,29 +74,40 @@
 :root[data-glass] .topbar { background: transparent; }
 
 /* Только размытие, без тона: с тоном шапка выделялась на свете полосой, а
-   так её не видно, пока под ней ничего не проезжает. Размытие — подложкой во
-   всю ширину окна: шириной с колонку у него были видны края. */
+   так её не видно, пока под ней ничего не проезжает. Шапки — во всю ширину
+   окна (поля слева и справа уходят в отступ): шириной с колонку у размытия
+   были видны края. Подложкой ::before не вышло — экран въезжает анимацией
+   прозрачности, и подложка внутри видела только саму шапку. */
 :root[data-glass] .head,
 :root[data-glass] .screen.picker .topbar,
 :root[data-glass] .screen.settings .topbar,
 :root[data-glass] .chosen-head,
-:root[data-glass] .bottom-bar { background: transparent; }
-
-:root[data-glass] .head::before,
-:root[data-glass] .screen.picker .topbar::before,
-:root[data-glass] .screen.settings .topbar::before,
-:root[data-glass] .chosen-head::before,
-:root[data-glass] .bottom-bar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(50% - 50vw);
-  right: calc(50% - 50vw);
-  z-index: -1;
-  pointer-events: none;
+:root[data-glass] .bottom-bar {
+  background: transparent;
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
+}
+
+:root[data-glass] .head,
+:root[data-glass] .screen.picker .topbar,
+:root[data-glass] .screen.settings .topbar,
+:root[data-glass] .chosen-head {
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+/* Прежние поля (app.css, screens.css) плюс отступ до края окна. */
+:root[data-glass] .head { padding-left: calc(50vw - 50%); padding-right: calc(50vw - 50%); }
+
+:root[data-glass] .screen.picker .topbar,
+:root[data-glass] .screen.settings .topbar {
+  padding-left: calc(50vw - 50% + 4px);
+  padding-right: calc(50vw - 50% + 4px);
+}
+
+:root[data-glass] .chosen-head {
+  padding-left: calc(50vw - 50% + 4px);
+  padding-right: calc(50vw - 50%);
 }
 
 :root[data-glass] .bottom-bar { border-top-color: transparent; }
