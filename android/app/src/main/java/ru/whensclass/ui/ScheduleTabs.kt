@@ -29,7 +29,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -240,8 +239,7 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boole
                     autoSize = FIT,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), RoundedCornerShape(50))
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 )
                 return@Tab

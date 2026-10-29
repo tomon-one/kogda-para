@@ -37,7 +37,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
@@ -367,8 +366,7 @@ private fun RoomChip(room: String) = Text(
     fontWeight = FontWeight.SemiBold,
     color = MaterialTheme.colorScheme.primary,
     modifier = Modifier
-        .clip(RoundedCornerShape(8.dp))
-        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f), RoundedCornerShape(8.dp))
         .padding(horizontal = 8.dp, vertical = 3.dp),
 )
 

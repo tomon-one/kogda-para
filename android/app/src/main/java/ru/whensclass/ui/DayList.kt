@@ -2,13 +2,13 @@ package ru.whensclass.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -288,6 +288,14 @@ private fun WeekStrip(shownDay: () -> LocalDate, today: LocalDate, onPick: (Loca
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
             .padding(4.dp)
+            // Одно касание на всю полоску вместо семи кнопок: при листании
+            // полоска перестраивается дешевле. Чтецу экрана — каждый день отдельно (ниже).
+            .pointerInput(monday) {
+                detectTapGestures { offset ->
+                    val i = (offset.x / (size.width / 7f)).toInt().coerceIn(0, 6)
+                    onPick(monday.plusDays(i.toLong()))
+                }
+            }
             .drawBehind {
                 val cell = size.width / 7
                 drawRoundRect(
@@ -305,9 +313,10 @@ private fun WeekStrip(shownDay: () -> LocalDate, today: LocalDate, onPick: (Loca
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable(onClickLabel = "Перейти к дню") { onPick(date) }
-                    .semantics { contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" },
+                    .semantics {
+                        contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}"
+                        onClick(label = "Перейти к дню") { onPick(date); true }
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
