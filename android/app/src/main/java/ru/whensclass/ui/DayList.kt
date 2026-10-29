@@ -2,6 +2,8 @@ package ru.whensclass.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.derivedStateOf
@@ -153,14 +155,26 @@ fun ScheduleDays(
         }
     }
 
-    // Какой день наверху — для выделения в полоске.
+    // Какой день наверху — для выделения в полоске: тот, чья карточка на четверти
+    // высоты списка. По самому верхнему краю выделение перескакивало от малейшей прокрутки.
     val shownDay by remember(days, shift) {
-        derivedStateOf { days.getOrNull((listState.firstVisibleItemIndex - shift).coerceAtLeast(0))?.date }
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val probe = info.viewportStartOffset + (info.viewportEndOffset - info.viewportStartOffset) / 4
+            val item = info.visibleItemsInfo.firstOrNull { it.offset + it.size > probe && it.index >= shift }
+                ?: info.visibleItemsInfo.firstOrNull { it.index >= shift }
+            item?.let { days.getOrNull(it.index - shift)?.date }
+        }
     }
 
-    // Нажатый в полоске день: пока список к нему едет, выделение стоит на нём,
-    // а не бежит по промежуточным.
+    // Нажатый в полоске день держит выделение, пока человек сам не поведёт список:
+    // день у конца списка (его не докрутить до верха) иначе отдавал выделение соседу.
     var picked by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect {
+            if (it is androidx.compose.foundation.interaction.DragInteraction.Start) picked = null
+        }
+    }
     val scope = rememberCoroutineScope()
     // Дни всплывают по очереди один раз — когда список только появился (как на сайте).
     val appearing = remember { mutableStateOf(true) }
@@ -179,10 +193,15 @@ fun ScheduleDays(
                 val index = dayIndex(days, date.toString())
                 picked = days.getOrNull(index)?.date
                 scope.launch {
-                    try {
+                    // Видимый день — мягкой прокруткой с замедлением в конце; далёкий — как умеет список.
+                    val seen = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index + shift }
+                    if (seen != null) {
+                        listState.animateScrollBy(
+                            seen.offset.toFloat(),
+                            androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                        )
+                    } else {
                         listState.animateScrollToItem(index + shift)
-                    } finally {
-                        picked = null
                     }
                 }
             },
@@ -241,55 +260,81 @@ private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", 
 
 /**
  * Полоска дней недели (week.js сайта): неделя дня, который наверху списка, он же
- * выделен, точка — сегодня. Нажатие ведёт к дню.
+ * выделен, точка — сегодня. Выделение — одна плашка, она переезжает от дня к дню.
  */
 @Composable
 private fun WeekStrip(shown: LocalDate, today: LocalDate, onPick: (LocalDate) -> Unit) {
     val monday = shown.minusDays((shown.dayOfWeek.value - 1).toLong())
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    val index = shown.dayOfWeek.value - 1
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(4.dp),
     ) {
-        for (i in 0 until 7) {
-            val date = monday.plusDays(i.toLong())
-            val on = date == shown
-            // Выделение перетекает с дня на день, а не перескакивает.
-            val fg by androidx.compose.animation.animateColorAsState(
-                if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "день",
-            )
-            val bg by androidx.compose.animation.animateColorAsState(
-                if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, label = "фон дня",
-            )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(bg)
-                    .clickable(onClickLabel = "Перейти к дню") { onPick(date) }
-                    .semantics { contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+        val cell = maxWidth / 7
+        val pill by androidx.compose.animation.core.animateDpAsState(
+            cell * index,
+            androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            label = "выделение дня",
+        )
+        val pillColor = MaterialTheme.colorScheme.primary
+        Row(
+            modifier = Modifier.fillMaxWidth().drawBehind {
+                drawRoundRect(
+                    pillColor,
+                    topLeft = androidx.compose.ui.geometry.Offset(pill.toPx(), 0f),
+                    size = androidx.compose.ui.geometry.Size(cell.toPx(), size.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()),
+                )
+            },
+        ) {
+            for (i in 0 until 7) {
+                val date = monday.plusDays(i.toLong())
+                val on = i == index
+                val fg by androidx.compose.animation.animateColorAsState(
+                    if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    androidx.compose.animation.core.tween(300),
+                    label = "день",
+                )
+                val muted by androidx.compose.animation.animateColorAsState(
+                    if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    androidx.compose.animation.core.tween(300),
+                    label = "день недели",
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(onClickLabel = "Перейти к дню") { onPick(date) }
+                        .semantics { contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        WEEK_NAMES[i],
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (on) fg else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(date.dayOfMonth.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = fg)
-                }
-                if (date == today) {
-                    // Точка — сегодня.
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 2.dp)
-                            .size(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(if (on) fg else MaterialTheme.colorScheme.primary)
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 7.dp),
+                    ) {
+                        Text(WEEK_NAMES[i], style = MaterialTheme.typography.labelSmall, color = muted)
+                        Text(
+                            date.dayOfMonth.toString(),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = fg,
+                        )
+                    }
+                    if (date == today) {
+                        // Точка — сегодня.
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 2.dp)
+                                .size(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (on) fg else MaterialTheme.colorScheme.primary)
+                        )
+                    }
                 }
             }
         }

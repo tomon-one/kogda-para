@@ -163,7 +163,9 @@ internal fun ScheduleTabs(
         Spacer(Modifier.height(8.dp))
         // Сменилась вкладка — раздел проявляется (как на сайте), а не подменяется рывком.
         val shown = remember(current) { androidx.compose.animation.core.Animatable(0f) }
-        LaunchedEffect(current) { shown.animateTo(1f, androidx.compose.animation.core.tween(180)) }
+        LaunchedEffect(current) {
+            shown.animateTo(1f, androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+        }
         Column(
             Modifier.weight(1f).nestedScroll(collapse).graphicsLayer { alpha = shown.value },
             content = content,

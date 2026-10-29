@@ -249,20 +249,37 @@ p a, .point a { text-decoration: underline; }
 
 .tabs { display: flex; }
 
-/* Полоска дней недели под вкладками (ui/week.js). */
+/* Полоска дней недели под вкладками (ui/week.js): общая подложка, выделение —
+   одна плашка, которая переезжает (--i — номер дня). */
 .week-strip {
+  position: relative;
   display: flex;
-  gap: 4px;
-  padding: 6px 12px 8px;
+  margin: 6px 12px 8px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface);
 }
+
+.week-pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 7);
+  border-radius: 10px;
+  background: var(--primary);
+  opacity: 0;
+  transform: translateX(calc(var(--i, 0) * 100%));
+}
+
+.week-strip.marked .week-pill { opacity: 1; }
 
 .week-day {
   flex: 1;
   min-width: 0;
-  padding: 4px 0 6px;
+  padding: 4px 0 7px;
   border: 0;
-  border-radius: 12px;
-  background: var(--surface);
+  background: none;
   color: var(--fg);
   text-align: center;
   position: relative;
@@ -271,7 +288,7 @@ p a, .point a { text-decoration: underline; }
 .week-name { display: block; font-size: 11px; color: var(--muted); }
 .week-num { display: block; font-size: 16px; font-weight: 600; line-height: 20px; }
 
-.week-day.on { background: var(--primary); color: var(--on-primary); }
+.week-day.on { color: var(--on-primary); }
 .week-day.on .week-name { color: var(--on-primary); }
 
 /* Точка — сегодня. */
