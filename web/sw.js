@@ -46,6 +46,7 @@ var FILES = [
   'assets/js/time.js',
   'assets/js/version.js',
   'assets/js/ui/days.js',
+  'assets/js/ui/week.js',
   'assets/js/ui/dom.js',
   'assets/js/ui/lists.js',
   'assets/js/ui/retakes.js',

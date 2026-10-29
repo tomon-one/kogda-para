@@ -6,6 +6,7 @@ import { dayCards } from './days.js';
 import { othersList } from './lists.js';
 import { retakesActive, retakesView } from './retakes.js';
 import { roomsView } from './rooms.js';
+import { weekStrip } from './week.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE } from '../repo.js';
@@ -40,8 +41,10 @@ export function mainScreen(app) {
   // узнать и те, кто вкладку не открывал.
   app.loadRetakes(false);
   var live = retakesActive(app.state.retakes, app.now().date);
+  // Полоска дней — у своего расписания, когда оно есть.
+  var strip = !route.kind && app.saved() ? weekStrip(app.scrollTarget(), app.now().date, app.showDay) : null;
   var head = h('div', { class: 'head' }, topbar(app, own), tabs(app, tab, teacherMode),
-    live ? secondTabs(app, tab, true) : null);
+    live ? secondTabs(app, tab, true) : null, strip);
   var content = h('main', { class: 'content' });
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
     head, live ? null : secondTabs(app, tab, false), content);

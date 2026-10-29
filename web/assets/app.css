@@ -246,6 +246,46 @@ p a, .point a { text-decoration: underline; }
 
 .tabs { display: flex; }
 
+/* Полоска дней недели под вкладками (ui/week.js). */
+.week-strip {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px 8px;
+}
+
+.week-day {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0 6px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--fg);
+  text-align: center;
+  position: relative;
+}
+
+.week-name { display: block; font-size: 11px; color: var(--muted); }
+.week-num { display: block; font-size: 16px; font-weight: 600; line-height: 20px; }
+
+.week-day.on { background: var(--primary); color: var(--on-primary); }
+.week-day.on .week-name { color: var(--on-primary); }
+
+/* Точка — сегодня. */
+.week-day.today::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+
+.week-day.today.on::after { background: var(--on-primary); }
+
 .tab {
   flex: 1;
   min-width: 0;
