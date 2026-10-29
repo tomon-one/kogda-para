@@ -13,9 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -105,15 +104,15 @@ internal fun ScheduleTabs(
     val upper: @Composable () -> Unit = {
         // Полоска рисуется только в том ряду, где выбранная вкладка: иначе
         // подчёркнутыми оказываются сразу две.
-        TabRow(
+        SecondaryTabRow(
             selectedTabIndex = top.indexOf(current).coerceAtLeast(0),
             containerColor = MaterialTheme.colorScheme.background,
             divider = {},
-            indicator = { positions ->
+            indicator = {
                 val index = top.indexOf(current)
                 if (index >= 0) {
                     TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(positions[index]),
+                        Modifier.tabIndicatorOffset(index, matchContentSize = false),
                     )
                 }
             },
@@ -139,16 +138,16 @@ internal fun ScheduleTabs(
         ) {
             Column {
                 if (short) upper()
-                TabRow(
+                SecondaryTabRow(
                     selectedTabIndex = (current.ordinal - 2).coerceIn(0, 2),
                     containerColor = MaterialTheme.colorScheme.background,
                     divider = {},
-                    indicator = { positions ->
+                    indicator = {
                         // Полоску под нижним рядом рисуем, только когда там и правда
                         // выбран раздел: иначе она подчёркивает пустое место.
                         if (current.ordinal >= 2) {
                             TabRowDefaults.SecondaryIndicator(
-                                Modifier.tabIndicatorOffset(positions[current.ordinal - 2]),
+                                Modifier.tabIndicatorOffset(current.ordinal - 2, matchContentSize = false),
                             )
                         }
                     },

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Нижняя граница: 250×200, при растягивании — 250×190. По ширине это время
-  пары, название и обе стрелки; по высоте — шапка и две строки пар целиком.
+  По умолчанию — 3×2 клетки (~270×175): шапка, сводка дня и две пары целиком;
+  3×3 было слишком крупным. Нижняя граница: 250×170, при растягивании — 250×150.
   Уже или ниже виджет начинает резать текст, поэтому оболочке это запрещено —
   хотя Nova запрет и не соблюдает, о чём знает сам виджет.
 -->
@@ -9,11 +9,11 @@
     android:description="@string/widget_description"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="250dp"
-    android:minHeight="200dp"
+    android:minHeight="170dp"
     android:minResizeWidth="250dp"
-    android:minResizeHeight="190dp"
+    android:minResizeHeight="150dp"
     android:targetCellWidth="3"
-    android:targetCellHeight="3"
+    android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="0" />

@@ -21,7 +21,12 @@ class CopyLinkActivity : Activity() {
         copy(intent?.getStringExtra(EXTRA_URL))
         finish()
         // Без анимации: человек не должен заметить, что что-то открывалось.
-        overridePendingTransition(0, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, 0)
+        } else {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
     }
 
     private fun copy(url: String?) {

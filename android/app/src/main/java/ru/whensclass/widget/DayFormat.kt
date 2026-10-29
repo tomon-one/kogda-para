@@ -10,7 +10,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val RU = Locale("ru")
+private val RU = Locale.forLanguageTag("ru")
 private val DAY_FORMAT = DateTimeFormatter.ofPattern("d MMMM, EEEE", RU)
 private val SHORT_DAY = DateTimeFormatter.ofPattern("d MMMM", RU)
 
@@ -296,7 +296,7 @@ fun plural(n: Int, one: String, few: String, many: String): String {
 fun formatSince(iso: String, now: Instant = Instant.now()): String {
     val since = runCatching { Instant.parse(iso) }.getOrNull() ?: return iso
     val local = LocalDateTime.ofInstant(since, ZoneId.systemDefault())
-    val when_ = local.format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale("ru")))
+    val when_ = local.format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale.forLanguageTag("ru")))
     val minutes = Duration.between(since, now).toMinutes().coerceAtLeast(0)
     val ago = when {
         minutes < 60 -> plural(minutes.toInt().coerceAtLeast(1), "минуту", "минуты", "минут")
@@ -313,7 +313,7 @@ fun formatSince(iso: String, now: Instant = Instant.now()): String {
 fun formatSinceMoment(iso: String): String {
     val since = runCatching { Instant.parse(iso) }.getOrNull() ?: return iso
     return LocalDateTime.ofInstant(since, ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale("ru")))
+        .format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale.forLanguageTag("ru")))
 }
 
 /**

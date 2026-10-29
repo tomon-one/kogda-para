@@ -287,7 +287,7 @@ internal fun TallyDialog(loadTally: suspend () -> ScheduleStore.Tally, onDismiss
 internal fun tallySince(day: LocalDate, today: LocalDate): String = when (day) {
     today -> "с сегодняшнего дня"
     today.minusDays(1) -> "со вчерашнего дня"
-    else -> "с " + day.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", java.util.Locale("ru")))
+    else -> "с " + day.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM", java.util.Locale.forLanguageTag("ru")))
 }
 
 
