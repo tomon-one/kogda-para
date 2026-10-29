@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -365,12 +366,14 @@ fun copyToClipboard(
  * мал для пальца, а нажимают по названию, как в соседних строках.
  */
 @Composable
-fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch),
+            .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch, enabled = enabled)
+            // Недоступная — бледнее, как у Material.
+            .alpha(if (enabled) 1f else 0.38f),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {

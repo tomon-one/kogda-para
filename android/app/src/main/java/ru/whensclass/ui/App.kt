@@ -100,7 +100,9 @@ internal fun App(
     val shownSchedule by container.repository.shownSchedule.collectAsState(initial = null)
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
-    val glow by container.store.glow.collectAsState(initial = false)
+    // Null — ещё не прочитано: первый кадр иначе мелькал бы обычной тёмной.
+    val glowStored by container.store.glow.collectAsState(initial = null)
+    val glow = glowStored == true
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
     val loaded by container.store.loaded.collectAsState(initial = false)
     val notifyBefore by container.store.notifyBefore
@@ -389,7 +391,7 @@ internal fun App(
         ) {
             // Пустой фон, пока настройки читаются с диска: это доли секунды,
             // но без него успевает мелькнуть чужой экран.
-            if (!loaded) return@Surface
+            if (!loaded || glowStored == null) return@Surface
             val screenStates = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
 
             // Экраны сменяются со сдвигом: вглубь — справа налево, назад —

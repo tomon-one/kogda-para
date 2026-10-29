@@ -225,7 +225,13 @@ fun SettingsScreen(
                 selected = theme,
                 onPick = onTheme,
             )
-            SwitchRow("Стекло · beta", glow, onGlow)
+            // В светлой теме «Стекло» ничего не меняет — выключатель недоступен.
+            val dark = when (theme) {
+                ThemeChoice.DARK -> true
+                ThemeChoice.LIGHT -> false
+                ThemeChoice.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
+            SwitchRow("Стекло · beta", glow, onGlow, enabled = dark)
             Text(
                 "Только в тёмной теме: красный свет за расписанием, полупрозрачные карточки, полоска дней — матовое стекло.",
                 style = MaterialTheme.typography.bodySmall,

@@ -13,6 +13,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.graphics.Color
@@ -198,7 +202,7 @@ fun ScheduleDays(
     }
 
     // «Стекло»: список уходит под полоску дней, и она размывает то, что под ней.
-    val glass = weekStrip && MaterialTheme.colorScheme.background.alpha < 1f
+    val glass = weekStrip && MaterialTheme.colorScheme.background.alpha < 1f && !rememberPowerSave()
     val haze = dev.chrisbanes.haze.rememberHazeState()
     var stripHeight by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val strip: @Composable (Modifier) -> Unit = { stripModifier ->
@@ -262,7 +266,14 @@ fun ScheduleDays(
     if (glass) {
         Box(modifier = modifier.fillMaxSize()) {
             val density = androidx.compose.ui.platform.LocalDensity.current
-            list(Modifier.fillMaxSize().hazeSource(haze), with(density) { stripHeight.toDp() })
+            list(
+                // Список начинается под верхним полем полоски: над ней он выглядывал бы
+                // полуразмытыми строками.
+                Modifier.fillMaxSize()
+                    .padding(top = STRIP_TOP)
+                    .hazeSource(haze),
+                with(density) { (stripHeight.toDp() - STRIP_TOP).coerceAtLeast(0.dp) },
+            )
             strip(Modifier.onSizeChanged { stripHeight = it.height })
         }
     } else {
@@ -296,6 +307,9 @@ private fun Modifier.appear(active: Boolean, order: Int): Modifier {
         translationY = (1f - progress.value) * 16.dp.toPx()
     }
 }
+
+/** Поле над полоской дней. */
+private val STRIP_TOP = 6.dp
 
 private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
@@ -333,7 +347,7 @@ private fun WeekStrip(
             // У «Стекла» размыта вся полоса во всю ширину, с полями: иначе в полях
             // и в скруглённых углах проступали чёткие строки и рамки карточек.
             .then(if (glass != null) Modifier.frosted(glass) else Modifier)
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)
+            .padding(start = 12.dp, end = 12.dp, top = STRIP_TOP, bottom = 8.dp)
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
             .then(if (glass != null) Modifier.border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(14.dp)) else Modifier)
             .padding(4.dp)
@@ -697,12 +711,16 @@ internal fun Modifier.frosted(state: dev.chrisbanes.haze.HazeState): Modifier =
     hazeBlur(
         dev.chrisbanes.haze.HazeInput.Sources(state),
         style = dev.chrisbanes.haze.blur.HazeBlurStyle {
-            blurRadius(24.dp)
+            blurRadius(32.dp)
             // Сплошная подложка под размытым: экран под списком прозрачный (свет
             // рисует корень), и без неё сквозь размытое проступал бы чёткий текст.
-            // Тон — как у света в этом месте экрана.
-            backgroundColor(Color(0xFF1C0606))
-            colorEffects(listOf(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.2f))))
+            // Тон — как у света на высоте полоски, чтобы полоса не выделялась.
+            backgroundColor(Color(0xFF1C0101))
+            // Без зерна: оно серит тон, и полоса отличалась от света вокруг.
+            noiseFactor(0f)
+            colorEffects(listOf(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.15f))))
             fallbackColorEffect(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.88f)))
+            // Низ полосы (её нижнее поле) сходит на нет: размытое переходит в чёткий список плавно, без черты.
+            mask(androidx.compose.ui.graphics.Brush.verticalGradient(0.9f to Color.Black, 1f to Color.Transparent))
         },
     )

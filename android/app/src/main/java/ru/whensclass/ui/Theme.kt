@@ -4,6 +4,10 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.luminance
 
 /** Красный колледжа — из его же логотипа. */
@@ -103,16 +107,20 @@ internal val GlowScheme = DarkScheme.copy(
  * Свет за экраном «Стекла»: красное пятно сверху и слабое снизу слева. Рисуется
  * один раз, без анимации: при листании корень не перерисовывается, батарею не ест.
  */
-internal fun androidx.compose.ui.graphics.drawscope.DrawScope.glowBackdrop() {
-    drawRect(Color.Black)
-    val w = size.width
-    val h = size.height
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.glowBackdrop(
+    /** Размер экрана: свет рисуется и под списком (для размытия), сдвинутым на его место. */
+    area: androidx.compose.ui.geometry.Size = size,
+) {
+    drawRect(Color.Black, size = area)
+    val w = area.width
+    val h = area.height
     drawRect(
         androidx.compose.ui.graphics.Brush.radialGradient(
             listOf(BRAND.copy(alpha = 0.42f), BRAND.copy(alpha = 0.12f), Color.Transparent),
             center = androidx.compose.ui.geometry.Offset(w * 0.55f, -h * 0.04f),
             radius = maxOf(w * 1.05f, 1f),
         ),
+        size = area,
     )
     drawRect(
         androidx.compose.ui.graphics.Brush.radialGradient(
@@ -121,5 +129,27 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.glowBackdrop() {
             center = androidx.compose.ui.geometry.Offset(0f, h),
             radius = maxOf(w * 0.9f, 1f),
         ),
+        size = area,
     )
+}
+
+/**
+ * Включено ли энергосбережение. Система в нём сама выключает размытие окон;
+ * «Стекло» делает так же — размытие пересчитывается на каждом кадре листания.
+ */
+@androidx.compose.runtime.Composable
+internal fun rememberPowerSave(): Boolean {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val power = remember(context) { context.getSystemService(android.os.PowerManager::class.java) }
+    var on by remember { mutableStateOf(power?.isPowerSaveMode == true) }
+    androidx.compose.runtime.DisposableEffect(context) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, i: android.content.Intent) {
+                on = power?.isPowerSaveMode == true
+            }
+        }
+        context.registerReceiver(receiver, android.content.IntentFilter(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED))
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    return on
 }
