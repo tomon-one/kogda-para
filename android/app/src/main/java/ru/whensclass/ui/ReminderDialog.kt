@@ -117,7 +117,7 @@ internal fun ReminderDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             shape = RoundedCornerShape(20.dp),
-            // У «свечения» surface полупрозрачный, а окну нужен сплошной фон.
+            // У «Стекла» surface полупрозрачный, а окну нужен сплошной фон.
             color = MaterialTheme.colorScheme.surface.let { if (it.alpha < 1f) MaterialTheme.colorScheme.surfaceContainer else it },
             modifier = Modifier
                 .padding(horizontal = 16.dp)

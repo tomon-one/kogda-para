@@ -380,7 +380,7 @@ internal fun App(
         }
     }
 
-    // «Свечение» — только у тёмной: в светлой красный свет за белыми карточками не виден.
+    // «Стекло» — только у тёмной: в светлой красный свет за белыми карточками не виден.
     val glowing = glow && dark
     MaterialTheme(colorScheme = if (glowing) GlowScheme else if (dark) DarkScheme else LightScheme) {
         Surface(

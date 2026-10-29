@@ -417,7 +417,7 @@ class ScheduleStore(private val context: Context) {
         context.dataStore.edit { it[KEY_THEME] = value }
     }
 
-    /** «Свечение» (beta): красный свет за экраном тёмной темы. По умолчанию выключено. */
+    /** «Стекло» (beta): красный свет за экраном тёмной темы, матовая полоска дней. По умолчанию выключено. */
     val glow: Flow<Boolean> = context.dataStore.data.map { it[KEY_GLOW] == "1" }
 
     suspend fun setGlow(on: Boolean) {

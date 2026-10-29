@@ -167,6 +167,8 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    // Размытие под полоской дней у темы «Стекло».
+    implementation(libs.haze.blur)
 
     testImplementation(libs.junit)
 }

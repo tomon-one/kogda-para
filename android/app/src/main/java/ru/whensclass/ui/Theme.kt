@@ -15,7 +15,7 @@ private val BRAND_ON_LIGHT = Color(0xFFC20302)
 internal val ColorScheme.online: Color
     get() = if (background.luminance() < 0.5f) Color(0xFF4CC38A) else Color(0xFF086B35)
 
-/** Плитка пары внутри карточки дня (--tile сайта). При свечении — стекло, как карточка. */
+/** Плитка пары внутри карточки дня (--tile сайта). У «Стекла» — полупрозрачная, как карточка. */
 internal val ColorScheme.tile: Color
     get() = when {
         background.alpha < 1f -> Color.White.copy(alpha = 0.06f)
@@ -79,7 +79,7 @@ internal val LightScheme = lightColorScheme(
 )
 
 /**
- * «Свечение» (beta): тёмная схема, у которой фон экрана прозрачный — под ним
+ * «Стекло» (beta): тёмная схема, у которой фон экрана прозрачный — под ним
  * красный свет ([glowBackdrop]), — а карточки полупрозрачные, как стекло.
  * Окна (диалоги) остаются непрозрачными: у них свои surfaceContainer*.
  */
@@ -90,7 +90,7 @@ internal val GlowScheme = DarkScheme.copy(
 )
 
 /**
- * Свет за экраном «свечения»: красное пятно сверху и слабое снизу слева. Рисуется
+ * Свет за экраном «Стекла»: красное пятно сверху и слабое снизу слева. Рисуется
  * один раз, без анимации: при листании корень не перерисовывается, батарею не ест.
  */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.glowBackdrop() {

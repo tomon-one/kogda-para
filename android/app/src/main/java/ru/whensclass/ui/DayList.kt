@@ -13,6 +13,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.hazeSource
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -163,7 +169,7 @@ fun ScheduleDays(
         derivedStateOf {
             val info = listState.layoutInfo
             val item = info.visibleItemsInfo.firstOrNull {
-                it.index >= shift && it.offset + it.size - maxOf(it.offset, info.viewportStartOffset) >= it.size / 2
+                it.index >= shift && it.offset + it.size - maxOf(it.offset, 0) >= it.size / 2
             } ?: info.visibleItemsInfo.lastOrNull { it.index >= shift }
             item?.let { days.getOrNull(it.index - shift)?.date }
         }
@@ -191,9 +197,14 @@ fun ScheduleDays(
         appearing.value = false
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-    if (weekStrip) {
+    // «Стекло»: список уходит под полоску дней, и она размывает то, что под ней.
+    val glass = weekStrip && MaterialTheme.colorScheme.background.alpha < 1f
+    val haze = dev.chrisbanes.haze.rememberHazeState()
+    var stripHeight by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val strip: @Composable (Modifier) -> Unit = { stripModifier ->
         WeekStrip(
+            modifier = stripModifier,
+            glass = if (glass) haze else null,
             // Лямбдой: день читается внутри полоски, и при листании перерисовывается
             // только она, а не весь список.
             shownDay = { (picked ?: shownDay)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today },
@@ -221,9 +232,10 @@ fun ScheduleDays(
             },
         )
     }
+    val list: @Composable (Modifier, androidx.compose.ui.unit.Dp) -> Unit = { listModifier, top ->
     LazyColumn(
         state = listState,
-        modifier = Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
+        modifier = listModifier.fillMaxWidth().pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
                     awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
@@ -231,7 +243,7 @@ fun ScheduleDays(
                 }
             }
         },
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = top, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         header?.let { item(key = "header") { it() } }
@@ -246,6 +258,18 @@ fun ScheduleDays(
             }
         }
     }
+    }
+    if (glass) {
+        Box(modifier = modifier.fillMaxSize()) {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            list(Modifier.fillMaxSize().hazeSource(haze), with(density) { stripHeight.toDp() })
+            strip(Modifier.onSizeChanged { stripHeight = it.height })
+        }
+    } else {
+        Column(modifier = modifier.fillMaxSize()) {
+            if (weekStrip) strip(Modifier)
+            list(Modifier.weight(1f), 0.dp)
+        }
     }
 }
 
@@ -281,6 +305,9 @@ private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", 
  */
 @Composable
 private fun WeekStrip(
+    modifier: Modifier = Modifier,
+    /** «Стекло»: размывать список под полоской. */
+    glass: dev.chrisbanes.haze.HazeState? = null,
     shownDay: () -> LocalDate,
     today: LocalDate,
     onPick: (LocalDate) -> Unit,
@@ -301,9 +328,11 @@ private fun WeekStrip(
     }
     val pillColor = MaterialTheme.colorScheme.primary
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)
+            // У «Стекла» сверху без поля: список уходит под полоску, а не выглядывает над ней.
+            .padding(start = 12.dp, end = 12.dp, top = if (glass != null) 0.dp else 6.dp, bottom = 8.dp)
+            .then(if (glass != null) Modifier.frosted(glass, RoundedCornerShape(14.dp)) else Modifier)
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
             .padding(4.dp)
             // Одно касание на всю полоску вместо семи кнопок: при листании
@@ -656,3 +685,24 @@ private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, su
         }
     }
 }
+
+/**
+ * Матовое стекло: размытое содержимое [state] под элементом, притемнённое, чтобы
+ * подписи читались над любой парой. До Android 12 размытия нет — тогда почти
+ * сплошной тёмный фон.
+ */
+internal fun Modifier.frosted(state: dev.chrisbanes.haze.HazeState, shape: androidx.compose.ui.graphics.Shape): Modifier =
+    clip(shape)
+        .hazeBlur(
+            dev.chrisbanes.haze.HazeInput.Sources(state),
+            style = dev.chrisbanes.haze.blur.HazeBlurStyle {
+                blurRadius(24.dp)
+                // Сплошная подложка под размытым: экран под списком прозрачный (свет
+                // рисует корень), и без неё сквозь размытое проступал бы чёткий текст.
+                // Тон — как у света в этом месте экрана.
+                backgroundColor(Color(0xFF240707))
+                colorEffects(listOf(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.45f))))
+                fallbackColorEffect(dev.chrisbanes.haze.blur.HazeColorEffect.tint(Color.Black.copy(alpha = 0.88f)))
+            },
+        )
+        .border(1.dp, Color.White.copy(alpha = 0.14f), shape)
