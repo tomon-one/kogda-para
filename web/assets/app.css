@@ -387,7 +387,7 @@ p a, .point a { text-decoration: underline; }
   height: 44px;
   margin-top: 6px;
   padding: 0 14px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-variant);
   color: var(--primary);
   font-size: 14px;
@@ -429,7 +429,7 @@ p a, .point a { text-decoration: underline; }
   color: var(--primary);
   font-size: 14px;
   font-weight: 500;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 .text-button:active { background: var(--surface-variant); }

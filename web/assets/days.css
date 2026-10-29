@@ -5,7 +5,8 @@
 
 .plate {
   background: var(--surface);
-  border-radius: 12px;
+  border: 1px solid var(--divider);
+  border-radius: 20px;
   padding: 10px 14px 12px;
   margin-bottom: 12px;
 }
@@ -109,7 +110,7 @@
   height: 18px;
   margin: 0 4px 4px 0;
   padding: 0 4px;
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--mark-bg);
   color: var(--primary);
   font-size: 11px;
