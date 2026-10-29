@@ -36,6 +36,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -173,7 +175,14 @@ fun TodayScreen(
         TallyDialog(loadTally = loadTally, onDismiss = { showTally = false })
     }
 
+    // В альбомной шапка уезжает при прокрутке вместе с вкладками (ScheduleTabs):
+    // неподвижная отнимает больше половины высоты.
+    val short = LocalConfiguration.current.screenHeightDp < SHORT_SCREEN_DP
+    val bar = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    LaunchedEffect(short) { if (!short) bar.state.heightOffset = 0f }
+
     Scaffold(
+        modifier = if (short) Modifier.nestedScroll(bar.nestedScrollConnection) else Modifier,
         snackbarHost = {
             SnackbarHost(snackbar) { data ->
                 // Своя плашка: у Material по умолчанию она светлая в любой теме, а
@@ -250,7 +259,9 @@ fun TodayScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
                 ),
+                scrollBehavior = if (short) bar else null,
             )
         },
     ) { padding ->

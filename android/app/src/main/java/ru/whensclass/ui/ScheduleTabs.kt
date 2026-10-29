@@ -54,6 +54,9 @@ enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String =
     EXAMS("Экзамены", false, "Появятся к сессии — колледж выкладывает их в декабре"),
 }
 
+/** Ниже этой высоты (альбомная, половина экрана) шапка и вкладки уезжают при прокрутке. */
+internal const val SHORT_SCREEN_DP = 480
+
 /** Порядок вкладок в верхнем ряду: преподавателю первым — раздел преподавателей. */
 private fun topTabs(teacherMode: Boolean): List<Tab> =
     if (teacherMode) listOf(Tab.TEACHERS, Tab.STUDENTS) else listOf(Tab.STUDENTS, Tab.TEACHERS)
@@ -73,8 +76,8 @@ internal fun ScheduleTabs(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val top = topTabs(teacherMode)
-    // В альбомной ряд уезжает всегда: шапка иначе отнимает больше половины высоты.
-    val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
+    // В альбомной ряды уезжают всегда: шапка иначе отнимает больше половины высоты.
+    val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < SHORT_SCREEN_DP
     val pinned by rememberUpdatedState((current.ordinal >= 2 || live) && !short)
     var rowHeight by remember { mutableIntStateOf(0) }
     // Насколько нижний ряд уехал вверх: от минус его высоты до нуля.
@@ -99,7 +102,7 @@ internal fun ScheduleTabs(
                 if (available.y > 0f) Offset(0f, move(available.y)) else Offset.Zero
         }
     }
-    Column(Modifier.fillMaxSize()) {
+    val upper: @Composable () -> Unit = {
         // Полоска рисуется только в том ряду, где выбранная вкладка: иначе
         // подчёркнутыми оказываются сразу две.
         TabRow(
@@ -117,6 +120,10 @@ internal fun ScheduleTabs(
         ) {
             top.forEach { TabButton(it, current, onPick) }
         }
+    }
+    Column(Modifier.fillMaxSize()) {
+        // В альбомной уезжают оба ряда, вместе с шапкой экрана.
+        if (!short) upper()
         // Сдвиг читается только при раскладке: прокрутка не пересобирает экран.
         Box(
             Modifier
@@ -130,23 +137,26 @@ internal fun ScheduleTabs(
                     layout(row.width, shown) { row.place(0, shown - row.height) }
                 },
         ) {
-            TabRow(
-                selectedTabIndex = (current.ordinal - 2).coerceIn(0, 2),
-                containerColor = MaterialTheme.colorScheme.background,
-                divider = {},
-                indicator = { positions ->
-                    // Полоску под нижним рядом рисуем, только когда там и правда
-                    // выбран раздел: иначе она подчёркивает пустое место.
-                    if (current.ordinal >= 2) {
-                        TabRowDefaults.SecondaryIndicator(
-                            Modifier.tabIndicatorOffset(positions[current.ordinal - 2]),
-                        )
-                    }
-                },
-            ) {
-                TabButton(Tab.RETAKES, current, onPick, live)
-                TabButton(Tab.ROOMS, current, onPick)
-                TabButton(Tab.EXAMS, current, onPick)
+            Column {
+                if (short) upper()
+                TabRow(
+                    selectedTabIndex = (current.ordinal - 2).coerceIn(0, 2),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    divider = {},
+                    indicator = { positions ->
+                        // Полоску под нижним рядом рисуем, только когда там и правда
+                        // выбран раздел: иначе она подчёркивает пустое место.
+                        if (current.ordinal >= 2) {
+                            TabRowDefaults.SecondaryIndicator(
+                                Modifier.tabIndicatorOffset(positions[current.ordinal - 2]),
+                            )
+                        }
+                    },
+                ) {
+                    TabButton(Tab.RETAKES, current, onPick, live)
+                    TabButton(Tab.ROOMS, current, onPick)
+                    TabButton(Tab.EXAMS, current, onPick)
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
