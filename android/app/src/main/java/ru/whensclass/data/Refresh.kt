@@ -32,6 +32,12 @@ internal suspend fun <T : Any> writeIfStillAsked(
 ): T? = if (current() == asked) write() else null
 
 /**
+ * Тихие часы по времени колледжа: с 22:00 до 7:00 об изменениях не сообщаем —
+ * копим и присылаем одно утром (quiet_hours в push/service.py службы).
+ */
+internal fun quietHours(now: java.time.LocalDateTime): Boolean = now.hour >= 22 || now.hour < 7
+
+/**
  * Строки уведомления об изменениях: непрочитанные прежние и новые, без
  * прошедших дней и повторов, не больше [MAX_CHANGE_LINES] последних.
  */

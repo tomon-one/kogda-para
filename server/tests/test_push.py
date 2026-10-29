@@ -85,6 +85,8 @@ class Recorder(service.Push):
     def __init__(self, path, vapid):
         super().__init__(path, vapid)
         self.sent = []
+        # Днём: тихие часы проверяются отдельно.
+        self.clock = lambda: dt.datetime(2026, 9, 8, 12, 0)
 
     def _dispatch(self, jobs):
         self.sent.extend(jobs)
@@ -152,6 +154,39 @@ def test_after_refresh_tells_only_subscribers_of_that_group(tmp_path, snapshots)
     assert note["data"]["t"] == "changes" and note["title"] == "Расписание изменилось"
     assert note["body"] == f"вт, 8 сентября: отменили {first.number} пару: {first.subject}"
     assert note["data"]["days"] == ["2026-09-08"]
+
+
+def test_changes_at_night_wait_for_the_morning(tmp_path, snapshots):
+    before, bt, after, at, day, first = snapshots
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(subscription.parse_subscription(_body(id="isp-924-2")), day)
+    push.sent.clear()
+    push.clock = lambda: dt.datetime(2026, 9, 7, 22, 30)
+    push.after_refresh(before, bt, after, at, day)
+    assert push.sent == []
+    # Придержанное переживает перезапуск службы.
+    again = Recorder(tmp_path, _vapid())
+    again.remind(after, at, now=dt.datetime(2026, 9, 8, 6, 59))
+    assert again.sent == []
+    again.remind(after, at, now=dt.datetime(2026, 9, 8, 7, 0))
+    changed = [j for j in again.sent if j.message["notification"]["data"]["t"] == "changes"]
+    assert len(changed) == 1
+    assert changed[0].message["notification"]["body"] == f"вт, 8 сентября: отменили {first.number} пару: {first.subject}"
+    again.sent.clear()
+    again.remind(after, at, now=dt.datetime(2026, 9, 8, 7, 1))
+    assert not [j for j in again.sent if j.message["notification"]["data"]["t"] == "changes"]
+
+
+def test_held_changes_drop_past_days(tmp_path, snapshots):
+    before, bt, after, at, day, _ = snapshots
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(subscription.parse_subscription(_body(id="isp-924-2")), day)
+    push.sent.clear()
+    push.clock = lambda: dt.datetime(2026, 9, 7, 23, 0)
+    push.after_refresh(before, bt, after, at, day)
+    # Утро после дня, о котором строки: сказать уже нечего.
+    push.remind(after, at, now=dt.datetime(2026, 9, 9, 7, 0))
+    assert not [j for j in push.sent if j.message["notification"]["data"]["t"] == "changes"]
 
 
 def test_reminder_goes_once_at_its_minute(tmp_path, snapshots):

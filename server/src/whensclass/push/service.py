@@ -59,12 +59,23 @@ GONE_DROP_DAYS = 14
 CATCH_UP_MINUTES = 10
 
 
+def quiet_hours(now: dt.datetime) -> bool:
+    """С 22:00 до 7:00 по времени колледжа об изменениях не сообщаем — копим и
+    шлём утром одним (quietHours в Refresh.kt приложения)."""
+    return now.hour >= 22 or now.hour < 7
+
+
 class Push(Delivery):
     """Подписки на диске и рассылка. Один на службу."""
 
     def __init__(self, state_dir: pathlib.Path, vapid: webpush.Vapid | None):
         self.path = state_dir / "push.json"
         self._reminded_path = state_dir / "push-reminded.json"
+        # Изменения, придержанные на ночь: (kind, id) -> строки [день, текст].
+        self._held_path = state_dir / "push-held.json"
+        self._held: dict[tuple[str, str], list[list[str]]] = self._load_held()
+        # Часы колледжа для тихих часов; в тестах подменяются.
+        self.clock = lambda: dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone))
         self.vapid = vapid
         self._lock = threading.RLock()
         self._subs: dict[str, dict] = self._load()
@@ -284,6 +295,9 @@ class Push(Delivery):
                 lines_for[key] = lines
         if not lines_for:
             return
+        if quiet_hours(self.clock()):
+            self._hold(lines_for)
+            return
         jobs = []
         for sub in subs:
             lines = lines_for.get((sub["kind"], sub["id"]))
@@ -318,6 +332,46 @@ class Push(Delivery):
 
     # --- напоминания ---------------------------------------------------------
 
+    def _load_held(self) -> dict[tuple[str, str], list[list[str]]]:
+        try:
+            data = json.loads(self._held_path.read_text("utf-8"))
+            return {(str(k), str(i)): [[str(d), str(t)] for d, t in lines] for k, i, lines in data}
+        except (OSError, ValueError, TypeError):
+            return {}
+
+    def _save_held(self) -> None:
+        try:
+            write_json(self._held_path, [[k, i, lines] for (k, i), lines in sorted(self._held.items())])
+        except OSError as exc:
+            log.warning("придержанные изменения не записались: %s", exc)
+
+    def _hold(self, lines_for: dict[tuple[str, str], list[list[str]]]) -> None:
+        """Ночь: строки — к придержанным. Повтор встаёт на последнее место, как в
+        приложении (mergeChanges)."""
+        with self._lock:
+            for key, lines in lines_for.items():
+                fresh = [list(x) for x in lines]
+                kept = [x for x in self._held.get(key, []) if x not in fresh]
+                self._held[key] = kept + fresh
+            self._save_held()
+        log.info("тихие часы: изменения придержаны до утра у %d субъектов", len(lines_for))
+
+    def _release(self, today: dt.date) -> None:
+        """Утро: придержанное — одним уведомлением, без прошедших дней."""
+        with self._lock:
+            held, self._held = self._held, {}
+            self._save_held()
+        jobs = []
+        for sub in self._snapshot_subs():
+            if not sub.get("changes") or sub.get("gone"):
+                continue
+            lines = [x for x in held.get((sub["kind"], sub["id"]), []) if x[0] >= today.isoformat()]
+            if lines:
+                jobs.append(Job(sub, changes_message(sub, lines), changes_ttl(lines)))
+        if jobs:
+            log.info("тихие часы кончились: %d уведомлений об изменениях", len(jobs))
+            self._dispatch(jobs)
+
     def _load_reminded(self) -> None:
         try:
             data = json.loads(self._reminded_path.read_text("utf-8"))
@@ -349,6 +403,8 @@ class Push(Delivery):
         self._check(snapshot, teachers, today, fresh)
         if settings.freeze:
             return
+        if self._held and not quiet_hours(now):
+            self._release(today)
         since = self._last_remind
         if since is None or since.date() != today or since >= now:
             since = now - dt.timedelta(minutes=CATCH_UP_MINUTES)

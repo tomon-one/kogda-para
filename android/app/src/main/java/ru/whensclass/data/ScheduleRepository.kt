@@ -106,12 +106,31 @@ class ScheduleRepository(
             .filter { it.day in soon }
         if (changes.isEmpty()) return
 
-        // Непрочитанное прежнее не затираем — дописываем ([ScheduleStore.pendingChanges]).
-        // Прочитанное или смахнутое — начинаем заново.
-        val pending = if (Notifications.changesShown(context)) store.pendingChanges() else emptyList()
+        // Непрочитанное прежнее и придержанное на ночь не затираем — дописываем
+        // ([ScheduleStore.pendingChanges]). Прочитанное или смахнутое — начинаем заново.
+        val held = store.changesHeld()
+        val pending = if (held || Notifications.changesShown(context)) store.pendingChanges() else emptyList()
         val lines = mergeChanges(pending, changes.map { it.day to it.text }, today)
         store.putPendingChanges(lines)
+        if (quietHours(ru.whensclass.widget.collegeNow())) {
+            store.setChangesHeld(true)
+            return
+        }
+        if (held) store.setChangesHeld(false)
+        showChanges(lines)
+    }
 
+    /** Ночь кончилась — придержанное одним уведомлением ([quietHours]). */
+    private suspend fun releaseHeldChanges() {
+        if (!store.changesHeld() || quietHours(ru.whensclass.widget.collegeNow())) return
+        store.setChangesHeld(false)
+        if (!store.notifyChangesEnabled()) return
+        val lines = mergeChanges(store.pendingChanges(), emptyList(), ru.whensclass.widget.collegeToday())
+        store.putPendingChanges(lines)
+        if (lines.isNotEmpty()) showChanges(lines)
+    }
+
+    private fun showChanges(lines: List<Pair<String, String>>) {
         // День — словами и датой, а не «Завтра»: уведомление висит в шторке до
         // утра, и наутро «Завтра» читалось бы как послезавтра. Снимается само
         // к концу последнего дня, о котором говорит.
@@ -488,6 +507,7 @@ class ScheduleRepository(
         val subject = asked.id
         val extraGroups = if (teacherMode) emptyList() else store.currentExtraGroups().filter { it.id in asked.extras }
         if (subject == null) return@withContext RefreshResult.NoGroup
+        releaseHeldChanges()
         // Неделя — одна на весь заход: иначе запрос через полночь воскресенья
         // записал бы окно прошлой недели с меткой новой.
         val from = weekStart()

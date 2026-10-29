@@ -9,6 +9,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.whensclass.data.MAX_CHANGE_LINES
 import ru.whensclass.data.mergeChanges
+import ru.whensclass.data.quietHours
 
 /** Уведомления и состояние телефона. */
 class PhoneStateTest {
@@ -76,5 +77,17 @@ class PhoneStateTest {
         assertEquals(MAX_CHANGE_LINES, merged.size)
         assertEquals("отменили 1 пару", merged.first().second)
         assertEquals(fresh, merged.takeLast(2))
+    }
+
+    @Test
+    fun `тихие часы — с 22 до 7, ночное утром уходит без вчерашнего дня`() {
+        val day = LocalDate.of(2026, 10, 29)
+        assertEquals(false, quietHours(day.atTime(21, 59)))
+        assertEquals(true, quietHours(day.atTime(22, 0)))
+        assertEquals(true, quietHours(day.plusDays(1).atTime(6, 59)))
+        assertEquals(false, quietHours(day.plusDays(1).atTime(7, 0)))
+        // Ночью копилось про сегодня и завтра; утром сегодняшний (уже вчера) отпадает.
+        val night = listOf("2026-10-29" to "отменили 6 пару", "2026-10-30" to "добавилась 1 пара")
+        assertEquals(listOf("2026-10-30" to "добавилась 1 пара"), mergeChanges(night, emptyList(), day.plusDays(1)))
     }
 }

@@ -99,7 +99,7 @@ export function notifications(app, teacherMode) {
       var cur = lost ? now : app.pushIntended();
       change({ changes: on, remind: cur.remind });
     }, 'push-changes'),
-    h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра.'),
+    h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.'),
     switchRow('Напоминать о паре', now.remind > 0, function (on) {
       var cur = lost ? now : app.pushIntended();
       change({ changes: cur.changes, remind: on ? (cur.remind || lastRemind()) : 0 });

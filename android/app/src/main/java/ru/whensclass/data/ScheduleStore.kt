@@ -165,6 +165,13 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
+    /** Тихие часы: изменения лежат в [pendingChanges] и ждут утра ([quietHours]). */
+    suspend fun changesHeld(): Boolean = context.dataStore.data.first()[KEY_CHANGES_HELD] != null
+
+    suspend fun setChangesHeld(held: Boolean) {
+        context.dataStore.edit { if (held) it[KEY_CHANGES_HELD] = "1" else it.remove(KEY_CHANGES_HELD) }
+    }
+
     /** О каком сбое (по его `since`) телефон уже сказал уведомлением. */
     suspend fun staleNotifiedFor(): String? = context.dataStore.data.first()[KEY_STALE_NOTIFIED]
 
@@ -392,6 +399,7 @@ class ScheduleStore(private val context: Context) {
             it.remove(KEY_GENERATED_AT)
             it.remove(KEY_FETCHED_AT)
             it.remove(KEY_PENDING_CHANGES)
+            it.remove(KEY_CHANGES_HELD)
         }
     }
 
@@ -463,6 +471,7 @@ class ScheduleStore(private val context: Context) {
             it.remove(KEY_FETCHED_AT)
             // Непрочитанные изменения — про прежнюю группу: к новым не копить.
             it.remove(KEY_PENDING_CHANGES)
+            it.remove(KEY_CHANGES_HELD)
             // Остальные выбранные группы к своей не привязаны и остаются —
             // кроме новой своей: дважды одну группу не показываем.
             val extras = readExtras(it)
@@ -753,6 +762,7 @@ class ScheduleStore(private val context: Context) {
         val KEY_LISTS_AT = stringPreferencesKey("lists_at")
         val KEY_GITHUB_AT = stringPreferencesKey("github_at")
         val KEY_PENDING_CHANGES = stringPreferencesKey("pending_changes")
+        val KEY_CHANGES_HELD = stringPreferencesKey("changes_held")
         val KEY_UNREACHABLE_SINCE = stringPreferencesKey("unreachable_since")
         val KEY_GONE_SINCE = stringPreferencesKey("gone_since")
         val KEY_GONE = stringPreferencesKey("gone")

@@ -163,7 +163,7 @@ internal fun NotificationsSection(
         if (notifyChanges && notifications && phone.changesChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES)
         }
-        Hint("Отмены и замены на сегодня и завтра.")
+        Hint("Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.")
 
         SwitchRow("Сообщать о сбоях сервера", notifyServer, onNotifyServer)
         if (notifyServer && notifications && phone.serverChannelOff) {
