@@ -15,6 +15,10 @@
   try {
     var theme = JSON.parse(localStorage.getItem(prefix + 'theme') || 'null');
     if (theme === 'dark' || theme === 'light') document.documentElement.setAttribute('data-theme', theme);
+    // «Стекло» — тоже до отрисовки: иначе мелькал бы обычный фон.
+    if (JSON.parse(localStorage.getItem(prefix + 'glass') || 'false') === true) {
+      document.documentElement.setAttribute('data-glass', '');
+    }
   } catch (e) { /* хранилище запрещено — тема системная */ }
 
   var OLD = 'Браузер слишком старый для этого сайта. Обновите его или откройте сайт ' +

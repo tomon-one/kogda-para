@@ -17,6 +17,23 @@ function row(main, sub, buttons) {
     h('div', { class: 'setting-buttons' }, buttons));
 }
 
+/**
+ * Плашка «Стекла» (как в приложении): превью темы, название с меткой beta,
+ * пояснение и выключатель; нажимается целиком.
+ */
+function glassToggle(app) {
+  var input = h('input', { type: 'checkbox', role: 'switch', class: 'switch', 'aria-label': 'Стекло' });
+  input.checked = app.glass();
+  input.addEventListener('change', function () { app.setGlass(input.checked); });
+  return h('label', { class: 'glass-toggle' },
+    h('span', { class: 'glass-preview', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')),
+    h('span', { class: 'glass-text' },
+      h('span', { class: 'glass-name' }, 'Стекло', h('span', { class: 'badge' }, 'beta')),
+      h('span', { class: 'glass-note' },
+        'Красный свет за расписанием, полупрозрачные карточки, матовые шапка и полоска дней.')),
+    input);
+}
+
 function segmented(options, selected, onPick) {
   var group = h('div', { class: 'segmented', role: 'radiogroup' });
   options.forEach(function (o) {
@@ -181,9 +198,10 @@ export function settingsScreen(app) {
           : actionButton('Открыть таблицу колледжа', function () { snackbar('Адрес таблицы ещё не получен от сервера'); }),
       ]),
 
-      section('Оформление', segmented(
-        [['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']],
-        app.theme(), app.setTheme)),
+      section('Оформление', [
+        segmented([['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']], app.theme(), app.setTheme),
+        glassToggle(app),
+      ]),
 
       // Два текста, которые читают один раз, — одной карточкой.
       section('Данные и ответственность', [

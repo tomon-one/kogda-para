@@ -57,6 +57,15 @@ Object.assign(app, {
     applyTheme();
     setTimeout(function () { html.classList.remove('theme-anim'); }, 400);
   },
+  /** «Стекло» (beta): свет за страницей и матовые полосы (glass.css). */
+  glass: function () { return store.get('glass') === true; },
+  setGlass: function (on) {
+    store.set('glass', on);
+    var html = document.documentElement;
+    html.classList.add('theme-anim');
+    applyTheme();
+    setTimeout(function () { html.classList.remove('theme-anim'); }, 400);
+  },
   installPrompt: function () { return installEvent; },
   install: function () {
     if (!installEvent) return;

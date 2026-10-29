@@ -12,6 +12,8 @@ export function applyTheme() {
   var theme = app.theme();
   if (theme === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', theme);
+  if (app.glass()) document.documentElement.setAttribute('data-glass', '');
+  else document.documentElement.removeAttribute('data-glass');
   // Полоса браузера и строка состояния — в цвет выбранной темы, а не системной:
   // у двух тегов свои media, при ручной теме оба — её.
   var metas = document.querySelectorAll('meta[name="theme-color"]');
