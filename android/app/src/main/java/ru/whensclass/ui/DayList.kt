@@ -13,6 +13,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.draw.drawWithContent
@@ -202,8 +204,14 @@ fun ScheduleDays(
 
     // «Стекло»: список уходит под полоску дней, и она размывает то, что под ней.
     val glass = weekStrip && MaterialTheme.colorScheme.background.alpha < 1f && !rememberPowerSave()
-    val sourceLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    val source = remember(sourceLayer) { GlassSource(sourceLayer) }
+    val blurLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val darkGlass = MaterialTheme.colorScheme.isDark
+    val screen = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val source = remember(blurLayer, listState, darkGlass, screen) {
+        GlassSource(blurLayer, darkGlass, androidx.compose.ui.geometry.Size(screen.width.toFloat(), screen.height.toFloat())) {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }
+    }
     var stripHeight by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val strip: @Composable (Modifier) -> Unit = { stripModifier ->
         WeekStrip(
@@ -335,29 +343,20 @@ private fun WeekStrip(
     }
     val pillColor = MaterialTheme.colorScheme.primary
     val dark = MaterialTheme.colorScheme.isDark
-    val blur = androidx.compose.ui.graphics.rememberGraphicsLayer()
-    // Где полоса на экране — для света под стеклом; меняется только при раскладке.
-    var origin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    val screen = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
-    val glow = remember(dark, screen, origin) {
-        glowTopBrush(dark, androidx.compose.ui.geometry.Size(screen.width.toFloat(), screen.height.toFloat()), origin)
+    // У «Стекла» полоска висит над списком: размыто только под ней самой,
+    // вокруг список виден как есть — без отдельной полосы во всю ширину.
+    Box(modifier = modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = STRIP_TOP, bottom = 8.dp)) {
+    if (glass != null) {
+        Box(
+            Modifier
+                .matchParentSize()
+                // Само стекло рисует список под полоской (GlassSource); здесь — только где оно.
+                .onGloballyPositioned { glass.window = it.boundsInRoot() },
+        )
     }
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = STRIP_TOP, bottom = 8.dp)
-            // У «Стекла» полоска висит над списком: размыто только под ней самой,
-            // вокруг список виден как есть — без отдельной полосы во всю ширину.
-            .then(
-                if (glass != null) {
-                    Modifier
-                        .onGloballyPositioned { origin = it.positionInRoot() }
-                        .clip(RoundedCornerShape(14.dp))
-                        .frosted(glass, blur, glassBase(dark), glow) { origin }
-                } else {
-                    Modifier
-                },
-            )
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
             .then(if (glass != null) Modifier.border(1.dp, if (dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f), RoundedCornerShape(14.dp)) else Modifier)
             .padding(4.dp)
@@ -424,6 +423,7 @@ private fun WeekStrip(
                 }
             }
         }
+    }
     }
 }
 
@@ -713,44 +713,51 @@ private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, su
 }
 
 /**
- * Источник матового стекла: список рисует себя в слой [layer], а полоска рисует
- * тот же слой у себя размытым. [origin] — где список на экране.
+ * Матовое стекло под полоской дней. Рисует его сам список, поверх себя, в
+ * прямоугольнике полоски ([window]): лист со светом того же места экрана (так
+ * стекло не отделяется от фона и закрывает чёткие строки под собой) и свою же
+ * копию, размытую. Копию, нарисованную полоской из чужого слоя, Android при
+ * листании не обновлял: под полоской застывал первый кадр.
  */
-internal class GlassSource(val layer: androidx.compose.ui.graphics.layer.GraphicsLayer) {
+internal class GlassSource(
+    val blur: androidx.compose.ui.graphics.layer.GraphicsLayer,
+    val dark: Boolean,
+    val screen: androidx.compose.ui.geometry.Size,
+    /** Читается при отрисовке: список перерисовывает стекло на каждом шаге листания. */
+    val moved: () -> Any?,
+) {
+    /** Где список на экране. */
     var origin = androidx.compose.ui.geometry.Offset.Zero
+
+    var flip = false
+
+    /** Где полоска на экране; null — ещё не разложена. */
+    var window by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
 }
 
-/** Рисовать содержимое через слой [source], чтобы стекло над ним могло его повторить. */
 internal fun Modifier.glassSource(source: GlassSource): Modifier =
     onGloballyPositioned { source.origin = it.positionInRoot() }
         .drawWithContent {
-            source.layer.record { this@drawWithContent.drawContent() }
-            drawLayer(source.layer)
+            source.moved()
+            drawContent()
+            val window = source.window?.translate(-source.origin) ?: return@drawWithContent
+            val outline = androidx.compose.ui.graphics.Path().apply {
+                addRoundRect(androidx.compose.ui.geometry.RoundRect(window, androidx.compose.ui.geometry.CornerRadius(14.dp.toPx())))
+            }
+            clipPath(outline) {
+                drawRect(glassBase(source.dark), window.topLeft, window.size)
+                drawRect(glowTopBrush(source.dark, source.screen, source.origin), window.topLeft, window.size)
+                // До Android 12 размытия нет — только лист со светом.
+                if (android.os.Build.VERSION.SDK_INT >= 31) {
+                    // Радиус каждый раз чуть другой: иначе Android считает размытый слой
+                    // прежним и при листании показывает его старую картинку.
+                    source.flip = !source.flip
+                    val radius = 10.dp.toPx() + if (source.flip) 0.01f else 0f
+                    source.blur.renderEffect = androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Clamp)
+                    source.blur.record(size = androidx.compose.ui.unit.IntSize(window.width.toInt().coerceAtLeast(1), window.height.toInt().coerceAtLeast(1))) {
+                        translate(-window.left, -window.top) { this@drawWithContent.drawContent() }
+                    }
+                    translate(window.left, window.top) { drawLayer(source.blur) }
+                }
+            }
         }
-
-/**
- * Матовое стекло: сплошной лист [base] со светом [glow] того же места экрана,
- * что рисует корень (так полоса не отделяется от фона и закрывает чёткий список
- * под собой), а поверх — список из [source], размытый. Список рисует слой заново
- * на каждом кадре листания, и размытое под стеклом едет вместе с ним. До
- * Android 12 размытия нет — тогда только лист со светом.
- */
-internal fun Modifier.frosted(
-    source: GlassSource,
-    blur: androidx.compose.ui.graphics.layer.GraphicsLayer,
-    base: Color,
-    glow: androidx.compose.ui.graphics.Brush,
-    origin: () -> androidx.compose.ui.geometry.Offset,
-): Modifier = drawBehind {
-    drawRect(base)
-    drawRect(glow)
-    if (android.os.Build.VERSION.SDK_INT >= 31) {
-        val radius = 10.dp.toPx()
-        blur.renderEffect = androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Clamp)
-        blur.record {
-            val here = origin()
-            translate(source.origin.x - here.x, source.origin.y - here.y) { drawLayer(source.layer) }
-        }
-        drawLayer(blur)
-    }
-}
