@@ -180,12 +180,23 @@ fun ScheduleDays(
         }
     }
 
-    // Нажатый в полоске день держит выделение, пока человек сам не поведёт список:
-    // день у конца списка (его не докрутить до верха) иначе отдавал выделение соседу.
+    // Нажатый в полоске день держит выделение, пока человек сам не поведёт список,
+    // а у конца списка — пока список стоит в самом низу: последние дни не докрутить
+    // до верха, и выделение иначе уходило к дню, который наверху.
     var picked by remember { mutableStateOf<String?>(null) }
+    var touched by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect {
-            if (it is androidx.compose.foundation.interaction.DragInteraction.Start) picked = null
+            if (it is androidx.compose.foundation.interaction.DragInteraction.Start) {
+                touched = true
+                if (listState.canScrollForward) picked = null
+            }
+        }
+    }
+    LaunchedEffect(listState) {
+        // Сам повёл список от низа — нажатый день больше не держит.
+        androidx.compose.runtime.snapshotFlow { listState.canScrollForward }.collect { away ->
+            if (away && touched) picked = null
         }
     }
     val scope = rememberCoroutineScope()
@@ -225,6 +236,7 @@ fun ScheduleDays(
                 wanted = null
                 val index = dayIndex(days, date.toString())
                 picked = days.getOrNull(index)?.date
+                touched = false
                 scope.launch {
                     // Видимый день — мягкой прокруткой с замедлением в конце; далёкий — как умеет список.
                     val seen = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index + shift }
@@ -239,7 +251,8 @@ fun ScheduleDays(
                 }
             },
             onDrag = { delta ->
-                picked = null
+                touched = true
+                if (listState.canScrollForward) picked = null
                 listState.dispatchRawDelta(-delta)
             },
         )

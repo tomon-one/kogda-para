@@ -53,9 +53,11 @@ export function mark(strip, day) {
   strip.classList.toggle('marked', index >= 0);
 }
 
-// Нажатый день держит выделение, пока человек сам не поведёт страницу: иначе
-// день у конца списка (его не докрутить до верха) отдавал выделение соседу.
+// Нажатый день держит выделение, пока человек сам не поведёт страницу, а у
+// конца списка — пока страница стоит в самом низу: последние дни не докрутить
+// до верха, и выделение иначе уходило к дню, который наверху.
 var picked = null;
+var touched = false;
 
 /** К дню — плавной прокруткой (без неё, если в системе «уменьшить движение»). */
 function go(strip, date) {
@@ -67,6 +69,7 @@ function go(strip, date) {
   var y = card.getBoundingClientRect().top + window.pageYOffset - headBottom() - 8;
   var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   picked = date;
+  touched = false;
   mark(strip, date);
   try {
     window.scrollTo({ top: Math.max(0, y), behavior: calm ? 'auto' : 'smooth' });
@@ -75,7 +78,14 @@ function go(strip, date) {
   }
 }
 
-function release() { picked = null; }
+function atBottom() {
+  return window.pageYOffset + window.innerHeight >= document.documentElement.scrollHeight - 2;
+}
+
+function release() {
+  touched = true;
+  if (!atBottom()) picked = null;
+}
 window.addEventListener('touchstart', release, { passive: true });
 window.addEventListener('wheel', release, { passive: true });
 window.addEventListener('keydown', release);
@@ -83,6 +93,8 @@ window.addEventListener('keydown', release);
 // Листают — выделение идёт за днём, который наверху.
 var pending = false;
 window.addEventListener('scroll', function () {
+  // Сам повёл страницу от низа — нажатый день больше не держит.
+  if (picked && touched && !atBottom()) picked = null;
   if (pending || picked) return;
   pending = true;
   window.requestAnimationFrame(function () {
