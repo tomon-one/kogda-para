@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -160,7 +161,13 @@ internal fun ScheduleTabs(
             }
         }
         Spacer(Modifier.height(8.dp))
-        Column(Modifier.weight(1f).nestedScroll(collapse), content = content)
+        // Сменилась вкладка — раздел проявляется (как на сайте), а не подменяется рывком.
+        val shown = remember(current) { androidx.compose.animation.core.Animatable(0f) }
+        LaunchedEffect(current) { shown.animateTo(1f, androidx.compose.animation.core.tween(180)) }
+        Column(
+            Modifier.weight(1f).nestedScroll(collapse).graphicsLayer { alpha = shown.value },
+            content = content,
+        )
     }
 }
 
