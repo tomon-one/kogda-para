@@ -18,15 +18,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import android.provider.Settings as SystemSettings
-import androidx.compose.animation.core.EaseInOutSine
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
@@ -316,6 +314,9 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
  * выдох, мягко у краёв, только прозрачностью — сжатие шестипиксельной точки
  * дёргалось. С выключенными в системе анимациями стоит на месте.
  */
+/** Вдох и выдох точки «идёт сейчас», как на сайте (motion.css, pulse). */
+private const val BREATH_MILLIS = 2400L
+
 @Composable
 private fun NowDot() {
     val context = LocalContext.current
@@ -327,17 +328,23 @@ private fun NowDot() {
         Box(Modifier.size(6.dp).background(color, CircleShape))
         return
     }
-    val breath by rememberInfiniteTransition(label = "идёт сейчас").animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(tween(1200, easing = EaseInOutSine), RepeatMode.Reverse),
-        label = "точка",
-    )
+    // Около 15 кадров в секунду, а не 60: для медленного дыхания хватает, а
+    // экран с идущей парой не перерисовывается на каждом кадре — бережёт батарею.
+    // Ждём кадра: приложение свёрнуто — кадров нет, и точка стоит.
+    val breath = remember { mutableFloatStateOf(1f) }
+    LaunchedEffect(Unit) {
+        val start = withFrameMillis { it }
+        while (true) {
+            val t = withFrameMillis { it } - start
+            breath.floatValue = ((kotlin.math.cos(t % BREATH_MILLIS / BREATH_MILLIS.toDouble() * 2 * Math.PI) + 1) / 2).toFloat()
+            kotlinx.coroutines.delay(66)
+        }
+    }
     Box(
         Modifier
             .size(6.dp)
             // Значение читается при отрисовке слоя: дыхание не пересобирает строку.
-            .graphicsLayer { alpha = 0.35f + 0.65f * breath }
+            .graphicsLayer { alpha = 0.35f + 0.65f * breath.floatValue }
             .background(color, CircleShape),
     )
 }

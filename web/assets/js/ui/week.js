@@ -98,12 +98,12 @@ function headBottom() {
 }
 
 /**
- * День наверху — тот, чья карточка на четверти видимой части под шапкой: по
+ * День наверху — тот, чья карточка на восьмой части видимого под шапкой: по
  * самому краю шапки выделение перескакивало от каждого миллиметра прокрутки.
  */
 function topDay() {
   var top = headBottom();
-  var probe = top + (window.innerHeight - top) / 4;
+  var probe = top + (window.innerHeight - top) / 8;
   var cards = document.querySelectorAll('[data-day]');
   var last = null;
   for (var i = 0; i < cards.length; i++) {

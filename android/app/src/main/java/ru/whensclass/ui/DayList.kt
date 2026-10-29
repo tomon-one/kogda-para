@@ -155,12 +155,12 @@ fun ScheduleDays(
         }
     }
 
-    // Какой день наверху — для выделения в полоске: тот, чья карточка на четверти
+    // Какой день наверху — для выделения в полоске: тот, чья карточка на восьмой
     // высоты списка. По самому верхнему краю выделение перескакивало от малейшей прокрутки.
     val shownDay by remember(days, shift) {
         derivedStateOf {
             val info = listState.layoutInfo
-            val probe = info.viewportStartOffset + (info.viewportEndOffset - info.viewportStartOffset) / 4
+            val probe = info.viewportStartOffset + (info.viewportEndOffset - info.viewportStartOffset) / 8
             val item = info.visibleItemsInfo.firstOrNull { it.offset + it.size > probe && it.index >= shift }
                 ?: info.visibleItemsInfo.firstOrNull { it.index >= shift }
             item?.let { days.getOrNull(it.index - shift)?.date }
@@ -177,11 +177,14 @@ fun ScheduleDays(
     }
     val scope = rememberCoroutineScope()
     // Дни всплывают по очереди один раз — когда список только появился (как на сайте).
-    val appearing = remember { mutableStateOf(true) }
+    // Только при первом открытии приложения: при возврате на вкладку список
+    // показывается сразу, иначе переключение вкладок подтормаживало.
+    val appearing = remember { mutableStateOf(!appearedOnce) }
     // Номер первой видимой строки при появлении — один раз: следить за ним при
     // листании значило бы перерисовывать каждую карточку на каждом шаге.
     val firstAtStart = remember { listState.firstVisibleItemIndex }
     LaunchedEffect(Unit) {
+        appearedOnce = true
         kotlinx.coroutines.delay(APPEAR_MILLIS)
         appearing.value = false
     }
@@ -242,6 +245,9 @@ fun ScheduleDays(
 
 /** Сколько длится всплытие дней при появлении списка. */
 private const val APPEAR_MILLIS = 700L
+
+/** Дни уже всплывали в этом запуске приложения. */
+private var appearedOnce = false
 
 /**
  * Всплытие карточки: снизу и из прозрачного, по очереди с шагом 45 мс (motion.css
