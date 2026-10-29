@@ -745,7 +745,7 @@ internal fun Modifier.frosted(
     drawRect(base)
     drawRect(glow)
     if (android.os.Build.VERSION.SDK_INT >= 31) {
-        val radius = 24.dp.toPx()
+        val radius = 10.dp.toPx()
         blur.renderEffect = androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Clamp)
         blur.record {
             val here = origin()
