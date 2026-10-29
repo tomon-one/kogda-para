@@ -309,7 +309,7 @@ private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
                 )
             }
             Text(
-                "Красный свет за расписанием, полупрозрачные карточки, матовая полоска дней.",
+                "Красный свет за расписанием, полупрозрачные карточки, матовые шапка и полоска дней.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

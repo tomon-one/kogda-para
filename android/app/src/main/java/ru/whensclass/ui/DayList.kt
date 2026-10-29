@@ -14,6 +14,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -24,6 +25,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.drawscope.scale
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -90,6 +94,8 @@ fun ScheduleDays(
     groupsByName: Boolean = true,
     /** Полоска дней недели над списком ([WeekStrip]) — у своего расписания. */
     weekStrip: Boolean = false,
+    /** «Стекло»: список заходит под шапку и вкладки, они его размывают. Над списком ничего своего. */
+    underHead: Boolean = false,
 ) {
     val now = rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
@@ -218,8 +224,13 @@ fun ScheduleDays(
     val blurLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val darkGlass = MaterialTheme.colorScheme.isDark
     val screen = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
-    val source = remember(blurLayer, listState, darkGlass, screen) {
-        GlassSource(blurLayer, darkGlass, androidx.compose.ui.geometry.Size(screen.width.toFloat(), screen.height.toFloat())) {
+    val tabsBottom = if (underHead) LocalTabsBottom.current else null
+    // Сколько от верха списка до верха экрана: на столько список вытянут вверх,
+    // под вкладки и шапку. Только растёт — когда ряд вкладок уезжает, верх списка
+    // поднимается, и вытянутый край не должен отставать на кадр.
+    var reach by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val source = remember(blurLayer, listState, darkGlass, screen, tabsBottom) {
+        GlassSource(blurLayer, darkGlass, androidx.compose.ui.geometry.Size(screen.width.toFloat(), screen.height.toFloat()), tabsBottom) {
             listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
         }
     }
@@ -287,7 +298,20 @@ fun ScheduleDays(
     if (glass) {
         Box(modifier = modifier.fillMaxSize()) {
             val density = androidx.compose.ui.platform.LocalDensity.current
-            list(Modifier.fillMaxSize().glassSource(source), with(density) { stripHeight.toDp() })
+            val under = if (tabsBottom == null) {
+                Modifier
+            } else {
+                // Строки стоят там же, где без этого: на сколько список вытянут
+                // вверх, на столько больше отступ над первой строкой.
+                Modifier
+                    .onGloballyPositioned { reach = maxOf(reach, it.positionInRoot().y.roundToInt()) }
+                    .layout { measurable, constraints ->
+                        val height = constraints.maxHeight + reach
+                        val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+                        layout(placeable.width, constraints.maxHeight) { placeable.place(0, -reach) }
+                    }
+            }
+            list(Modifier.fillMaxSize().then(under).glassSource(source), with(density) { (stripHeight + reach).toDp() })
             strip(Modifier.onSizeChanged { stripHeight = it.height })
         }
     } else {
@@ -736,6 +760,8 @@ internal class GlassSource(
     val blur: androidx.compose.ui.graphics.layer.GraphicsLayer,
     val dark: Boolean,
     val screen: androidx.compose.ui.geometry.Size,
+    /** Низ вкладок на экране: от верха экрана до него — тоже стекло; null — только полоска. */
+    val head: androidx.compose.runtime.State<Float>?,
     /** Читается при отрисовке: список перерисовывает стекло на каждом шаге листания. */
     val moved: () -> Any?,
 ) {
@@ -748,29 +774,64 @@ internal class GlassSource(
     var window by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
 }
 
+/** Во сколько раз уменьшена копия, которую размывает стекло. */
+private const val GLASS_SCALE = 0.25f
+
 internal fun Modifier.glassSource(source: GlassSource): Modifier =
     onGloballyPositioned { source.origin = it.positionInRoot() }
         .drawWithContent {
             source.moved()
+            val strip = source.window?.translate(-source.origin)
+            if (strip == null) {
+                drawContent()
+                return@drawWithContent
+            }
+            if ((source.head?.value ?: 0f) > 0f) {
+                // Шапка, вкладки и полоска — прямоугольник во всю ширину от верха
+                // экрана до низа полоски (в щели между ними список иначе виден
+                // чётким). Чёткий список — только ниже, здесь только размытая
+                // копия, а сквозь неё — свет за экраном: закрывать чёткий список
+                // листом на всю шапку стоило рывка на каждом кадре листания.
+                val window = androidx.compose.ui.geometry.Rect(0f, -source.origin.y, size.width, strip.bottom)
+                clipRect(top = window.bottom) { this@drawWithContent.drawContent() }
+                // Под шапкой лежат плашки и подписи: там список смазан сильнее и
+                // проступает слабее, иначе текст поверх него плохо читается.
+                drawBlurred(source, window, 18.dp.toPx(), 0.45f)
+                return@drawWithContent
+            }
             drawContent()
-            val window = source.window?.translate(-source.origin) ?: return@drawWithContent
             val outline = androidx.compose.ui.graphics.Path().apply {
-                addRoundRect(androidx.compose.ui.geometry.RoundRect(window, androidx.compose.ui.geometry.CornerRadius(14.dp.toPx())))
+                addRoundRect(androidx.compose.ui.geometry.RoundRect(strip, androidx.compose.ui.geometry.CornerRadius(14.dp.toPx())))
             }
             clipPath(outline) {
-                drawRect(glassBase(source.dark), window.topLeft, window.size)
-                drawRect(glowTopBrush(source.dark, source.screen, source.origin), window.topLeft, window.size)
-                // До Android 12 размытия нет — только лист со светом.
-                if (android.os.Build.VERSION.SDK_INT >= 31) {
-                    // Радиус каждый раз чуть другой: иначе Android считает размытый слой
-                    // прежним и при листании показывает его старую картинку.
-                    source.flip = !source.flip
-                    val radius = 10.dp.toPx() + if (source.flip) 0.01f else 0f
-                    source.blur.renderEffect = androidx.compose.ui.graphics.BlurEffect(radius, radius, androidx.compose.ui.graphics.TileMode.Clamp)
-                    source.blur.record(size = androidx.compose.ui.unit.IntSize(window.width.toInt().coerceAtLeast(1), window.height.toInt().coerceAtLeast(1))) {
-                        translate(-window.left, -window.top) { this@drawWithContent.drawContent() }
-                    }
-                    translate(window.left, window.top) { drawLayer(source.blur) }
-                }
+                drawRect(glassBase(source.dark), strip.topLeft, strip.size)
+                drawRect(glowTopBrush(source.dark, source.screen, source.origin), strip.topLeft, strip.size)
+                this@drawWithContent.drawBlurred(source, strip, 10.dp.toPx(), 1f)
             }
         }
+
+/** Размытая копия списка в [window]. До Android 12 размытия нет — тогда ничего. */
+private fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.drawBlurred(
+    source: GlassSource,
+    window: androidx.compose.ui.geometry.Rect,
+    radius: Float,
+    alpha: Float,
+) {
+    if (android.os.Build.VERSION.SDK_INT < 31) return
+    // Радиус каждый раз чуть другой: иначе Android считает размытый слой
+    // прежним и при листании показывает его старую картинку.
+    source.flip = !source.flip
+    // Размывается копия вчетверо меньше, потом растягивается.
+    val k = GLASS_SCALE
+    val r = radius * k + if (source.flip) 0.01f else 0f
+    source.blur.alpha = alpha
+    source.blur.renderEffect = androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Clamp)
+    source.blur.record(size = androidx.compose.ui.unit.IntSize((window.width * k).toInt().coerceAtLeast(1), (window.height * k).toInt().coerceAtLeast(1))) {
+        scale(k, androidx.compose.ui.geometry.Offset.Zero) {
+            translate(-window.left, -window.top) { this@drawBlurred.drawContent() }
+        }
+    }
+    translate(window.left, window.top) {
+        scale(1f / k, androidx.compose.ui.geometry.Offset.Zero) { drawLayer(source.blur) }
+    }
+}

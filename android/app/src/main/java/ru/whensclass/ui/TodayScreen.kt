@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Check
@@ -292,6 +293,8 @@ fun TodayScreen(
                 current = tab,
                 teacherMode = teacherMode,
                 live = retakes?.activeOn(today) == true,
+                // Под плашками: у «Стекла» список заходит под них и под шапку.
+                modifier = Modifier.zIndex(-1f),
                 onPick = { picked ->
                     if (picked.ready) {
                         if (picked == Tab.TEACHERS && tab != Tab.TEACHERS) teachersEnterKey++
@@ -391,6 +394,7 @@ fun TodayScreen(
                     header = if (platesInList) plates else null,
                     groupsByName = groupsByName,
                     weekStrip = true,
+                    underHead = true,
                 )
             }
         }

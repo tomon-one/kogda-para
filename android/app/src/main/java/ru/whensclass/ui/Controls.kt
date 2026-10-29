@@ -118,17 +118,19 @@ fun MinimalSwitch(
     )
     val trackOn = MaterialTheme.colorScheme.primary
     val trackOff = MaterialTheme.colorScheme.surfaceVariant
-    val thumbOn = MaterialTheme.colorScheme.onPrimary
+    // Белый в обеих темах: чёрный onPrimary тёмной темы на треке читался дыркой.
+    val thumbOn = Color.White
     val thumbOff = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = modifier
             .size(width = 42.dp, height = 24.dp)
             .drawBehind {
-                drawRoundRect(
-                    color = lerp(trackOff, trackOn, progress),
-                    cornerRadius = CornerRadius(8.dp.toPx()),
-                )
+                // Включённый проступает поверх выключенного, а не смешивается с ним:
+                // у «Стекла» выключенный почти прозрачный, и на полпути трек пустел.
+                val corner = CornerRadius(8.dp.toPx())
+                drawRoundRect(color = trackOff, cornerRadius = corner)
+                drawRoundRect(color = trackOn, cornerRadius = corner, alpha = progress)
             }
             .then(
                 if (onCheckedChange == null) Modifier

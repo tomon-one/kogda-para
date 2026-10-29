@@ -33,7 +33,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -56,6 +59,12 @@ enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String =
 /** Ниже этой высоты (альбомная, половина экрана) шапка и вкладки уезжают при прокрутке. */
 internal const val SHORT_SCREEN_DP = 480
 
+/**
+ * Низ рядов вкладок на экране. «Стекло»: своё расписание уходит под шапку и
+ * вкладки, и по этой границе список размывает себя под ними (DayList.kt).
+ */
+internal val LocalTabsBottom = androidx.compose.runtime.compositionLocalOf<androidx.compose.runtime.State<Float>?> { null }
+
 /** Порядок вкладок в верхнем ряду: преподавателю первым — раздел преподавателей. */
 private fun topTabs(teacherMode: Boolean): List<Tab> =
     if (teacherMode) listOf(Tab.TEACHERS, Tab.STUDENTS) else listOf(Tab.STUDENTS, Tab.TEACHERS)
@@ -72,8 +81,10 @@ internal fun ScheduleTabs(
     teacherMode: Boolean,
     onPick: (Tab) -> Unit,
     live: Boolean = false,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val tabsBottom = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val top = topTabs(teacherMode)
     // В альбомной ряды уезжают всегда: шапка иначе отнимает больше половины высоты.
     val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < SHORT_SCREEN_DP
@@ -120,12 +131,15 @@ internal fun ScheduleTabs(
             top.forEach { TabButton(it, current, onPick) }
         }
     }
-    Column(Modifier.fillMaxSize()) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalTabsBottom provides tabsBottom) {
+    Column(modifier.fillMaxSize()) {
         // В альбомной уезжают оба ряда, вместе с шапкой экрана.
         if (!short) upper()
         // Сдвиг читается только при раскладке: прокрутка не пересобирает экран.
         Box(
             Modifier
+                // Свёрнутый ряд — нулевой высоты, у такого boundsInRoot пустой: считаем сами.
+                .onGloballyPositioned { tabsBottom.floatValue = it.positionInRoot().y + it.size.height }
                 .clipToBounds()
                 .layout { measurable, constraints ->
                     val row = measurable.measure(
@@ -167,10 +181,22 @@ internal fun ScheduleTabs(
         Column(
             // Слой прозрачности — только пока идёт проявление: оставленный на списке,
             // он утяжелял листание и сворачивание ряда вкладок.
-            Modifier.weight(1f).nestedScroll(collapse)
-                .then(if (shown.value < 1f) Modifier.graphicsLayer { alpha = shown.value } else Modifier),
+            // Под рядами: у «Стекла» список заходит под них. Прозрачность — без
+            // отдельного слоя, иначе слой обрезал бы заходящее.
+            Modifier.weight(1f).zIndex(-1f).nestedScroll(collapse)
+                .then(
+                    if (shown.value < 1f) {
+                        Modifier.graphicsLayer {
+                            alpha = shown.value
+                            compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
             content = content,
         )
+    }
     }
 }
 

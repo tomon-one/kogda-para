@@ -135,6 +135,7 @@ fun TeacherScreen(
                 startDay = startDay,
                 startKey = startKey,
                 weekStrip = true,
+                underHead = true,
             )
             TextButton(
                 onClick = { browsing = true },
