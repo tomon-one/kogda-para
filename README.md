@@ -183,7 +183,7 @@ GitHub — группа и настройки туда не уходят, а Git
   `assets/js/ui/`, запуск и переходы — `main.js` и `route.js`, данные — `repo.js`.
 - `docs/` — [формат таблицы](docs/source-format.md),
   [ответы сервера](docs/api.md), [версии](docs/versions.md),
-  [установка](docs/install.md).
+  [установка](docs/install.md), [планы](docs/roadmap-2027.png).
 - `tools/` — вспомогательные скрипты.
 
 Комментарии в коде объясняют, почему он такой; история решений в них не пишется
