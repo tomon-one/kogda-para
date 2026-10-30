@@ -348,8 +348,7 @@ function chosenView(app, kind, id) {
   var box = h('div', { class: 'chosen' },
     h('div', { class: 'chosen-head' },
       h('div', { class: 'chosen-title' },
-        h('h2', { class: 'chosen-name' }, name),
-        ready && other.at ? h('div', { class: 'fetched' }, formatFetchedAt(other.at)) : null),
+        h('h2', { class: 'chosen-name' }, name)),
       h('button', { type: 'button', class: 'text-button', onclick: function () { app.toList(kind); } }, 'К списку')));
   if (!ready || other.loading) {
     box.appendChild(h('div', { class: 'centered' }, h('div', { class: 'spinner' })));
