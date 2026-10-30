@@ -514,6 +514,9 @@ internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
  * своего — без имени, у преподавателя — с группами из `ug` (и `uk`, где пары
  * прежние), у других выбранных групп — с их именами.
  */
+/** Строка карточки «Сегодня» 2 апреля (как на сайте, `ui/days.js`). */
+private const val BIRTHDAY = "🎂 Сегодня у автора день рождения. Он не вправе отменить пары, но очень хотел бы"
+
 internal fun unreadNotes(day: DayDto): List<String> {
     val base = "Сервер не смог прочитать этот день"
     val out = mutableListOf<String>()
@@ -583,7 +586,9 @@ private fun DayCard(
         Column {
             DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday, past, daySummary(day.lessons, groups, bells))
 
-            val notes = unreadNotes(day)
+            val notes = unreadNotes(day) + listOfNotNull(
+                BIRTHDAY.takeIf { isToday && !teacher && date?.monthValue == 4 && date.dayOfMonth == 2 },
+            )
             // Свой день не прочитан — «пар нет» тут было бы неправдой.
             val unknown = day.unread == UnreadDay.MISSING
             notes.forEachIndexed { index, note ->

@@ -3,7 +3,6 @@ package ru.whensclass.data
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -12,9 +11,10 @@ import kotlinx.coroutines.flow.first
 import ru.whensclass.BuildConfig
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.notify.Notifications
-import ru.whensclass.widget.NextLessonWidget
-import ru.whensclass.widget.ScheduleWidget
-import ru.whensclass.widget.WeekWidget
+import ru.whensclass.widget.NextLessonWidgetReceiver
+import ru.whensclass.widget.ScheduleWidgetReceiver
+import ru.whensclass.widget.WeekWidgetReceiver
+import ru.whensclass.widget.widgetIds
 
 /**
  * Что приложение знает о себе — одним куском текста для отчёта об ошибке:
@@ -104,12 +104,11 @@ internal suspend fun collectDiagnostics(
  * обновляется» — а добавлен ли он вообще.
  */
 private suspend fun widgets(context: Context): String = runCatching {
-    val manager = GlanceAppWidgetManager(context)
     val count = listOf(
-        ScheduleWidget::class.java,
-        WeekWidget::class.java,
-        NextLessonWidget::class.java,
-    ).sumOf { manager.getGlanceIds(it).size }
+        ScheduleWidgetReceiver::class.java,
+        WeekWidgetReceiver::class.java,
+        NextLessonWidgetReceiver::class.java,
+    ).sumOf { widgetIds(context, it).size }
     "Виджетов на экране: $count"
 }.getOrDefault("Виджетов на экране: посчитать не вышло")
 

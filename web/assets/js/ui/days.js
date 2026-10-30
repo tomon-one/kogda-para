@@ -34,6 +34,9 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
   return list;
 }
 
+/** Строка карточки «Сегодня» 2 апреля (как в приложении, `DayList.kt`). */
+var BIRTHDAY = '🎂 Сегодня у автора день рождения. Он не вправе отменить пары, но очень хотел бы';
+
 function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   var isToday = day.d === now.date;
   var past = day.d < now.date;
@@ -42,10 +45,12 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   var card = h('section', {
     class: 'day' + (isToday ? ' today' : '') + (past ? ' past' : ''),
     'data-day': day.d,
-  }, h('h3', { class: 'day-title' }, dayTitle(day.d, now.date),
+  }, h('h2', { class: 'day-title' }, dayTitle(day.d, now.date),
     summaryLine(daySummary(lessons, groups, bells))));
 
-  unreadNotes(day).forEach(function (note) {
+  var notes = unreadNotes(day);
+  if (isToday && !teacher && day.d.slice(5) === '04-02') notes = notes.concat(BIRTHDAY);
+  notes.forEach(function (note) {
     card.appendChild(h('p', { class: 'day-note' }, note));
   });
   // Свой день не прочитан, и пар нет — это не «пар нет».

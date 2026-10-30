@@ -28,7 +28,6 @@ function fill(strip, monday) {
       type: 'button',
       class: 'week-day' + (date === strip.__today ? ' today' : ''),
       'data-date': date,
-      'aria-label': name + ', ' + Number(date.slice(8)),
     }, h('span', { class: 'week-name' }, name), h('span', { class: 'week-num' }, String(Number(date.slice(8)))));
     button.addEventListener('click', function () { go(strip, date); });
     strip.appendChild(button);

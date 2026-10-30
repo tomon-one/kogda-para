@@ -1,6 +1,9 @@
 package ru.whensclass.widget
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
+import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
@@ -16,16 +19,33 @@ import java.time.LocalDateTime
  * читает его через [moment].
  */
 suspend fun redrawWidgets(context: Context) {
-    val manager = GlanceAppWidgetManager(context)
     val tick = System.currentTimeMillis()
-    listOf(ScheduleWidget(), WeekWidget(), NextLessonWidget()).forEach { widget ->
-        manager.getGlanceIds(widget.javaClass).forEach { id ->
+    listOf(
+        ScheduleWidget() to ScheduleWidgetReceiver::class.java,
+        WeekWidget() to WeekWidgetReceiver::class.java,
+        NextLessonWidget() to NextLessonWidgetReceiver::class.java,
+    ).forEach { (widget, receiver) ->
+        widgetIds(context, receiver).forEach { id ->
             updateAppWidgetState(context, PreferencesGlanceStateDefinition, id) { prefs ->
                 prefs.toMutablePreferences().apply { this[ScheduleWidget.KEY_TICK] = tick }
             }
             widget.update(context, id)
         }
     }
+}
+
+/**
+ * Виджеты приёмника на экране — по списку системы, а не Glance. Glance узнаёт о
+ * виджете из onUpdate его приёмника и забывает вместе с данными приложения, а
+ * без периодического обновления onUpdate виджету больше не придёт: по списку
+ * Glance такой виджет не перерисовался бы никогда и стоял бы с заглушкой загрузки.
+ */
+internal fun widgetIds(context: Context, receiver: Class<*>): List<GlanceId> {
+    val ids = runCatching {
+        AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, receiver))
+    }.getOrNull() ?: return emptyList()
+    val manager = GlanceAppWidgetManager(context)
+    return ids.map { manager.getGlanceIdBy(it) }
 }
 
 /**

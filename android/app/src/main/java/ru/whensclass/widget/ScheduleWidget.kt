@@ -10,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.updateAppWidgetState
@@ -133,8 +132,7 @@ class ScheduleWidget : GlanceAppWidget() {
     }
 
     suspend fun resetDayOffset(context: Context) {
-        val manager = GlanceAppWidgetManager(context)
-        manager.getGlanceIds(ScheduleWidget::class.java).forEach { id ->
+        widgetIds(context, ScheduleWidgetReceiver::class.java).forEach { id ->
             updateAppWidgetState(context, PreferencesGlanceStateDefinition, id) { prefs ->
                 prefs.toMutablePreferences().apply {
                     this[KEY_DAY_OFFSET] = 0

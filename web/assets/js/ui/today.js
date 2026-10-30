@@ -189,7 +189,7 @@ function secondTabs(app, current, live) {
     type: 'button', class: 'tab' + (roomsOn ? ' on' : ''), 'aria-current': roomsOn ? 'page' : null, 'data-key': 'tab:rooms',
     onclick: function () { if (!roomsOn) app.go('rooms'); },
   }, h('span', { class: 'tab-label' }, 'Аудитории'));
-  return h('nav', { class: 'tabs soon', 'aria-label': 'Разделы' }, [retakes, rooms].concat(['exams'].map(function (key) {
+  return h('nav', { class: 'tabs soon', 'aria-label': 'Другие разделы' }, [retakes, rooms].concat(['exams'].map(function (key) {
     return h('button', {
       type: 'button', class: 'tab muted',
       onclick: function () { snackbar(SOON[key][1]); },

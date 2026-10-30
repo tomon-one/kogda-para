@@ -500,8 +500,26 @@ class ScheduleRepository(
      * прошлого раза, качать расписание незачем. Ошибку наружу не выносим:
      * прежние пары на виджете лучше сообщения об ошибке.
      */
-    suspend fun refresh(force: Boolean = false): RefreshResult =
-        refreshLock.withLock { refreshOnce(force) }
+    suspend fun refresh(force: Boolean = false): RefreshResult {
+        val asked = System.currentTimeMillis()
+        return refreshLock.withLock {
+            // Ждали чужой заход, а он только что не дозвался сервера: второй круг
+            // по тому же таймауту — ещё полминуты ожидания без нового ответа.
+            silentFailure?.takeIf { (at, _) -> at >= asked }?.let { (_, result) -> return@withLock result }
+            refreshOnce(force).also { result ->
+                silentFailure = if (result is RefreshResult.Failed && result.error is java.io.IOException &&
+                    result.error !is HttpFailure
+                ) {
+                    System.currentTimeMillis() to result
+                } else {
+                    null
+                }
+            }
+        }
+    }
+
+    /** Последний заход, не дозвавшийся сервера, и когда он кончился. Под [refreshLock]. */
+    private var silentFailure: Pair<Long, RefreshResult>? = null
 
     private suspend fun refreshOnce(force: Boolean): RefreshResult = withContext(Dispatchers.IO) {
         // Снимок сборок до 0.1.4 лежит склеенным с парами соседки: сравнить
@@ -555,6 +573,10 @@ class ScheduleRepository(
             // Сервер занят — и своё, и другие группы упрутся в тот же лимит:
             // не тратить его на заведомо отказанные запросы.
             if (busy) return@withContext RefreshResult.Failed(metaAnswer.exceptionOrNull()!!)
+            // Сервер не ответил вовсе (таймаут, обрыв), а не ответил ошибкой:
+            // расписание упрётся в тот же таймаут — ещё полминуты крутилки ради
+            // той же неудачи.
+            metaAnswer.exceptionOrNull()?.takeIf { it is java.io.IOException && it !is HttpFailure }?.let { throw it }
             if (!force && !outdated && meta != null) {
                 if (meta.generatedAt == store.generatedAt.first()) {
                     // Данные те же, но проверку показать надо: иначе кажется,

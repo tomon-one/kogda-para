@@ -22,9 +22,10 @@
 
   .switch { transition: background 0.15s; }
 
-  /* Полоска дней: выделение перетекает с дня на день. */
+  /* Полоска дней: выделение перетекает с дня на день. Цвет подписи меняется
+     сразу, как в приложении: под плашкой это не видно, а переход цвета считался
+     на основном потоке и вдвое резал частоту кадров при листании на телефоне. */
   .week-pill { transition: transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s; }
-  .week-day, .week-day .week-name { transition: color 0.3s ease-out; }
   .switch::after { transition: transform 0.15s; }
 
   .screen.enter-forward > :not(.bottom-bar) {

@@ -3,7 +3,6 @@ package ru.whensclass.widget
 import android.content.Context
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
@@ -112,12 +111,11 @@ class RefreshAction : ActionCallback {
         }
         // Кнопка есть на обоих виджетах, а перерисовать нужно тот, на котором
         // нажали: чужая разметка сюда не встанет.
-        val manager = GlanceAppWidgetManager(context)
         when (glanceId) {
-            in manager.getGlanceIds(ScheduleWidget::class.java) ->
+            in widgetIds(context, ScheduleWidgetReceiver::class.java) ->
                 ScheduleWidget().update(context, glanceId)
 
-            in manager.getGlanceIds(WeekWidget::class.java) ->
+            in widgetIds(context, WeekWidgetReceiver::class.java) ->
                 WeekWidget().update(context, glanceId)
 
             else -> NextLessonWidget().update(context, glanceId)
