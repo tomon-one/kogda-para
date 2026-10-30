@@ -84,7 +84,7 @@
 /* Только размытие, без тона: с тоном шапка выделялась на свете полосой, а
    так её не видно, пока под ней ничего не проезжает. Шапки — во всю ширину
    окна (поля слева и справа уходят в отступ): шириной с колонку у размытия
-   были видны края. Подложкой ::before не вышло — экран въезжает анимацией
+   были видны края. Подложка ::before — только у шапки с рядом разделов (ниже): экран въезжает анимацией
    прозрачности, и подложка внутри видела только саму шапку. */
 :root[data-glass] .head,
 :root[data-glass] .screen.picker .topbar,
@@ -113,15 +113,42 @@
 
 :root[data-glass] .bottom-bar { border-top-color: transparent; }
 
-/* Ряд разделов — продолжение шапки: то же размытие, во всю ширину окна. Зазор до
-   полоски — его частью, иначе в нём проезжал бы чёткий текст. */
-:root[data-glass] .tabs.float {
-  margin: 0 calc(50% - 50vw);
-  padding: 0 calc(50vw - 37.5%) 12px;
-  background: transparent;
+/* Ряд разделов — продолжение шапки, во всю ширину окна. Размытие у них одно на
+   двоих: два слоя рядом давали видимый шов. Его рисует подложка шапки, растянутая
+   на высоту ряда; ряд лежит поверх неё. Шапка не въезжает прозрачностью: внутри
+   такой анимации подложка видела бы только саму шапку. */
+:root[data-glass] .screen > .head { animation: none; }
+
+:root[data-glass] .head:has(~ .tabs.float) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root[data-glass] .head:has(~ .tabs.float)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(100% + var(--row-shift, 0px));
+  z-index: -1;
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
 }
+
+:root[data-glass] .row-moving > .head::before { transition: height 0.2s ease; }
+
+/* Зазор до полоски — частью ряда, иначе в нём проезжал бы чёткий текст. */
+:root[data-glass] .tabs.float {
+  z-index: 11;
+  margin: 0 calc(50% - 50vw);
+  padding: 0 calc(50vw - 37.5%) 12px;
+  background: transparent;
+}
+
+:root[data-glass] .row-hidden > .tabs.float { opacity: 0; }
+:root[data-glass] .row-moving > .tabs.float { transition: top 0.2s ease, opacity 0.2s ease, visibility 0s; }
+:root[data-glass] .row-moving.row-hidden > .tabs.float { transition: top 0.2s ease, opacity 0.2s ease, visibility 0s 0.2s; }
 
 @media (max-width: 380px) {
   :root[data-glass] .tabs.float { padding-left: 0; padding-right: 0; }
