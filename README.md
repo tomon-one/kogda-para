@@ -28,16 +28,16 @@
 ## Как выглядит
 
 <p>
-  <img src="docs/screenshots/widget-week.png" alt="Виджет «Неделя»" width="300" align="top">
-  <img src="docs/screenshots/widget-day.png" alt="Виджет «День»" width="300" align="top">
-  <img src="docs/screenshots/widget-next.png" alt="Виджет «Ближайшая пара»" width="150" align="top">
+  <img src="docs/screenshots/widget-week.webp" alt="Виджет «Неделя»" width="300" align="top">
+  <img src="docs/screenshots/widget-day.webp" alt="Виджет «День»" width="300" align="top">
+  <img src="docs/screenshots/widget-next.webp" alt="Виджет «Ближайшая пара»" width="150" align="top">
 </p>
 
 <p>
-  <img src="docs/screenshots/today-dark.png" alt="Расписание, тёмная тема" width="250">
-  <img src="docs/screenshots/today-light.png" alt="Расписание, светлая тема" width="250">
-  <img src="docs/screenshots/today-glass.png" alt="Расписание, тема «Стекло»" width="250">
-  <img src="docs/screenshots/settings.png" alt="Настройки" width="250">
+  <img src="docs/screenshots/today-dark.webp" alt="Расписание, тёмная тема" width="250">
+  <img src="docs/screenshots/today-light.webp" alt="Расписание, светлая тема" width="250">
+  <img src="docs/screenshots/today-glass.webp" alt="Расписание, тема «Стекло»" width="250">
+  <img src="docs/screenshots/settings.webp" alt="Настройки" width="250">
 </p>
 
 ## Что умеет
@@ -81,7 +81,7 @@
 Расписание коллег — во вкладке «Преподавателям», нужных можно закрепить
 звёздочкой. На сайте выбор тот же.
 
-<img src="docs/screenshots/teacher.png" alt="Расписание преподавателя" width="250">
+<img src="docs/screenshots/teacher.webp" alt="Расписание преподавателя" width="250">
 
 ## Сайт
 
@@ -97,7 +97,7 @@
 свои настройки — группу в нём нужно выбрать ещё раз. На Android — меню браузера
 → «Добавить на главный экран».
 
-<img src="docs/screenshots/web-iphone.png" alt="Сайт, вид на телефоне" width="250">
+<img src="docs/screenshots/web-iphone.webp" alt="Сайт, вид на телефоне" width="250">
 
 ## Установка
 
@@ -117,13 +117,13 @@
 **Первое окно:** Google проверил файл и ничего опасного не нашёл. Нажмите
 «Install» («Установить»).
 
-<img src="docs/screenshots/play-protect-safe.png" alt="Play Защита: приложение выглядит безопасным" width="240">
+<img src="docs/screenshots/play-protect-safe.webp" alt="Play Защита: приложение выглядит безопасным" width="240">
 
 **Второе окно:** Google не знает разработчика. Нажмите мелкую надпись
 «Install anyway» («Всё равно установить»), большая кнопка «Got it» отменяет
 установку.
 
-<img src="docs/screenshots/play-protect-blocked.png" alt="Play Защита: приложение заблокировано" width="240">
+<img src="docs/screenshots/play-protect-blocked.webp" alt="Play Защита: приложение заблокировано" width="240">
 
 **Третье окно:** «App scan recommended» — Google этот файл ещё не видел.
 «Scan app» отправит его на проверку, или «More details» → «Install without
@@ -183,7 +183,7 @@ GitHub — группа и настройки туда не уходят, а Git
   `assets/js/ui/`, запуск и переходы — `main.js` и `route.js`, данные — `repo.js`.
 - `docs/` — [формат таблицы](docs/source-format.md),
   [ответы сервера](docs/api.md), [версии](docs/versions.md),
-  [установка](docs/install.md), [планы](docs/roadmap-2027.png).
+  [установка](docs/install.md), [планы](docs/roadmap-2028.webp).
 - `tools/` — вспомогательные скрипты.
 
 Комментарии в коде объясняют, почему он такой; история решений в них не пишется

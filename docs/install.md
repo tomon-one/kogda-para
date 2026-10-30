@@ -21,14 +21,14 @@
    **Первое:** Google проверил файл и ничего опасного не нашёл. Нажмите
    «Install» («Установить»).
 
-   <img src="screenshots/play-protect-safe.png" alt="Play Защита: приложение выглядит безопасным" width="240">
+   <img src="screenshots/play-protect-safe.webp" alt="Play Защита: приложение выглядит безопасным" width="240">
 
    **Второе:** Google не знает разработчика. Это не найденный вирус, а
    отсутствие подписи из магазина. Нажмите мелкую надпись «Install anyway»
    («Всё равно установить»), иногда она спрятана под «Подробнее». Большая
    кнопка «Got it» отменяет установку.
 
-   <img src="screenshots/play-protect-blocked.png" alt="Play Защита: приложение заблокировано" width="240">
+   <img src="screenshots/play-protect-blocked.webp" alt="Play Защита: приложение заблокировано" width="240">
 
    **Третье:** «App scan recommended» («Рекомендуется проверить приложение») —
    Google этот файл ещё не видел. «Scan app» («Проверить») отправит его Google
