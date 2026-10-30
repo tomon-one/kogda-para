@@ -131,13 +131,14 @@ function lessonRow(lesson, bells, isNow, key, groups, byName, saidAbove) {
     // Чья пара — первой строкой: сначала видно, что она не своя.
     foreign && !saidAbove ? h('div', { class: 'sub only-at' }, onlyAt(lesson.slots, groups)) : null,
     h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, lesson.s),
-    h('div', { class: 'lesson-meta' }, place, kind ? h('span', { class: 'kind' }, kind) : null),
+    h('div', { class: 'lesson-meta' }, place),
     lesson.u ? onlineLink(lesson.u, key) : null,
     // Подпись группы — вместо преподавателя: у преподавателя важно, кому
     // читается пара. Чья пара у выбранных групп — видно по значкам.
-    lesson.gr != null
-      ? h('div', { class: 'sub' }, lesson.gr)
-      : (lesson.t || []).map(function (t) { return h('div', { class: 'sub' }, shortenName(t)); }),
+    // Тип занятия — через точку после последней подписи: рядом с длинным местом
+    // он висел бы посреди его строк.
+    whoLines(lesson.gr != null ? [lesson.gr] : (lesson.t || []).map(shortenName), kind)
+      .map(function (line) { return h('div', { class: 'sub' }, line); }),
     note(lesson));
   return h('div', { class: 'lesson' + (isNow ? ' now' : '') + (foreign ? ' foreign' : '') },
     h('div', { class: 'lesson-time' + (groups.length ? ' with-marks' : '') },
@@ -146,6 +147,13 @@ function lessonRow(lesson, bells, isNow, key, groups, byName, saidAbove) {
       isNow ? nowLabel() : null,
       groups.length ? groupMarks(lesson.slots || [], groups, byName) : null),
     body);
+}
+
+/** Подписи под парой; [kind] — тип занятия через точку после последней. */
+function whoLines(who, kind) {
+  if (!kind) return who;
+  if (!who.length) return [kind];
+  return who.slice(0, -1).concat(who[who.length - 1] + ' · ' + kind);
 }
 
 /**
@@ -176,7 +184,7 @@ export function groupMark(label, own, name) {
 var PULSE_MS = 2400;
 
 function nowLabel() {
-  var el = h('div', { class: 'now-label' }, 'идёт сейчас');
+  var el = h('div', { class: 'now-label' }, 'идёт');
   var now = window.performance && performance.now ? performance.now() : Date.now();
   el.style.setProperty('--pulse-shift', -(now % PULSE_MS) + 'ms');
   return el;

@@ -190,23 +190,18 @@
 
 .place {
   min-width: 0;
-  margin-right: 8px;
-  padding: 0 8px;
-  border-radius: 10px;
-  background: var(--mark-bg);
   font-size: 13px;
   font-weight: 600;
-  line-height: 22px;
+  line-height: 18px;
   color: var(--primary);
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
 /* Место у пары не своей группы — серым, как в приложении. */
 .place.muted, .past .place, .foreign .place { color: var(--muted); }
-.kind { font-size: 13px; color: var(--muted); flex: none; }
 .sub { font-size: 13px; color: var(--muted); }
 .only-at { margin-bottom: 2px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

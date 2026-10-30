@@ -36,6 +36,7 @@
 <p>
   <img src="docs/screenshots/today-dark.png" alt="Расписание, тёмная тема" width="250">
   <img src="docs/screenshots/today-light.png" alt="Расписание, светлая тема" width="250">
+  <img src="docs/screenshots/today-glass.png" alt="Расписание, тема «Стекло»" width="250">
   <img src="docs/screenshots/settings.png" alt="Настройки" width="250">
 </p>
 

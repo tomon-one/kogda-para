@@ -129,8 +129,6 @@ internal fun LessonRow(
             // Тип занятия и аудитория — то, ради чего сюда заглядывают: сразу
             // под названием и заметно.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Аудитория ужимается, тип занятия — нет: иначе длинное
-                // название места съедает строку целиком.
                 val shrink = Modifier.weight(1f, fill = false)
                 if (lesson.isOnline) {
                     Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, muted = past || foreign, modifier = shrink)
@@ -140,34 +138,23 @@ internal fun LessonRow(
                     val room = roomLabel(lesson.room)
                     Place(room ?: "Не указано", muted = room == null || past || foreign, modifier = shrink)
                 }
-                kindName(lesson.kind)?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
 
             lesson.url?.let { OnlineLink(it, muted = past) }
 
             // Подпись группы — вместо преподавателя: в своём расписании
             // преподавателю важно, кому читается пара.
-            val group = lesson.groups
-            if (group != null) {
+            val who = lesson.groups?.let(::listOf) ?: lesson.teachers.map(::shortenName)
+            // Тип занятия — через точку после последней подписи: рядом с длинным
+            // местом он висел бы посреди его строк.
+            val kind = kindName(lesson.kind)
+            (if (kind == null) who else if (who.isEmpty()) listOf(kind)
+            else who.dropLast(1) + "${who.last()} · $kind").forEach {
                 Text(
-                    group,
+                    it,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } else {
-                lesson.teachers.forEach {
-                    Text(
-                        shortenName(it),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
 
             if (lesson.isCancelled) {
@@ -218,7 +205,7 @@ internal fun LessonRow(
                         NowDot()
                         Spacer(Modifier.width(5.dp))
                         Text(
-                            "идёт сейчас",
+                            "идёт",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -266,7 +253,7 @@ internal fun LessonRow(
                         NowDot()
                         Spacer(Modifier.width(5.dp))
                         Text(
-                            "идёт сейчас",
+                            "идёт",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -292,19 +279,12 @@ private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Mod
         color = if (muted) MaterialTheme.colorScheme.onSurfaceVariant
         else MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,
-        // Две строки: аудитория бывает и текстом — «Спортзал Б.Хмельницкого
+        // Три строки: аудитория бывает и текстом — «Спортзал Б.Хмельницкого
         // 2», «выездная, с 15.00». Многоточие — чтобы обрыв не читался
         // самостоятельным названием.
-        maxLines = 2,
+        maxLines = 3,
         overflow = TextOverflow.Ellipsis,
-        modifier = modifier
-            .padding(end = 8.dp)
-            .background(
-                if (muted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
-                else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                RoundedCornerShape(10.dp),
-            )
-            .padding(horizontal = 8.dp, vertical = 1.dp),
+        modifier = modifier,
     )
 }
 
