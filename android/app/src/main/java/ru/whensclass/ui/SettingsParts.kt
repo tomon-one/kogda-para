@@ -177,9 +177,15 @@ internal fun BackgroundWork(phone: ru.whensclass.notify.PhoneState, exactAlarms:
             Hint(
                 "${vendor.title()} не будит приложения в фоне: виджет не обновится, а " +
                     "напоминание не придёт, пока приложение не открыть. Нажмите пункты по очереди.",
+                modifier = Modifier.padding(bottom = 6.dp),
             )
             steps.forEach { step ->
-                ExternalRow(step.label, checked = if (step.battery) phone.unrestricted else null) {
+                // Имя — как у этого приложения: у tested-сборки оно своё.
+                ExternalRow(
+                    step.label,
+                    checked = if (step.battery) phone.unrestricted else null,
+                    hint = step.hint.replace("«Когда пара?»", "«${context.getString(ru.whensclass.R.string.app_name)}»"),
+                ) {
                     if (!Background.open(context, step)) {
                         Toast.makeText(
                             context,
@@ -188,13 +194,12 @@ internal fun BackgroundWork(phone: ru.whensclass.notify.PhoneState, exactAlarms:
                         ).show()
                     }
                 }
-                // Имя — как у этого приложения: у tested-сборки оно своё.
-                Hint(step.hint.replace("«Когда пара?»", "«${context.getString(ru.whensclass.R.string.app_name)}»"))
             }
             if (vendor.pinInRecents) {
                 Hint(
                     "Ещё закрепите приложение в недавних (замок на карточке): иначе очистка " +
                         "памяти выгружает его вместе с остальными.",
+                    modifier = Modifier.padding(vertical = 6.dp),
                 )
             }
         }
@@ -217,17 +222,20 @@ internal fun BackgroundWork(phone: ru.whensclass.notify.PhoneState, exactAlarms:
  * нажатие откроет чужой экран. [checked] — что там сейчас, если это видно.
  */
 @Composable
-private fun ExternalRow(label: String, checked: Boolean? = null, onClick: () -> Unit) {
+private fun ExternalRow(label: String, checked: Boolean? = null, hint: String? = null, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp)
             .heightIn(min = 48.dp)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            hint?.let { Hint(it, modifier = Modifier.padding(top = 2.dp)) }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (checked != null) MinimalCheck(selected = checked, modifier = Modifier.padding(end = 10.dp))
             ExternalMark(color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -311,18 +319,18 @@ private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
         }
         Unit
     }
-    ExternalRow("Точное время", checked = allowed, onClick = open)
     val what = if (reminders) "напоминание и выделение на виджетах" else "выделение на виджетах"
-    Text(
-        if (allowed) {
+    ExternalRow(
+        "Точное время",
+        checked = allowed,
+        hint = if (allowed) {
             if (reminders) "Напоминание придёт правильно, выделение на виджетах сменится со звонком."
             else "Выделение идущей пары на виджетах сменится со звонком."
         } else {
             "Без него система может сдвинуть $what. Нажмите — разрешение " +
                 "выдаётся в настройках телефона."
         },
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        onClick = open,
     )
 }
 

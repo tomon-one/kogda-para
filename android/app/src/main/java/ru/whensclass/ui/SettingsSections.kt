@@ -140,52 +140,56 @@ internal fun NotificationsSection(
 ) {
     Section("Уведомления") {
         NotificationsDenied(notifications)
-        SwitchRow("Напоминать о паре", notifyEnabled, onNotifyEnabled)
+        // Напоминаем не о каждой паре — сказать заранее, чтобы это не приняли за поломку.
+        SwitchRow(
+            "Напоминать о паре", notifyEnabled, onNotifyEnabled,
+            hint = "Напоминание о первой паре дня или между парами.".takeIf { notifyEnabled },
+        )
         if (notifyEnabled && notifications && phone.lessonChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_LESSON)
         }
         if (notifyEnabled) {
-            // Напоминаем не о каждой паре — сказать заранее, чтобы это не
-            // приняли за поломку.
-            Text(
-                "Напоминание о первой паре дня или между парами.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 10.dp),
-            )
             // Строка с кнопкой, выбор — в своём окне: фишки в карточке
             // занимали бы полэкрана.
             MinutesRow(current = notifyBefore, onOpen = onAskMinutes)
         }
 
         // У каждого вида уведомлений — свой выключатель и свой канал.
-        SwitchRow("Сообщать об изменениях", notifyChanges, onNotifyChanges)
+        SwitchRow(
+            "Сообщать об изменениях", notifyChanges, onNotifyChanges,
+            hint = "Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.",
+        )
         if (notifyChanges && notifications && phone.changesChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES)
         }
-        Hint("Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.")
 
-        SwitchRow("Сообщать о сбоях сервера", notifyServer, onNotifyServer)
+        SwitchRow(
+            "Сообщать о сбоях сервера", notifyServer, onNotifyServer,
+            hint = "Если расписание не обновляется дольше двух часов.",
+        )
         if (notifyServer && notifications && phone.serverChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SERVER)
         }
-        Hint("Если расписание не обновляется дольше двух часов.")
 
         // Только студенту с другими выбранными группами: остальным его не бывает.
         if (!teacherMode && extraGroups.isNotEmpty()) {
-            SwitchRow("Сообщать о пропаже других групп", notifyGroupsGone, onNotifyGroupsGone)
+            SwitchRow(
+                "Сообщать о пропаже других групп", notifyGroupsGone, onNotifyGroupsGone,
+                hint = "Если одной из выбранных групп не стало в таблице.",
+            )
             if (notifyGroupsGone && notifications && phone.subgroupChannelOff) {
                 ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SUBGROUP)
             }
-            Hint("Если одной из выбранных групп не стало в таблице.")
         }
 
-        SwitchRow("Сообщать о новых версиях", notifyUpdates, onNotifyUpdates)
+        // Магазина нет, обновление никто не принесёт.
+        SwitchRow(
+            "Сообщать о новых версиях", notifyUpdates, onNotifyUpdates,
+            hint = "Приложение проверяет это раз в час вместе с расписанием.",
+        )
         if (notifyUpdates && notifications && phone.updateChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_UPDATE)
         }
-        // Магазина нет, обновление никто не принесёт.
-        Hint("Приложение проверяет это раз в час вместе с расписанием.")
     }
 }
 
@@ -337,6 +341,7 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
 
         // Ссылки — в том же порядке, что в «О сайте».
         Link("Сайт", "https://kogda-para-nsk.ru")
+        Link("Новости в Telegram", CHANNEL_URL)
         Link("Нашли ошибку? Напишите автору в Telegram", "https://t.me/toomonn")
         ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth(), asLink = true)
         Link("Исходный код", "https://github.com/tomon-one/kogda-para")

@@ -231,6 +231,7 @@ export function settingsScreen(app) {
       // куда ведёт «Сменить».
       section('О сайте', [
         h('p', null, 'Неофициальный сайт для студентов и преподавателей НГОК.'),
+        h('p', null, externalLink('Новости в Telegram', 'https://t.me/kogda_para_news')),
         h('p', null, externalLink('Нашли ошибку? Напишите автору в Telegram', 'https://t.me/toomonn')),
         h('p', null, h('button', { type: 'button', class: 'text-link', 'data-key': 'report', onclick: app.showReport }, 'Сведения для отчёта')),
         h('p', null, externalLink('Исходный код', 'https://github.com/tomon-one/kogda-para')),
