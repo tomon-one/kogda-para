@@ -89,7 +89,6 @@
 :root[data-glass] .head,
 :root[data-glass] .screen.picker .topbar,
 :root[data-glass] .screen.settings .topbar,
-:root[data-glass] .chosen-head,
 :root[data-glass] .bottom-bar {
   background: transparent;
   -webkit-backdrop-filter: blur(20px);
@@ -98,8 +97,7 @@
 
 :root[data-glass] .head,
 :root[data-glass] .screen.picker .topbar,
-:root[data-glass] .screen.settings .topbar,
-:root[data-glass] .chosen-head {
+:root[data-glass] .screen.settings .topbar {
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
 }
@@ -113,17 +111,20 @@
   padding-right: calc(50vw - 50% + 4px);
 }
 
-:root[data-glass] .chosen-head {
-  padding-left: calc(50vw - 50% + 4px);
-  padding-right: calc(50vw - 50%);
-}
-
 :root[data-glass] .bottom-bar { border-top-color: transparent; }
 
+/* Ряд разделов — продолжение шапки: то же размытие, во всю ширину окна. Зазор до
+   полоски — его частью, иначе в нём проезжал бы чёткий текст. */
 :root[data-glass] .tabs.float {
-  background: var(--glass-bar);
+  margin: 0 calc(50% - 50vw);
+  padding: 0 calc(50vw - 37.5%) 12px;
+  background: transparent;
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
+}
+
+@media (max-width: 380px) {
+  :root[data-glass] .tabs.float { padding-left: 0; padding-right: 0; }
 }
 
 /* Полоска висит над списком, как в приложении: без кольца цвета фона вокруг
@@ -150,7 +151,7 @@
   :root[data-glass] .head,
   :root[data-glass] .screen.picker .topbar,
   :root[data-glass] .screen.settings .topbar,
-  :root[data-glass] .chosen-head,
+  :root[data-glass] .tabs.float,
   :root[data-glass] .bottom-bar { background: var(--glass-bar); }
   :root[data-glass] .week-strip { background: var(--glass-base); }
 }

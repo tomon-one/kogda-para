@@ -131,7 +131,6 @@ function renderScreen(navigated) {
   }
   clear(root);
   root.appendChild(screen);
-  // Имя открытого преподавателя или группы прилипает под шапкой (screens.css, .chosen-head).
   measureHead();
   syncRow(navigated);
   fitLabels(screen);
@@ -208,13 +207,12 @@ export function redrawRefresh() {
   if (focused) fresh.focus();
 }
 
-/** Сколько сверху закрыто: шапка и прилипшее имя открытого преподавателя или группы. */
+/** Сколько сверху закрыто: шапка с именем открытого преподавателя или группы и полоска. */
 function headHeight() {
   var head = root.querySelector('.head') || root.querySelector('.topbar');
-  var chosen = root.querySelector('.chosen-head');
   // Полоска дней прилипает под шапкой — вместе с полями.
   var strip = root.querySelector('.week-strip');
-  return stuck(head) + rowShift() + (chosen ? chosen.getBoundingClientRect().height : 0) + (strip ? strip.offsetHeight + 14 : 0);
+  return stuck(head) + rowShift() + (strip ? strip.offsetHeight + 14 : 0);
 }
 
 /** Под шапкой прилипает полоска дней: высота шапки меняется и при смене ширины окна. */

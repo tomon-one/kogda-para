@@ -28,7 +28,7 @@ function applyRow() {
 
 /** Экран перестроен. Прокрутка к дню — не листание: ждать, пока человек поведёт страницу сам. */
 export function syncRow(navigated) {
-  if (navigated) rowHidden = false;
+  if (navigated || document.querySelector('.tabs.stays')) rowHidden = false;
   rowArmed = false;
   applyRow();
 }
@@ -43,7 +43,7 @@ window.addEventListener('wheel', armRow, { passive: true });
 window.addEventListener('pointerdown', armRow, { passive: true });
 window.addEventListener('keydown', armRow);
 window.addEventListener('scroll', function () {
-  if (!rowArmed) return;
+  if (!rowArmed || document.querySelector('.tabs.stays')) return;
   var y = window.pageYOffset;
   if (Math.abs(y - rowY) < 6) return;
   var hide = y > rowY && y > 0;

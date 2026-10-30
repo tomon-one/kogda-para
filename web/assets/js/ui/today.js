@@ -47,9 +47,12 @@ export function mainScreen(app) {
     live ? secondTabs(app, tab, true) : null);
   var content = h('main', { class: 'content' });
   // Страница открывается у сегодняшнего дня: над полоской ряд был бы выше экрана,
-  // поэтому он прилипает и уходит при листании вниз, как в приложении.
+  // поэтому он прилипает и уходит при листании вниз, как в приложении. На своих
+  // разделах ряд стоит: уходить некуда, он и есть переключатель.
   var row = live ? null : secondTabs(app, tab, false);
-  if (row && strip) row.classList.add('float');
+  var rowStays = tab === 'retakes' || tab === 'rooms';
+  if (row && (strip || rowStays)) row.classList.add('float');
+  if (row && rowStays) row.classList.add('stays');
   // Полоска — под вторым рядом вкладок, как в приложении, и прилипает под шапкой.
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
     head, row, strip, content);
@@ -62,7 +65,11 @@ export function mainScreen(app) {
     if (top) content.appendChild(top);
   }
   if (route.kind && route.id) {
-    content.appendChild(chosenView(app, route.kind, route.id));
+    // Имя — часть шапки: прилипает с ней и размывается с ней одним слоем.
+    var box = chosenView(app, route.kind, route.id);
+    head.appendChild(box.querySelector('.chosen-head'));
+    if (box.querySelector('[data-day]')) screen.insertBefore(weekStrip(app.now().date, app.now().date), content);
+    content.appendChild(box);
   } else if (route.kind === 'teachers') {
     if (teacherMode) {
       content.appendChild(h('div', { class: 'back-row' },
