@@ -164,13 +164,16 @@ export function forgetSchedule() {
   dropSchedule();
 }
 
-/** Сохранённое расписание, приведённое к форме; испорченное — забыть. */
-/** День, с которого открыть список: сегодня, а после последнего звонка — завтра. */
-export function openingDate() {
+/**
+ * День, с которого открыть список: сегодня, а после последнего звонка — завтра.
+ * Звонки — того расписания, что открывается (`schedule`), иначе своего.
+ */
+export function openingDate(schedule) {
   var now = collegeNow();
-  return openingDay(bellsOn(saved(), now.date), now);
+  return openingDay(bellsOn(schedule || saved(), now.date), now);
 }
 
+/** Сохранённое расписание, приведённое к форме; испорченное — забыть. */
 export function saved() {
   var body = store.get('schedule');
   if (!body) return null;

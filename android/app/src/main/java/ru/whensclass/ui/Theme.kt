@@ -107,10 +107,14 @@ internal val GlassDarkScheme = DarkScheme.copy(
 )
 
 /** «Стекло» в светлой теме: молочные карточки на сером листе с розовым светом сверху. */
+// Подписи и красное темнее обычной светлой: под светом сверху мелкий серый
+// текст и «Пересдачи» на красном держат контраст 4,5:1.
 internal val GlassLightScheme = LightScheme.copy(
     background = Color.Transparent,
     surface = Color.White.copy(alpha = 0.5f),
     surfaceVariant = Color.Black.copy(alpha = 0.05f),
+    onSurfaceVariant = Color(0xFF4D5155),
+    primary = Color(0xFFA00302),
 )
 
 /** Тёмная ли схема. По фону не понять: у «Стекла» он прозрачный. */
@@ -132,7 +136,7 @@ internal fun glowTopBrush(
 ): androidx.compose.ui.graphics.Brush =
     androidx.compose.ui.graphics.Brush.radialGradient(
         if (dark) listOf(BRAND.copy(alpha = 0.42f), BRAND.copy(alpha = 0.12f), Color.Transparent)
-        else listOf(BRAND.copy(alpha = 0.32f), BRAND.copy(alpha = 0.10f), Color.Transparent),
+        else listOf(BRAND.copy(alpha = 0.24f), BRAND.copy(alpha = 0.08f), Color.Transparent),
         center = androidx.compose.ui.geometry.Offset(screen.width * 0.55f - origin.x, -screen.height * 0.04f - origin.y),
         radius = maxOf(screen.width * 1.05f, 1f),
     )

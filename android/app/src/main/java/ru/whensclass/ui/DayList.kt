@@ -199,6 +199,10 @@ fun ScheduleDays(
             }
         }
     }
+    // Список повели к дню не пальцем (полночь, день из виджета) — выделение за ним.
+    LaunchedEffect(wanted) {
+        if (wanted != null) picked = null
+    }
     LaunchedEffect(listState) {
         // Сам повёл список от низа — нажатый день больше не держит.
         androidx.compose.runtime.snapshotFlow { listState.canScrollForward }.collect { away ->
@@ -382,7 +386,7 @@ private fun WeekStrip(
     val dark = MaterialTheme.colorScheme.isDark
     // У «Стекла» полоска висит над списком: размыто только под ней самой,
     // вокруг список виден как есть — без отдельной полосы во всю ширину.
-    Box(modifier = modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = STRIP_TOP, bottom = 8.dp)) {
+    Box(modifier = modifier.fillMaxWidth().holdTouches().padding(start = 12.dp, end = 12.dp, top = STRIP_TOP, bottom = 8.dp)) {
     if (glass != null) {
         Box(
             Modifier
@@ -603,6 +607,7 @@ private fun DayCard(
             } else {
                 // Своих пар нет, а у выбранных групп есть: это уже сказала сводка под
                 // датой («Пары только у …»), у самих пар подпись не повторяем.
+                // Отменённые сводка не считает — у них подпись остаётся.
                 val allForeign = groups.isNotEmpty() && day.lessons.none { 0 in it.slots }
                 day.lessons.forEach { lesson ->
                     // Отменённая пара в своё время — не «идёт сейчас». Пара
@@ -614,7 +619,7 @@ private fun DayCard(
                         past = past,
                         groups = groups,
                         groupsByName = groupsByName,
-                        saidAbove = allForeign,
+                        saidAbove = allForeign && !lesson.isCancelled,
                     )
                 }
                 // День, в котором отменили все свои пары.

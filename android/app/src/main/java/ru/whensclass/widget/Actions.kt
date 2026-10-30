@@ -29,14 +29,21 @@ class ShiftDayAction : ActionCallback {
         val schedule = ScheduleWidget.parse(
             runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()?.scheduleJson
         )
-        val today = collegeToday()
-        val low = firstOffset(schedule, today)
-        val high = maxOf(low, lastOffset(schedule, today))
+        val now = collegeNow()
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
+            // От того же дня, что и стрелки: вечером день открытия — завтра.
+            val base = dayBase(
+                prefs[ScheduleWidget.KEY_DAY_BASE]?.let { java.time.LocalDate.ofEpochDay(it) }, schedule, now,
+            )
+            val low = firstOffset(schedule, base)
+            val high = maxOf(low, lastOffset(schedule, base))
             val current = prefs[ScheduleWidget.KEY_DAY_OFFSET] ?: 0
             // Назад — в прожитые дни недели: они уже лежат на телефоне.
             val next = (current + step).coerceIn(low, high)
-            prefs.toMutablePreferences().apply { this[ScheduleWidget.KEY_DAY_OFFSET] = next }
+            prefs.toMutablePreferences().apply {
+                this[ScheduleWidget.KEY_DAY_OFFSET] = next
+                this[ScheduleWidget.KEY_DAY_BASE] = base.toEpochDay()
+            }
         }
         ScheduleWidget().update(context, glanceId)
     }

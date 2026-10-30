@@ -3,6 +3,8 @@
 
 export var root = document.getElementById('app');
 
+export var OPENING = 'opening';
+
 export var state = {
   refreshing: false,
   flash: false,
@@ -23,7 +25,10 @@ export var state = {
   opened: {},
   // Преподаватель открыт из «Пересдач» (id) — не память вкладки «Преподавателям».
   viaRetakes: null,
-  /** День, к которому надо прокрутить, когда он появится; null — человек листает сам. */
+  /**
+   * День, к которому надо прокрутить, когда он появится; null — человек листает сам.
+   * OPENING — день открытия по звонкам того расписания, что ещё не пришло.
+   */
   wanted: null,
   lastRefresh: 0,
   /** Когда начал крутиться ⟳: новый значок после перестройки продолжает с той же фазы. */

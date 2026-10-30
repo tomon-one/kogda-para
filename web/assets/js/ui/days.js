@@ -55,14 +55,15 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
     return card;
   }
   // Своих пар нет, а у выбранных групп есть: это уже сказала сводка под датой
-  // («Пары только у …»), у самих пар подпись не повторяем.
+  // («Пары только у …»), у самих пар подпись не повторяем. Отменённые сводка
+  // не считает — у них подпись остаётся.
   var allForeign = groups.length > 0 && lessons.every(function (l) { return isForeign(l, groups); });
   lessons.forEach(function (lesson, index) {
     // Пара только у других групп — не «идёт сейчас»: человек на ней не сидит.
     var foreign = isForeign(lesson, groups);
     // С порядком: у одного номера бывают две пары — подгруппы в разных кабинетах.
     var key = day.d + ':' + lesson.n + ':' + (lesson.gr || (lesson.slots || []).join('-')) + ':' + index;
-    card.appendChild(lessonRow(lesson, bells, lesson.n === current && !isCancelled(lesson) && !foreign, key, groups, byName, allForeign));
+    card.appendChild(lessonRow(lesson, bells, lesson.n === current && !isCancelled(lesson) && !foreign, key, groups, byName, allForeign && !isCancelled(lesson)));
   });
   // Считаются только свои пары.
   var own = groups.length ? lessons.filter(function (l) { return !isForeign(l, groups); }) : lessons;

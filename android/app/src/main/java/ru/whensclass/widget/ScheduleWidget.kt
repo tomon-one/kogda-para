@@ -61,6 +61,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 colors,
                 now = now,
                 offset = currentOffset(),
+                base = currentState(KEY_DAY_BASE)?.let { LocalDate.ofEpochDay(it) },
                 busy = refreshing(),
                 done = currentState(KEY_DONE) == true,
                 failed = currentState(KEY_FAILED) == true,
@@ -83,6 +84,7 @@ class ScheduleWidget : GlanceAppWidget() {
         colors: Palette,
         now: LocalDateTime,
         offset: Int,
+        base: LocalDate?,
         busy: Boolean,
         done: Boolean,
         failed: Boolean,
@@ -105,7 +107,9 @@ class ScheduleWidget : GlanceAppWidget() {
             colors = colors,
             now = now,
             // После последнего звонка — с завтрашнего дня, как список в приложении.
-            day = ru.whensclass.ui.openingDay(schedule?.bellsOn(now.toLocalDate()).orEmpty(), now).plusDays(offset.toLong()),
+            // Листнули — от дня, с которого листали ([KEY_DAY_BASE]), а не от
+            // нового дня открытия: последний звонок не уводит выбранный день.
+            day = dayBase(base, schedule, now).plusDays(offset.toLong()),
             offset = offset,
             modifier = GlanceModifier,
         )
@@ -129,7 +133,10 @@ class ScheduleWidget : GlanceAppWidget() {
         val manager = GlanceAppWidgetManager(context)
         manager.getGlanceIds(ScheduleWidget::class.java).forEach { id ->
             updateAppWidgetState(context, PreferencesGlanceStateDefinition, id) { prefs ->
-                prefs.toMutablePreferences().apply { this[KEY_DAY_OFFSET] = 0 }
+                prefs.toMutablePreferences().apply {
+                    this[KEY_DAY_OFFSET] = 0
+                    remove(KEY_DAY_BASE)
+                }
             }
             update(context, id)
         }
@@ -137,6 +144,8 @@ class ScheduleWidget : GlanceAppWidget() {
 
     companion object {
         val KEY_DAY_OFFSET = intPreferencesKey("day_offset")
+        /** День, от которого считается [KEY_DAY_OFFSET]: день открытия в минуту первого листания. */
+        val KEY_DAY_BASE = longPreferencesKey("day_base")
 
         /** Идёт ли сейчас обновление: нажатие должно отзываться сразу. */
         val KEY_BUSY = booleanPreferencesKey("busy")
@@ -169,3 +178,8 @@ class ScheduleWidget : GlanceAppWidget() {
         }
     }
 }
+
+/** От какого дня листает дневной виджет: сохранённый (не вчерашний) или день открытия сейчас. */
+internal fun dayBase(stored: LocalDate?, schedule: ScheduleDto?, now: LocalDateTime): LocalDate =
+    stored?.takeIf { !it.isBefore(now.toLocalDate()) }
+        ?: ru.whensclass.ui.openingDay(schedule?.bellsOn(now.toLocalDate()).orEmpty(), now)

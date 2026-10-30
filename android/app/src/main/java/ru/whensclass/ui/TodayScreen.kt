@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
@@ -288,7 +289,7 @@ fun TodayScreen(
         val platesInList = maxHeight < 480.dp && tab == Tab.STUDENTS && !teacherMode &&
             !schedule?.days.isNullOrEmpty()
         Column(modifier = Modifier.fillMaxSize()) {
-            if (!platesInList) plates()
+            if (!platesInList) Column(Modifier.fillMaxWidth().holdTouches()) { plates() }
             ScheduleTabs(
                 current = tab,
                 teacherMode = teacherMode,

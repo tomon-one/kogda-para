@@ -347,7 +347,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
     /**
      * Отдаёт проверенный файл установщику Android. Итог придёт в
-     * [InstallResultReceiver]; до него кнопка показывает, что обновление идёт.
+     * [InstallResultReceiver]; до него (или до окна подтверждения) кнопка
+     * показывает, что обновление идёт.
      * Сессия не открылась — итог [Result.Manual]. Здесь, а не в экране: смена
      * [download] перезапускает экран, и установка из него отменила бы сама себя.
      */
@@ -389,6 +390,11 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             runCatching { installer.abandonSession(id) }
             throw error
         }
+    }
+
+    /** Установщик ждёт подтверждения в своём окне: итог придёт, только если в нём ответят. */
+    internal fun awaitingUser() {
+        if (_download.value == Download.Running) _download.value = null
     }
 
     /** Итог от установщика ([InstallResultReceiver]). Удачный приходит уже новой сборке. */
@@ -526,7 +532,10 @@ class InstallResultReceiver : BroadcastReceiver() {
             val opened = confirm != null && runCatching {
                 context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }.isSuccess
-            if (!opened) updates.installed(PackageInstaller.STATUS_FAILURE)
+            // Окно у человека: брошенное или не пущенное из фона оно итога не
+            // пришлёт, и «Обновляется…» висело бы до смерти процесса. Кнопка
+            // снова живая — нажатие откроет новую сессию.
+            if (opened) updates.awaitingUser() else updates.installed(PackageInstaller.STATUS_FAILURE)
             return
         }
         updates.installed(status)

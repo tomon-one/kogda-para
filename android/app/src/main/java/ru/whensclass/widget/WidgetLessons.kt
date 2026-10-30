@@ -55,9 +55,9 @@ internal fun Lessons(
     // Растёт со шрифтом только текст, поля — нет (как в WeekFit.kt): на шрифте 2,0
     // шаг пары ~76 dp, шапка ~85, а не вдвое больше.
     val scale = fontScale()
-    val rowHeight = if (fit.dense) (13 + 28 * scale).dp else (14 + 31 * scale).dp
+    val rowHeight = rowHeight(fit, scale)
     // Место под шапкой; строки «прошло/ещё N» вычитаются ниже, отдельно.
-    val free = LocalSize.current.height - reserved - if (fit.dense) (12 + 30 * scale).dp else (15 + 35 * scale).dp
+    val free = freeHeight(LocalSize.current.height, reserved, fit, scale)
     // Строки «прошло N пар» и «ещё N пар» занимают место, а нужны ли они —
     // видно только после выбора окна. Поэтому прикидка, потом уточнение:
     // одного круга хватает.
@@ -244,3 +244,12 @@ private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
         },
     )
 }
+
+private fun rowHeight(fit: Fit, scale: Float): Dp = if (fit.dense) (13 + 28 * scale).dp else (14 + 31 * scale).dp
+
+private fun freeHeight(height: Dp, reserved: Dp, fit: Fit, scale: Float): Dp =
+    height - reserved - if (fit.dense) (12 + 30 * scale).dp else (15 + 35 * scale).dp
+
+/** Сколько целых пар войдёт в виджет высотой [height], если над ними занято [reserved]. */
+internal fun pairsRoom(height: Dp, reserved: Dp, fit: Fit): Int =
+    (freeHeight(height, reserved, fit, fit.scale) / rowHeight(fit, fit.scale)).toInt()

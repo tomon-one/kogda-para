@@ -7,10 +7,11 @@ import * as store from './store.js';
 import { h, clear, fitLabels } from './ui/dom.js';
 import { dayIndex } from './schedule.js';
 import { mainScreen, refreshButton } from './ui/today.js';
+import { forgetPick } from './ui/week.js';
 import { pickerScreen } from './ui/lists.js';
 import { settingsScreen } from './ui/settings.js';
 import { welcomeScreen } from './ui/welcome.js';
-import { root, state, nav, app } from './state.js';
+import { root, state, nav, app, OPENING } from './state.js';
 
 var appearAt = 0;
 
@@ -106,6 +107,9 @@ function renderScreen(navigated) {
   var anchor = navigated ? null : scrollAnchor();
   var scrollY = window.pageYOffset;
   var hadCards = !!root.querySelector('[data-day]');
+  var hadPlates = plateTitles();
+  var oldPlates = root.querySelector('.plates');
+  var platesAbove = oldPlates ? platesBottom(oldPlates) : 0;
 
   var screen = screenFor(app.route);
   if (navigated) nav.at = Date.now();
@@ -146,6 +150,39 @@ function renderScreen(navigated) {
     if (anchor) restoreAnchor(anchor);
     else if (navigated) window.scrollTo(0, 0);
     else window.scrollTo(0, scrollY);
+    if (!navigated) showNewPlate(hadPlates, anchor, platesAbove, scrollY);
+  }
+}
+
+function plateTitles() {
+  return Array.prototype.map.call(root.querySelectorAll('.plate-title'), function (el) { return el.textContent; });
+}
+
+/** Низ блока плашек от верха страницы — вместе с отступом под ним. */
+function platesBottom(el) {
+  return el.getBoundingClientRect().bottom + window.pageYOffset + parseFloat(window.getComputedStyle(el).marginBottom || 0);
+}
+
+/**
+ * Плашка появилась посреди открытого экрана («Нет сети», сбой сервера).
+ * Блок плашек стоит перед сегодняшним днём, а перестройка держит на месте
+ * карточку под шапкой — плашка уезжала бы под шапку. Стоит человек на этом
+ * дне — довести до неё: сбой без плашки хуже сдвига. У списков без дней
+ * плашка над ними — список не прыгает вниз на её высоту.
+ */
+function showNewPlate(had, anchor, platesAbove, scrollY) {
+  var plates = root.querySelector('.plates');
+  if (!plates || !plateTitles().some(function (t) { return had.indexOf(t) < 0; })) return;
+  var top = plates.getBoundingClientRect().top;
+  if (top >= headHeight()) return;
+  if (anchor) {
+    // Только если плашка — прямо над днём на экране: ушедшего вглубь недели
+    // назад не тянуть.
+    var next = plates.nextElementSibling;
+    if (!next || next.getAttribute('data-day') !== anchor.day) return;
+    window.scrollTo(0, Math.max(0, top + window.pageYOffset - headHeight() - 8));
+  } else if (scrollY > 0) {
+    window.scrollTo(0, scrollY + platesBottom(plates) - (platesAbove || plates.getBoundingClientRect().top + window.pageYOffset));
   }
 }
 
@@ -203,9 +240,13 @@ function scrollToWanted() {
   if (!state.wanted) return false;
   var cards = root.querySelectorAll('[data-day]');
   if (!cards.length) return false;
+  // Звонки — пришедшего расписания: до него (выбрали группу) день открытия
+  // вечером был бы сегодняшним.
+  if (state.wanted === OPENING) state.wanted = repo.openingDate(app.route.id && state.other ? state.other.schedule : null);
   var days = [];
   for (var i = 0; i < cards.length; i++) days.push({ d: cards[i].getAttribute('data-day') });
   var index = dayIndex(days, state.wanted);
+  forgetPick();
   var card = cards[index];
   // Плашки сбоя стоят перед сегодняшним днём — показать и их.
   var prev = card.previousElementSibling;

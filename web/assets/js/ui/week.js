@@ -68,14 +68,21 @@ function go(strip, date) {
   if (!card) return;
   var y = card.getBoundingClientRect().top + window.pageYOffset - headBottom() - 8;
   var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  picked = date;
+  // Выделен день, к которому пришли: нажатого (воскресенье, невыложенный
+  // будень) в списке может не быть — как в приложении.
+  picked = card.getAttribute('data-day');
   touched = false;
-  mark(strip, date);
+  mark(strip, picked);
   try {
     window.scrollTo({ top: Math.max(0, y), behavior: calm ? 'auto' : 'smooth' });
   } catch (e) {
     window.scrollTo(0, Math.max(0, y));
   }
+}
+
+/** Список повели к дню не пальцем (полночь, уведомление) — выделение за ним. */
+export function forgetPick() {
+  picked = null;
 }
 
 function atBottom() {

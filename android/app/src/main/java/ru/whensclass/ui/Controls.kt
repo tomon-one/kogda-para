@@ -36,7 +36,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -396,3 +398,10 @@ internal fun ClearSearch(query: String, onClear: () -> Unit) {
         )
     }
 }
+
+/**
+ * Касание здесь никуда не уходит. У «Стекла» список заходит под шапку, плашки
+ * и полоску дней, и промах в щель между ними нажимал кнопку пары под размытием.
+ */
+internal fun Modifier.holdTouches(): Modifier =
+    pointerInput(Unit) { detectTapGestures { } }

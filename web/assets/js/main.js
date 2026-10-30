@@ -10,7 +10,7 @@ import { fitLabels, snackbar } from './ui/dom.js';
 import { collegeNow, parseIso } from './time.js';
 import { bellsOn, currentLessonNumber, parseTime } from './schedule.js';
 import { showReport } from './ui/report.js';
-import { state, app } from './state.js';
+import { state, app, OPENING } from './state.js';
 import { render, focusKey } from './render.js';
 import { parseRoute, go, back, home, onRoute, stepsNow } from './route.js';
 import { emptyList, loadLists, loadRetakes, loadRooms, refresh } from './data.js';
@@ -179,7 +179,7 @@ function pick(mode, row) {
   } else {
     if (mode === 'self') repo.selectSelf(row);
     else repo.selectGroup(row);
-    state.wanted = repo.openingDate();
+    state.wanted = OPENING;
     // Уведомления — о новой своей группе, а не о прежней.
     pushTries = 0;
     syncPush();

@@ -25,6 +25,7 @@ import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
+import androidx.glance.layout.wrapContentWidth
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -238,12 +239,16 @@ class NextLessonWidget : GlanceAppWidget() {
                             else -> colors.accent
                         },
                     ),
+                    // Фон, поля и ширина — у обеих веток: без команды лаунчер накатывает
+                    // новые на прежнюю вьюху, и плашка бывшего кабинета оставалась
+                    // под строкой без плашки (как в «Неделе», WeekRows).
                     modifier = (
                         if (chip) {
                             // Поля только по бокам: высота строки та же, по ней посчитаны пороги выше.
-                            GlanceModifier.background(colors.nowSurface).cornerRadius(10.dp).padding(horizontal = 6.dp)
+                            GlanceModifier.wrapContentWidth().background(colors.nowSurface).cornerRadius(10.dp)
+                                .padding(horizontal = 6.dp)
                         } else {
-                            GlanceModifier.fillMaxWidth()
+                            GlanceModifier.fillMaxWidth().background(NO_SURFACE).cornerRadius(10.dp).padding(horizontal = 0.dp)
                         }
                         ).let { base ->
                         lesson.url?.takeUnless { foreign || pair }?.let { url ->
@@ -255,7 +260,9 @@ class NextLessonWidget : GlanceAppWidget() {
                 val then = next.then
                 if (then != null && !tight && roomy && !long) {
                     Text(
-                        "потом " + (lessonStart(bells, then.number) ?: "${then.number} пара") + " · " + then.subject,
+                        // Две пары номера (подгруппы с разными языками) — обе: какая своя, неизвестно.
+                        "потом " + (lessonStart(bells, then.number) ?: "${then.number} пара") + " · " +
+                            joinSubjects(distinctSubjects(listOf(then) + next.thenAlso)),
                         maxLines = 1,
                         style = TextStyle(fontSize = 11.sp, color = colors.textDim),
                         modifier = GlanceModifier.padding(top = 2.dp),
@@ -283,6 +290,8 @@ data class NextLesson(
     val unreadOn: LocalDate? = null,
     /** Следующая своя пара того же дня. */
     val then: LessonDto? = null,
+    /** Другие пары номера [then]. */
+    val thenAlso: List<LessonDto> = emptyList(),
 ) {
     val lessons: List<LessonDto> get() = listOf(lesson) + also
 }
@@ -314,9 +323,11 @@ private fun findNext(schedule: ScheduleDto, now: LocalDateTime): NextLesson? {
         // Отменённая половинка того же номера — её подгруппе эта пара не своя.
         val off = schedule.days.firstOrNull { it.date == date.toString() }?.lessons.orEmpty()
             .filter { it.number == lesson.number && it.isCancelled && !schedule.isNeighbours(it) }
+        val then = day.filter { it.number > lesson.number }.minByOrNull { it.number }
         return NextLesson(
             date, lesson, day.filter { it !== lesson && it.number == lesson.number }, off = off,
-            then = day.filter { it.number > lesson.number }.minByOrNull { it.number },
+            then = then,
+            thenAlso = day.filter { then != null && it !== then && it.number == then.number },
         )
     }
 

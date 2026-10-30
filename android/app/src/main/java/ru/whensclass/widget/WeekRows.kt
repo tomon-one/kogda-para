@@ -123,7 +123,7 @@ private fun MoreDays(first: LocalDate, count: Int, colors: Palette) {
 }
 
 /** Фон строки, которая не идёт сейчас: задаётся явно, см. [LessonLine]. */
-private val NO_SURFACE = ColorProvider(Color.Transparent)
+internal val NO_SURFACE = ColorProvider(Color.Transparent)
 
 /**
  * Сколько детей вмещает контейнер Glance. Разметка виджета собирается заранее,

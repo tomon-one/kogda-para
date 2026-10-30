@@ -144,9 +144,14 @@ fun ScheduleWidgetContent(
                 colors, open = actionStartActivity(openDay(context, day)),
             )
             else -> {
-                // Сводка дня, как на экране: «2 пары · до 12:10». На низком виджете
-                // места под неё нет — пары важнее.
+                // Сводка дня, как на экране: «2 пары · до 12:10». Пары важнее: на
+                // низком виджете и там, где строка сводки отняла бы пару, её нет.
+                val summaryHeight = (4 + 15 * fit.scale).dp
                 val summary = if (fit.dense) null else ru.whensclass.ui.daySummary(today.lessons, schedule.groupNames, schedule.bellsOf(today))
+                    ?.takeIf {
+                        pairsRoom(size.height, summaryHeight, fit) >=
+                            minOf(today.lessons.size, maxOf(1, pairsRoom(size.height, 0.dp, fit)))
+                    }
                 if (summary != null) {
                     Text(
                         summary,
@@ -163,7 +168,7 @@ fun ScheduleWidgetContent(
                     fit,
                     colors,
                     modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
-                    reserved = if (summary != null) (4 + 15 * fit.scale).dp else 0.dp,
+                    reserved = if (summary != null) summaryHeight else 0.dp,
                 )
             }
         }

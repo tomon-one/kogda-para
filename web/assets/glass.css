@@ -4,11 +4,15 @@
   матовые шапка, имя и полоска дней — сквозь них размыто видно, что проезжает.
   Включено — у <html> атрибут data-glass (boot.js, site.js). Без
   backdrop-filter (старые браузеры) полосы просто полупрозрачные.
+  Свет у светлой слабее, а подписи темнее: мелкий серый текст и красное на
+  красном держат контраст 4,5:1 и под самым пятном.
 */
 :root[data-glass] {
   --glass-base: #f1f2f4;
-  --glow-top: rgba(214, 4, 3, 0.32);
-  --glow-mid: rgba(214, 4, 3, 0.1);
+  --glow-top: rgba(214, 4, 3, 0.24);
+  --glow-mid: rgba(214, 4, 3, 0.08);
+  --muted: #4d5155;
+  --primary: #a00302;
   --glow-bottom: rgba(214, 4, 3, 0.1);
   --glass-bar: rgba(241, 242, 244, 0.62);
   --glass-edge: rgba(0, 0, 0, 0.08);
@@ -25,6 +29,8 @@
     --glass-base: #000;
     --glow-top: rgba(214, 4, 3, 0.42);
     --glow-mid: rgba(214, 4, 3, 0.12);
+    --muted: #9aa0a6;
+    --primary: #ff6b70;
     --glow-bottom: rgba(214, 4, 3, 0.08);
     --glass-bar: rgba(0, 0, 0, 0.38);
     --glass-edge: rgba(255, 255, 255, 0.14);
@@ -40,6 +46,8 @@
   --glass-base: #000;
   --glow-top: rgba(214, 4, 3, 0.42);
   --glow-mid: rgba(214, 4, 3, 0.12);
+  --muted: #9aa0a6;
+  --primary: #ff6b70;
   --glow-bottom: rgba(214, 4, 3, 0.08);
   --glass-bar: rgba(0, 0, 0, 0.38);
   --glass-edge: rgba(255, 255, 255, 0.14);
@@ -121,6 +129,21 @@
   box-shadow: inset 0 0 0 1px var(--glass-edge);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
+}
+
+/* Зазор над полоской — частью шапки: под пустым зазором проезжал чёткий
+   срезанный текст пары. Шапка ниже на зазор, полоска прилипает к ней. */
+:root[data-glass] .head:has(~ .week-strip) { padding-bottom: 8px; }
+:root[data-glass] .head:has(~ .week-strip) ~ .week-strip { top: var(--head-h, 0px); }
+
+/* Без размытия прозрачная шапка не закрывает список — тогда полупрозрачная. */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  :root[data-glass] .head,
+  :root[data-glass] .screen.picker .topbar,
+  :root[data-glass] .screen.settings .topbar,
+  :root[data-glass] .chosen-head,
+  :root[data-glass] .bottom-bar { background: var(--glass-bar); }
+  :root[data-glass] .week-strip { background: var(--glass-base); }
 }
 
 /* Окна и всплывающее — сплошные: сквозь них читать нечего. */

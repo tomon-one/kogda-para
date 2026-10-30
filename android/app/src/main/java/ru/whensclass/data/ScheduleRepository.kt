@@ -123,11 +123,16 @@ class ScheduleRepository(
     /** Ночь кончилась — придержанное одним уведомлением ([quietHours]). */
     private suspend fun releaseHeldChanges() {
         if (!store.changesHeld() || quietHours(ru.whensclass.widget.collegeNow())) return
-        store.setChangesHeld(false)
-        if (!store.notifyChangesEnabled()) return
-        val lines = mergeChanges(store.pendingChanges(), emptyList(), ru.whensclass.widget.collegeToday())
-        store.putPendingChanges(lines)
-        if (lines.isNotEmpty()) showChanges(lines)
+        // Целиком: отменённый между снятием флага и показом заход терял бы ночь —
+        // флаг снят, а уведомления нет.
+        withContext(NonCancellable) {
+            if (store.notifyChangesEnabled()) {
+                val lines = mergeChanges(store.pendingChanges(), emptyList(), ru.whensclass.widget.collegeToday())
+                store.putPendingChanges(lines)
+                if (lines.isNotEmpty()) showChanges(lines)
+            }
+            store.setChangesHeld(false)
+        }
     }
 
     private fun showChanges(lines: List<Pair<String, String>>) {
