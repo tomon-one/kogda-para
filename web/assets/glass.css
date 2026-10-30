@@ -138,11 +138,11 @@
 
 :root[data-glass] .row-moving > .head::before { transition: height 0.2s ease; }
 
-/* Зазор до полоски — частью ряда, иначе в нём проезжал бы чёткий текст. */
+/* Те же отступы, что у ряда вне шапки: при смене вкладки он не скачет. */
 :root[data-glass] .tabs.float {
   z-index: 11;
   margin: 0 calc(50% - 50vw);
-  padding: 0 calc(50vw - 37.5%) 12px;
+  padding: 0 calc(50vw - 37.5%) 8px;
   background: transparent;
 }
 
@@ -163,17 +163,12 @@
   /* Шириной с телефонную: вровень с карточками её рамка сливалась с их рамкой. */
   width: calc(100% - 24px);
   max-width: 420px;
-  margin: 10px auto 8px;
+  margin: 8px auto;
   background: var(--glass-bar);
   box-shadow: inset 0 0 0 1px var(--glass-edge);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
 }
-
-/* Зазор над полоской — частью шапки: под пустым зазором проезжал чёткий
-   срезанный текст пары. Шапка ниже на зазор, полоска прилипает к ней. */
-:root[data-glass] .head:has(~ .week-strip) { padding-bottom: 12px; }
-:root[data-glass] .head:has(~ .week-strip) ~ .week-strip { top: calc(var(--head-h, 0px) + var(--row-shift, 0px)); }
 
 /* Без размытия прозрачная шапка не закрывает список — тогда полупрозрачная. */
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
