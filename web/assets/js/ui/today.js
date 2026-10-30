@@ -43,7 +43,7 @@ export function mainScreen(app) {
   var live = retakesActive(app.state.retakes, app.now().date);
   // Полоска дней — у своего расписания, когда оно есть.
   var strip = !route.kind && app.saved() ? weekStrip(app.scrollTarget(), app.now().date) : null;
-  var head = h('div', { class: 'head' }, topbar(app, own), tabs(app, tab, teacherMode),
+  var head = h('div', { class: 'head' }, topbar(app, own), channelPlate(app), tabs(app, tab, teacherMode),
     live ? secondTabs(app, tab, true) : null);
   var content = h('main', { class: 'content' });
   // Полоска — под вторым рядом вкладок, как в приложении, и прилипает под шапкой.
@@ -197,6 +197,24 @@ function secondTabs(app, current, live) {
   })));
 }
 
+/**
+ * Один раз, когда расписание уже выбрано: у сайта есть канал новостей. Стоит в
+ * шапке и прилипает с ней, как в приложении, а не среди дней.
+ * И кнопка, и крестик убирают плашку насовсем.
+ */
+function channelPlate(app) {
+  if (!app.chosen() || app.channelSeen()) return null;
+  var channel = actionLink('Открыть канал', CHANNEL_URL);
+  channel.addEventListener('click', function () { app.setChannelSeen(); });
+  return h('div', { class: 'plate' },
+    h('div', { class: 'plate-head' },
+      h('div', { class: 'plate-title' }, 'Канал новостей'),
+      h('button', { type: 'button', class: 'icon-button dialog-close', 'aria-label': 'Закрыть',
+        onclick: function () { app.setChannelSeen(); } }, icon('close'))),
+    h('div', { class: 'plate-text' }, 'У «Когда пара?» есть канал в Telegram: обновления, сбои и их починка.'),
+    channel);
+}
+
 /** Плашки: группы нет в таблице, сервер в сбое. */
 function plates(app) {
   var out = [];
@@ -223,19 +241,6 @@ function plates(app) {
         ? 'Её пары не показываются и вернутся сами, когда она появится. Если её переименовали — выберите заново в настройках.'
         : 'Их пары не показываются и вернутся сами, когда они появятся. Если их переименовали — выберите заново в настройках.'),
       actionButton('Настройки', function () { app.go('settings'); })));
-  }
-  // Один раз, когда расписание уже выбрано: у сайта есть канал новостей.
-  // И кнопка, и крестик убирают плашку насовсем.
-  if (own && !app.channelSeen()) {
-    var channel = actionLink('Открыть канал', CHANNEL_URL);
-    channel.addEventListener('click', function () { app.setChannelSeen(); });
-    out.push(h('div', { class: 'plate' },
-      h('div', { class: 'plate-head' },
-        h('div', { class: 'plate-title' }, 'Канал новостей'),
-        h('button', { type: 'button', class: 'icon-button dialog-close', 'aria-label': 'Закрыть',
-          onclick: function () { app.setChannelSeen(); } }, icon('close'))),
-      h('div', { class: 'plate-text' }, 'У «Когда пара?» есть канал в Telegram: обновления, сбои и их починка.'),
-      channel));
   }
   // Без сети — сказать, что на экране не обновится: сам сбой сервера тут ни при чём.
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
