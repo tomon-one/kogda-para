@@ -98,6 +98,11 @@ class Failing:
                 force=True, good=True,
             )
         self._lever_used = False
+        # Правка колледжа кончилась — рычаг «колледж правит» больше не нужен.
+        try:
+            self._editing_path.unlink(missing_ok=True)
+        except OSError as exc:
+            log.warning("рычаг college-editing не стёрся: %s", exc)
         for kind in FAIL_KINDS:
             alerts.forget(kind)
         self.failing_since, self.last_error, self._alerted = None, None, False

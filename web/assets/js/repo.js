@@ -19,6 +19,8 @@ var UNREACHABLE_STREAK_GAP_MS = 3 * 60 * 60 * 1000;
 var GONE_CONFIRM_MS = 60 * 60 * 1000;
 
 export var STATUS_UNREACHABLE = 'unreachable';
+/** Автор сказал, что колледж правит таблицу (`refresh` в /v1/meta). */
+export var STATUS_EDITING = 'editing';
 
 // ——— выбор ———
 

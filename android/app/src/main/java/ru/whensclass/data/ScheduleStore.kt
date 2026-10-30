@@ -449,6 +449,7 @@ class ScheduleStore(private val context: Context) {
             scheduleJson = prefs[KEY_SCHEDULE],
             serverBroken = (prefs[KEY_SERVER_STATUS] ?: "ok") != "ok",
             unsupported = prefs[KEY_SERVER_STATUS] == STATUS_UNSUPPORTED,
+            editing = prefs[KEY_SERVER_STATUS] == STATUS_EDITING,
             sourceUrl = prefs[KEY_SOURCE_URL],
             gone = prefs[KEY_GONE] == "1",
             fetchedAt = prefs[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L,
@@ -758,6 +759,8 @@ class ScheduleStore(private val context: Context) {
         val gone: Boolean = false,
         /** Сервер эту сборку больше не обслуживает — нужно обновить приложение. */
         val unsupported: Boolean = false,
+        /** Колледж правит таблицу ([STATUS_EDITING]): вместо «сбой» — «правка таблицы». */
+        val editing: Boolean = false,
         val fetchedAt: Long,
         val theme: String,
     )

@@ -634,6 +634,7 @@ internal fun App(
                         loadTally = { container.store.tally() },
                         serverBroken = serverStatus != "ok",
                         unreachable = serverStatus == ru.whensclass.data.STATUS_UNREACHABLE,
+                        editing = serverStatus == ru.whensclass.data.STATUS_EDITING,
                         unsupported = serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED,
                         sourceUrl = tableUrl,
                         serverSince = serverSince,

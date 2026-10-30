@@ -226,7 +226,8 @@ def meta(request: Request) -> Response:
     status, since, error = _outward(store, refresher)
     body = meta_payload(store.snapshot, store.generated, status,
                         refresher.checked_at, today=_today(),
-                        failing_since=since, error=error, refresh=refresher.status)
+                        failing_since=since, error=error, refresh=refresher.status,
+                        editing=refresher.status != "ok" and refresher.editing())
     return _json_response(request, body, cache=False)
 
 

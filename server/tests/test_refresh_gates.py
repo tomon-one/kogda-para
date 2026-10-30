@@ -200,6 +200,36 @@ def test_accept_next_lever_passes_a_sheet_rejected_against_previous(
     assert r.refresh(today=TODAY, force=True) is False
 
 
+def test_college_editing_lever_says_wait_and_goes_away_with_the_fix(
+    tmp_path, sheet, sent, fixture_csv
+):
+    """Рычаг college-editing: пока лист отвергается, новым версиям — `editing`
+    вместо сбоя; прежним — `stale`. Лист снова принят — рычаг снят сам;
+    забытый (старше EDITING_TTL) стирается."""
+    import os
+
+    from whensclass.api.payloads import meta_payload
+
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    assert r.refresh(today=TODAY) is True
+    good = sheet["text"]
+    sheet["text"] = _drop_two_groups(fixture_csv)
+    assert r.refresh(today=TODAY, force=True) is False
+    lever = tmp_path / "college-editing"
+    lever.touch()
+    assert r.editing()
+    body = meta_payload(store.snapshot, store.generated, r.status, None, editing=r.editing())
+    assert body["status"] == "stale" and body["refresh"] == "editing"
+    sheet["text"] = good
+    assert r.refresh(today=TODAY, force=True) is True
+    assert not lever.exists()
+    lever.touch()
+    old = lever.stat().st_mtime - refresher_mod.EDITING_TTL.total_seconds() - 60
+    os.utime(lever, (old, old))
+    assert not r.editing() and not lever.exists()
+
+
 def test_group_drop_is_checked_on_the_next_week_sheet_too():
     """Новый лист, впервые увиденный сразу первым, с прежним дат не делит, но
     сверяется: соседняя неделя без трети групп — отказ; после каникул —

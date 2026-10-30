@@ -9,7 +9,7 @@ import { roomsView } from './rooms.js';
 import { weekStrip } from './week.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
-import { STATUS_UNREACHABLE } from '../repo.js';
+import { STATUS_UNREACHABLE, STATUS_EDITING } from '../repo.js';
 
 /** Разделы. Пересдачи и экзамены колледж публикует отдельными листами. */
 var SOON = {
@@ -96,6 +96,7 @@ export function refreshLabel(app) {
   }
   if (app.gone()) return app.isTeacher() ? 'Вас нет в таблице' : 'Группы нет в таблице';
   if (app.server().status === STATUS_UNREACHABLE) return 'Сервер расписания не отвечает';
+  if (app.server().status === STATUS_EDITING) return 'Колледж правит таблицу';
   if (app.serverBroken()) return 'Сервер не смог обновить расписание';
   return null;
 }
@@ -242,7 +243,17 @@ function plates(app) {
       h('div', { class: 'plate-title' }, 'Нет сети'),
       h('div', { class: 'plate-text' }, 'Расписание не обновляется. На экране — последнее, что было скачано.')));
   }
-  if (app.serverBroken()) {
+  if (app.server().status === STATUS_EDITING) {
+    // Автор сказал: таблицу правит колледж — не сбой сервера, а ожидание.
+    var edited = app.server();
+    var source = sheetLink(app.saved(), app.now().date, edited.src_url);
+    out.push(h('div', { class: 'plate' },
+      h('div', { class: 'plate-title' }, 'Колледж правит таблицу'),
+      h('div', { class: 'plate-text' }, 'Расписание обновится само, когда правка закончится. Пары могли поменяться.'),
+      edited.since ? h('div', { class: 'plate-since' },
+        'С ' + formatSince(edited.since) + '. На экране — таблица, какой она была до правки.') : null,
+      source ? actionLink('Открыть таблицу колледжа', source) : null));
+  } else if (app.serverBroken()) {
     var server = app.server();
     var unreachable = server.status === STATUS_UNREACHABLE;
     var link = sheetLink(app.saved(), app.now().date, server.src_url);

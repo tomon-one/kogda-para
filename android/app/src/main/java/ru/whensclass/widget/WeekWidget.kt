@@ -89,6 +89,7 @@ class WeekWidget : GlanceAppWidget() {
                     currentState(ScheduleWidget.KEY_DONE) == true,
                     currentState(ScheduleWidget.KEY_FAILED) == true,
                     state?.serverBroken == true,
+                    state?.editing == true,
                     state?.gone == true,
                     state?.unsupported == true,
                     colors,
@@ -145,6 +146,7 @@ private fun Header(
     done: Boolean,
     failed: Boolean,
     serverBroken: Boolean,
+    editing: Boolean,
     gone: Boolean,
     unsupported: Boolean,
     colors: Palette,
@@ -194,7 +196,7 @@ private fun Header(
                         // Пропажа и сбой — как в дневном виджете.
                         gone -> " · нет в таблице"
                         unsupported -> " · обновите приложение"
-                        serverBroken -> " · сбой"
+                        serverBroken -> if (editing) " · правка таблицы" else " · сбой"
                         done -> " · обновлено"
                         else -> " · " + formatFetchedShort(fetchedAt, nowMillis)
                     },

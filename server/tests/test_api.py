@@ -31,6 +31,9 @@ class FakeRefresher:
     failing_since = None
     last_error = None
 
+    def editing(self):
+        return False
+
 
 @pytest.fixture(autouse=True)
 def today_inside_the_fixture(monkeypatch):

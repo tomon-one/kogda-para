@@ -106,6 +106,8 @@ fun TodayScreen(
     serverBroken: Boolean = false,
     /** Сервер не отвечает телефону — не то же, что «не прочитал таблицу». */
     unreachable: Boolean = false,
+    /** Колледж правит таблицу (сказал автор) — не сбой сервера. */
+    editing: Boolean = false,
     /** Сервер больше не обслуживает эту сборку — нужно обновить приложение. */
     unsupported: Boolean = false,
     sourceUrl: String? = null,
@@ -233,6 +235,7 @@ fun TodayScreen(
                             gone -> if (teacherMode) "Вас нет в таблице" else "Группы нет в таблице"
                             unsupported -> "Нужно обновить приложение"
                             unreachable -> "Сервер расписания не отвечает"
+                            editing -> "Колледж правит таблицу"
                             serverBroken -> "Сервер не смог обновить расписание"
                             else -> null
                         },
@@ -280,7 +283,7 @@ fun TodayScreen(
                 Unsupported(onUpdateBadge)
             } else if (serverBroken) {
                 ServerBroken(
-                    sheetLink(schedule, today, sourceUrl), serverSince, now, unreachable,
+                    sheetLink(schedule, today, sourceUrl), serverSince, now, unreachable, editing,
                 )
             }
         }

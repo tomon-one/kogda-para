@@ -52,6 +52,8 @@ internal fun ServerBroken(
     since: String?,
     now: LocalDateTime,
     unreachable: Boolean = false,
+    /** Колледж правит таблицу (сказал автор): ожидание, а не сбой. */
+    editing: Boolean = false,
 ) {
     val context = LocalContext.current
     Surface(
@@ -66,15 +68,22 @@ internal fun ServerBroken(
             // Сервер не ответил телефону — не «не прочитал таблицу»: таблица тут
             // ни при чём, как и в уведомлении.
             Text(
-                if (unreachable) "Сервер расписания не отвечает" else "Сбой на сервере",
+                when {
+                    unreachable -> "Сервер расписания не отвечает"
+                    editing -> "Колледж правит таблицу"
+                    else -> "Сбой на сервере"
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.error,
+                color = if (editing) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error,
             )
             Text(
                 // Что на экране прежнее, говорит строка со временем сбоя ниже.
-                (if (unreachable) "Телефон не достучался до сервера. "
-                else "Не удалось прочитать таблицу. ") + "Пары могли поменяться.",
+                when {
+                    unreachable -> "Телефон не достучался до сервера. "
+                    editing -> "Расписание обновится само, когда правка закончится. "
+                    else -> "Не удалось прочитать таблицу. "
+                } + "Пары могли поменяться.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -84,10 +93,15 @@ internal fun ServerBroken(
                 Text(
                     // Не «получено» и не дата правки: до сбоя сервер читал таблицу
                     // исправно, значит на экране она — какой была к его началу.
-                    "Сбой с ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}. " +
-                        "На экране — таблица, какой она была до сбоя.",
+                    if (editing) {
+                        "С ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}. " +
+                            "На экране — таблица, какой она была до правки."
+                    } else {
+                        "Сбой с ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}. " +
+                            "На экране — таблица, какой она была до сбоя."
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = if (editing) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }

@@ -169,6 +169,8 @@ class ScheduleRepository(
             return
         }
         if (!store.notifyServerEnabled()) return
+        // Колледж правит таблицу — ждать, а не тревожиться: это не сбой сервера.
+        if (status == STATUS_EDITING) return
         if (store.staleNotifiedFor() == sinceIso) return
         val since = runCatching { java.time.Instant.parse(sinceIso) }.getOrNull() ?: return
         if (System.currentTimeMillis() - (countFrom ?: since).toEpochMilli() < STALE_NOTIFY_AFTER_MILLIS) return

@@ -515,9 +515,11 @@ def meta_payload(
     failing_since: datetime | None = None,
     error: str | None = None,
     refresh: str | None = None,
+    editing: bool = False,
 ) -> dict:
     """`status` — для всех версий; `refresh` — состояние обновления без
-    непрочитанных дней (их список — `unread`), его читают новые."""
+    непрочитанных дней (их список — `unread`), его читают новые. `editing` —
+    владелец сказал, что колледж правит таблицу: `refresh` тогда `editing`."""
     # Куда идти, когда мы подвели: на лист, где лежит сегодняшний день, а
     # без него — просто в книгу. Ближайший известный день годится тоже:
     # в воскресенье это завтрашний понедельник.
@@ -549,8 +551,12 @@ def meta_payload(
             out["since"] = _iso(failing_since)
         if error:
             out["err"] = error
-    if snapshot.unread:
+    if editing:
+        # Прежние версии знают только `stale` и `ok` — у них остаётся сбой.
+        out["refresh"] = "editing"
+    elif snapshot.unread:
         out["refresh"] = refresh or status
+    if snapshot.unread:
         # Только даты: у какой группы — в её расписании. День без даты в
         # листе задевает все 190 групп, а /v1/meta спрашивают чаще всего.
         out["unread"] = sorted({day.isoformat() for days in snapshot.unread.values() for day in days})

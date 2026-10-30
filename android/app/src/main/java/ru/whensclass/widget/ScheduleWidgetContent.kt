@@ -54,6 +54,7 @@ fun ScheduleWidgetContent(
     done: Boolean = false,
     failed: Boolean = false,
     serverBroken: Boolean = false,
+    editing: Boolean = false,
     gone: Boolean = false,
     unsupported: Boolean = false,
     sourceUrl: String? = null,
@@ -92,6 +93,7 @@ fun ScheduleWidgetContent(
             done,
             failed,
             serverBroken,
+            editing,
             gone,
             unsupported,
             // Пары дня прежние или неполные: сервер его не прочитал. Пустой
@@ -209,6 +211,7 @@ private fun Header(
     done: Boolean,
     failed: Boolean,
     serverBroken: Boolean,
+    editing: Boolean,
     gone: Boolean,
     unsupported: Boolean,
     unread: Boolean,
@@ -289,7 +292,7 @@ private fun Header(
                         // Сбой показываем и тогда, когда пары на экране есть:
                         // снимок прежний. Коротко — подробности на плашке в
                         // приложении.
-                        serverBroken -> " · сбой"
+                        serverBroken -> if (editing) " · правка таблицы" else " · сбой"
                         done -> " · обновлено"
                         else -> " · " + formatFetchedShort(fetchedAt, nowMillis)
                     },

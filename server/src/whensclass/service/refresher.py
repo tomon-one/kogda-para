@@ -74,6 +74,10 @@ class Refresher(Failing, SheetWatch):
         # snapshot.prev.json.
         self._accept_path = state_dir / "accept-next"
         self._accepting = False
+        # Рычаг владельца: колледж правит таблицу, и сбой — не у сервера.
+        # Людям — «подождите», а не «сбой» (`editing`); снимается сам, когда
+        # лист снова принят, или через EDITING_TTL.
+        self._editing_path = state_dir / "college-editing"
         try:
             self._crashes = int(self._running_path.read_text("utf-8").strip() or 0)
         except (OSError, ValueError):
@@ -146,6 +150,19 @@ class Refresher(Failing, SheetWatch):
             self._accept_path.unlink(missing_ok=True)
             return False
         log.warning("рычаг accept-next: лист сверяется без прежнего снимка")
+        return True
+
+    def editing(self) -> bool:
+        """Поставлен ли рычаг college-editing. Старше EDITING_TTL — стирается:
+        забытый файл прятал бы настоящий сбой."""
+        try:
+            age = dt.datetime.now().timestamp() - self._editing_path.stat().st_mtime
+        except OSError:
+            return False
+        if age > EDITING_TTL.total_seconds():
+            log.warning("рычаг college-editing старше %s — стираю", EDITING_TTL)
+            self._editing_path.unlink(missing_ok=True)
+            return False
         return True
 
     def _accepted(self) -> None:
@@ -525,6 +542,7 @@ class SheetRejected(SourceFormatChanged):
 UNREAD_REMIND_SECONDS = 24 * 60 * 60
 
 ACCEPT_NEXT_TTL = dt.timedelta(hours=2)
+EDITING_TTL = dt.timedelta(hours=12)
 
 
 def _hold_unread(snapshot, before) -> None:

@@ -68,6 +68,7 @@ class NextLessonWidget : GlanceAppWidget() {
             val next = nextLesson(schedule, now)
             val lesson = next?.lesson
             val broken = state?.serverBroken == true
+            val editing = state?.editing == true
             val gone = state?.gone == true
             val unsupported = state?.unsupported == true
 
@@ -93,7 +94,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 if (lesson == null || next == null) {
                     Text(
                         noNextLesson(
-                            state?.groupName, schedule, today, broken,
+                            state?.groupName, schedule, today, broken, editing = editing,
                             checked = checkedToday(state?.fetchedAt ?: 0L, today),
                             unsupported = unsupported,
                         ),
@@ -113,7 +114,7 @@ class NextLessonWidget : GlanceAppWidget() {
                             failed -> "не обновилось ⟳"
                             gone -> "нет в таблице"
                             unsupported -> "обновите приложение"
-                            broken -> "сбой ⟳"
+                            broken -> if (editing) "правка ⟳" else "сбой ⟳"
                             done -> "обновлено"
                             else -> formatFetchedShort(state?.fetchedAt ?: 0L) + " ⟳"
                         },
@@ -150,7 +151,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 val status = when {
                     gone -> "нет в таблице · "
                     unsupported -> "обновите приложение · "
-                    broken -> "сбой · "
+                    broken -> if (editing) "правка таблицы · " else "сбой · "
                     else -> ""
                 }
                 // Непрочитанный день — после времени: в узкой клетке
@@ -365,12 +366,14 @@ internal fun noNextLesson(
     checked: Boolean = true,
     /** Сервер эту сборку не обслуживает (426). */
     unsupported: Boolean = false,
+    /** Колледж правит таблицу — не сбой сервера. */
+    editing: Boolean = false,
 ): String {
     // «…группу или себя»: виджет ставит и преподаватель.
     if (groupName == null) return "Откройте приложение и выберите группу или себя"
     if (schedule == null) return "Расписание не загружено"
     if (unsupported) return "Нужно обновить приложение"
-    if (broken) return "Сбой: расписание не обновляется"
+    if (broken) return if (editing) "Колледж правит таблицу" else "Сбой: расписание не обновляется"
     // Пар впереди нет, но день сервер не прочитал — это не «пар нет».
     schedule.days.firstOrNull { day ->
         day.unread == UnreadDay.MISSING &&
