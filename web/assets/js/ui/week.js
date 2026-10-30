@@ -60,8 +60,12 @@ window.addEventListener('scroll', function () {
 export function weekStrip(day, today) {
   var strip = h('nav', { class: 'week-strip', 'aria-label': 'Дни недели' });
   strip.__today = today;
-  fill(strip, weekStart(day));
-  mark(strip, picked || day);
+  // Экран перестраивается и при обновлении: с дня, что уже выделен, иначе плашка
+  // каждый раз съезжала бы на день открытия и возвращалась.
+  var shown = document.querySelector('.week-day.on');
+  var start = picked || (shown && shown.getAttribute('data-date')) || day;
+  fill(strip, weekStart(start));
+  mark(strip, start);
   // Экран перестроен и прокручен — выделить день, который на самом деле наверху.
   window.requestAnimationFrame(function () { mark(strip, picked || topDay() || day); });
   return strip;
