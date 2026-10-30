@@ -250,7 +250,8 @@ p a, .point a { text-decoration: underline; }
 
 .tabs { display: flex; }
 
-/* Полоска дней недели под вкладками (ui/week.js): общая подложка, выделение —
+/* Полоска дней недели под вкладками (ui/week.js), шириной с телефонную: на широком
+   окне вровень с карточками её рамка сливалась с их рамкой. Общая подложка, выделение —
    одна плашка, которая переезжает (--i — номер дня). */
 .week-strip {
   position: -webkit-sticky;
@@ -258,12 +259,19 @@ p a, .point a { text-decoration: underline; }
   top: calc(var(--head-h, 0px) + var(--row-shift, 0px));
   z-index: 9;
   display: flex;
-  margin: 6px 12px 8px;
+  width: calc(100% - 24px);
+  max-width: 420px;
+  margin: 6px auto 8px;
   padding: 4px;
   border-radius: 14px;
   background: var(--surface);
   /* Поля полоски — фоном страницы: дни не просвечивают по краям, когда едут под ней. */
   box-shadow: 0 0 0 6px var(--bg);
+}
+
+/* Шире полоски по бокам едут карточки: кольцо цвета фона вырезало бы из них кусок. */
+@media (min-width: 445px) {
+  .week-strip { box-shadow: 0 0 0 1px var(--divider); }
 }
 
 .week-pill {
@@ -374,8 +382,12 @@ p a, .point a { text-decoration: underline; }
   position: sticky;
   top: var(--head-h, 0);
   z-index: 8;
+  margin-bottom: 0;
   background: var(--bg);
 }
+
+/* Зазор — частью ряда: в пустом проезжали бы карточки. */
+.screen > .tabs.float { padding-bottom: 8px; }
 
 .row-hidden > .tabs.float {
   top: calc(var(--head-h, 0px) - var(--row-h, 0px));
