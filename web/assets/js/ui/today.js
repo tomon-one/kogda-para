@@ -46,9 +46,13 @@ export function mainScreen(app) {
   var head = h('div', { class: 'head' }, topbar(app, own), channelPlate(app), tabs(app, tab, teacherMode),
     live ? secondTabs(app, tab, true) : null);
   var content = h('main', { class: 'content' });
+  // Страница открывается у сегодняшнего дня: над полоской ряд был бы выше экрана,
+  // поэтому он прилипает и уходит при листании вниз, как в приложении.
+  var row = live ? null : secondTabs(app, tab, false);
+  if (row && strip) row.classList.add('float');
   // Полоска — под вторым рядом вкладок, как в приложении, и прилипает под шапкой.
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
-    head, live ? null : secondTabs(app, tab, false), strip, content);
+    head, row, strip, content);
 
   // Сбой и пропажа — на любой вкладке, как в приложении: иначе чужое
   // расписание во время сбоя выглядело бы свежим. На расписании — у сегодняшнего

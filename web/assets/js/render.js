@@ -7,7 +7,7 @@ import * as store from './store.js';
 import { h, clear, fitLabels } from './ui/dom.js';
 import { dayIndex } from './schedule.js';
 import { mainScreen, refreshButton } from './ui/today.js';
-import { forgetPick } from './ui/week.js';
+import { forgetPick, rowShift, syncRow } from './ui/week.js';
 import { pickerScreen } from './ui/lists.js';
 import { settingsScreen } from './ui/settings.js';
 import { welcomeScreen } from './ui/welcome.js';
@@ -132,7 +132,8 @@ function renderScreen(navigated) {
   clear(root);
   root.appendChild(screen);
   // Имя открытого преподавателя или группы прилипает под шапкой (screens.css, .chosen-head).
-  root.style.setProperty('--head-h', stuck(root.querySelector('.head')) + 'px');
+  measureHead();
+  syncRow(navigated);
   fitLabels(screen);
   if (focusKey && !navigated && document.activeElement !== active && root.contains(active)) active.focus();
   if (!focusKey) restoreFocus(signature);
@@ -213,7 +214,12 @@ function headHeight() {
   var chosen = root.querySelector('.chosen-head');
   // Полоска дней прилипает под шапкой — вместе с полями.
   var strip = root.querySelector('.week-strip');
-  return stuck(head) + (chosen ? chosen.getBoundingClientRect().height : 0) + (strip ? strip.offsetHeight + 14 : 0);
+  return stuck(head) + rowShift() + (chosen ? chosen.getBoundingClientRect().height : 0) + (strip ? strip.offsetHeight + 14 : 0);
+}
+
+/** Под шапкой прилипает полоска дней: высота шапки меняется и при смене ширины окна. */
+export function measureHead() {
+  root.style.setProperty('--head-h', stuck(root.querySelector('.head')) + 'px');
 }
 
 /** Высота прилипшей шапки; не прилипает (альбомная, app.css) — ноль. */

@@ -6,6 +6,56 @@ import { addDays, weekStart } from '../time.js';
 
 var NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
+var rowHidden = false;
+var rowArmed = false;
+var rowY = 0;
+
+/** Сколько под шапкой занимает ряд разделов над полоской; ноль, если он ушёл или не прилипает. */
+export function rowShift() {
+  var row = document.querySelector('.tabs.float');
+  if (!row || rowHidden || window.getComputedStyle(row).position !== 'sticky') return 0;
+  return row.offsetHeight + parseFloat(window.getComputedStyle(row).marginBottom || 0);
+}
+
+function applyRow() {
+  var row = document.querySelector('.tabs.float');
+  if (!row) return;
+  var screen = row.parentNode;
+  screen.classList.toggle('row-hidden', rowHidden);
+  screen.style.setProperty('--row-h', row.offsetHeight + 'px');
+  screen.style.setProperty('--row-shift', rowShift() + 'px');
+}
+
+/** Экран перестроен. Прокрутка к дню — не листание: ждать, пока человек поведёт страницу сам. */
+export function syncRow(navigated) {
+  if (navigated) rowHidden = false;
+  rowArmed = false;
+  applyRow();
+}
+
+function armRow() {
+  if (rowArmed) return;
+  rowArmed = true;
+  rowY = window.pageYOffset;
+}
+
+window.addEventListener('wheel', armRow, { passive: true });
+window.addEventListener('pointerdown', armRow, { passive: true });
+window.addEventListener('keydown', armRow);
+window.addEventListener('scroll', function () {
+  if (!rowArmed) return;
+  var y = window.pageYOffset;
+  if (Math.abs(y - rowY) < 6) return;
+  var hide = y > rowY && y > 0;
+  rowY = y;
+  if (hide !== rowHidden) {
+    rowHidden = hide;
+    var row = document.querySelector('.tabs.float');
+    if (row) row.parentNode.classList.add('row-moving');
+    applyRow();
+  }
+}, { passive: true });
+
 /** `day` — с какого дня неделя (тот, к которому открыт список), `today` — дата колледжа. */
 export function weekStrip(day, today) {
   var strip = h('nav', { class: 'week-strip', 'aria-label': 'Дни недели' });

@@ -255,7 +255,7 @@ p a, .point a { text-decoration: underline; }
 .week-strip {
   position: -webkit-sticky;
   position: sticky;
-  top: var(--head-h, 0);
+  top: calc(var(--head-h, 0px) + var(--row-shift, 0px));
   z-index: 9;
   display: flex;
   margin: 6px 12px 8px;
@@ -272,10 +272,19 @@ p a, .point a { text-decoration: underline; }
   bottom: 4px;
   left: 4px;
   width: calc((100% - 8px) / 7);
-  border-radius: 10px;
-  background: var(--primary);
   opacity: 0;
   transform: translateX(calc(var(--i, 0) * 100%));
+}
+
+/* Ячейка широкая на большом окне, сама плашка — как на телефоне. */
+.week-pill::before {
+  content: '';
+  display: block;
+  height: 100%;
+  max-width: 56px;
+  margin: 0 auto;
+  border-radius: 10px;
+  background: var(--primary);
 }
 
 .week-strip.marked .week-pill { opacity: 1; }
@@ -349,8 +358,34 @@ p a, .point a { text-decoration: underline; }
 .tab.on::after {
   transform: none;
 }
+/* Шире колонки подчёркивание упиралось в пустоту: край растворяется. На телефоне
+   оно идёт до края экрана и остаётся резким. */
+@media (min-width: 641px) {
+  .head .tab:first-child::after { background: linear-gradient(to right, transparent, var(--primary) 96px); }
+  .head .tab:last-child::after { background: linear-gradient(to left, transparent, var(--primary) 96px); }
+}
+
 .tab.muted { color: var(--muted); }
 .tabs.soon { margin-bottom: 8px; }
+
+/* Ряд разделов над полоской: виден при открытии, уходит под шапку при листании вниз. */
+.tabs.float {
+  position: -webkit-sticky;
+  position: sticky;
+  top: var(--head-h, 0);
+  z-index: 8;
+  background: var(--bg);
+}
+
+.row-hidden > .tabs.float {
+  top: calc(var(--head-h, 0px) - var(--row-h, 0px));
+  visibility: hidden;
+}
+
+/* Только при листании: перестроенный экран встаёт сразу, без наезда полоски. */
+.row-moving > .week-strip,
+.row-moving > .tabs.float { transition: top 0.2s ease; }
+.row-moving.row-hidden > .tabs.float { transition: top 0.2s ease, visibility 0s 0.2s; }
 
 /* ——— содержимое ——— */
 
@@ -455,5 +490,5 @@ p a, .point a { text-decoration: underline; }
 
 /* Альбомная на телефоне: шапка не прилипает, иначе она отнимает половину высоты. */
 @media (max-height: 480px) and (orientation: landscape) {
-  .head { position: static; }
+  .head, .tabs.float { position: static; }
 }

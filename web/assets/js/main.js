@@ -11,7 +11,7 @@ import { collegeNow, parseIso } from './time.js';
 import { bellsOn, currentLessonNumber, parseTime } from './schedule.js';
 import { showReport } from './ui/report.js';
 import { state, app, OPENING } from './state.js';
-import { render, focusKey } from './render.js';
+import { render, focusKey, measureHead } from './render.js';
 import { parseRoute, go, back, home, onRoute, stepsNow } from './route.js';
 import { emptyList, loadLists, loadRetakes, loadRooms, refresh } from './data.js';
 import { mixedBuild } from './version.js';
@@ -283,6 +283,7 @@ window.addEventListener('resize', function () {
   window.requestAnimationFrame(function () {
     fitPending = false;
     fitLabels(document.body);
+    measureHead();
   });
 });
 
