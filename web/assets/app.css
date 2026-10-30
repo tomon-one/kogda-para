@@ -256,12 +256,12 @@ p a, .point a { text-decoration: underline; }
 .week-strip {
   position: -webkit-sticky;
   position: sticky;
-  top: calc(var(--head-h, 0px) + var(--row-shift, 0px));
+  top: calc(var(--head-h, 0px) + var(--row-shift, 0px) + 8px);
   z-index: 9;
   display: flex;
   width: calc(100% - 24px);
   max-width: 420px;
-  margin: 6px auto 8px;
+  margin: 8px auto;
   padding: 4px;
   border-radius: 14px;
   background: var(--surface);

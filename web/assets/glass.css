@@ -159,9 +159,7 @@
 /* Полоска висит над списком, как в приложении: без кольца цвета фона вокруг
    и с зазором под вкладками. */
 :root[data-glass] .week-strip {
-  top: calc(var(--head-h, 0px) + var(--row-shift, 0px) + 8px);
   z-index: 12;
-  margin: 8px auto;
   background: var(--glass-bar);
   box-shadow: inset 0 0 0 1px var(--glass-edge);
   -webkit-backdrop-filter: blur(16px);
