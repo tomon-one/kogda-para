@@ -62,7 +62,8 @@
 
 
 .day-note {
-  padding: 6px 16px 10px;
+  margin-top: -4px;
+  padding: 0 16px 10px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -79,7 +80,9 @@
 
 /* В em, а не px: с крупным шрифтом «09:00–10:30» должно помещаться, как в
    приложении, где колонка растёт с масштабом шрифта. */
-.lesson-time { width: 5.75em; flex: none; }
+.lesson-time { width: 4.5em; flex: none; }
+/* Значкам групп под временем нужно больше. */
+.lesson-time.with-marks { width: 5.75em; }
 .pair { font-size: 11px; color: var(--muted); }
 .time { white-space: nowrap; }
 .time-start { display: block; font-size: 18px; font-weight: 700; line-height: 22px; }
@@ -154,7 +157,7 @@
    размером шрифта браузера по умолчанию. */
 @media (max-width: 21.25em) {
   .lesson { flex-direction: column; }
-  .lesson-time { width: auto; }
+  .lesson-time, .lesson-time.with-marks { width: auto; }
   .lesson-time .pair, .lesson-time .time, .lesson-time .now-label { display: inline; margin-right: 6px; }
   .lesson-time .time-start, .lesson-time .time-end { display: inline; font-size: 15px; color: inherit; }
   .lesson-time .time-end::before { content: "–"; }

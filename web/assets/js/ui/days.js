@@ -37,6 +37,23 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
 /** Строка карточки «Сегодня» 2 апреля (как в приложении, `DayList.kt`). */
 var BIRTHDAY = '🎂 Сегодня у автора день рождения. Он не вправе отменить пары, но очень хотел бы';
 
+var HOLIDAYS = {
+  '01-07': '⭐ С Рождеством!',
+  '02-23': '🎖️ С Днём защитника Отечества!',
+  '03-08': '🌷 С 8 Марта!',
+  '05-01': '🌱 С Первомаем!',
+  '05-09': '🕊️ С Днём Победы!',
+  '06-12': '🇷🇺 С Днём России!',
+  '11-04': '🤝 С Днём народного единства!',
+};
+
+/** Поздравление карточки «Сегодня» в праздник (как в приложении, `DayList.kt`). */
+export function holidayNote(date) {
+  var day = date.slice(5);
+  if (HOLIDAYS[day]) return HOLIDAYS[day];
+  return day >= '01-01' && day <= '01-08' ? '🎄 С Новым годом!' : null;
+}
+
 function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   var isToday = day.d === now.date;
   var past = day.d < now.date;
@@ -50,6 +67,7 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
 
   var notes = unreadNotes(day);
   if (isToday && !teacher && day.d.slice(5) === '04-02') notes = notes.concat(BIRTHDAY);
+  if (isToday && holidayNote(day.d)) notes = notes.concat(holidayNote(day.d));
   notes.forEach(function (note) {
     card.appendChild(h('p', { class: 'day-note' }, note));
   });
@@ -122,7 +140,7 @@ function lessonRow(lesson, bells, isNow, key, groups, byName, saidAbove) {
       : (lesson.t || []).map(function (t) { return h('div', { class: 'sub' }, shortenName(t)); }),
     note(lesson));
   return h('div', { class: 'lesson' + (isNow ? ' now' : '') + (foreign ? ' foreign' : '') },
-    h('div', { class: 'lesson-time' },
+    h('div', { class: 'lesson-time' + (groups.length ? ' with-marks' : '') },
       h('div', { class: 'pair' }, lesson.n + ' пара'),
       time ? timeBlock(time) : null,
       isNow ? nowLabel() : null,

@@ -80,4 +80,13 @@ class FreeDayTest {
         assertEquals(day.plusDays(1), openingDay(bells, day.atTime(19, 10)))
         assertEquals(day, openingDay(emptyMap(), day.atTime(23, 0)))
     }
+
+    @Test
+    fun `поздравление только в праздник`() {
+        org.junit.Assert.assertEquals("🎄 С Новым годом!", holidayNote(1, 8))
+        org.junit.Assert.assertEquals("⭐ С Рождеством!", holidayNote(1, 7))
+        org.junit.Assert.assertEquals("🤝 С Днём народного единства!", holidayNote(11, 4))
+        org.junit.Assert.assertNull(holidayNote(1, 9))
+        org.junit.Assert.assertNull(holidayNote(11, 5))
+    }
 }

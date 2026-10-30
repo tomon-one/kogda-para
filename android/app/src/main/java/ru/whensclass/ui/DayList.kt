@@ -62,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -512,6 +513,18 @@ internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
 /** Строка карточки «Сегодня» 2 апреля (как на сайте, `ui/days.js`). */
 private const val BIRTHDAY = "🎂 Сегодня у автора день рождения. Он не вправе отменить пары, но очень хотел бы"
 
+/** Поздравление карточки «Сегодня» в праздник (как на сайте, `ui/days.js`). */
+internal fun holidayNote(month: Int, day: Int): String? = when (month to day) {
+    1 to 7 -> "⭐ С Рождеством!"
+    2 to 23 -> "🎖️ С Днём защитника Отечества!"
+    3 to 8 -> "🌷 С 8 Марта!"
+    5 to 1 -> "🌱 С Первомаем!"
+    5 to 9 -> "🕊️ С Днём Победы!"
+    6 to 12 -> "🇷🇺 С Днём России!"
+    11 to 4 -> "🤝 С Днём народного единства!"
+    else -> "🎄 С Новым годом!".takeIf { month == 1 && day <= 8 }
+}
+
 /**
  * Пометки дня, который сервер не прочитал (unreadNotes в schedule.js сайта):
  * своего — без имени, у преподавателя — с группами из `ug` (и `uk`, где пары
@@ -584,11 +597,15 @@ private fun DayCard(
         // прозрачностью: при прозрачности контраст падает так, что вчерашнюю
         // аудиторию не прочесть.
         Column {
-            DayHeader(date?.let(::formatDayTitle) ?: day.date, isToday, past, daySummary(day.lessons, groups, bells))
-
             val notes = unreadNotes(day) + listOfNotNull(
                 BIRTHDAY.takeIf { isToday && !teacher && date?.monthValue == 4 && date.dayOfMonth == 2 },
+                date?.takeIf { isToday }?.let { holidayNote(it.monthValue, it.dayOfMonth) },
             )
+            DayHeader(
+                date?.let(::formatDayTitle) ?: day.date, isToday, past, daySummary(day.lessons, groups, bells),
+                bottom = if (notes.isEmpty()) 8.dp else 4.dp,
+            )
+
             // Свой день не прочитан — «пар нет» тут было бы неправдой.
             val unknown = day.unread == UnreadDay.MISSING
             notes.forEachIndexed { index, note ->
@@ -596,8 +613,13 @@ private fun DayCard(
                     note,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = if (index == 0) 12.dp else 4.dp,
-                        bottom = if (index == notes.lastIndex && unknown && day.lessons.isEmpty()) 16.dp else 4.dp),
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = if (index == 0) 0.dp else 4.dp,
+                        bottom = when {
+                            index != notes.lastIndex -> 4.dp
+                            day.lessons.isNotEmpty() -> 8.dp
+                            unknown -> 16.dp
+                            else -> 4.dp
+                        }),
                 )
             }
             if (unknown && day.lessons.isEmpty()) {
@@ -736,8 +758,8 @@ private val FREE_STUDENT = listOf("Пар нет. Можно одичать")
 internal const val IDLE_MILLIS = (5 * 60 + 8) * 1000L
 
 @Composable
-private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, summary: String? = null) {
-    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)) {
+private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, summary: String? = null, bottom: Dp = 8.dp) {
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = bottom)) {
         Text(
             title.replaceFirstChar { it.uppercase() },
             style = MaterialTheme.typography.titleMedium,

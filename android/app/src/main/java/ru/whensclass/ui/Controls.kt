@@ -385,8 +385,9 @@ fun SwitchRow(
             .toggleable(value = checked, onValueChange = onCheckedChange, role = Role.Switch, enabled = enabled)
             // Недоступная — бледнее, как у Material.
             .alpha(if (enabled) 1f else 0.38f)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(vertical = 12.dp),
+        // Тумблер — у первой строки подписи: у него та же высота, что у строки.
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         // Длинная подпись переносится, а не налезает на тумблер. Пояснение — внутри

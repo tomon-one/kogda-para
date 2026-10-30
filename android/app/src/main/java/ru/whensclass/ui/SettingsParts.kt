@@ -228,8 +228,8 @@ private fun ExternalRow(label: String, checked: Boolean? = null, hint: String? =
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {

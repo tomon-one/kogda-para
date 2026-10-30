@@ -356,3 +356,11 @@ test('открыть список: сегодня, после последнег
   // Сетки нет — сегодня.
   assert.equal(openingDay({}, at(23, 0)), '2026-10-29');
 });
+
+test('поздравление только в праздник', async () => {
+  const { holidayNote } = await import('../assets/js/ui/days.js');
+  assert.equal(holidayNote('2027-01-08'), '🎄 С Новым годом!');
+  assert.equal(holidayNote('2027-01-07'), '⭐ С Рождеством!');
+  assert.equal(holidayNote('2026-11-04'), '🤝 С Днём народного единства!');
+  assert.equal(holidayNote('2027-01-09'), null);
+});
