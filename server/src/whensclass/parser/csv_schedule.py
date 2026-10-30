@@ -480,8 +480,10 @@ def _settle_moved(
         d = doubt[day]
         n_main, main = share(d.by_main)
         n_sect, sect = share(d.by_section)
-        if not n_main and not n_sect and not any(d.by_new.values()):
+        others = any(by.get(day) for gid, by in snapshot.schedule.items() if gid not in d.by_main)
+        if not n_main and not n_sect and not others and not any(d.by_new.values()):
             # В строках дня пусто при любом чтении: спорить не о чем, пар нет.
+            # Пусто только у спорных групп — другое: их колонки могли уехать.
             for gid in d.by_main:
                 snapshot.schedule[gid].pop(day, None)
             continue

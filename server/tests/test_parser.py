@@ -768,6 +768,20 @@ def test_day_empty_by_both_headers_is_empty_not_unread():
     assert busy in snapshot.unread["a-1"]
 
 
+def test_day_empty_only_for_doubtful_groups_stays_unread():
+    """Пары есть у групп вне спорных: пустота спорной колонки — не выходной."""
+    import datetime as dt
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+    from whensclass.parser import csv_schedule as cs
+
+    day = dt.date(2026, 10, 14)
+    groups = [GroupRef(name="А-1", id="a-1", column=4), GroupRef(name="Б-1", id="b-1", column=8)]
+    pair = Lesson(number=1, subject="Физика")
+    snapshot = Snapshot("лист", groups=groups, dates=[day], schedule={"a-1": {day: [pair]}, "b-1": {day: [pair]}})
+    cs._settle_moved(snapshot, {day: cs._Doubt(columns={"a-1": 4}, why="сдвиг", by_main={"a-1": []}, by_section={"a-1": []})})
+    assert day in snapshot.unread["a-1"]
+
+
 def test_subgroup_of_next_sheet_gets_group_lessons_in_current_sheet():
     """Подгруппа названа только в следующем листе: в днях текущего она — группа."""
     import datetime as dt
