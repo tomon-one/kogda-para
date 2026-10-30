@@ -111,7 +111,7 @@ class WeekWidget : GlanceAppWidget() {
                         val missing = missingDay(
                             schedule, today, state?.serverBroken == true, week = true,
                             checked = checkedToday(state?.fetchedAt ?: 0L, today),
-                            unsupported = state?.unsupported == true,
+                            unsupported = state?.unsupported == true, editing = state?.editing == true,
                         )
                         MissingHint(
                             missing.text, colors,
@@ -204,7 +204,7 @@ private fun Header(
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || serverBroken || gone || unsupported -> colors.error
+                            failed || (serverBroken && !editing) || gone || unsupported -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },

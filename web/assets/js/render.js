@@ -109,7 +109,7 @@ function renderScreen(navigated) {
   var hadCards = !!root.querySelector('[data-day]');
   var hadPlates = plateTitles();
   var oldPlates = root.querySelector('.plates');
-  var platesAbove = oldPlates ? platesBottom(oldPlates) : 0;
+  var platesHigh = platesHeight(oldPlates);
 
   var screen = screenFor(app.route);
   if (navigated) nav.at = Date.now();
@@ -150,7 +150,10 @@ function renderScreen(navigated) {
     if (anchor) restoreAnchor(anchor);
     else if (navigated) window.scrollTo(0, 0);
     else window.scrollTo(0, scrollY);
-    if (!navigated) showNewPlate(hadPlates, anchor, platesAbove, scrollY);
+    if (!navigated) {
+      if (anchor) showNewPlate(hadPlates, anchor);
+      else keepList(platesHigh, scrollY);
+    }
   }
 }
 
@@ -158,32 +161,40 @@ function plateTitles() {
   return Array.prototype.map.call(root.querySelectorAll('.plate-title'), function (el) { return el.textContent; });
 }
 
-/** Низ блока плашек от верха страницы — вместе с отступом под ним. */
-function platesBottom(el) {
-  return el.getBoundingClientRect().bottom + window.pageYOffset + parseFloat(window.getComputedStyle(el).marginBottom || 0);
+/** Высота блока плашек вместе с отступом под ним: отступ — у плашки и схлопывается сквозь блок. */
+function platesHeight(el) {
+  if (!el) return 0;
+  var last = el.lastElementChild;
+  return el.getBoundingClientRect().height + (last ? parseFloat(window.getComputedStyle(last).marginBottom || 0) : 0);
+}
+
+/** Плашка появилась или ушла над списком без дней: список не прыгает на её высоту. */
+function keepList(before, scrollY) {
+  if (scrollY <= 0) return;
+  var plates = root.querySelector('.plates');
+  var now = platesHeight(plates);
+  if (now === before) return;
+  // Новая плашка на виду — листать незачем.
+  if (now > before && plates.getBoundingClientRect().top >= headHeight()) return;
+  window.scrollTo(0, Math.max(0, scrollY + now - before));
 }
 
 /**
  * Плашка появилась посреди открытого экрана («Нет сети», сбой сервера).
  * Блок плашек стоит перед сегодняшним днём, а перестройка держит на месте
  * карточку под шапкой — плашка уезжала бы под шапку. Стоит человек на этом
- * дне — довести до неё: сбой без плашки хуже сдвига. У списков без дней
- * плашка над ними — список не прыгает вниз на её высоту.
+ * дне — довести до неё: сбой без плашки хуже сдвига.
  */
-function showNewPlate(had, anchor, platesAbove, scrollY) {
+function showNewPlate(had, anchor) {
   var plates = root.querySelector('.plates');
   if (!plates || !plateTitles().some(function (t) { return had.indexOf(t) < 0; })) return;
   var top = plates.getBoundingClientRect().top;
   if (top >= headHeight()) return;
-  if (anchor) {
-    // Только если плашка — прямо над днём на экране: ушедшего вглубь недели
-    // назад не тянуть.
-    var next = plates.nextElementSibling;
-    if (!next || next.getAttribute('data-day') !== anchor.day) return;
-    window.scrollTo(0, Math.max(0, top + window.pageYOffset - headHeight() - 8));
-  } else if (scrollY > 0) {
-    window.scrollTo(0, scrollY + platesBottom(plates) - (platesAbove || plates.getBoundingClientRect().top + window.pageYOffset));
-  }
+  // Только если плашка — прямо над днём на экране: ушедшего вглубь недели
+  // назад не тянуть.
+  var next = plates.nextElementSibling;
+  if (!next || next.getAttribute('data-day') !== anchor.day) return;
+  window.scrollTo(0, Math.max(0, top + window.pageYOffset - headHeight() - 8));
 }
 
 /** Только ⟳ в шапке — без перестройки экрана (today.js, refreshButton). */

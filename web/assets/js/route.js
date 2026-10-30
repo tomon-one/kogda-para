@@ -124,7 +124,7 @@ export function onRoute() {
   // Дни всплывают после выбора группы; при переходах внутри экрана хватает сдвига.
   nav.appear = nav.depth != null && nav.depth < 2 && depth >= 2;
   nav.depth = depth;
-  if ((isOwn && !wasOwn) || (route.id && enteredList)) state.wanted = route.id ? OPENING : repo.openingDate();
+  if ((isOwn && !wasOwn) || (route.id && enteredList)) state.wanted = route.id || state.wanted === OPENING ? OPENING : repo.openingDate();
   if (route.id) loadOther(route.kind, route.id);
   // Экран выбора — всегда за свежими (ответ по ETag, без изменений — пустой):
   // после «Выбрать заново» в старом списке нет новой группы.

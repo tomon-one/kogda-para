@@ -505,7 +505,7 @@ class ScheduleRepository(
         return refreshLock.withLock {
             // Ждали чужой заход, а он только что не дозвался сервера: второй круг
             // по тому же таймауту — ещё полминуты ожидания без нового ответа.
-            silentFailure?.takeIf { (at, _) -> at >= asked }?.let { (_, result) -> return@withLock result }
+            silentFailure?.takeIf { (at, _) -> at in asked..System.currentTimeMillis() }?.let { (_, result) -> return@withLock result }
             refreshOnce(force).also { result ->
                 silentFailure = if (result is RefreshResult.Failed && result.error is java.io.IOException &&
                     result.error !is HttpFailure

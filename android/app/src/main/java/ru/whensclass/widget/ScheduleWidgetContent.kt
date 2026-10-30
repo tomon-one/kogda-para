@@ -116,7 +116,7 @@ fun ScheduleWidgetContent(
             today == null -> {
                 val missing = missingDay(
                     schedule, day, serverBroken, checked = checkedToday(fetchedAt, now.toLocalDate()),
-                    unsupported = unsupported,
+                    unsupported = unsupported, editing = editing,
                 )
                 // К своей колонке и к этому дню, а не в книгу целиком.
                 val link = sheetLink(schedule, day, sourceUrl)
@@ -151,8 +151,8 @@ fun ScheduleWidgetContent(
                 val summaryHeight = (4 + 15 * fit.scale).dp
                 val summary = if (fit.dense) null else ru.whensclass.ui.daySummary(today.lessons, schedule.groupNames, schedule.bellsOf(today))
                     ?.takeIf {
-                        pairsRoom(size.height, summaryHeight, fit) >=
-                            minOf(today.lessons.size, maxOf(1, pairsRoom(size.height, 0.dp, fit)))
+                        pairsShown(size.height, summaryHeight, fit, today.lessons.size) >=
+                            minOf(today.lessons.size, maxOf(1, pairsShown(size.height, 0.dp, fit, today.lessons.size)))
                     }
                 if (summary != null) {
                     Text(
@@ -300,7 +300,7 @@ private fun Header(
                     style = TextStyle(
                         fontSize = 11.sp,
                         color = when {
-                            failed || serverBroken || gone || unsupported -> colors.error
+                            failed || (serverBroken && !editing) || gone || unsupported -> colors.error
                             busy || done -> colors.accent
                             else -> colors.textDim
                         },

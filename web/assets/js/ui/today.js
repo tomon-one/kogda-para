@@ -51,9 +51,9 @@ export function mainScreen(app) {
     head, live ? null : secondTabs(app, tab, false), strip, content);
 
   // Сбой и пропажа — на любой вкладке, как в приложении: иначе чужое
-  // расписание во время сбоя выглядело бы свежим. На своём — у сегодняшнего
+  // расписание во время сбоя выглядело бы свежим. На расписании — у сегодняшнего
   // дня, куда страница прокручивается.
-  if (route.kind) {
+  if (route.kind && !route.id) {
     var top = plates(app);
     if (top) content.appendChild(top);
   }
@@ -248,7 +248,7 @@ function plates(app) {
     var edited = app.server();
     var source = sheetLink(app.saved(), app.now().date, edited.src_url);
     out.push(h('div', { class: 'plate' },
-      h('div', { class: 'plate-title' }, 'Колледж правит таблицу'),
+      h('div', { class: 'plate-title plate-quiet' }, 'Колледж правит таблицу'),
       h('div', { class: 'plate-text' }, 'Расписание обновится само, когда правка закончится. Пары могли поменяться.'),
       edited.since ? h('div', { class: 'plate-since' },
         'С ' + formatSince(edited.since) + '. На экране — таблица, какой она была до правки.') : null,
@@ -324,6 +324,7 @@ function ownView(app, content) {
 
 function chosenView(app, kind, id) {
   var other = app.state.other;
+  var platesEl = plates(app);
   var ready = other && other.kind === kind && other.id === id;
   var list = kind === 'teachers' ? app.state.teachers : app.state.groups;
   var known = (list || []).filter(function (x) { return x.id === id; })[0];
@@ -345,8 +346,9 @@ function chosenView(app, kind, id) {
   } else {
     var missing = explainMissing(app, other.schedule, false, null);
     if (other.failed && other.schedule) box.appendChild(h('p', { class: 'nothing' }, 'Не обновилось — на экране прежнее.'));
-    box.appendChild(missing || dayCards(other.schedule, app.now(), null, null));
+    box.appendChild(missing || dayCards(other.schedule, app.now(), platesEl, app.now().date));
   }
+  if (platesEl && !platesEl.parentNode) box.insertBefore(platesEl, box.children[1] || null);
   return box;
 }
 

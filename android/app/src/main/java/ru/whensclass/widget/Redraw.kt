@@ -45,7 +45,8 @@ internal fun widgetIds(context: Context, receiver: Class<*>): List<GlanceId> {
         AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, receiver))
     }.getOrNull() ?: return emptyList()
     val manager = GlanceAppWidgetManager(context)
-    return ids.map { manager.getGlanceIdBy(it) }
+    // Виджет могли снять после списка: один снятый не должен обрывать весь заход.
+    return ids.toList().mapNotNull { id -> runCatching { manager.getGlanceIdBy(id) }.getOrNull() }
 }
 
 /**

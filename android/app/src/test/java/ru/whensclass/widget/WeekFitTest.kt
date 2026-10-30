@@ -1,5 +1,6 @@
 package ru.whensclass.widget
 
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -47,5 +48,15 @@ class WeekFitTest {
         val fit = fitWeek(week, free = 30f, summary = 21f)
         assertEquals(0, fit.open)
         assertEquals(1, fit.shown)
+    }
+
+    @Test
+    fun `строка ещё N считается в пары дневного виджета`() {
+        val fit = Fit(narrow = false, dense = false)
+        // Три пары на 175 dp: без сводки видно две, со сводкой — одна и «ещё 2».
+        assertEquals(2, pairsShown(175.dp, 0.dp, fit, 3))
+        assertEquals(1, pairsShown(175.dp, 19.dp, fit, 3))
+        // Две пары входят и со сводкой: строки «ещё» нет.
+        assertEquals(2, pairsShown(175.dp, 19.dp, fit, 2))
     }
 }

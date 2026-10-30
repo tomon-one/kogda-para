@@ -41,7 +41,8 @@ class ShiftDayAction : ActionCallback {
             val next = (current + step).coerceIn(low, high)
             prefs.toMutablePreferences().apply {
                 this[ScheduleWidget.KEY_DAY_OFFSET] = next
-                this[ScheduleWidget.KEY_DAY_BASE] = base.toEpochDay()
+                // Вернулись на день открытия: дальше он снова считается по звонкам.
+                if (next == 0) remove(ScheduleWidget.KEY_DAY_BASE) else this[ScheduleWidget.KEY_DAY_BASE] = base.toEpochDay()
             }
         }
         ScheduleWidget().update(context, glanceId)

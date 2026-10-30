@@ -253,3 +253,9 @@ private fun freeHeight(height: Dp, reserved: Dp, fit: Fit, scale: Float): Dp =
 /** Сколько целых пар войдёт в виджет высотой [height], если над ними занято [reserved]. */
 internal fun pairsRoom(height: Dp, reserved: Dp, fit: Fit): Int =
     (freeHeight(height, reserved, fit, fit.scale) / rowHeight(fit, fit.scale)).toInt()
+
+/** Сколько из [count] пар будет видно: не вошедшие сами занимают строку «ещё N». */
+internal fun pairsShown(height: Dp, reserved: Dp, fit: Fit, count: Int): Int {
+    val room = pairsRoom(height, reserved, fit)
+    return if (count > room) pairsRoom(height, reserved + 17.dp * fit.scale, fit) else room
+}

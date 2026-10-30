@@ -17,6 +17,9 @@
 /* Плашка-новость, не беда: заголовок обычным цветом и крестик справа. */
 .plate-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -6px -10px 0 0; }
 .plate-head .plate-title { color: var(--fg); }
+/* Ожидание, не сбой: как в приложении, без красного. */
+.plate-title.plate-quiet { color: var(--fg); }
+.plate-quiet ~ .plate-since { color: var(--muted); }
 
 /* ——— дни ——— */
 

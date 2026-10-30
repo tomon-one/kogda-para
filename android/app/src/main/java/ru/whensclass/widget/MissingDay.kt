@@ -51,6 +51,8 @@ internal fun missingDay(
     checked: Boolean = true,
     /** Сервер эту сборку не обслуживает (426). */
     unsupported: Boolean = false,
+    /** Сбой — колледж правит таблицу ([ru.whensclass.data.ServerState.editing]). */
+    editing: Boolean = false,
 ): Missing {
     val covered = schedule.coverage.size == 2 && runCatching {
         !day.isBefore(LocalDate.parse(schedule.coverage[0])) &&
@@ -69,7 +71,9 @@ internal fun missingDay(
         unsupported -> Missing("Нужно обновить приложение", toApp = true)
         // Сбой — раньше несвежести: данные при сбое всегда стареют, а
         // обновление тут не поможет.
-        serverBroken -> Missing("Сбой: расписание не обновляется", toSource = true)
+        serverBroken -> Missing(
+            if (editing) "Колледж правит таблицу" else "Сбой: расписание не обновляется", toSource = true,
+        )
         // Лист этот день покрывает, а на телефоне его нет — окно не то.
         // Утверждать «выходной» или «не опубликовано» нечем.
         covered || !checked -> Missing(

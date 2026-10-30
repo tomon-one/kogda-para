@@ -509,14 +509,14 @@ internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
     return out
 }
 
+/** Строка карточки «Сегодня» 2 апреля (как на сайте, `ui/days.js`). */
+private const val BIRTHDAY = "🎂 Сегодня у автора день рождения. Он не вправе отменить пары, но очень хотел бы"
+
 /**
  * Пометки дня, который сервер не прочитал (unreadNotes в schedule.js сайта):
  * своего — без имени, у преподавателя — с группами из `ug` (и `uk`, где пары
  * прежние), у других выбранных групп — с их именами.
  */
-/** Строка карточки «Сегодня» 2 апреля (как на сайте, `ui/days.js`). */
-private const val BIRTHDAY = "🎂 Сегодня у автора день рождения. Он не вправе отменить пары, но очень хотел бы"
-
 internal fun unreadNotes(day: DayDto): List<String> {
     val base = "Сервер не смог прочитать этот день"
     val out = mutableListOf<String>()
