@@ -830,6 +830,9 @@ private fun androidx.compose.ui.graphics.drawscope.ContentDrawScope.drawBlurred(
     val k = GLASS_SCALE
     val r = radius * k + if (source.flip) 0.01f else 0f
     source.blur.alpha = alpha
+    // Размытие растекается за края слоя: без обрезки под полоской оставалась
+    // мутная полоса шириной в радиус размытия.
+    source.blur.clip = true
     source.blur.renderEffect = androidx.compose.ui.graphics.BlurEffect(r, r, androidx.compose.ui.graphics.TileMode.Clamp)
     source.blur.record(size = androidx.compose.ui.unit.IntSize((window.width * k).toInt().coerceAtLeast(1), (window.height * k).toInt().coerceAtLeast(1))) {
         scale(k, androidx.compose.ui.geometry.Offset.Zero) {
