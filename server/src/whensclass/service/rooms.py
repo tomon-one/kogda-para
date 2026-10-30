@@ -18,6 +18,7 @@ import re
 from collections import defaultdict
 
 from ..domain.models import Snapshot
+from ..parser.groups import SUBGROUP_RE
 
 MAIN = "Главный корпус"
 # 55-й кабинет — отдельный корпус со своим входом, у колледжа «Вход 2».
@@ -81,9 +82,15 @@ def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]])
     known = {place for place, slots in seen.items() if len(slots) >= MIN_SEEN}
 
     names = {g.id: g.name for g in snapshot.groups}
+    ids = {g.name: g.id for g in snapshot.groups}
+    base_of = {g.id: ids[m[1]] for g in snapshot.groups if (m := SUBGROUP_RE.fullmatch(g.name)) and m[1] in ids}
     busy: dict[int, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
     unread = []
     for gid, by_date in snapshot.schedule.items():
+        if (base := base_of.get(gid)) is not None and by_date.get(day) == snapshot.schedule.get(base, {}).get(day) \
+                and (day in snapshot.unread.get(gid, {})) == (day in snapshot.unread.get(base, {})):
+            # День, где лист пишет группу целиком: у подгруппы её же пары.
+            continue
         if day in snapshot.unread.get(gid, {}):
             unread.append(names.get(gid, gid))
             continue

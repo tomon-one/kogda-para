@@ -69,17 +69,33 @@ _TITLE = re.compile(r"пересдач|задолженност", re.IGNORECASE)
 _MONTHS = ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
 
 
+def _title_months(title: str) -> list[tuple[int, int]]:
+    """Год и месяц каждого месяца заголовка по порядку: «декабрь 2026 – январь
+    2027» -> [(2026, 12), (2027, 1)]. Месяцу — год, идущий за ним в тексте
+    (иначе последний перед ним); «декабрь – январь 2027»: декабрь — 2026-й."""
+    years = [(m.start(), int(m[1])) for m in re.finditer(r"\b(20\d{2})\b", title)]
+    if not years:
+        return []
+    found = []
+    for word in re.finditer(r"[а-яё]+", title.lower()):
+        w = word[0]
+        month = next(
+            (i + 1 for i, stem in enumerate(_MONTHS) if w.startswith(stem) and (stem != "ма" or w in ("май", "мая"))),
+            None,
+        )
+        if month:
+            after = [y for at, y in years if at > word.start()]
+            found.append([after[0] if after else years[-1][1], month])
+    for i in range(len(found) - 2, -1, -1):
+        if found[i][0] == found[i + 1][0] and found[i][1] > found[i + 1][1]:
+            found[i][0] -= 1
+    return [(y, m) for y, m in found]
+
+
 def _title_month(title: str) -> tuple[int, int] | None:
-    """Год и месяц из заголовка («График пересдач, октябрь 2026 г.»), если есть оба."""
-    year = re.search(r"\b(20\d{2})\b", title)
-    if not year:
-        return None
-    words = re.findall(r"[а-яё]+", title.lower())
-    month = next(
-        (i + 1 for i, stem in enumerate(_MONTHS) for w in words if w.startswith(stem) and (stem != "ма" or w in ("май", "мая"))),
-        None,
-    )
-    return (int(year[1]), month) if month else None
+    """Последний месяц заголовка с годом («График пересдач, октябрь 2026 г.»)."""
+    months = _title_months(title)
+    return max(months) if months else None
 
 
 def _anchor(title: str, today: dt.date) -> dt.date:
@@ -89,8 +105,8 @@ def _anchor(title: str, today: dt.date) -> dt.date:
     year = re.search(r"\b(20\d{2})\b", title)
     if not year:
         return today
-    if found := _title_month(title):
-        return dt.date(found[0], found[1], 15)
+    if months := _title_months(title):
+        return dt.date(*min(months), 15)
     # Учебный год без месяца («2026-2027 уч. год», «2026/27»): сентябрь —
     # первого года, январь — второго; середина — новый год между ними.
     span = re.search(r"\b(20\d{2})\s*[-–/]\s*(?:20)?(\d{2})\b", title)

@@ -292,6 +292,11 @@ def test_last_day_counts_moved_and_undated_rows():
     assert last("14.10", "по договорённости") == dt.date(2026, 10, 31)
     assert last("по договорённости", title="График пересдач 2026-2027") is None
     assert last("по договорённости", title="График пересдач, декабрь 2026") == dt.date(2026, 12, 31)
+    # Через Новый год конец — последний месяц, а не первый в списке месяцев.
+    title = "График пересдач декабрь 2026 - январь 2027"
+    assert last("14.12", "20.01", "по договорённости", title=title) == dt.date(2027, 1, 31)
+    assert last("14.12", title="Пересдачи декабрь - январь 2027") == dt.date(2026, 12, 14)
+    assert last("по договорённости", title="Пересдачи ноябрь–декабрь 2026") == dt.date(2026, 12, 31)
 
 
 def test_sheet_whose_days_all_passed_is_closed(source, monkeypatch):

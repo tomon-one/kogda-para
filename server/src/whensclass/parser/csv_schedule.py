@@ -470,6 +470,7 @@ def _settle_moved(
 
     back_to_main = False
     added: dict[str, GroupRef] = {}
+    own: dict[str, set[date]] = {}
     read: dict[str, list[date]] = {"section": [], "main": [], "": []}
     whys: dict[str, None] = {}
     absent: dict[tuple[str, str], list[date]] = {}
@@ -519,11 +520,38 @@ def _settle_moved(
                     default=len(snapshot.groups) - 1,
                 )
                 snapshot.groups.insert(at + 1, added[gid])
+            own.setdefault(gid, set()).add(day)
             if lessons:
                 snapshot.schedule.setdefault(gid, {})[day] = list(lessons)
             if col != added[gid].column:
                 snapshot.day_columns.setdefault(gid, {})[day] = col
             names[gid] = name
+    if previous is not None and read[""]:
+        # Ни один день разделения не решён — подгруппы прежнего снимка остаются:
+        # иначе у выбравших их 404 и «выберите заново», а через заход всё вернётся.
+        have = {g.id for g in snapshot.groups}
+        for g in previous.groups:
+            m = SUBGROUP_RE.fullmatch(g.name)
+            if g.id in have or not m or (base := group_id(m.group(1))) not in have:
+                continue
+            added[g.id] = g
+            at = max(k for k, x in enumerate(snapshot.groups) if x.id in (base, *added))
+            snapshot.groups.insert(at + 1, g)
+            have.add(g.id)
+            names[g.id] = g.name
+    for gid, ref in added.items():
+        # Подгруппа — часть группы: в дни, где лист пишет группу целиком (вне
+        # недели разделения или день не решён), у неё пары и пометки группы.
+        base = group_id(SUBGROUP_RE.fullmatch(ref.name).group(1))
+        mine = own.get(gid, set())
+        for day, lessons in snapshot.schedule.get(base, {}).items():
+            if day not in mine:
+                snapshot.schedule.setdefault(gid, {})[day] = list(lessons)
+                snapshot.day_columns.setdefault(gid, {})[day] = snapshot.day_columns.get(base, {}).get(
+                    day, column_of.get(base, ref.column))
+        for day, known_before in snapshot.unread.get(base, {}).items():
+            if day not in mine:
+                snapshot.unread.setdefault(gid, {})[day] = known_before
     for (gid, why), days in absent.items():
         snapshot.unread_why.append(
             f"{names.get(gid, gid)} {days[0]:%d.%m}–{days[-1]:%d.%m}: группы нет в повторном "

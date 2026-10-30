@@ -653,9 +653,10 @@ def test_too_little_to_judge_leaves_the_days_unread(fixture_csv):
 
 def test_group_split_into_subgroups_under_the_header_is_read_by_their_names(fixture_csv, monkeypatch):
     """Под повторным заголовком колледж разделил группу на подгруппы («С-926» на
-    «С-926/1» и «С-926/2»), и всё правее съехало на блок. Пары подгрупп — под
-    их именами и только в днях под заголовком; сама группа там не прочитана, а
-    не получает молча пары первой подгруппы."""
+    «С-926/1» и «С-926/2»), и всё правее съехало на блок. Пары подгрупп в днях
+    под заголовком — под их именами, а в остальных — пары и пометки группы:
+    там лист пишет её целиком. Сама группа под заголовком не прочитана, а не
+    получает молча пары первой подгруппы."""
     from whensclass.parser import csv_schedule
 
     monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
@@ -684,7 +685,9 @@ def test_group_split_into_subgroups_under_the_header_is_read_by_their_names(fixt
     for k in (1, 2):
         gid = f"gd-1125-{k}"
         assert any(g.id == gid and g.name == f"ГД-1125/{k}" for g in snap.groups)
-        assert snap.schedule[gid] == {day: gd[day] for day in read if gd.get(day)}
+        whole = {d: x for d, x in snap.schedule["gd-1125"].items() if d not in read}
+        assert whole and snap.schedule[gid] == {**whole, **{day: gd[day] for day in read if gd.get(day)}}
+        assert set(snap.unread.get(gid, {})) == set(below) - set(read)
     ids = [g.id for g in snap.groups]
     assert ids[ids.index("gd-1125") + 1:ids.index("gd-1125") + 3] == ["gd-1125-1", "gd-1125-2"]
     assert set(snap.unread["gd-1125"]) == set(below)
@@ -693,6 +696,14 @@ def test_group_split_into_subgroups_under_the_header_is_read_by_their_names(fixt
         if group.id != "gd-1125":
             for day in read:
                 assert snap.schedule[group.id].get(day) == honest.schedule[group.id].get(day), group.name
+
+    # Следующая версия не решила ни одного дня — подгруппы прежнего снимка не
+    # пропадают: их дни под заголовком не прочитаны, как у группы.
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 10**6)
+    again = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE, previous=snap)
+    ids = [g.id for g in again.groups]
+    assert ids[ids.index("gd-1125") + 1:ids.index("gd-1125") + 3] == ["gd-1125-1", "gd-1125-2"]
+    assert set(again.unread["gd-1125-1"]) == set(below)
 
 
 def test_unknown_name_that_is_not_a_subgroup_is_not_a_new_group(fixture_csv, monkeypatch):

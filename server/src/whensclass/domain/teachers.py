@@ -177,6 +177,10 @@ def _full_names(snapshot: Snapshot) -> dict[str, str]:
     return out
 
 
+# «С-926/1»: подгруппа группы «С-926» (как SUBGROUP_RE разбора).
+_SUBGROUP = re.compile(r"(.+?)\s*/\s*\d+")
+
+
 def build_index(snapshot: Snapshot) -> TeacherIndex:
     """Переворачивает снимок: из «пары группы» получаются «пары преподавателя».
 
@@ -240,9 +244,13 @@ def build_index(snapshot: Snapshot) -> TeacherIndex:
 
     for key, groups in merged.items():
         tid, day, _number, _state = key
+        names = set(groups)
+        # В дни, где лист пишет группу целиком, у её подгрупп та же пара: это
+        # одна пара группы, а не три.
+        names = {n for n in names if not ((m := _SUBGROUP.fullmatch(n)) and m[1] in names)}
         entry = TeacherLesson(
             lesson=best[key],
-            group_name=", ".join(sorted(set(groups))),
+            group_name=", ".join(sorted(names)),
             column=columns.get(key),
         )
         index.schedule.setdefault(tid, {}).setdefault(day, []).append(entry)

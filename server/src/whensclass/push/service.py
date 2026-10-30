@@ -65,6 +65,15 @@ def quiet_hours(now: dt.datetime) -> bool:
     return now.hour >= 22 or now.hour < 7
 
 
+
+def _by_day(lines: list[list[str]]) -> list[list[str]]:
+    """Строки ночи — по дням, как днём у change_lines: получатель оставляет
+    первые MAX_LINES, и сегодняшнее должно быть в начале. Внутри дня — порядок
+    прихода; лишнее уходит с дальних дней, а в дне — старое: «вернули» после
+    «отменили» важнее самой отмены."""
+    order = sorted(range(len(lines)), key=lambda i: (lines[i][0], -i))[:changes.MAX_LINES]
+    return [lines[i] for i in sorted(order, key=lambda i: (lines[i][0], i))]
+
 class Push(Delivery):
     """Подписки на диске и рассылка. Один на службу."""
 
@@ -298,6 +307,17 @@ class Push(Delivery):
         if quiet_hours(self.clock()):
             self._hold(lines_for)
             return
+        if self._held:
+            # Утро без выпуска (служба лежала в 7:00, заморозка): сначала ночное,
+            # потом свежее — иначе последней строкой у получателя встанет старое.
+            with self._lock:
+                held, self._held = self._held, {}
+                self._save_held()
+            for key, night in held.items():
+                fresh = lines_for.get(key, [])
+                night = [x for x in night if x[0] >= today.isoformat() and x not in fresh]
+                if night:
+                    lines_for[key] = _by_day(night + fresh)
         jobs = []
         for sub in subs:
             lines = lines_for.get((sub["kind"], sub["id"]))
@@ -365,7 +385,7 @@ class Push(Delivery):
         for sub in self._snapshot_subs():
             if not sub.get("changes") or sub.get("gone"):
                 continue
-            lines = [x for x in held.get((sub["kind"], sub["id"]), []) if x[0] >= today.isoformat()]
+            lines = _by_day([x for x in held.get((sub["kind"], sub["id"]), []) if x[0] >= today.isoformat()])
             if lines:
                 jobs.append(Job(sub, changes_message(sub, lines), changes_ttl(lines)))
         if jobs:

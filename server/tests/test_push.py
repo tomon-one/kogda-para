@@ -177,6 +177,41 @@ def test_changes_at_night_wait_for_the_morning(tmp_path, snapshots):
     assert not [j for j in again.sent if j.message["notification"]["data"]["t"] == "changes"]
 
 
+def test_held_changes_go_out_by_day(tmp_path, snapshots):
+    """Ночью правки нескольких заходов копятся по приходу; утром сегодня — первым:
+    сервис-воркер оставляет первые восемь строк."""
+    _, _, after, at, day, _ = snapshots
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(subscription.parse_subscription(_body(id="isp-924-2")), day)
+    push.sent.clear()
+    push._held = {("group", "isp-924-2"): [["2026-09-09", "ср: первая"], ["2026-09-08", "вт: вторая"],
+                                           ["2026-09-09", "ср: третья"]]}
+    push.remind(after, at, now=dt.datetime(2026, 9, 8, 7, 0))
+    changed = [j for j in push.sent if j.message["notification"]["data"]["t"] == "changes"]
+    assert changed[0].message["notification"]["body"] == "вт: вторая\nср: первая\nср: третья"
+    # Больше восьми: уходят дальние дни, а в сегодняшнем — старые строки.
+    many = [["2026-09-09", f"ср: {n}"] for n in range(4)] + [["2026-09-08", f"вт: {n}"] for n in range(7)]
+    many.insert(5, ["2026-09-08", "вт: отменили"])
+    many.append(["2026-09-08", "вт: вернули"])
+    today = [x for x in many if x[0] == "2026-09-08"]
+    assert len(today) == 9 and service._by_day(many) == today[1:]
+
+
+def test_day_change_after_missed_morning_goes_after_the_night(tmp_path, snapshots):
+    """Служба лежала в 7:00: первый заход днём шлёт ночное и свежее одним
+    сообщением, свежее — последним."""
+    before, bt, after, at, day, first = snapshots
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(subscription.parse_subscription(_body(id="isp-924-2")), day)
+    push.sent.clear()
+    push._held = {("group", "isp-924-2"): [["2026-09-08", "вт: ночная"]]}
+    push.clock = lambda: dt.datetime(2026, 9, 8, 7, 30)
+    push.after_refresh(before, bt, after, at, day)
+    assert len(push.sent) == 1 and push._held == {}
+    assert push.sent[0].message["notification"]["body"] == \
+        f"вт: ночная\nвт, 8 сентября: отменили {first.number} пару: {first.subject}"
+
+
 def test_held_changes_drop_past_days(tmp_path, snapshots):
     before, bt, after, at, day, _ = snapshots
     push = Recorder(tmp_path, _vapid())
