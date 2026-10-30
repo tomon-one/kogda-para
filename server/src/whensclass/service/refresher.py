@@ -74,6 +74,9 @@ class Refresher(Failing, SheetWatch):
         # snapshot.prev.json.
         self._accept_path = state_dir / "accept-next"
         self._accepting = False
+        # День, пустой у всех групп, -> когда его впервые увидели таким. В памяти:
+        # перезапуск начинает час заново — в безопасную сторону.
+        self._cleared_since: dict[dt.date, dt.datetime] = {}
         # Рычаг владельца: колледж правит таблицу, и сбой — не у сервера.
         # Людям — «подождите», а не «сбой» (`editing`); снимается сам, когда
         # лист снова принят, или через EDITING_TTL.
@@ -518,11 +521,30 @@ class Refresher(Failing, SheetWatch):
             dropped = _check_group_drop(previous, snapshot)
             if dropped:
                 self._suspicions.append(dropped)
-            _check_days_emptied(previous, snapshot, today, dropped=bool(self._dropped))
+            seen: set[dt.date] = set()
+            try:
+                _check_days_emptied(previous, snapshot, today, dropped=bool(self._dropped),
+                                    cleared_ok=self._cleared_held(seen))
+            finally:
+                # Хоть одна группа с парами в этот день — отсчёт сначала.
+                self._cleared_since = {d: t for d, t in self._cleared_since.items() if d in seen}
             teachers = build_index(snapshot)
         except ValueError as exc:
             raise SourceFormatChanged(f"разбор споткнулся о значение: {exc}") from exc
         return snapshot, teachers
+
+    def _cleared_held(self, seen: set):
+        """Проверка для `_check_days_emptied`: день пуст у всех групп не меньше DAY_CLEARED_HOLD."""
+        now = dt.datetime.now(dt.timezone.utc)
+
+        def held(day: dt.date) -> bool:
+            seen.add(day)
+            first = self._cleared_since.setdefault(day, now)
+            if now - first < DAY_CLEARED_HOLD:
+                return False
+            log.warning("%s пуст у всех групп с %s — принимаю как выходной", day, first.isoformat())
+            return True
+        return held
 
 
 class NotYetPublished(Exception):
@@ -543,6 +565,9 @@ UNREAD_REMIND_SECONDS = 24 * 60 * 60
 
 ACCEPT_NEXT_TTL = dt.timedelta(hours=2)
 EDITING_TTL = dt.timedelta(hours=12)
+# День, пустой в листе у всех групп, принимается, если пуст столько подряд:
+# выходной держится, а стёртое по ошибке колледж за это время возвращает.
+DAY_CLEARED_HOLD = dt.timedelta(hours=1)
 
 
 def _hold_unread(snapshot, before) -> None:

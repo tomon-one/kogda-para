@@ -273,6 +273,64 @@ def test_published_day_emptied_for_many_groups_is_rejected():
     gates._check_days_emptied(before, sheet(12), day)
 
 
+def test_holiday_and_day_cleared_everywhere_are_not_a_cut_day():
+    """Праздник, опустевший даже у части групп, — колледж убирает пары, не
+    отказ. День, пустой у всех групп, — отказ, пока служба не скажет, что он
+    держится (`cleared_ok`); частичная очистка — отказ и с ним."""
+    from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Lesson, Snapshot
+
+    holiday, workday = dt.date(2026, 11, 4), dt.date(2026, 11, 5)
+    groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(30)]
+    pair = [Lesson(number=1, subject="Физика")]
+
+    def sheet(day: dt.date, empty: int) -> Snapshot:
+        return Snapshot("лист", groups=groups, dates=[day],
+                        schedule={g.id: {day: [] if i < empty else pair} for i, g in enumerate(groups)})
+
+    gates._check_days_emptied(sheet(holiday, 0), sheet(holiday, 15), holiday)
+    asked = []
+    with pytest.raises(ChangedAgainstPrevious, match="у 30 групп из 30"):
+        gates._check_days_emptied(sheet(workday, 0), sheet(workday, 30), workday,
+                                  cleared_ok=lambda d: asked.append(d) or False)
+    assert asked == [workday]
+    gates._check_days_emptied(sheet(workday, 0), sheet(workday, 30), workday, cleared_ok=lambda d: True)
+    with pytest.raises(ChangedAgainstPrevious, match="у 29 групп из 30"):
+        gates._check_days_emptied(sheet(workday, 0), sheet(workday, 29), workday, cleared_ok=lambda d: True)
+
+
+def test_day_cleared_everywhere_is_accepted_after_an_hour_and_the_count_restarts(tmp_path, monkeypatch):
+    """Служба пропускает день, пустой у всех, только когда он пуст подряд не
+    меньше часа; вернулись пары хоть у одной группы — отсчёт сначала."""
+    from whensclass.service import refresher as refresher_mod
+
+    now = [dt.datetime(2026, 11, 5, 3, 0, tzinfo=dt.timezone.utc)]
+
+    class Clock(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now[0]
+
+    monkeypatch.setattr(refresher_mod.dt, "datetime", Clock)
+    r = refresher_mod.Refresher.__new__(refresher_mod.Refresher)
+    r._cleared_since = {}
+    day = dt.date(2026, 11, 5)
+
+    def ask(cleared: bool) -> bool:
+        seen = set()
+        ok = r._cleared_held(seen)(day) if cleared else False
+        r._cleared_since = {d: t for d, t in r._cleared_since.items() if d in seen}
+        return ok
+
+    assert not ask(True)
+    now[0] += dt.timedelta(minutes=40)
+    assert not ask(True)
+    now[0] += dt.timedelta(minutes=20)
+    assert ask(True)
+    assert not ask(False)
+    now[0] += dt.timedelta(minutes=20)
+    assert not ask(True)
+
+
 def test_day_cut_out_with_its_date_is_rejected_but_a_cut_tail_is_not():
     """Строки дня вырезаны вместе с датой: дня нет в листе, и пересечение
     дат его не видит. Внутри листа — отказ; хвост, перенесённый в новый

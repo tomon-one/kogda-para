@@ -28,6 +28,10 @@ MAX_GROUP_DROP = 0.3
 DAY_EMPTIED_SHARE = 0.1
 DAY_EMPTIED_COUNT = 12
 DAY_EMPTIED_MIN_GROUPS = 20
+# Официальные праздники (ст. 112 ТК РФ): опустевший в них день — колледж убрал
+# пары, а не вырезал день. Переносы выходных каждый год свои и сюда не входят:
+# их ловит «день пуст у всех», см. `cleared_ok`.
+HOLIDAYS = {(1, d) for d in range(1, 9)} | {(2, 23), (3, 8), (5, 1), (5, 9), (6, 12), (11, 4)}
 
 
 def _check_group_drop(previous, current) -> str | None:
@@ -55,7 +59,7 @@ def _check_group_drop(previous, current) -> str | None:
     return f"новый лист после перерыва в {gap} дн.: {message}"
 
 
-def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False) -> None:
+def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False, cleared_ok=None) -> None:
     """Отказ, если на уже выложенном дне (сегодня и дальше) пары пропали
     целиком у многих групп.
 
@@ -64,6 +68,10 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
     бы «убрали N пару», и вторым валом — «добавилась», когда колледж вернёт
     день. Честно за заход пары убирают у 12 групп из 190 (15.09, архив
     14–28.09). Если колледж правда отменил день — рычаг accept-next.
+
+    Праздник (`HOLIDAYS`) не проверяется. День, пустой в новом листе у всех
+    групп, пропускается, если `cleared_ok(day)` — решает служба: такой день
+    бывает и выходным, и стёртым по ошибке на пять минут.
     """
     if previous is None:
         return
@@ -85,7 +93,7 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
                     "групп — похоже на вырезанные строки"
                 )
     for day in sorted(set(previous.dates) & set(current.dates)):
-        if day < today:
+        if day < today or (day.month, day.day) in HOLIDAYS:
             continue
         # День, который прежний снимок не прочитал, держался на парах ещё более
         # раннего: это не то, что стояло в листе, и сверять с ним нечего.
@@ -101,6 +109,9 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
         if dropped and _from_dropped(previous, current, day):
             continue
         emptied = [gid for gid in had if not current.schedule.get(gid, {}).get(day)]
+        everywhere = not any(current.schedule.get(g.id, {}).get(day) for g in current.groups)
+        if everywhere and cleared_ok is not None and cleared_ok(day):
+            continue
         if len(emptied) >= max(DAY_EMPTIED_COUNT, DAY_EMPTIED_SHARE * len(had)):
             raise ChangedAgainstPrevious(
                 f"{day} у {len(emptied)} групп из {len(had)} пропали все пары — похоже на "
