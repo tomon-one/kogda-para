@@ -147,10 +147,10 @@
 }
 
 /* Ряд лежит поверх подложки шапки, уезжать вверх ему нельзя: наедет на вкладки.
-   Растворяется на месте, а полоска поднимается. */
+   Растворяется на месте быстрее, чем поднимается полоска, и уходит под неё. */
 :root[data-glass] .row-hidden > .tabs.float { top: var(--head-h, 0px); opacity: 0; }
-:root[data-glass] .row-moving > .tabs.float { transition: opacity 0.2s ease, visibility 0s; }
-:root[data-glass] .row-moving.row-hidden > .tabs.float { transition: opacity 0.2s ease, visibility 0s 0.2s; }
+:root[data-glass] .row-moving > .tabs.float { transition: opacity 0.12s ease 0.08s, visibility 0s; }
+:root[data-glass] .row-moving.row-hidden > .tabs.float { transition: opacity 0.12s ease, visibility 0s 0.12s; }
 
 @media (max-width: 380px) {
   :root[data-glass] .tabs.float { padding-left: 0; padding-right: 0; }
@@ -160,6 +160,7 @@
    и с зазором под вкладками. */
 :root[data-glass] .week-strip {
   top: calc(var(--head-h, 0px) + var(--row-shift, 0px) + 8px);
+  z-index: 12;
   /* Шириной с телефонную: вровень с карточками её рамка сливалась с их рамкой. */
   width: calc(100% - 24px);
   max-width: 420px;
