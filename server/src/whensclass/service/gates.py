@@ -69,9 +69,12 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
     день. Честно за заход пары убирают у 12 групп из 190 (15.09, архив
     14–28.09). Если колледж правда отменил день — рычаг accept-next.
 
-    Праздник (`HOLIDAYS`) не проверяется. День, пустой в новом листе у всех
-    групп, пропускается, если `cleared_ok(day)` — решает служба: такой день
-    бывает и выходным, и стёртым по ошибке на пять минут.
+    Праздник (`HOLIDAYS`) не проверяется. Будущий день, пустой в новом листе у
+    всех групп, пропускается, если `cleared_ok(day)` — решает служба: такой
+    день бывает и выходным, и стёртым по ошибке на пять минут. Сегодняшний не
+    пропускается: ошибка здесь — пустой день у всех без плашки. Вопрос задаётся
+    обо всех днях сразу, поэтому отказ бросается после цикла: неделя,
+    очищенная разом, ждёт один час, а не по часу на день.
     """
     if previous is None:
         return
@@ -92,6 +95,7 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
                     f"{day} пропал из листа вместе с датой, а пары в нём были у {len(had)} "
                     "групп — похоже на вырезанные строки"
                 )
+    refused = None
     for day in sorted(set(previous.dates) & set(current.dates)):
         if day < today or (day.month, day.day) in HOLIDAYS:
             continue
@@ -110,13 +114,15 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
             continue
         emptied = [gid for gid in had if not current.schedule.get(gid, {}).get(day)]
         everywhere = not any(current.schedule.get(g.id, {}).get(day) for g in current.groups)
-        if everywhere and cleared_ok is not None and cleared_ok(day):
+        if everywhere and day > today and cleared_ok is not None and cleared_ok(day):
             continue
-        if len(emptied) >= max(DAY_EMPTIED_COUNT, DAY_EMPTIED_SHARE * len(had)):
-            raise ChangedAgainstPrevious(
+        if refused is None and len(emptied) >= max(DAY_EMPTIED_COUNT, DAY_EMPTIED_SHARE * len(had)):
+            refused = ChangedAgainstPrevious(
                 f"{day} у {len(emptied)} групп из {len(had)} пропали все пары — похоже на "
                 "вырезанный или очищенный день"
             )
+    if refused is not None:
+        raise refused
 
 
 def _from_dropped(previous, current, day: dt.date) -> bool:

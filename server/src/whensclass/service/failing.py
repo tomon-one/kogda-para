@@ -84,6 +84,11 @@ class Failing:
 
     def _recovered(self) -> None:
         """Обновление удалось после сбоя: сказать, что и сколько лежало."""
+        # Правка колледжа кончилась — рычаг «колледж правит» больше не нужен.
+        try:
+            self._editing_path.unlink(missing_ok=True)
+        except OSError as exc:
+            log.warning("рычаг college-editing не стёрся: %s", exc)
         since = self.failing_since
         if since is None:
             return
@@ -98,11 +103,6 @@ class Failing:
                 force=True, good=True,
             )
         self._lever_used = False
-        # Правка колледжа кончилась — рычаг «колледж правит» больше не нужен.
-        try:
-            self._editing_path.unlink(missing_ok=True)
-        except OSError as exc:
-            log.warning("рычаг college-editing не стёрся: %s", exc)
         for kind in FAIL_KINDS:
             alerts.forget(kind)
         self.failing_since, self.last_error, self._alerted = None, None, False

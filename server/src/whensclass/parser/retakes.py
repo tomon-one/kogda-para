@@ -72,7 +72,9 @@ _MONTHS = ("январ", "феврал", "март", "апрел", "ма", "ию
 def _title_months(title: str) -> list[tuple[int, int]]:
     """Год и месяц каждого месяца заголовка по порядку: «декабрь 2026 – январь
     2027» -> [(2026, 12), (2027, 1)]. Месяцу — год, идущий за ним в тексте
-    (иначе последний перед ним); «декабрь – январь 2027»: декабрь — 2026-й."""
+    (иначе последний перед ним); «декабрь – январь 2027»: декабрь — 2026-й.
+    Год стоит у первого месяца или в заголовке учебный год («декабрь 2026 –
+    январь», «декабрь-январь 2026-2027»): январь — следующий."""
     years = [(m.start(), int(m[1])) for m in re.finditer(r"\b(20\d{2})\b", title)]
     if not years:
         return []
@@ -85,11 +87,17 @@ def _title_months(title: str) -> list[tuple[int, int]]:
         )
         if month:
             after = [y for at, y in years if at > word.start()]
-            found.append([after[0] if after else years[-1][1], month])
+            found.append([after[0] if after else years[-1][1], month, word.start()])
     for i in range(len(found) - 2, -1, -1):
-        if found[i][0] == found[i + 1][0] and found[i][1] > found[i + 1][1]:
+        year, month, start = found[i]
+        if year != found[i + 1][0] or month <= found[i + 1][1]:
+            continue
+        school_year = re.search(rf"\b{year}\s*[-–—/]\s*(?:20)?{(year + 1) % 100:02d}\b", title)
+        if school_year or any(start < at < found[i + 1][2] for at, _ in years):
+            found[i + 1][0] += 1
+        else:
             found[i][0] -= 1
-    return [(y, m) for y, m in found]
+    return [(y, m) for y, m, _ in found]
 
 
 def _title_month(title: str) -> tuple[int, int] | None:

@@ -310,3 +310,17 @@ def test_sheet_whose_days_all_passed_is_closed(source, monkeypatch):
     source.now = lambda: dt.datetime(2026, 10, 24, 8, 0)
     source.refresh()
     assert source.payload["rows"] == [] and source.payload["title"] is None
+
+
+@pytest.mark.parametrize("title", [
+    "График пересдач декабрь-январь 2026-2027",
+    "График пересдач декабрь - январь 2026/27",
+    "График пересдач декабрь-январь 2026-2027 уч. год",
+    "График пересдач декабрь 2026 - январь",
+    "График пересдач декабрь 2026 - январь 2027",
+    "График пересдач декабрь - январь 2027",
+])
+def test_december_january_title_ends_in_next_year(title):
+    from whensclass.parser.retakes import _title_months
+
+    assert _title_months(title) == [(2026, 12), (2027, 1)]

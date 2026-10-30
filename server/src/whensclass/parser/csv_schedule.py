@@ -480,6 +480,11 @@ def _settle_moved(
         d = doubt[day]
         n_main, main = share(d.by_main)
         n_sect, sect = share(d.by_section)
+        if not n_main and not n_sect and not any(d.by_new.values()):
+            # В строках дня пусто при любом чтении: спорить не о чем, пар нет.
+            for gid in d.by_main:
+                snapshot.schedule[gid].pop(day, None)
+            continue
         verdict = ""
         if n_main >= SETTLE_MIN_LESSONS and main >= SETTLE_KNOWN and main - sect >= SETTLE_GAP:
             verdict = "main"
@@ -540,18 +545,7 @@ def _settle_moved(
             have.add(g.id)
             names[g.id] = g.name
     for gid, ref in added.items():
-        # Подгруппа — часть группы: в дни, где лист пишет группу целиком (вне
-        # недели разделения или день не решён), у неё пары и пометки группы.
-        base = group_id(SUBGROUP_RE.fullmatch(ref.name).group(1))
-        mine = own.get(gid, set())
-        for day, lessons in snapshot.schedule.get(base, {}).items():
-            if day not in mine:
-                snapshot.schedule.setdefault(gid, {})[day] = list(lessons)
-                snapshot.day_columns.setdefault(gid, {})[day] = snapshot.day_columns.get(base, {}).get(
-                    day, column_of.get(base, ref.column))
-        for day, known_before in snapshot.unread.get(base, {}).items():
-            if day not in mine:
-                snapshot.unread.setdefault(gid, {})[day] = known_before
+        fill_subgroup(snapshot, ref, own.get(gid, set()))
     for (gid, why), days in absent.items():
         snapshot.unread_why.append(
             f"{names.get(gid, gid)} {days[0]:%d.%m}–{days[-1]:%d.%m}: группы нет в повторном "
@@ -574,6 +568,21 @@ def _settle_moved(
         "%s, не прочитаны — %s", span(read["section"]), span(read["main"]), span(read[""]),
         logger=log,
     )
+
+
+def fill_subgroup(snapshot: Snapshot, ref: GroupRef, own: set[date]) -> None:
+    """Подгруппа — часть группы: в дни, где лист пишет группу целиком (вне
+    недели разделения или день не решён), у неё пары и пометки группы."""
+    base = group_id(SUBGROUP_RE.fullmatch(ref.name).group(1))
+    parent = next((g for g in snapshot.groups if g.id == base), None)
+    for day, lessons in snapshot.schedule.get(base, {}).items():
+        if day not in own:
+            snapshot.schedule.setdefault(ref.id, {})[day] = list(lessons)
+            snapshot.day_columns.setdefault(ref.id, {})[day] = snapshot.day_columns.get(base, {}).get(
+                day, parent.column if parent else ref.column)
+    for day, known_before in snapshot.unread.get(base, {}).items():
+        if day not in own:
+            snapshot.unread.setdefault(ref.id, {})[day] = known_before
 
 
 def _day_bells(

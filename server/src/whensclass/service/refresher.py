@@ -20,7 +20,7 @@ import httpx
 from ..config import settings
 from ..domain.models import ChangedAgainstPrevious, SheetTooSmall, SourceFormatChanged
 from ..domain.teachers import build_index
-from ..parser.csv_schedule import Limits
+from ..parser.csv_schedule import SUBGROUP_RE, Limits, fill_subgroup
 from ..parser.export import parse_export
 from ..parser.shift import check_shift, shift_seed
 from ..sources import gsheets, sheet_index
@@ -74,8 +74,9 @@ class Refresher(Failing, SheetWatch):
         # snapshot.prev.json.
         self._accept_path = state_dir / "accept-next"
         self._accepting = False
-        # День, пустой у всех групп, -> когда его впервые увидели таким. В памяти:
-        # перезапуск начинает час заново — в безопасную сторону.
+        # День, пустой у всех групп, -> когда его впервые увидели таким. Живёт
+        # от разбора до разбора: что не подтвердилось, отсчитывается сначала.
+        # В памяти: перезапуск начинает час заново — в безопасную сторону.
         self._cleared_since: dict[dt.date, dt.datetime] = {}
         # Рычаг владельца: колледж правит таблицу, и сбой — не у сервера.
         # Людям — «подождите», а не «сбой» (`editing`); снимается сам, когда
@@ -217,6 +218,8 @@ class Refresher(Failing, SheetWatch):
             # сказал бы ok: разбор ниже решает, отказ это или «ещё не выложено».
             needed = bool(self._dropped) and coverage is not None and coverage[1] < today
             if not force and not needed and all(self._source_hashes.get(t) == h for t, _, _, h in texts):
+                # Лист равен принятому: стирание, если оно было, отменено.
+                self._cleared_since = {}
                 # Не изменился ни один лист — перерисовывать нечего. Но если
                 # сегодня уже за краем прежнего снимка, набор листов пора
                 # пересобрать — как и при разборе ниже.
@@ -454,6 +457,7 @@ class Refresher(Failing, SheetWatch):
         """
         self._dropped = {}
         self._suspicions: list[str] = []
+        cleared_before, self._cleared_since = self._cleared_since, {}
         # Следующий лист окна, отвергнутый по формату: (имя, отказ).
         self._next_rejected: tuple[str, SourceFormatChanged] | None = None
         self._accepting = self._accept_next()
@@ -506,7 +510,16 @@ class Refresher(Failing, SheetWatch):
                     self._dropped[title] = f"следующий лист отвергнут: {exc}"
                     self._next_rejected = (name, rejected)
                     continue
-                snapshot = current if snapshot is None else snapshot.merged_with(current)
+                if snapshot is None:
+                    snapshot = current
+                    continue
+                first = {g.id for g in snapshot.groups}
+                snapshot = snapshot.merged_with(current)
+                # Подгруппа, названная только в следующем листе: в днях текущего
+                # лист пишет группу целиком.
+                for ref in current.groups:
+                    if ref.id not in first and SUBGROUP_RE.fullmatch(ref.name):
+                        fill_subgroup(snapshot, ref, set(current.dates))
             if snapshot is None:
                 if self._dropped and len(self._dropped) == len(texts):
                     # Все листы окна — недописанные будущие: каникулы, колледж
@@ -521,28 +534,24 @@ class Refresher(Failing, SheetWatch):
             dropped = _check_group_drop(previous, snapshot)
             if dropped:
                 self._suspicions.append(dropped)
-            seen: set[dt.date] = set()
-            try:
-                _check_days_emptied(previous, snapshot, today, dropped=bool(self._dropped),
-                                    cleared_ok=self._cleared_held(seen))
-            finally:
-                # Хоть одна группа с парами в этот день — отсчёт сначала.
-                self._cleared_since = {d: t for d, t in self._cleared_since.items() if d in seen}
+            _check_days_emptied(previous, snapshot, today, dropped=bool(self._dropped),
+                                cleared_ok=self._cleared_held(cleared_before))
             teachers = build_index(snapshot)
         except ValueError as exc:
             raise SourceFormatChanged(f"разбор споткнулся о значение: {exc}") from exc
         return snapshot, teachers
 
-    def _cleared_held(self, seen: set):
-        """Проверка для `_check_days_emptied`: день пуст у всех групп не меньше DAY_CLEARED_HOLD."""
+    def _cleared_held(self, before: dict):
+        """Проверка для `_check_days_emptied`: день пуст у всех групп не меньше
+        DAY_CLEARED_HOLD. `before` — отсчёты прошлого разбора, день без него — с нуля."""
         now = dt.datetime.now(dt.timezone.utc)
 
         def held(day: dt.date) -> bool:
-            seen.add(day)
-            first = self._cleared_since.setdefault(day, now)
+            first = self._cleared_since[day] = before.get(day, now)
             if now - first < DAY_CLEARED_HOLD:
                 return False
             log.warning("%s пуст у всех групп с %s — принимаю как выходной", day, first.isoformat())
+            self._suspicions.append(f"{day:%d.%m} пуст у всех групп больше часа — принят как выходной")
             return True
         return held
 

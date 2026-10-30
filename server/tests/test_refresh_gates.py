@@ -224,6 +224,10 @@ def test_college_editing_lever_says_wait_and_goes_away_with_the_fix(
     sheet["text"] = good
     assert r.refresh(today=TODAY, force=True) is True
     assert not lever.exists()
+    # Поставлен на здоровой службе — снят следующим заходом, а не через TTL.
+    lever.touch()
+    assert r.refresh(today=TODAY, force=True) is True
+    assert not lever.exists()
     lever.touch()
     old = lever.stat().st_mtime - refresher_mod.EDITING_TTL.total_seconds() - 60
     os.utime(lever, (old, old))
@@ -290,12 +294,37 @@ def test_holiday_and_day_cleared_everywhere_are_not_a_cut_day():
     gates._check_days_emptied(sheet(holiday, 0), sheet(holiday, 15), holiday)
     asked = []
     with pytest.raises(ChangedAgainstPrevious, match="у 30 групп из 30"):
-        gates._check_days_emptied(sheet(workday, 0), sheet(workday, 30), workday,
+        gates._check_days_emptied(sheet(workday, 0), sheet(workday, 30), holiday,
                                   cleared_ok=lambda d: asked.append(d) or False)
     assert asked == [workday]
-    gates._check_days_emptied(sheet(workday, 0), sheet(workday, 30), workday, cleared_ok=lambda d: True)
+    gates._check_days_emptied(sheet(workday, 0), sheet(workday, 30), holiday, cleared_ok=lambda d: True)
     with pytest.raises(ChangedAgainstPrevious, match="у 29 групп из 30"):
-        gates._check_days_emptied(sheet(workday, 0), sheet(workday, 29), workday, cleared_ok=lambda d: True)
+        gates._check_days_emptied(sheet(workday, 0), sheet(workday, 29), holiday, cleared_ok=lambda d: True)
+
+
+def test_cleared_today_is_refused_and_a_week_of_days_waits_one_hour():
+    """Сегодняшний день `cleared_ok` не спрашивают: ошибка здесь — пустой день
+    без плашки. Будущие спрашивают все разом, отказ — по первому."""
+    from whensclass.domain.models import ChangedAgainstPrevious, GroupRef, Lesson, Snapshot
+
+    today = dt.date(2026, 11, 5)
+    days = [today + dt.timedelta(days=i) for i in range(3)]
+    groups = [GroupRef(name=f"Г-{i}", id=f"g-{i}", column=4 * i) for i in range(30)]
+    pair = [Lesson(number=1, subject="Физика")]
+
+    def sheet(lessons) -> Snapshot:
+        return Snapshot("лист", groups=groups, dates=days,
+                        schedule={g.id: {d: list(lessons) for d in days} for g in groups})
+
+    asked = []
+    with pytest.raises(ChangedAgainstPrevious, match=str(today)):
+        gates._check_days_emptied(sheet(pair), sheet([]), today, cleared_ok=lambda d: asked.append(d) or True)
+    assert asked == days[1:]
+    asked.clear()
+    with pytest.raises(ChangedAgainstPrevious, match=str(days[1])):
+        gates._check_days_emptied(sheet(pair), sheet([]), today - dt.timedelta(days=1),
+                                  cleared_ok=lambda d: asked.append(d) or d == today)
+    assert asked == days
 
 
 def test_day_cleared_everywhere_is_accepted_after_an_hour_and_the_count_restarts(tmp_path, monkeypatch):
@@ -313,19 +342,19 @@ def test_day_cleared_everywhere_is_accepted_after_an_hour_and_the_count_restarts
     monkeypatch.setattr(refresher_mod.dt, "datetime", Clock)
     r = refresher_mod.Refresher.__new__(refresher_mod.Refresher)
     r._cleared_since = {}
+    r._suspicions = []
     day = dt.date(2026, 11, 5)
 
     def ask(cleared: bool) -> bool:
-        seen = set()
-        ok = r._cleared_held(seen)(day) if cleared else False
-        r._cleared_since = {d: t for d, t in r._cleared_since.items() if d in seen}
-        return ok
+        before, r._cleared_since = r._cleared_since, {}
+        return r._cleared_held(before)(day) if cleared else False
 
     assert not ask(True)
     now[0] += dt.timedelta(minutes=40)
     assert not ask(True)
     now[0] += dt.timedelta(minutes=20)
     assert ask(True)
+    assert len(r._suspicions) == 1 and "принят как выходной" in r._suspicions[0]
     assert not ask(False)
     now[0] += dt.timedelta(minutes=20)
     assert not ask(True)

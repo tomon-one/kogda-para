@@ -745,3 +745,43 @@ def test_repeated_header_with_an_extra_or_missing_head_row_is_still_a_header(fix
     snap = parse_sheet(rows, "фикстура", FIXTURE)
     assert snap.schedule == honest.schedule
     assert snap.unread == honest.unread
+
+
+def test_day_empty_by_both_headers_is_empty_not_unread():
+    """Спорный день без единой пары: чьи пары — вопроса нет, день не «не прочитан»."""
+    import datetime as dt
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+    from whensclass.parser import csv_schedule as cs
+
+    empty, busy = dt.date(2026, 11, 4), dt.date(2026, 11, 5)
+    groups = [GroupRef(name="А-1", id="a-1", column=4)]
+    pair = Lesson(number=1, subject="Физика")
+    snapshot = Snapshot("лист", groups=groups, dates=[empty, busy],
+                        schedule={"a-1": {empty: [pair], busy: [pair]}})
+    doubt = {
+        empty: cs._Doubt(columns={"a-1": 4}, why="сдвиг", by_main={"a-1": []}, by_section={"a-1": []}),
+        busy: cs._Doubt(columns={"a-1": 4}, why="сдвиг", by_main={"a-1": [pair]}, by_section={"a-1": [pair]}),
+    }
+    cs._settle_moved(snapshot, doubt)
+    assert empty not in snapshot.schedule["a-1"]
+    assert empty not in snapshot.unread.get("a-1", {})
+    assert busy in snapshot.unread["a-1"]
+
+
+def test_subgroup_of_next_sheet_gets_group_lessons_in_current_sheet():
+    """Подгруппа названа только в следующем листе: в днях текущего она — группа."""
+    import datetime as dt
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+    from whensclass.parser.csv_schedule import fill_subgroup
+
+    a, b = dt.date(2026, 11, 2), dt.date(2026, 11, 9)
+    base = GroupRef(name="С-926", id="s-926", column=4)
+    sub = GroupRef(name="С-926/1", id="s-926-1", column=5)
+    pair = Lesson(number=1, subject="Физика")
+    first = Snapshot("1", groups=[base], dates=[a], schedule={"s-926": {a: [pair]}}, unread={"s-926": {a: True}})
+    second = Snapshot("2", groups=[base, sub], dates=[b], schedule={"s-926": {b: [pair]}, "s-926-1": {b: [pair]}})
+    merged = first.merged_with(second)
+    fill_subgroup(merged, sub, set(second.dates))
+    assert merged.schedule["s-926-1"][a] == [pair]
+    assert merged.unread["s-926-1"] == {a: True}
+    assert merged.day_columns["s-926-1"][a] == 4
