@@ -312,7 +312,8 @@ private fun LessonLine(
             when {
                 lesson.isCancelled -> "отменена"
                 lesson.isOnline -> onlineLabel(lesson)
-                else -> lesson.room?.trim().orEmpty()
+                // Зал с адресом занял бы всю строку вместе с названием пары.
+                else -> lesson.room?.trim().orEmpty().let { if (it.length > 12) it.take(11) + "…" else it }
             },
             maxLines = 1,
             style = TextStyle(

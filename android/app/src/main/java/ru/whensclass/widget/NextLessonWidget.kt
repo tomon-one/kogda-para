@@ -220,9 +220,6 @@ class NextLessonWidget : GlanceAppWidget() {
                 // Две пары одного номера — оба места, без копирования ссылки:
                 // нажатие открывает день, где у каждой пары своя.
                 val pair = next.also.isNotEmpty() || next.off.isNotEmpty()
-                // Своё место — плашкой, как кабинет на экране; две пары и чужая ссылка —
-                // простой строкой: это предупреждение, а не место.
-                val chip = !pair && !foreign
                 if (!tight) Text(
                     when {
                         pair -> places(next)
@@ -240,18 +237,10 @@ class NextLessonWidget : GlanceAppWidget() {
                             else -> colors.accent
                         },
                     ),
-                    // Фон, поля и ширина — у обеих веток: без команды лаунчер накатывает
-                    // новые на прежнюю вьюху, и плашка бывшего кабинета оставалась
-                    // под строкой без плашки (как в «Неделе», WeekRows).
-                    modifier = (
-                        if (chip) {
-                            // Поля только по бокам: высота строки та же, по ней посчитаны пороги выше.
-                            GlanceModifier.wrapContentWidth().background(colors.nowSurface).cornerRadius(10.dp)
-                                .padding(horizontal = 6.dp)
-                        } else {
-                            GlanceModifier.fillMaxWidth().background(NO_SURFACE).cornerRadius(10.dp).padding(horizontal = 0.dp)
-                        }
-                        ).let { base ->
+                    // Прозрачный фон — командой: без неё лаунчер оставил бы плашку прежней версии.
+                    modifier = GlanceModifier.fillMaxWidth().background(NO_SURFACE).cornerRadius(10.dp)
+                        .padding(horizontal = 0.dp)
+                        .let { base ->
                         lesson.url?.takeUnless { foreign || pair }?.let { url ->
                             base.clickable(actionStartActivity(CopyLinkActivity.intent(LocalContext.current, url)))
                         } ?: base
