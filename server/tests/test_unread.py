@@ -354,3 +354,27 @@ def test_same_unread_days_remind_once_a_day_new_ones_at_once(tmp_path, sheet, se
     assert refresher.refresh(today=DAY, force=True) and len(sent) == 2
     sheet["text"] = spilled(fixture_csv, BP, GD)
     assert refresher.refresh(today=DAY, force=True) and len(sent) == 3
+
+
+def test_quiet_group_gets_no_alert_but_keeps_its_mark(monkeypatch):
+    from whensclass.domain.models import GroupRef, Snapshot
+    from whensclass.service import refresher as refresher_mod
+
+    sent = []
+    monkeypatch.setattr(refresher_mod.alerts, "notify", lambda kind, text, **kw: sent.append((kind, text)))
+    monkeypatch.setattr(refresher_mod.alerts, "forget", lambda kind: None)
+    monkeypatch.setattr(refresher_mod.settings, "quiet_groups", ("ld-1126",))
+    day = TODAY + dt.timedelta(days=1)
+    groups = [GroupRef("ЛД-1126", "ld-1126", 0), GroupRef("БП-1126", "bp-1126", 4)]
+
+    alone = Snapshot("лист", groups=groups, unread={"ld-1126": {day: False}},
+                     unread_why=["ЛД-1126 09.09: группы нет"])
+    Refresher._tell_unread(None, alone, alone, TODAY)
+    assert sent == []
+    assert alone.unread == {"ld-1126": {day: False}}
+
+    both = Snapshot("лист", groups=groups, unread={"ld-1126": {day: False}, "bp-1126": {day: False}},
+                    unread_why=["ЛД-1126 09.09: группы нет", "БП-1126 09.09: текст в колонке"])
+    Refresher._tell_unread(None, alone, both, TODAY)
+    assert [kind for kind, _ in sent] == ["unread"]
+    assert "БП-1126 09.09" in sent[0][1] and "ЛД-1126" not in sent[0][1]

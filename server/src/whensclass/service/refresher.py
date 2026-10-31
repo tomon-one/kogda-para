@@ -385,12 +385,17 @@ class Refresher(Failing, SheetWatch):
     def _tell_unread(self, old, snapshot, today: dt.date) -> None:
         """Непрочитанные дни — владельцу сразу, как появились новые; прочитались
         все — что снова всё. Прошедшие не в счёт: их колледж уже не перепишет."""
-        was = {(g, d) for g, days in (old.unread if old else {}).items() for d in days if d >= today}
-        now = {(g, d) for g, days in snapshot.unread.items() for d in days if d >= today}
+        quiet = settings.quiet_groups
+        was = {(g, d) for g, days in (old.unread if old else {}).items() for d in days
+               if d >= today and g not in quiet}
+        now = {(g, d) for g, days in snapshot.unread.items() for d in days
+               if d >= today and g not in quiet}
         if now:
+            silent = tuple(f"{g.name} " for g in snapshot.groups if g.id in quiet)
+            whys = [why for why in snapshot.unread_why if not why.startswith(silent)]
             alerts.notify(
                 "unread",
-                "Лист принят, но не прочитаны дни: " + "; ".join(snapshot.unread_why[:3])
+                "Лист принят, но не прочитаны дни: " + "; ".join(whys[:3])
                 + ". Там отдаётся прежнее, а где его нет — день с пометкой «не прочитан»; "
                 "старые версии приложения видят сбой. Присмотреться (руководство по "
                 "серверу, «Когда что-то не так»).",
