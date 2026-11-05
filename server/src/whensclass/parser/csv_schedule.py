@@ -106,6 +106,14 @@ def parse_sheet(
     строку, что открывается в таблице: без него номер расходится с Sheets.
     """
     rows = [list(r) for r in rows]
+    draft = _draft_tail(rows)
+    if draft is not None:
+        at = sheet_rows[draft] if sheet_rows is not None and draft < len(sheet_rows) else draft
+        _warn_once(
+            ("черновик", at), "со строки %s до конца листа — повтор уже выложенных дат, "
+            "черновик недели: не читаю", at, logger=log,
+        )
+        rows = rows[:draft]
 
     def where(i: int) -> str:
         if sheet_rows is not None and i < len(sheet_rows):
@@ -572,6 +580,29 @@ def _settle_moved(
         "%s, не прочитаны — %s", span(read["section"]), span(read["main"]), span(read[""]),
         logger=log,
     )
+
+
+def _draft_tail(rows: list[list[str]]) -> int | None:
+    """Начало черновика внизу листа: с первой повторной даты до конца — только
+    даты, которые выше уже есть. Так колледж набирает неделю заново, не трогая
+    выложенную; выше лежит то, что видят люди, его и читаем. Повтор посреди
+    листа или новая дата после повтора — не черновик, а отказ, как раньше."""
+    seen: set[date] = set()
+    start = None
+    for i, row in enumerate(rows):
+        try:
+            day = _parse_date(_cell(row, 0))
+        except SourceFormatChanged:
+            day = None
+        if day is None:
+            continue
+        if day in seen:
+            start = i if start is None else start
+        elif start is not None:
+            return None
+        else:
+            seen.add(day)
+    return start
 
 
 def fill_subgroup(snapshot: Snapshot, ref: GroupRef, own: set[date]) -> None:

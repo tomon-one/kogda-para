@@ -54,6 +54,13 @@ _ROOM_RE = re.compile(r"^(?:[А-ЯЁA-Z][\w.]*\s+)?\d{1,4}(?:[а-яА-Я]|/\d{1,
 # преподаватель — у Y, иначе студентов позовут к заменённому преподавателю.
 # Слово — целиком: «заменитель» не замена.
 _REPLACED_RE = re.compile(r"\bзамена\b[\s\-–—:,.]*", re.IGNORECASE)
+# «X (Пр) ЗАМЕНА преподаватель заболел» и два преподавателя: пара та же,
+# заменили преподавателя. После слова — причина, а не пара: её в приписку.
+_TEACHER_REPLACED_RE = re.compile(
+    r"\bзамена\b[\s\-–—:,.]*(?P<why>(?:преподавател\w*\s+)?(?:заболел\w*|болеет|на\s+больничном)"
+    r"|болезн\w*(?:\s+преподавател\w*)?)[\s.,;]*$",
+    re.IGNORECASE,
+)
 
 # «преподаватель на онлайн, студенты в кабинете 269»: пара очная — студенты
 # в кабинете, преподаватель на связи по ссылке. Номер нужен как аудитория, а не
@@ -389,6 +396,13 @@ def parse_lesson(
         return Lesson(number=number, subject=PLACEHOLDER, cancelled=True, note=note)
 
     subject = subject.replace("\n", " ").strip()
+    swap = _TEACHER_REPLACED_RE.search(subject)
+    if swap and subject[: swap.start()].strip(" ,;.-"):
+        subject = subject[: swap.start()].strip(" ,;.-")
+        # Как у замены пары: заболевший — первым, кто ведёт — последним.
+        teachers = teachers[-1:]
+        why = f"замена: {swap.group('why')}"
+        note = f"{note}; {why}" if note else why
     replaced = replaced_subject(subject)
     if replaced is not None:
         old_name, subject = replaced

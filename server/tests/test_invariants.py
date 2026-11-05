@@ -47,6 +47,20 @@ def test_date_copied_further_down_names_both_rows(fixture_csv):
         parse_sheet(rows, "фикстура", FIXTURE)
 
 
+def test_week_retyped_below_the_sheet_is_a_draft(fixture_csv):
+    """Колледж набирает выложенные дни заново под листом: внизу только повторы
+    дат. Читается то, что выше, как без черновика; черновик — в другом виде."""
+    rows = rows_of(fixture_csv)
+    starts = date_rows(rows)
+    plain = parse_sheet(rows_of(fixture_csv), "фикстура", FIXTURE)
+    draft = [list(r) for r in rows[starts[1]:starts[3]]]
+    for row in draft:
+        row[1:] = [""] + row[1:-1]
+    snapshot = parse_sheet(rows + draft, "фикстура", FIXTURE)
+    assert snapshot.dates == plain.dates
+    assert snapshot.schedule == plain.schedule
+
+
 def test_date_in_another_format_is_still_a_date(fixture_csv):
     """«07/09/2026» и «понедельник 07.09.2026» — даты, а не текст рядом с датой."""
     rows = rows_of(fixture_csv)

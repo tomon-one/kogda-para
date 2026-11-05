@@ -353,6 +353,19 @@ def test_replacement_takes_the_new_lesson(subject, room, teachers, expected):
         assert getattr(lesson, field) == value, field
 
 
+@pytest.mark.parametrize("subject", [
+    "Моделирование и анализ программного обеспечения (Пр) ЗАМЕНА преподаватель заболел",
+    "Моделирование и анализ программного обеспечения (Пр) замена, болезнь преподавателя",
+])
+def test_replaced_teacher_keeps_the_lesson(subject):
+    """После «замена» — причина, а не пара: предмет тот же, ведёт второй преподаватель."""
+    lesson = parse_lesson(2, subject, "273", "Банкрофт Мириам Олеговна Райкер Элиас Иванович")
+    assert lesson.subject == "Моделирование и анализ программного обеспечения"
+    assert lesson.kind == "Пр" and lesson.room == "273" and not lesson.cancelled
+    assert lesson.teachers == ("Райкер Элиас Иванович",)
+    assert lesson.note.startswith("замена: ") and "вместо" not in lesson.note
+
+
 def test_word_replacement_alone_is_not_a_replacement():
     lesson = parse_lesson(1, "Замена", "", "")
     assert lesson.subject == "Замена" and lesson.note is None
