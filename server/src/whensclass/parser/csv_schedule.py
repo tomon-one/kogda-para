@@ -109,11 +109,21 @@ def parse_sheet(
     draft = _draft_tail(rows)
     if draft is not None:
         at = sheet_rows[draft] if sheet_rows is not None and draft < len(sheet_rows) else draft
-        _warn_once(
-            ("черновик", at), "со строки %s до конца листа — повтор уже выложенных дат, "
-            "черновик недели: не читаю", at, logger=log,
-        )
-        rows = rows[:draft]
+        order = _retyped_order(rows, draft, limits.min_groups)
+        if order is not None:
+            _warn_once(
+                ("заново", at), "со строки %s до конца листа — те же дни набраны заново "
+                "и не беднее прежних: читаю их вместо прежних", at, logger=log,
+            )
+            rows = [rows[i] for i in order]
+            if sheet_rows is not None:
+                sheet_rows = [sheet_rows[i] for i in order]
+        else:
+            _warn_once(
+                ("черновик", at), "со строки %s до конца листа — повтор уже выложенных дат, "
+                "черновик недели: не читаю", at, logger=log,
+            )
+            rows = rows[:draft]
 
     def where(i: int) -> str:
         if sheet_rows is not None and i < len(sheet_rows):
@@ -603,6 +613,47 @@ def _draft_tail(rows: list[list[str]]) -> int | None:
         else:
             seen.add(day)
     return start
+
+
+RETYPED_FULL = 0.8
+
+
+def _retyped_order(rows: list[list[str]], start: int, min_groups: int) -> list[int] | None:
+    """Порядок строк, в котором дни, набранные заново внизу листа, стоят на
+    месте прежних; None — копия внизу ещё черновик.
+
+    Колледж вставляет неделю заново целиком (05.11: за одну правку, все дни) и
+    старую не стирает сразу; верна новая — она сходится с листом преподавателей.
+    Черновик отличает заполненность: каждый день внизу должен быть не беднее
+    `RETYPED_FULL` прежнего. Шапка между копиями — отказ от подмены: под ней
+    могли смениться колонки групп, и новая копия читалась бы чужими."""
+    def day_at(i: int) -> date | None:
+        try:
+            return _parse_date(_cell(rows[i], 0))
+        except SourceFormatChanged:
+            return None
+
+    marks = [(i, d) for i in range(len(rows)) if (d := day_at(i)) is not None]
+    tail = [(i, d) for i, d in marks if i >= start]
+    days = {d for _, d in tail}
+    old = [(i, d) for i, d in marks if i < start and d in days]
+    if not old or len(tail) != len(days):
+        return None
+    lo = old[0][0]
+    after = [i for i, d in marks if lo < i < start and d not in days]
+    hi = after[0] if after else start
+    if [d for i, d in old] != [d for _, d in tail] or any(i >= hi for i, _ in old):
+        return None
+    if any(len(header_blocks([rows[i]], min_groups)) for i in range(lo, len(rows))):
+        return None
+
+    def fill(at: int) -> int:
+        nxt = next((i for i, _ in marks if i > at), len(rows))
+        return sum(1 for r in rows[at:nxt] for c in r[2:] if c.strip())
+
+    if any(fill(n) < RETYPED_FULL * fill(o) for (o, _), (n, _) in zip(old, tail)):
+        return None
+    return list(range(lo)) + list(range(start, len(rows))) + list(range(hi, start))
 
 
 def fill_subgroup(snapshot: Snapshot, ref: GroupRef, own: set[date]) -> None:
