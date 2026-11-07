@@ -169,8 +169,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         /** Куда кладём скачанное. Внутренняя память: снаружи туда не залезть. */
         const val DIR = "updates"
         const val APK = "application/vnd.android.package-archive"
-        /** Больше этого сборка не бывает: она весит около 2,5 МБ. */
-        const val MAX_SIZE = 64L * 1024 * 1024
+        /** Потолок от ошибки сервера, а не размер сборки: она весит около 2,5 МБ. */
+        const val MAX_SIZE = 16L * 1024 * 1024
         /** Экран проверяет сборку не чаще раза в полчаса ([checkForScreen]). */
         const val CHECK_EVERY_MILLIS = 30L * 60 * 1000
         /** Не дозвонился — экран спросит снова не раньше чем через столько. */
