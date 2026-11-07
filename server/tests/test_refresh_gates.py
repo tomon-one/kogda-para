@@ -14,7 +14,7 @@ from test_refresh_failures import TODAY, a_teacher
 from whensclass.parser import cells
 from whensclass.parser.csv_schedule import FIXTURE
 from whensclass.parser.export import parse_csv, read_csv
-from whensclass.service import gates, refresher as refresher_mod
+from whensclass.service import gates, levers, refresher as refresher_mod
 from whensclass.service.refresher import Refresher
 from whensclass.storage.snapshot_store import SnapshotStore
 
@@ -229,7 +229,7 @@ def test_college_editing_lever_says_wait_and_goes_away_with_the_fix(
     assert r.refresh(today=TODAY, force=True) is True
     assert not lever.exists()
     lever.touch()
-    old = lever.stat().st_mtime - refresher_mod.EDITING_TTL.total_seconds() - 60
+    old = lever.stat().st_mtime - levers.EDITING_TTL.total_seconds() - 60
     os.utime(lever, (old, old))
     assert not r.editing() and not lever.exists()
 
@@ -422,7 +422,7 @@ def test_forgotten_accept_next_lever_is_not_taken(tmp_path, sheet, sent, fixture
     assert r.refresh(today=TODAY) is True
     lever = tmp_path / "accept-next"
     lever.touch()
-    old = lever.stat().st_mtime - refresher_mod.ACCEPT_NEXT_TTL.total_seconds() - 60
+    old = lever.stat().st_mtime - levers.ACCEPT_NEXT_TTL.total_seconds() - 60
     os.utime(lever, (old, old))
     sheet["text"] = _drop_two_groups(fixture_csv)
     assert r.refresh(today=TODAY, force=True) is False

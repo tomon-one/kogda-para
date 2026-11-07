@@ -29,19 +29,20 @@ from ..sources import gsheets, sheet_index
 from ..sources.sheet_memory import SheetIndex
 from ..storage import history
 from . import alerts
-from .bells import own_bells
 from .clock import _today
 from .failing import CRASHES_TO_ALERT, Failing
 from .gates import (
-    _check_days_emptied, _check_group_drop, _check_lost_names, _check_today_kept, groups_emptied,
+    _check_days_emptied, _check_group_drop, _check_lost_names, _check_today_kept, _hold_unread,
 )
+from .levers import Levers
 from .sheet_watch import SheetWatch
+from .telling import Telling
 from ..storage.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
 
 
-class Refresher(Failing, SheetWatch):
+class Refresher(Failing, SheetWatch, Levers, Telling):
     def __init__(self, store: SnapshotStore, state_dir: pathlib.Path):
         self.store = store
         self.state_dir = state_dir
@@ -144,43 +145,6 @@ class Refresher(Failing, SheetWatch):
             finally:
                 self._clear_running()
 
-    def _accept_next(self) -> bool:
-        """Поставлен ли рычаг accept-next. Старше ACCEPT_NEXT_TTL — стирается:
-        забытый файл пропустил бы без сверки настоящий сдвиг через неделю."""
-        try:
-            age = dt.datetime.now().timestamp() - self._accept_path.stat().st_mtime
-        except OSError:
-            return False
-        if age > ACCEPT_NEXT_TTL.total_seconds():
-            log.warning("рычаг accept-next старше %s — не беру и стираю", ACCEPT_NEXT_TTL)
-            self._accept_path.unlink(missing_ok=True)
-            return False
-        log.warning("рычаг accept-next: лист сверяется без прежнего снимка")
-        return True
-
-    def editing(self) -> bool:
-        """Поставлен ли рычаг college-editing. Старше EDITING_TTL — стирается:
-        забытый файл прятал бы настоящий сбой."""
-        try:
-            age = dt.datetime.now().timestamp() - self._editing_path.stat().st_mtime
-        except OSError:
-            return False
-        if age > EDITING_TTL.total_seconds():
-            log.warning("рычаг college-editing старше %s — стираю", EDITING_TTL)
-            self._editing_path.unlink(missing_ok=True)
-            return False
-        return True
-
-    def _accepted(self) -> None:
-        """Лист принят — разовый рычаг снят."""
-        if self._accepting:
-            self._accepting = False
-            self._lever_used = True
-            try:
-                self._accept_path.unlink(missing_ok=True)
-            except OSError as exc:
-                log.warning("рычаг accept-next не стёрся: %s", exc)
-            log.warning("лист принят без сверки с прежним снимком (accept-next), рычаг снят")
 
     def _refresh(self, today: dt.date, force: bool, retried: bool = False) -> bool:
         self.checked_at = dt.datetime.now(dt.timezone.utc)
@@ -384,76 +348,6 @@ class Refresher(Failing, SheetWatch):
         )
         return True
 
-    def _tell_unread(self, old, snapshot, today: dt.date) -> None:
-        """Непрочитанные дни — владельцу сразу, как появились новые; прочитались
-        все — что снова всё. Прошедшие не в счёт: их колледж уже не перепишет."""
-        quiet = settings.quiet_groups
-        was = {(g, d) for g, days in (old.unread if old else {}).items() for d in days
-               if d >= today and g not in quiet}
-        now = {(g, d) for g, days in snapshot.unread.items() for d in days
-               if d >= today and g not in quiet}
-        if now:
-            silent = tuple(f"{g.name} " for g in snapshot.groups if g.id in quiet)
-            whys = [why for why in snapshot.unread_why if not why.startswith(silent)]
-            alerts.notify(
-                "unread",
-                "Лист принят, но не прочитаны дни: " + "; ".join(whys[:3])
-                + ". Там отдаётся прежнее, а где его нет — день с пометкой «не прочитан»; "
-                "старые версии приложения видят сбой. Присмотреться (руководство по "
-                "серверу, «Когда что-то не так»).",
-                force=bool(now - was),
-                # Те же дни остаются непрочитанными, пока колледж не поправит
-                # лист, — сутки, а не шесть часов.
-                window=UNREAD_REMIND_SECONDS,
-            )
-        elif was:
-            alerts.forget("unread")
-            alerts.notify("unread-ok", "Непрочитанных дней на сегодня и вперёд больше нет.", force=True, good=True)
-
-    def _tell_emptied(self, old, snapshot, today) -> None:
-        """Группа потеряла все будущие пары — владельцу, сразу как появилась новая."""
-        emptied = groups_emptied(old, snapshot, today, dropped=bool(self._dropped))
-        if not emptied:
-            return
-        names = ", ".join(f"{name} с {first:%d.%m} ({n} дн.)" for name, first, n in emptied[:3])
-        more = f" и ещё {len(emptied) - 3}" if len(emptied) > 3 else ""
-        alerts.notify(
-            "emptied",
-            f"Лист принят, но у групп пропали все пары на будущее: {names}{more}. Колонку "
-            "стёрли или группу убрали? Пока это так, у них пустые дни без пометки. "
-            "Присмотреться (руководство по серверу, «Когда что-то не так»).",
-            force=True,
-        )
-
-    def _tell_bells(self, old, snapshot) -> None:
-        """День со своими звонками — владельцу, когда такой появился или изменился."""
-        def own(snap) -> dict:
-            return {
-                day: grid for day in (snap.bells if snap else {})
-                if (grid := own_bells(snap, day))
-            }
-
-        was, now = own(old), own(snapshot)
-        fresh = sorted(day for day, grid in now.items() if was.get(day) != grid)
-        if fresh:
-            day = fresh[0]
-            spans = ", ".join(f"{n} — {a}–{b}" for n, (a, b) in sorted(now[day].items()))
-            more = f" и ещё {len(fresh) - 1} дн." if len(fresh) > 1 else ""
-            alerts.notify(
-                "bells",
-                f"В листе у {day:%d.%m} свои звонки: {spans}{more}. Отдаются у этого дня "
-                "вместо обычных.",
-                force=True, quiet=True,
-            )
-
-    def _announce(self, before, snapshot, teachers, today: dt.date) -> None:
-        """Сказать подписчикам об изменениях; их поломка — не поломка обновления."""
-        if self.on_update is None:
-            return
-        try:
-            self.on_update(before[0], before[1], snapshot, teachers, today)
-        except Exception:
-            log.exception("уведомления об изменениях не посчитались")
 
     def _parse(self, texts, today: dt.date):
         """Тексты листов -> (снимок, индекс преподавателей) или None.
@@ -576,33 +470,9 @@ class SheetRejected(SourceFormatChanged):
         self.against_previous = against_previous
 
 
-# Как часто напоминать о тех же непрочитанных днях; о новых — сразу.
-UNREAD_REMIND_SECONDS = 24 * 60 * 60
-
-ACCEPT_NEXT_TTL = dt.timedelta(hours=2)
-EDITING_TTL = dt.timedelta(hours=12)
 # День, пустой в листе у всех групп, принимается, если пуст столько подряд:
 # выходной держится, а стёртое по ошибке колледж за это время возвращает.
 DAY_CLEARED_HOLD = dt.timedelta(hours=1)
-
-
-def _hold_unread(snapshot, before) -> None:
-    """Непрочитанные дни групп — прежними парами, если прежний снимок их знал.
-
-    Знал без пар — день пустой, но знакомый: прежние версии клиентов получат
-    его как раньше, новые — с пометкой «не прочитан» (`_unread_mark`). Не знал
-    (неделя пришла впервые) — прежним версиям край встаёт перед ним.
-    """
-    for gid, days in snapshot.unread.items():
-        for day in days:
-            known = (
-                before is not None and day in before.dates and gid in before.schedule
-                and before.unread.get(gid, {}).get(day, True)
-            )
-            lessons = before.schedule.get(gid, {}).get(day) if known else None
-            if lessons:
-                snapshot.schedule.setdefault(gid, {})[day] = list(lessons)
-            days[day] = bool(known)
 
 
 def _limits() -> Limits:

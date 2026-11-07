@@ -19,7 +19,8 @@ from whensclass.domain.teachers import build_index
 from whensclass.parser.csv_schedule import FIXTURE
 from whensclass.push.changes import compare
 from whensclass.parser.export import parse_csv, read_csv
-from whensclass.service.refresher import Refresher, _hold_unread
+from whensclass.service.gates import _hold_unread
+from whensclass.service.refresher import Refresher
 from whensclass.storage.snapshot_store import SnapshotStore
 
 TODAY = dt.date(2026, 9, 8)
