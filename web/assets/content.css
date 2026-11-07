@@ -1,0 +1,108 @@
+/* Содержимое экрана: ожидание, пояснения, кнопки действий. Подключается сразу
+   после app.css. */
+
+/* ——— содержимое ——— */
+
+.content { padding: 0 12px 24px; }
+.screen.with-bottom .content { padding-bottom: 88px; }
+
+.centered {
+  display: flex;
+  justify-content: center;
+  padding: 32px;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--surface-variant);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+
+.explanation {
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.explanation .spinner { margin-bottom: 16px; }
+.explanation h2 { font-size: 16px; font-weight: 600; }
+.explanation p { margin-top: 8px; font-size: 14px; color: var(--muted); }
+
+/*
+  Размеры кнопок — одни на весь сайт, как в приложении (Controls.kt). Высота
+  не зависит от надписи: надпись в одну строку, не влезла — многоточие. Кнопки
+  в строке с названием — одной ширины (.fixed), остальные — во всю ширину
+  карточки, и смена надписи их не двигает.
+*/
+.action {
+  display: inline-block;
+  height: 44px;
+  margin-top: 6px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--surface-variant);
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 44px;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.action:hover { text-decoration: none; }
+.action:active { opacity: 0.7; }
+.action:disabled { color: var(--muted); opacity: 0.7; }
+
+.card > .action, .setting-actions .action, .plate .action, .explanation .action, .load-failed .action {
+  display: block;
+  width: 100%;
+}
+
+/* Тесно и в 10 px (fitLabels) — в две строки: смысл важнее ровного ряда. */
+.action.fit-wrap, .primary-button.fit-wrap, .text-button.fit-wrap {
+  height: auto;
+  min-height: 44px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.text-button {
+  display: inline-block;
+  height: 40px;
+  padding: 0 12px;
+  line-height: 40px;
+  white-space: nowrap;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 10px;
+}
+
+.text-button:active { background: var(--surface-variant); }
+
+.text-link { color: var(--primary); }
+
+/* Нижний ряд — три раздела под двумя верхними. Середины вкладок — на четверти,
+   половине и трёх четвертях ширины: крайние стоят ровно под верхними, средняя
+   — между ними. Равные трети во всю ширину встали бы вразнобой с верхними. */
+.tabs.soon { padding: 0 12.5%; }
+.tabs.soon .tab { padding-left: 2px; padding-right: 2px; }
+/* Узко (iPhone SE, крупный текст): трети во всю ширину, как в приложении, —
+   иначе подсвеченная «Пересдачи» мельчает до 11 px, а соседние слипаются. */
+@media (max-width: 380px) {
+  .tabs.soon { padding: 0; }
+}
+
+/* Альбомная на телефоне: шапка не прилипает, иначе она отнимает половину высоты. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .head, .tabs.float { position: static; }
+}
