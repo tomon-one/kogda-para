@@ -22,7 +22,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ..api.payloads import published
+from ..api.published import published
 from ..config import settings
 from ..storage.atomic import write_json
 from ..domain.ids import group_id

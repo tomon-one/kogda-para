@@ -36,7 +36,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import replay  # noqa: E402  (тот же стенд службы: сеть, архив и тревоги подменены)
 from replay import Bench, read, stamp  # noqa: E402
-from whensclass.api.payloads import published  # noqa: E402
+from whensclass.api.published import published  # noqa: E402
 
 _DATE = re.compile(r"(\d{1,2})[./](\d{1,2})[./](\d{2,4})")
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]

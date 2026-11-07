@@ -23,17 +23,13 @@ from ..service.rooms import rooms_payload
 from ..service.refresher import state_dir
 from .etag import etag_for, matches
 from .payloads import (
-    FILLED_SHARE,
-    _alive_since,
-    _group_edge,
-    filling,
     groups_payload,
     meta_payload,
-    published,
     schedule_payload,
     teacher_answer,
     teachers_payload,
 )
+from .published import FILLED_SHARE, _alive_since, _group_edge, filling, published
 from .releases import CHANNELS, latest_release
 
 # Маршруты — на GET и HEAD: nginx пропускает оба, а сторожа по коду ответа

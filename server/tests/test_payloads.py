@@ -339,7 +339,7 @@ def test_without_today_coverage_is_the_whole_sheet(snapshot):
 def test_two_unread_weeks_stay_in_cov_across_sunday():
     """Две непрочитанные недели подряд: цепочка не рвётся на воскресенье,
     которого в листе нет, — обе недели в покрытии с пометкой."""
-    from whensclass.api.payloads import _group_edge
+    from whensclass.api.published import _group_edge
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
 
     days = [dt.date(2026, 10, 5) + dt.timedelta(days=i) for i in range(20) if (dt.date(2026, 10, 5) + dt.timedelta(days=i)).weekday() != 6]
