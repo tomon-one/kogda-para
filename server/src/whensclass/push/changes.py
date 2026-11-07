@@ -25,7 +25,6 @@ from .labels import (
     url_host,
 )
 
-
 # Больше строк шторка всё равно не покажет развёрнутой (MAX_CHANGE_LINES).
 MAX_LINES = 8
 
