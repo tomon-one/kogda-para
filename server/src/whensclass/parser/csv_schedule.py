@@ -370,6 +370,11 @@ class _Doubt:
     by_new: dict[str, list[Lesson]] = field(default_factory=dict)
 
 
+def _numbers(gid: str) -> tuple[str, ...]:
+    """Числа в имени группы: курс, год набора, подгруппа."""
+    return tuple(re.findall(r"\d+", gid))
+
+
 def _section_columns(
     rows: list[list[str]], i: int, names_i: int, groups: list[GroupRef]
 ) -> tuple[dict[str, int], dict[str, tuple[str, int]]]:
@@ -378,7 +383,10 @@ def _section_columns(
 
     Имя, которого главный заголовок не знает («СИС(а)-926/1» у «СИС-926/1»), —
     прежнее имя группы: её место видно по соседям. Если слева и справа группы
-    стоят с одним и тем же шагом от своих колонок, с тем же шагом стоит и она.
+    стоят с одним и тем же шагом от своих колонок, с тем же шагом стоит и она —
+    когда номера в именах те же. Иначе это другая группа: колонку вырезали во
+    всём листе, и в старом шаблоне ушла не та группа, что в главном заголовке,
+    а на её месте осталось имя ушедшей из главного. Пары под ней — не наши.
 
     Шаг не сошёлся, а имя — «группа/N» той группы, которой в заголовке нет, —
     колледж разделил группу на подгруппы («С-926» на «С-926/1» и «С-926/2»):
@@ -410,7 +418,11 @@ def _section_columns(
         if left is None or left != right:
             unplaced.append(col)
             continue
-        for gid in at_main.get(col - left, []):
+        numbers = {_numbers(gid) for gid in map(group_id, split_group_names(_cell(names_row, col)))}
+        same = [gid for gid in at_main.get(col - left, []) if _numbers(gid) in numbers]
+        if not same:
+            unplaced.append(col)
+        for gid in same:
             placed.setdefault(gid, col)
     new: dict[str, tuple[str, int]] = {}
     for col in unplaced:

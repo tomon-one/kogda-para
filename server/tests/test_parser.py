@@ -729,6 +729,51 @@ def test_unknown_name_that_is_not_a_subgroup_is_not_a_new_group(fixture_csv, mon
     assert "ГД-1125/2" in names
 
 
+def test_name_with_other_numbers_is_not_the_old_name_of_a_neighbour(fixture_csv, monkeypatch):
+    """Колонку вырезали во всём листе: в старом шаблоне ушла другая группа, а
+    на её месте осталось имя группы, которой уже нет в главном заголовке.
+    Шаг соседей тот же, но номера в именах другие — это не прежнее имя: группа
+    главного заголовка в этих днях не прочитана, а не получает чужие пары."""
+    from whensclass.parser import csv_schedule
+
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    _, rows, below = _week_from_another_template(fixture_csv, days=2)
+    header = _columnar_header(rows)[0]
+    end = next(i for i, r in enumerate(rows) if _parse_date(r[0]) == below[2])
+    # Колонка 10 под заголовком — ДП-923 и ДП-1124 по шагу соседей. Пусть в
+    # ней стоит ушедшая группа со своими парами. Предметы у неё те же, что у
+    # ДП (на сотне групп одна чужая колонка долю своих предметов не роняет):
+    # пары ДП из других дней.
+    rows[header + 2][10] = "ПР-926/2"
+    above = [i for i, r in enumerate(rows) if i < header and _parse_date(r[0]) is not None]
+    starts = [i for i, r in enumerate(rows) if header < i < end and _parse_date(r[0]) is not None]
+    for k, start in enumerate(starts):
+        for step in range(12):
+            rows[start + step][10:14] = rows[above[(k + 2) % len(above)] + step][14:18]
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+
+    for gid in ("dp-923", "dp-1124"):
+        assert set(snap.unread.get(gid, {})) >= {below[0], below[1]}
+        assert not any(snap.schedule[gid].get(day) for day in below[:2])
+
+
+def test_old_name_with_the_same_numbers_is_read_by_neighbours(fixture_csv, monkeypatch):
+    """Прежнее имя («ДП(а)-923 и ДП(а)-1124») с теми же номерами — та же группа:
+    её пары под повторным заголовком читаются, а не теряются."""
+    from whensclass.parser import csv_schedule
+
+    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    honest, rows, below = _week_from_another_template(fixture_csv, days=2)
+    header = _columnar_header(rows)[0]
+    rows[header + 2][10] = "ДП(а)-923 и ДП(а)-1124"
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+
+    for gid in ("dp-923", "dp-1124"):
+        assert not set(snap.unread.get(gid, {})) & {below[0], below[1]}
+        assert {d: snap.schedule[gid].get(d) for d in below[:2]} == \
+            {d: honest.schedule[gid].get(d) for d in below[:2]}
+
+
 @pytest.mark.parametrize("shape", ["Дисциплина повторена", "без «Дисциплина»"])
 def test_repeated_header_with_an_extra_or_missing_head_row_is_still_a_header(fixture_csv, shape):
     """Колледж то повторяет в шапке недели строку «Дисциплина» (Дисциплина /
