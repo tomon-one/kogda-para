@@ -9,55 +9,29 @@
 
 from __future__ import annotations
 
-import dataclasses
 import logging
-import re
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, timedelta
 
-from ..domain.ids import group_id
-from ..domain.models import (
-    GroupRef,
-    Lesson,
-    SheetTooSmall,
-    Snapshot,
-    SourceFormatChanged,
-    a1_column,
-)
-from .cells import _HAS_LETTER, _ROOM_RE, _online_room, parse_lesson, replaced_of
+from ..domain.models import SheetTooSmall, Snapshot, SourceFormatChanged
 from .dates import _parse_date
-from .groups import (
-    HEAD_WORDS,
-    SUBGROUP_RE,
-    _warn_once,
-    build_column_map,
-    find_header_rows,
-    header_blocks,
-    split_group_names,
+from .groups import _warn_once, build_column_map, find_header_rows
+from .rows import (
+    _LESSON_NO_RE,
+    _LOOKS_LIKE_DATE,
+    _TIME_RE,
+    _blank_day,
+    _cell,
+    _lessons_at,
+    _mark_unread,
+    _spill,
+    _teacher_row,
 )
-from .subgroups import split_subgroups
+from .sections import _Doubt, _section_columns, _settle_moved
+from .settle import _adopt_names, _draft_tail, _retyped_order, _settle_replacements
 
 log = logging.getLogger(__name__)
-
-# Ячейка с двумя числами через точку, дробь или дефис — это дата, которую
-# не смогли прочитать, а не «нет даты»: иначе день молча приклеится к
-# предыдущему.
-_LOOKS_LIKE_DATE = re.compile(r"\d{1,2}\s*[.,/-]\s*\d{1,2}")
-_LESSON_NO_RE = re.compile(r"^([1-9])$")
-# Строка под парой несёт время звонка в колонке номера: «9-00-10.30».
-_TIME_RE = re.compile(r"^(\d{1,2})[.:-](\d{2})\s*[-–]\s*(\d{1,2})[.:-](\d{2})$")
-# Сдвиг не на целый блок («вставить 1–3 ячейки»): колонки +1 и +2 блока,
-# всегда пустые, получают текст. Сдвиг строки задевает каждый блок правее
-# вставки — у сдвига хоть на один день таких ячеек от 70. Текст в одном-двух
-# блоках — запись колледжа, которую разбор не знает: день этих групп не
-# прочитан, остальным лист принимается.
-SPILL_BLOCKS = 3
-# Одна буква в пустой колонке — опечатка, а не сдвиг: за 350 версий листа
-# такая была одна. Счётом, а не регуляркой: ^\W*\w?\W*$ на длинном ряду
-# точек с буквами в конце перебирает за квадратичное время.
-def _noise(text: str) -> bool:
-    return sum(1 for ch in text if ch.isalnum() or ch == "_") <= 1
 
 
 @dataclass(frozen=True)
@@ -78,13 +52,13 @@ class Limits:
     # нужен с избытком.
     max_days_ahead: int = 120
 
+
+FULL_SHEET = Limits()
+
+
 FULL_SHEET = Limits()
 # Для фикстур из нескольких групп: структура та же, объём другой.
 FIXTURE = Limits(min_groups=3, min_dates=2, min_lessons=5)
-
-
-def _cell(row: list[str], col: int) -> str:
-    return row[col] if col < len(row) else ""
 
 
 def parse_sheet(
@@ -334,355 +308,6 @@ def parse_sheet(
     return snapshot
 
 
-def _lessons_at(row: list[str], teacher_row: list[str], col: int, number: int) -> list[Lesson]:
-    """Пары блока, который начинается в колонке `col`."""
-    out: list[Lesson] = []
-    # Половинки — две пары с одним номером: каждая со своей аудиторией.
-    halved = _halves(row, col, teacher_row)
-    parts = [(col, col + 1), (col + 2, col + 3)] if halved else [(col, col + 3)]
-    for subject_col, room_col in parts:
-        cells = (
-            _cell(row, subject_col),
-            _cell(row, room_col),
-            _cell(teacher_row, subject_col) if teacher_row else "",
-        )
-        for subject_raw, room_raw, teacher_raw in split_subgroups(*cells) or [cells]:
-            lesson = parse_lesson(
-                number=number, subject_raw=subject_raw, room_raw=room_raw,
-                teacher_raw=teacher_raw,
-            )
-            if lesson is not None:
-                out.append(lesson)
-    return out
-
-
-@dataclass
-class _Doubt:
-    """День под повторным заголовком, который расставил группы иначе, чем главный."""
-
-    # Группа -> её колонка по повторному заголовку; группы там нет — нет и здесь.
-    columns: dict[str, int]
-    why: str
-    # Подгруппы, на которые заголовок разделил группу: id -> (имя, колонка).
-    new: dict[str, tuple[str, int]] = field(default_factory=dict)
-    by_main: dict[str, list[Lesson]] = field(default_factory=dict)
-    by_section: dict[str, list[Lesson]] = field(default_factory=dict)
-    by_new: dict[str, list[Lesson]] = field(default_factory=dict)
-
-
-def _numbers(gid: str) -> tuple[str, ...]:
-    """Числа в имени группы: курс, год набора, подгруппа."""
-    return tuple(re.findall(r"\d+", gid))
-
-
-def _section_columns(
-    rows: list[list[str]], i: int, names_i: int, groups: list[GroupRef]
-) -> tuple[dict[str, int], dict[str, tuple[str, int]]]:
-    """Где какая группа по повторному заголовку в строке `i` (имена — в `names_i`),
-    и подгруппы, на которые он разделил группу: id -> (имя, колонка).
-
-    Имя, которого главный заголовок не знает («СИС(а)-926/1» у «СИС-926/1»), —
-    прежнее имя группы: её место видно по соседям. Если слева и справа группы
-    стоят с одним и тем же шагом от своих колонок, с тем же шагом стоит и она —
-    когда номера в именах те же. Иначе это другая группа: колонку вырезали во
-    всём листе, и в старом шаблоне ушла не та группа, что в главном заголовке,
-    а на её месте осталось имя ушедшей из главного. Пары под ней — не наши.
-
-    Шаг не сошёлся, а имя — «группа/N» той группы, которой в заголовке нет, —
-    колледж разделил группу на подгруппы («С-926» на «С-926/1» и «С-926/2»):
-    их пары — под их именами. Другие незнакомые имена так не читаются: старое
-    имя из чужого шаблона дало бы группу-двойника.
-    """
-    names_row = rows[names_i]
-    main_col = {g.id: g.column for g in groups}
-    at_main: dict[int, list[str]] = {}
-    for g in groups:
-        at_main.setdefault(g.column, []).append(g.id)
-    heads = sorted(c for c, v in enumerate(rows[i]) if (v or "").strip() in HEAD_WORDS)
-    placed: dict[str, int] = {}
-    step: dict[int, int] = {}
-    unknown: list[int] = []
-    for col in heads:
-        ids = [group_id(name) for name in split_group_names(_cell(names_row, col))]
-        known = [gid for gid in ids if gid in main_col]
-        if known:
-            for gid in known:
-                placed.setdefault(gid, col)
-            step[col] = col - main_col[known[0]]
-        elif ids:
-            unknown.append(col)
-    unplaced: list[int] = []
-    for col in unknown:
-        left = next((step[c] for c in reversed(heads[: heads.index(col)]) if c in step), None)
-        right = next((step[c] for c in heads[heads.index(col) + 1:] if c in step), None)
-        if left is None or left != right:
-            unplaced.append(col)
-            continue
-        numbers = {_numbers(gid) for gid in map(group_id, split_group_names(_cell(names_row, col)))}
-        same = [gid for gid in at_main.get(col - left, []) if _numbers(gid) in numbers]
-        if not same:
-            unplaced.append(col)
-        for gid in same:
-            placed.setdefault(gid, col)
-    new: dict[str, tuple[str, int]] = {}
-    for col in unplaced:
-        for name in split_group_names(_cell(names_row, col)):
-            m = SUBGROUP_RE.fullmatch(name)
-            if not m:
-                continue
-            try:
-                base = group_id(m.group(1))
-            except ValueError:
-                continue
-            gid = group_id(name)
-            if base in main_col and base not in placed and gid not in main_col:
-                new.setdefault(gid, (name, col))
-    return placed, new
-
-
-
-# Запасной способ верит разбору дня, только если предметы в основном знакомы
-# группам (по дням выше заголовка), а у другого разбора — заметно реже. Со
-# временем в неделях появляются новые предметы и практика: у верного разбора
-# доля падает к 0,9, у неверного не поднимается выше 0,55.
-SETTLE_MIN_LESSONS = 40
-SETTLE_KNOWN = 0.8
-SETTLE_GAP = 0.2
-
-
-def _blank_day(rows: list[list[str]], start: int) -> range | None:
-    """Строки дня с датой в `start` до следующей даты, если в них, кроме
-    номеров и времени, ничего нет; иначе None."""
-    end = start + 1
-    while end < len(rows) and not _LOOKS_LIKE_DATE.search(_cell(rows[end], 0)):
-        end += 1
-    if any(c.strip() for row in rows[start:end] for c in row[2:]):
-        return None
-    return range(start, end)
-
-
-def _settle_moved(
-    snapshot: Snapshot, doubt: dict[date, _Doubt], previous: Snapshot | None = None
-) -> None:
-    """Дни под повторным заголовком с другой раскладкой: чьи в них пары.
-
-    Основной способ — главный заголовок — здесь не годится: повторный с ним
-    спорит. Запасной: день разобран обоими способами, и верен тот, где группы
-    получили свои предметы — те, что у них были в днях выше заголовка. Сдвиг
-    блока даёт группе предметы соседа, и на сотне групп разница видна сразу.
-    Неделя, вставленная со сдвигом, кончается без заголовка: дальше дни снова
-    стоят по главному. Поэтому решение — по каждому дню, а после первого дня
-    по главному заголовку повторному больше не верим. Не решилось — день не
-    прочитан, как и у группы, которой в повторном заголовке нет.
-
-    Новый лист над заголовком может держать всего неделю — на ней доля своих
-    предметов порога не наберёт. Тогда в «свои» идут и предметы прежнего
-    снимка, только до спорных дней: спорные он сам решал этим же способом.
-    """
-    if not doubt:
-        return
-    first = min(doubt)
-    known: dict[str, set[str]] = {}
-    for source in (previous, snapshot):
-        if source is None:
-            continue
-        for gid, by_date in source.schedule.items():
-            known.setdefault(gid, set()).update(
-                _topic(x.subject) for day, lessons in by_date.items()
-                if source is snapshot or day < first for x in lessons
-            )
-
-    def share(parsed: dict[str, list[Lesson]]) -> tuple[int, float]:
-        total = sum(len(lessons) for lessons in parsed.values())
-        hits = sum(
-            1 for gid, lessons in parsed.items() for x in lessons
-            if _topic(x.subject) in known.get(gid, ())
-        )
-        return total, (hits / total if total else 0.0)
-
-    back_to_main = False
-    added: dict[str, GroupRef] = {}
-    own: dict[str, set[date]] = {}
-    read: dict[str, list[date]] = {"section": [], "main": [], "": []}
-    whys: dict[str, None] = {}
-    absent: dict[tuple[str, str], list[date]] = {}
-    names = {g.id: g.name for g in snapshot.groups}
-    column_of = {g.id: g.column for g in snapshot.groups}
-    for day in sorted(doubt):
-        d = doubt[day]
-        n_main, main = share(d.by_main)
-        n_sect, sect = share(d.by_section)
-        others = any(by.get(day) for gid, by in snapshot.schedule.items() if gid not in d.by_main)
-        if not n_main and not n_sect and not others and not any(d.by_new.values()):
-            # В строках дня пусто при любом чтении: спорить не о чем, пар нет.
-            # Пусто только у спорных групп — другое: их колонки могли уехать.
-            for gid in d.by_main:
-                snapshot.schedule[gid].pop(day, None)
-            continue
-        verdict = ""
-        if n_main >= SETTLE_MIN_LESSONS and main >= SETTLE_KNOWN and main - sect >= SETTLE_GAP:
-            verdict = "main"
-        elif (
-            n_sect >= SETTLE_MIN_LESSONS and sect >= SETTLE_KNOWN and sect - main >= SETTLE_GAP
-            and not back_to_main
-        ):
-            verdict = "section"
-        back_to_main = back_to_main or verdict == "main"
-        read[verdict].append(day)
-        parsed = {"main": d.by_main, "section": d.by_section}.get(verdict, {})
-        for gid in d.by_main:
-            snapshot.schedule[gid].pop(day, None)
-            if verdict == "main" or (verdict == "section" and gid in d.columns):
-                if parsed.get(gid):
-                    snapshot.schedule[gid][day] = list(parsed[gid])
-                if verdict == "section" and d.columns[gid] != column_of.get(gid):
-                    snapshot.day_columns.setdefault(gid, {})[day] = d.columns[gid]
-            else:
-                snapshot.unread.setdefault(gid, {})[day] = False
-                if verdict == "section":
-                    absent.setdefault((gid, d.why), []).append(day)
-                else:
-                    whys[d.why] = None
-        if verdict != "section":
-            continue
-        for gid, (name, col) in d.new.items():
-            lessons = d.by_new.get(gid, [])
-            if gid not in added and not lessons:
-                # Пустая колонка шаблона — ещё не группа.
-                continue
-            if gid not in added:
-                added[gid] = GroupRef(name=name, id=gid, column=col)
-                # В списке выбора — сразу за группой, которую разделили.
-                base = group_id(SUBGROUP_RE.fullmatch(name).group(1))
-                at = max(
-                    (k for k, g in enumerate(snapshot.groups) if g.id == base or g.id in added),
-                    default=len(snapshot.groups) - 1,
-                )
-                snapshot.groups.insert(at + 1, added[gid])
-            own.setdefault(gid, set()).add(day)
-            if lessons:
-                snapshot.schedule.setdefault(gid, {})[day] = list(lessons)
-            if col != added[gid].column:
-                snapshot.day_columns.setdefault(gid, {})[day] = col
-            names[gid] = name
-    if previous is not None and read[""]:
-        # Ни один день разделения не решён — подгруппы прежнего снимка остаются:
-        # иначе у выбравших их 404 и «выберите заново», а через заход всё вернётся.
-        have = {g.id for g in snapshot.groups}
-        for g in previous.groups:
-            m = SUBGROUP_RE.fullmatch(g.name)
-            if g.id in have or not m or (base := group_id(m.group(1))) not in have:
-                continue
-            added[g.id] = g
-            at = max(k for k, x in enumerate(snapshot.groups) if x.id in (base, *added))
-            snapshot.groups.insert(at + 1, g)
-            have.add(g.id)
-            names[g.id] = g.name
-    for gid, ref in added.items():
-        fill_subgroup(snapshot, ref, own.get(gid, set()))
-    for (gid, why), days in absent.items():
-        snapshot.unread_why.append(
-            f"{names.get(gid, gid)} {days[0]:%d.%m}–{days[-1]:%d.%m}: группы нет в повторном "
-            f"заголовке, по которому прочитаны эти дни ({why})"
-        )
-    snapshot.unread_why.extend(whys)
-
-    def span(days: list[date]) -> str:
-        return f"{days[0]:%d.%m}–{days[-1]:%d.%m} ({len(days)})" if days else "нет"
-
-    if added:
-        _warn_once(
-            ("подгруппы", tuple(sorted(added))),
-            "повторный заголовок разделил группы на подгруппы — читаю их пары под ним: %s",
-            ", ".join(g.name for g in added.values()), logger=log,
-        )
-    _warn_once(
-        ("запасной", tuple(sorted(doubt)), tuple(read["section"]), tuple(read["main"])),
-        "повторный заголовок спорит с главным: по повторному прочитаны дни %s, по главному — "
-        "%s, не прочитаны — %s", span(read["section"]), span(read["main"]), span(read[""]),
-        logger=log,
-    )
-
-
-def _draft_tail(rows: list[list[str]]) -> int | None:
-    """Начало черновика внизу листа: с первой повторной даты до конца — только
-    даты, которые выше уже есть. Так колледж набирает неделю заново, не трогая
-    выложенную; выше лежит то, что видят люди, его и читаем. Повтор посреди
-    листа или новая дата после повтора — не черновик, а отказ, как раньше."""
-    seen: set[date] = set()
-    start = None
-    for i, row in enumerate(rows):
-        try:
-            day = _parse_date(_cell(row, 0))
-        except SourceFormatChanged:
-            day = None
-        if day is None:
-            continue
-        if day in seen:
-            start = i if start is None else start
-        elif start is not None:
-            return None
-        else:
-            seen.add(day)
-    return start
-
-
-RETYPED_FULL = 0.8
-
-
-def _retyped_order(rows: list[list[str]], start: int, min_groups: int) -> list[int] | None:
-    """Порядок строк, в котором дни, набранные заново внизу листа, стоят на
-    месте прежних; None — копия внизу ещё черновик.
-
-    Колледж вставляет неделю заново целиком (05.11: за одну правку, все дни) и
-    старую не стирает сразу; верна новая — она сходится с листом преподавателей.
-    Черновик отличает заполненность: каждый день внизу должен быть не беднее
-    `RETYPED_FULL` прежнего. Шапка между копиями — отказ от подмены: под ней
-    могли смениться колонки групп, и новая копия читалась бы чужими."""
-    def day_at(i: int) -> date | None:
-        try:
-            return _parse_date(_cell(rows[i], 0))
-        except SourceFormatChanged:
-            return None
-
-    marks = [(i, d) for i in range(len(rows)) if (d := day_at(i)) is not None]
-    tail = [(i, d) for i, d in marks if i >= start]
-    days = {d for _, d in tail}
-    old = [(i, d) for i, d in marks if i < start and d in days]
-    if not old or len(tail) != len(days):
-        return None
-    lo = old[0][0]
-    after = [i for i, d in marks if lo < i < start and d not in days]
-    hi = after[0] if after else start
-    if [d for i, d in old] != [d for _, d in tail] or any(i >= hi for i, _ in old):
-        return None
-    if any(len(header_blocks([rows[i]], min_groups)) for i in range(lo, len(rows))):
-        return None
-
-    def fill(at: int) -> int:
-        nxt = next((i for i, _ in marks if i > at), len(rows))
-        return sum(1 for r in rows[at:nxt] for c in r[2:] if c.strip())
-
-    if any(fill(n) < RETYPED_FULL * fill(o) for (o, _), (n, _) in zip(old, tail)):
-        return None
-    return list(range(lo)) + list(range(start, len(rows))) + list(range(hi, start))
-
-
-def fill_subgroup(snapshot: Snapshot, ref: GroupRef, own: set[date]) -> None:
-    """Подгруппа — часть группы: в дни, где лист пишет группу целиком (вне
-    недели разделения или день не решён), у неё пары и пометки группы."""
-    base = group_id(SUBGROUP_RE.fullmatch(ref.name).group(1))
-    parent = next((g for g in snapshot.groups if g.id == base), None)
-    for day, lessons in snapshot.schedule.get(base, {}).items():
-        if day not in own:
-            snapshot.schedule.setdefault(ref.id, {})[day] = list(lessons)
-            snapshot.day_columns.setdefault(ref.id, {})[day] = snapshot.day_columns.get(base, {}).get(
-                day, parent.column if parent else ref.column)
-    for day, known_before in snapshot.unread.get(base, {}).items():
-        if day not in own:
-            snapshot.unread.setdefault(ref.id, {})[day] = known_before
-
-
 def _day_bells(
     day: date, numbers: list[int], cells: dict[int, list[str]]
 ) -> dict[str, list[str]] | None:
@@ -743,122 +368,6 @@ def _no_date(guess: date, place: str, cell: str, then: date | None) -> SourceFor
     )
 
 
-def _halves(row: list[str], col: int, teacher_row: list[str]) -> bool:
-    """Блок поделён пополам: две пары рядом, у каждой своё название.
-
-    Так колледж пишет подгруппы с разными языками: «немецкий» и «55/1» слева,
-    «английский» и «467» справа, преподаватели — под каждым названием. От
-    вставки ячеек отличает то, что в +2 название, а не номер аудитории соседа,
-    и в +3 есть аудитория: вставка на две ячейки оставляет там пусто. Аудитории
-    справа ещё может не быть — тогда половинки узнаются по названию слева и
-    ФИО под правым: у вставки +0 пуст.
-
-    Половинка бывает и одна: правая (слева пусто) или левая — название в +0,
-    аудитория в +1, справа пусто и в строке преподавателей тоже. У вставки на
-    одну ячейку наоборот: в +0 аудитория соседа, название — в +1.
-    """
-    left = _cell(row, col).strip()
-    right = _cell(row, col + 2).strip()
-    if _ROOM_RE.match(left):
-        return False
-    if not right:
-        return bool(
-            _HAS_LETTER.search(left)
-            and _ROOM_RE.match(_cell(row, col + 1).strip())
-            and not _cell(row, col + 3).strip()
-            and not _cell(teacher_row, col + 2).strip()
-        )
-    if not _HAS_LETTER.search(right) or _ROOM_RE.match(right):
-        return False
-    if _cell(row, col + 3).strip():
-        return True
-    return bool(_HAS_LETTER.search(left) and _HAS_LETTER.search(_cell(teacher_row, col + 2)))
-
-
-def _leftover(rows: list[list[str]], i: int, col: int, text: str) -> bool:
-    """Одна аудитория («онлайн», «255») в пустой колонке блока, у которого ни в
-    строке пары, ни в строке преподавателей рядом нет предмета, — остаток
-    удалённой пары. Пары из неё не собрать, и вставка ячеек так не выглядит:
-    та уводит из колонки предмета сам предмет."""
-    if _online_room(text) is None and not _ROOM_RE.match(text):
-        return False
-    return not any(_cell(rows[j], col).strip() for j in (i - 1, i, i + 1) if 0 <= j < len(rows))
-
-
-def _spill(
-    rows: list[list[str]], groups: list[GroupRef], skip: set[int], where
-) -> list[tuple[int, int, int]]:
-    """Текст в пустых колонках блоков (+1, +2): (строка, колонка блока, ячейка).
-
-    Так выглядит «вставить ячейки» не на ширину блока: предмет уезжает в +1
-    или +2, а аудитория соседа — в колонку предмета. Без проверки это прошло
-    бы при ok: на две ячейки — «пар нет» у всех групп, на одну — номера
-    аудиторий вместо предметов. Задеты SPILL_BLOCKS блоков и больше — отказ
-    листа. Блоки, поделённые пополам ([_halves]), и их строки преподавателей
-    не в счёт.
-    """
-    columns = sorted({g.column for g in groups})
-    halved: set[tuple[int, int]] = set()
-    for i, row in enumerate(rows):
-        if i in skip or not _LESSON_NO_RE.match(_cell(row, 1).strip()):
-            continue
-        teacher_row = _teacher_row(rows, i, skip, where)
-        cols = [col for col in columns if _halves(row, col, teacher_row)]
-        if not cols:
-            continue
-        teacher_i = next((j for j in range(i + 1, len(rows)) if rows[j] is teacher_row), None)
-        for col in cols:
-            halved.add((i, col))
-            if teacher_i is not None:
-                halved.add((teacher_i, col))
-    found: list[tuple[int, int, int]] = []
-    for i, row in enumerate(rows):
-        if i in skip:
-            continue
-        for col in columns:
-            if (i, col) in halved:
-                continue
-            for extra in (1, 2):
-                text = _cell(row, col + extra).strip()
-                if text and not _noise(text) and not _leftover(rows, i, col, text):
-                    found.append((i, col, col + extra))
-    if len({col for _, col, _ in found}) >= SPILL_BLOCKS:
-        i, _, col = found[0]
-        raise SourceFormatChanged(
-            f"в {len(found)} ячейках пустых колонок блоков есть текст, первая — "
-            f"{where(i)}, колонка {a1_column(col)}: похоже на вставку ячеек не на ширину блока"
-        )
-    return found
-
-
-def _mark_unread(
-    snapshot: Snapshot, spill: list[tuple[int, int, int]], row_date: dict[int, date], where
-) -> None:
-    """День группы с лишним текстом в блоке — не прочитан: его пары прочь.
-
-    Что в них, разбор не знает: половинка без аудитории, сдвиг у края строки.
-    Служба отдаст по этому дню прежнее и скажет владельцу.
-    """
-    first: dict[tuple[int, date], tuple[int, int]] = {}
-    for i, block, col in spill:
-        day = row_date.get(i)
-        if day is None:
-            raise SourceFormatChanged(
-                f"текст в пустой колонке блока раньше первой даты: {where(i)}, "
-                f"колонка {a1_column(col)}"
-            )
-        first.setdefault((block, day), (i, col))
-    for (block, day), (i, col) in sorted(first.items(), key=lambda item: item[1]):
-        names = [g for g in snapshot.groups if g.column == block]
-        for group in names:
-            snapshot.schedule.get(group.id, {}).pop(day, None)
-            snapshot.unread.setdefault(group.id, {})[day] = False
-        snapshot.unread_why.append(
-            f"{', '.join(g.name for g in names)} {day:%d.%m}: текст в пустой колонке "
-            f"блока, {where(i)}, колонка {a1_column(col)}"
-        )
-
-
 def _cut_far_skeleton(
     snapshot: Snapshot, far: dict[date, str], seen: list[date], limits: Limits, around
 ) -> None:
@@ -872,106 +381,6 @@ def _cut_far_skeleton(
     if far:
         log.info("пустые даты за горизонтом (%s…%s) — каркас, отрезаю", min(far), max(far))
         seen[:] = [d for d in seen if d not in far]
-
-
-def _topic(subject: str) -> str:
-    """Первые два слова названия: «Иностранный язык .Английский ячзык» и
-    «Иностранный язык, Английский» — один предмет."""
-    return " ".join(re.findall(r"[а-яёa-z]+", subject.casefold())[:2])
-
-
-def _settle_replacements(snapshot: Snapshot) -> None:
-    """Одно ФИО у замены — чьё: заменённой пары или новой?
-
-    Два ФИО колледж пишет как «прежний, новый», а одно бывает и тем, и другим.
-    Судим по остальным ячейкам листа: если преподаватель ведёт заменённый
-    предмет и не ведёт новый, это прежний — у новой пары его нет. Иначе в его
-    расписании окажется чужая пара: тому, кто ведёт «Коммуникативный тренинг»,
-    — «Кураторский час» вместо него.
-    """
-    teaches: dict[str, set[str]] = {}
-    pending: list[tuple[list[Lesson], int, str]] = []
-    for by_date in snapshot.schedule.values():
-        for lessons in by_date.values():
-            for i, lesson in enumerate(lessons):
-                old = replaced_of(lesson)
-                if old is None:
-                    for name in lesson.teachers:
-                        teaches.setdefault(name, set()).add(_topic(lesson.subject))
-                elif len(lesson.teachers) == 1:
-                    pending.append((lessons, i, old))
-    for lessons, i, old in pending:
-        lesson = lessons[i]
-        known = teaches.get(lesson.teachers[0], set())
-        if _topic(old) in known and _topic(lesson.subject) not in known:
-            lessons[i] = dataclasses.replace(lesson, teachers=())
-
-
-def _adopt_names(
-    rows: list[list[str]], groups: list[GroupRef], adopt: dict[int, list[str]], min_groups: int
-) -> tuple[list[GroupRef], dict[int, int]]:
-    """Имена безымянным блокам главного заголовка — из повторного.
-
-    Возвращает группы (с подобранными) и оставшиеся безымянные блоки со
-    счётчиком пар, который набирает обход.
-    """
-    taken = {g.column for g in groups}
-    known = {g.id for g in groups}
-    blocks = header_blocks(rows, min_groups) - taken
-    groups = list(groups)
-    for col in sorted(adopt):
-        if col not in blocks:
-            # Главный заголовок про этот блок не знает вовсе — не с чего
-            # подбирать: его ставят и законно, под будущую группу.
-            _warn_once(
-                ("gap", col, tuple(adopt[col])),
-                "повторный заголовок: в колонке %s стоит %s, а в главном заголовке этой "
-                "колонки нет и такого имени нет нигде — считаю блок безымянным",
-                a1_column(col), adopt[col], logger=log,
-            )
-            continue
-        for name in adopt[col]:
-            gid = group_id(name)
-            if gid in known:
-                continue
-            _warn_once(
-                ("adopt", col, name),
-                "в главном заголовке у колонки %s нет имени, а повторный называет её %r — "
-                "беру имя оттуда", a1_column(col), name, logger=log,
-            )
-            known.add(gid)
-            groups.append(GroupRef(name=name, id=gid, column=col))
-        blocks.discard(col)
-    groups.sort(key=lambda g: g.column)
-    return groups, dict.fromkeys(blocks, 0)
-
-
-def _teacher_row(rows: list[list[str]], i: int, skip: set[int], where) -> list[str]:
-    """Строка преподавателей пары в строке `i`.
-
-    Это строка под парой со временем звонка в колонке номеров, а не просто
-    следующая: между ними бывает вставлена строка с припиской («перенос с
-    23.09» у одной группы), и она отняла бы преподавателей у всей строки пары.
-    Строки без номера и времени между ними пропускаются. Времени нет вовсе —
-    берём следующую.
-    """
-    between: list[int] = []
-    j = i + 1
-    while j < len(rows) and j not in skip:
-        marker = _cell(rows[j], 1).strip()
-        if _LESSON_NO_RE.match(marker):
-            break
-        if _TIME_RE.match(marker):
-            if between:
-                _warn_once(
-                    ("между", where(between[0])),
-                    "между строкой пары и строкой времени в %s лишняя строка — пропускаю",
-                    where(between[0]), logger=log,
-                )
-            return rows[j]
-        between.append(j)
-        j += 1
-    return rows[between[0]] if between else []
 
 
 def _validate(
@@ -1011,6 +420,3 @@ def _validate(
             f"нашёл всего {total} пар, ожидал не меньше {limits.min_lessons}",
             starts=min(snapshot.dates, default=None),
         )
-    # Сдвиг по содержимому здесь не проверяется: его зовут явно служба (с
-    # историей прежнего снимка) и канарейка — так видно, какая проверка
-    # отвергла лист.

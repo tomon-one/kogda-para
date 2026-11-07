@@ -564,9 +564,9 @@ def test_week_pasted_without_one_group_is_read_by_its_own_header(fixture_csv, mo
     """Запасной способ: главный заголовок и повторный спорят — день читается тем,
     при котором группы получают свои предметы. Сдвинутые дни — по повторному,
     дни после них — по главному; группа, которой в повторном нет, не прочитана."""
-    from whensclass.parser import csv_schedule
+    from whensclass.parser import sections
 
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
     honest, rows, below = _week_from_another_template(fixture_csv, days=2)
     snap = parse_sheet(rows, "фикстура", FIXTURE)
 
@@ -585,9 +585,9 @@ def test_days_read_by_the_repeated_header_remember_their_columns(fixture_csv, mo
     import datetime as dt
 
     from whensclass.api.payloads import schedule_payload
-    from whensclass.parser import csv_schedule
+    from whensclass.parser import sections
 
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
     honest, rows, below = _week_from_another_template(fixture_csv, days=2)
     snap = parse_sheet(rows, "фикстура", FIXTURE)
     moved = {gid for gid, days in snap.day_columns.items() if set(days) == set(below[:2])}
@@ -603,9 +603,9 @@ def test_days_read_by_the_repeated_header_remember_their_columns(fixture_csv, mo
 def test_block_erased_under_a_shifted_header_is_unread_not_empty(fixture_csv, monkeypatch):
     """Под сдвинутым заголовком стёрли блок вместе с именем: группа, чья это
     колонка по главному, не прочитана — пустая неделя была бы молчаливой ложью."""
-    from whensclass.parser import csv_schedule
+    from whensclass.parser import sections
 
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
     _, rows, below = _week_from_another_template(fixture_csv, days=2)
     header = _columnar_header(rows)[0]
     end = next(i for i, r in enumerate(rows) if _parse_date(r[0]) == below[2])
@@ -623,9 +623,9 @@ def test_thin_history_above_the_header_is_helped_by_the_previous_snapshot(fixtur
     """Новый лист: над сдвинутым заголовком почти нет своих пар, судить по
     ним не о чем. Предметы групп из прежнего снимка решают, а без него дни
     остаются непрочитанными у всех."""
-    from whensclass.parser import csv_schedule
+    from whensclass.parser import sections
 
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
     honest, rows, below = _week_from_another_template(fixture_csv, days=99)
     header = _columnar_header(rows)[0]
     for i in range(header):
@@ -657,9 +657,9 @@ def test_group_split_into_subgroups_under_the_header_is_read_by_their_names(fixt
     под заголовком — под их именами, а в остальных — пары и пометки группы:
     там лист пишет её целиком. Сама группа под заголовком не прочитана, а не
     получает молча пары первой подгруппы."""
-    from whensclass.parser import csv_schedule
+    from whensclass.parser import sections
 
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     header = _columnar_header(rows)[0]
     # Дни под заголовком повторяют дни над ним — как в листе, где недель много.
@@ -699,7 +699,7 @@ def test_group_split_into_subgroups_under_the_header_is_read_by_their_names(fixt
 
     # Следующая версия не решила ни одного дня — подгруппы прежнего снимка не
     # пропадают: их дни под заголовком не прочитаны, как у группы.
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 10**6)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 10**6)
     again = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE, previous=snap)
     ids = [g.id for g in again.groups]
     assert ids[ids.index("gd-1125") + 1:ids.index("gd-1125") + 3] == ["gd-1125-1", "gd-1125-2"]
@@ -709,9 +709,9 @@ def test_group_split_into_subgroups_under_the_header_is_read_by_their_names(fixt
 def test_unknown_name_that_is_not_a_subgroup_is_not_a_new_group(fixture_csv, monkeypatch):
     """Под сдвинутым заголовком незнакомое имя без «/N» его группы — не новая
     группа: старое имя из чужого шаблона дало бы двойника."""
-    from whensclass.parser import csv_schedule
+    from whensclass.parser import sections
 
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
     _, rows, below = _week_from_another_template(fixture_csv, days=2)
     header = _columnar_header(rows)[0]
     end = next(i for i, r in enumerate(rows) if _parse_date(r[0]) == below[2])
@@ -734,9 +734,9 @@ def test_name_with_other_numbers_is_not_the_old_name_of_a_neighbour(fixture_csv,
     на её месте осталось имя группы, которой уже нет в главном заголовке.
     Шаг соседей тот же, но номера в именах другие — это не прежнее имя: группа
     главного заголовка в этих днях не прочитана, а не получает чужие пары."""
-    from whensclass.parser import csv_schedule
+    from whensclass.parser import sections
 
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
     _, rows, below = _week_from_another_template(fixture_csv, days=2)
     header = _columnar_header(rows)[0]
     end = next(i for i, r in enumerate(rows) if _parse_date(r[0]) == below[2])
@@ -760,9 +760,9 @@ def test_name_with_other_numbers_is_not_the_old_name_of_a_neighbour(fixture_csv,
 def test_old_name_with_the_same_numbers_is_read_by_neighbours(fixture_csv, monkeypatch):
     """Прежнее имя («ДП(а)-923 и ДП(а)-1124») с теми же номерами — та же группа:
     её пары под повторным заголовком читаются, а не теряются."""
-    from whensclass.parser import csv_schedule
+    from whensclass.parser import sections
 
-    monkeypatch.setattr(csv_schedule, "SETTLE_MIN_LESSONS", 8)
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
     honest, rows, below = _week_from_another_template(fixture_csv, days=2)
     header = _columnar_header(rows)[0]
     rows[header + 2][10] = "ДП(а)-923 и ДП(а)-1124"
@@ -796,7 +796,7 @@ def test_day_empty_by_both_headers_is_empty_not_unread():
     """Спорный день без единой пары: чьи пары — вопроса нет, день не «не прочитан»."""
     import datetime as dt
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
-    from whensclass.parser import csv_schedule as cs
+    from whensclass.parser import sections as cs
 
     empty, busy = dt.date(2026, 11, 4), dt.date(2026, 11, 5)
     groups = [GroupRef(name="А-1", id="a-1", column=4)]
@@ -817,7 +817,7 @@ def test_day_empty_only_for_doubtful_groups_stays_unread():
     """Пары есть у групп вне спорных: пустота спорной колонки — не выходной."""
     import datetime as dt
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
-    from whensclass.parser import csv_schedule as cs
+    from whensclass.parser import sections as cs
 
     day = dt.date(2026, 10, 14)
     groups = [GroupRef(name="А-1", id="a-1", column=4), GroupRef(name="Б-1", id="b-1", column=8)]
@@ -831,7 +831,7 @@ def test_subgroup_of_next_sheet_gets_group_lessons_in_current_sheet():
     """Подгруппа названа только в следующем листе: в днях текущего она — группа."""
     import datetime as dt
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
-    from whensclass.parser.csv_schedule import fill_subgroup
+    from whensclass.parser.sections import fill_subgroup
 
     a, b = dt.date(2026, 11, 2), dt.date(2026, 11, 9)
     base = GroupRef(name="С-926", id="s-926", column=4)

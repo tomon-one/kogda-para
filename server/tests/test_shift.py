@@ -219,7 +219,7 @@ def test_left_half_alone_is_one_lesson_with_its_room(fixture_csv):
     (["", "55/1", "", ""], ["", "", "", ""], False),
 ])
 def test_each_condition_of_a_halved_block(cells, teacher, halved):
-    from whensclass.parser.csv_schedule import _halves
+    from whensclass.parser.rows import _halves
 
     assert _halves(cells, 0, teacher) is halved
 

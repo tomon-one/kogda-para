@@ -20,8 +20,10 @@ import httpx
 from ..config import settings
 from ..domain.models import ChangedAgainstPrevious, SheetTooSmall, SourceFormatChanged
 from ..domain.teachers import build_index
-from ..parser.csv_schedule import SUBGROUP_RE, Limits, fill_subgroup
+from ..parser.csv_schedule import Limits
 from ..parser.export import parse_export
+from ..parser.groups import SUBGROUP_RE
+from ..parser.sections import fill_subgroup
 from ..parser.shift import check_shift, shift_seed
 from ..sources import gsheets, sheet_index
 from ..sources.sheet_memory import SheetIndex
