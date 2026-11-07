@@ -2,22 +2,19 @@ package ru.whensclass.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import ru.whensclass.BuildConfig
 
 // Испорченный файл настроек — начать с пустого: без обработчика каждый старт
 // падал на CorruptionException, и помогала только «Очистить данные».
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+internal val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     "whensclass",
     corruptionHandler = androidx.datastore.core.handlers.ReplaceFileCorruptionHandler {
         androidx.datastore.preferences.core.emptyPreferences()
@@ -42,9 +39,8 @@ internal fun notifyFlag(own: String?, changes: String?): Boolean =
  * Виджет рисуется только отсюда и никогда из сети, поэтому одинаково работает
  * в метро и при выключенном сервере.
  */
-class ScheduleStore(private val context: Context) {
-    private val json = Json { ignoreUnknownKeys = true }
-
+class ScheduleStore(internal val context: Context) {
+    internal val json = Json { ignoreUnknownKeys = true }
 
     /**
      * Прочитаны ли настройки с диска.
@@ -74,32 +70,6 @@ class ScheduleStore(private val context: Context) {
     /** С какого момента сервер лежит (ISO, UTC); null, когда всё в порядке. */
     val serverSince: Flow<String?> = context.dataStore.data.map { it[KEY_SERVER_SINCE] }
 
-    suspend fun putServerState(status: String, sourceUrl: String?, since: String? = null) {
-        context.dataStore.edit {
-            it[KEY_SERVER_STATUS] = status
-            sourceUrl?.let { url -> it[KEY_SOURCE_URL] = url }
-            if (status == "ok" || since == null) it.remove(KEY_SERVER_SINCE)
-            else it[KEY_SERVER_SINCE] = since
-            // Отказ относится к этой сборке: после обновления его надо забыть.
-            if (status == STATUS_UNSUPPORTED) it[KEY_UNSUPPORTED_BUILD] = BuildConfig.VERSION_CODE.toString()
-        }
-    }
-
-    /**
-     * Сервер ответил расписанием, хотя /v1/meta в этом заходе сорвался: «не
-     * отвечает» — уже неправда. true — отметка стояла и снята.
-     */
-    suspend fun forgetUnreachable(): Boolean {
-        var was = false
-        context.dataStore.edit {
-            if (it[KEY_SERVER_STATUS] != STATUS_UNREACHABLE) return@edit
-            was = true
-            it[KEY_SERVER_STATUS] = "ok"
-            it.remove(KEY_SERVER_SINCE)
-        }
-        return was
-    }
-
     /**
      * Сервер отказал прежней сборке (426), а приложение с тех пор обновили:
      * отказ к нынешней не относится, и до первого ответа сервера на экране и в
@@ -115,71 +85,7 @@ class ScheduleStore(private val context: Context) {
         }
     }
 
-    /**
-     * Неудача связи с сервером при живой сети: с какого момента он молчит
-     * ([Unreachable.since] — для текста «Сбой с …», держится до первого
-     * удачного ответа) и с какого — подряд, без перерывов дольше
-     * [UNREACHABLE_STREAK_GAP] ([Unreachable.run] — для решения «не отвечает»).
-     * Второй счёт нужен, чтобы вечерняя и утренняя неудачи через ночь без
-     * проверок не сложились в сбой.
-     */
-    suspend fun noteUnreachable(now: java.time.Instant): Unreachable {
-        var first = now
-        var run = now
-        context.dataStore.edit { prefs ->
-            fun instant(key: Preferences.Key<String>) =
-                prefs[key]?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
-            val known = instant(KEY_UNREACHABLE_SINCE)
-            val last = instant(KEY_UNREACHABLE_LAST)
-            val started = instant(KEY_UNREACHABLE_RUN)
-            if (known != null) first = known else prefs[KEY_UNREACHABLE_SINCE] = now.toString()
-            val streak = last != null && java.time.Duration.between(last, now) < UNREACHABLE_STREAK_GAP
-            if (streak && started != null) run = started else prefs[KEY_UNREACHABLE_RUN] = now.toString()
-            prefs[KEY_UNREACHABLE_LAST] = now.toString()
-        }
-        return Unreachable(first, run)
-    }
-
     data class Unreachable(val since: java.time.Instant, val run: java.time.Instant)
-
-    suspend fun clearUnreachable() {
-        context.dataStore.edit {
-            it.remove(KEY_UNREACHABLE_SINCE)
-            it.remove(KEY_UNREACHABLE_LAST)
-            it.remove(KEY_UNREACHABLE_RUN)
-        }
-    }
-
-    /**
-     * Строки непрочитанного «Расписание изменилось»: день и текст. Копятся,
-     * потому что новое уведомление с тем же id заменяет прежнее, и неосмотренная
-     * отмена пропала бы бесследно.
-     */
-    suspend fun pendingChanges(): List<Pair<String, String>> =
-        context.dataStore.data.first()[KEY_PENDING_CHANGES].orEmpty().split("\n")
-            .mapNotNull { line -> line.split("\t", limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
-
-    suspend fun putPendingChanges(lines: List<Pair<String, String>>) {
-        context.dataStore.edit {
-            it[KEY_PENDING_CHANGES] = lines.joinToString("\n") { (day, text) -> "$day\t$text" }
-        }
-    }
-
-    /** Тихие часы: изменения лежат в [pendingChanges] и ждут утра ([quietHours]). */
-    suspend fun changesHeld(): Boolean = context.dataStore.data.first()[KEY_CHANGES_HELD] != null
-
-    suspend fun setChangesHeld(held: Boolean) {
-        context.dataStore.edit { if (held) it[KEY_CHANGES_HELD] = "1" else it.remove(KEY_CHANGES_HELD) }
-    }
-
-    /** О каком сбое (по его `since`) телефон уже сказал уведомлением. */
-    suspend fun staleNotifiedFor(): String? = context.dataStore.data.first()[KEY_STALE_NOTIFIED]
-
-    suspend fun setStaleNotifiedFor(since: String?) {
-        context.dataStore.edit {
-            if (since == null) it.remove(KEY_STALE_NOTIFIED) else it[KEY_STALE_NOTIFIED] = since
-        }
-    }
 
     /**
      * Группы (или преподавателя) в таблице больше нет: сервер ответил 404 при
@@ -192,29 +98,6 @@ class ScheduleStore(private val context: Context) {
 
     /** Сервер ответил 404 на свою группу, но час ещё не прошёл ([noteNotFound]). */
     val notFoundPending: Flow<Boolean> = context.dataStore.data.map { it[KEY_GONE_SINCE] != null }
-
-    /** Отмечает 404. True, если пора говорить человеку. */
-    suspend fun noteNotFound(nowMillis: Long): Boolean {
-        var confirmed = false
-        context.dataStore.edit {
-            val first = it[KEY_GONE_SINCE]?.toLongOrNull()
-            when {
-                first == null -> it[KEY_GONE_SINCE] = nowMillis.toString()
-                nowMillis - first >= GONE_CONFIRM_MILLIS -> {
-                    it[KEY_GONE] = "1"
-                    confirmed = true
-                }
-            }
-        }
-        return confirmed
-    }
-
-    suspend fun clearNotFound() {
-        context.dataStore.edit {
-            it.remove(KEY_GONE_SINCE)
-            it.remove(KEY_GONE)
-        }
-    }
 
     /**
      * За сколько минут напоминать о паре; общее для студента и преподавателя.
@@ -258,51 +141,9 @@ class ScheduleStore(private val context: Context) {
         it[KEY_NOTIFY_UPDATES] != "0"
     }
 
-    suspend fun notifyUpdatesEnabled(): Boolean = notifyUpdates.first()
-
-    suspend fun setNotifyUpdates(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_NOTIFY_UPDATES] = if (enabled) "1" else "0" }
-    }
-
-    /** Про какую сборку уже сказали — чтобы не повторяться каждый час. */
-    suspend fun announcedVersion(): Int =
-        context.dataStore.data.first()[KEY_UPDATE_ANNOUNCED]?.toIntOrNull() ?: 0
-
-    suspend fun setAnnouncedVersion(code: Int) {
-        context.dataStore.edit { it[KEY_UPDATE_ANNOUNCED] = code.toString() }
-    }
-
-    /** Сборка, отданная установщику из приложения: после замены сказать, что встала. */
-    suspend fun setInstalling(code: Int) {
-        context.dataStore.edit { it[KEY_INSTALL_PENDING] = code.toString() }
-    }
-
-    /** Ждали эту сборку — забыть ожидание; true — её и ставили из приложения. */
-    suspend fun takeInstalling(code: Int): Boolean {
-        var mine = false
-        context.dataStore.edit {
-            mine = it[KEY_INSTALL_PENDING]?.toIntOrNull() == code
-            it.remove(KEY_INSTALL_PENDING)
-        }
-        return mine
-    }
-
-    /** Чем кончилась последняя установка из приложения — для «Сведений для отчёта». */
-    suspend fun lastInstall(): String? = context.dataStore.data.first()[KEY_LAST_INSTALL]
-
-    suspend fun setLastInstall(text: String) {
-        context.dataStore.edit { it[KEY_LAST_INSTALL] = text }
-    }
-
     /** Сообщать ли об изменениях в расписании. */
     val notifyChanges: Flow<Boolean> = context.dataStore.data.map {
         it[KEY_NOTIFY_CHANGES] != "0"
-    }
-
-    suspend fun notifyChangesEnabled(): Boolean = notifyChanges.first()
-
-    suspend fun setNotifyChanges(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_NOTIFY_CHANGES] = if (enabled) "1" else "0" }
     }
 
     /** Сообщать ли о сбое сервера — своим выключателем, а не «изменениями». */
@@ -310,21 +151,9 @@ class ScheduleStore(private val context: Context) {
         notifyFlag(it[KEY_NOTIFY_SERVER], it[KEY_NOTIFY_CHANGES])
     }
 
-    suspend fun notifyServerEnabled(): Boolean = notifyServer.first()
-
-    suspend fun setNotifyServer(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_NOTIFY_SERVER] = if (enabled) "1" else "0" }
-    }
-
     /** Сообщать ли о пропаже из таблицы одной из остальных выбранных групп. */
     val notifyGroupsGone: Flow<Boolean> = context.dataStore.data.map {
         notifyFlag(it[KEY_NOTIFY_SUBGROUP], it[KEY_NOTIFY_CHANGES])
-    }
-
-    suspend fun notifyGroupsGoneEnabled(): Boolean = notifyGroupsGone.first()
-
-    suspend fun setNotifyGroupsGone(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_NOTIFY_SUBGROUP] = if (enabled) "1" else "0" }
     }
 
     /**
@@ -338,34 +167,6 @@ class ScheduleStore(private val context: Context) {
     /** Закреплённые группы — для тех, кто смотрит чужие расписания. */
     val pinnedGroups: Flow<List<String>> = context.dataStore.data.map {
         it[KEY_PINNED_GROUPS]?.split("\n")?.filter(String::isNotBlank).orEmpty()
-    }
-
-    suspend fun togglePinnedGroup(id: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[KEY_PINNED_GROUPS]?.split("\n")?.filter(String::isNotBlank)
-                .orEmpty()
-            val next = if (id in current) current - id else current + id
-            prefs[KEY_PINNED_GROUPS] = next.joinToString("\n")
-        }
-    }
-
-    /** Закреплённый id сменился — имя исправили. */
-    suspend fun replacePinnedTeacher(old: String, new: String) = replacePinned(KEY_PINNED_TEACHERS, old, new)
-
-    private suspend fun replacePinned(key: Preferences.Key<String>, old: String, new: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[key]?.split("\n")?.filter(String::isNotBlank).orEmpty()
-            prefs[key] = current.map { if (it == old) new else it }.distinct().joinToString("\n")
-        }
-    }
-
-    suspend fun togglePinnedTeacher(id: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[KEY_PINNED_TEACHERS]?.split("\n")?.filter(String::isNotBlank)
-                .orEmpty()
-            val next = if (id in current) current - id else current + id
-            prefs[KEY_PINNED_TEACHERS] = next.joinToString("\n")
-        }
     }
 
     /**
@@ -524,7 +325,7 @@ class ScheduleStore(private val context: Context) {
      * Остальные выбранные группы по порядку выбора — их пары видны на экране
      * рядом со своими ([combineGroups]). Своя группа сюда не входит.
      */
-    val extraGroups: Flow<List<ExtraGroup>> = context.dataStore.data.map(::readExtras)
+    val extraGroups: Flow<List<ExtraGroup>> = context.dataStore.data.map { readExtras(it) }
 
     suspend fun currentExtraGroups(): List<ExtraGroup> = extraGroups.first()
 
@@ -533,68 +334,6 @@ class ScheduleStore(private val context: Context) {
      * Разбирает репозиторий; хранилищу нужно только выбросить лишние.
      */
     val extraSchedulesJson: Flow<String?> = context.dataStore.data.map { it[KEY_EXTRA_SCHEDULES] }
-
-    /**
-     * Новый список остальных групп. Расписания убранных — прочь сразу: иначе
-     * при повторном выборе группы на экран вернулся бы прошлый снимок.
-     */
-    suspend fun setExtraGroups(groups: List<ExtraGroup>) {
-        context.dataStore.edit { writeExtras(it, groups.take(MAX_GROUPS - 1)) }
-    }
-
-    suspend fun putExtraSchedules(body: String) {
-        context.dataStore.edit { it[KEY_EXTRA_SCHEDULES] = body }
-    }
-
-    /** Группу переименовали: сервер ответил за неё под новым id. */
-    suspend fun adoptExtra(oldId: String, id: String, name: String) {
-        editExtras { list -> list.map { if (it.id == oldId) it.copy(id = id, name = name) else it } }
-    }
-
-    /**
-     * Группа ответила 404 при здоровом сервере. Подтверждается тем же часом,
-     * что и пропажа своей группы ([gone]). true — подтверждено.
-     */
-    suspend fun noteExtraNotFound(id: String, nowMillis: Long): Boolean {
-        var confirmed = false
-        editExtras { list ->
-            list.map {
-                if (it.id != id) return@map it
-                val since = it.goneSince
-                if (since != null && nowMillis - since >= GONE_CONFIRM_MILLIS) confirmed = true
-                if (since == null) it.copy(goneSince = nowMillis) else it
-            }
-        }
-        return confirmed
-    }
-
-    /** Группы снова отвечают: отметки о пропаже — прочь, их пары вернутся. */
-    suspend fun clearExtrasNotFound(ids: Set<String>) {
-        if (ids.isEmpty()) return
-        editExtras { list ->
-            list.map { if (it.id in ids && (it.gone || it.goneSince != null)) it.copy(gone = false, goneSince = null, told = false) else it }
-        }
-    }
-
-    /**
-     * Группы нет в таблице — подтверждено. Выбор не стирается: после починки
-     * таблицы её пары вернутся сами. true — отметка новая, о ней пора сказать.
-     */
-    /** Пропавшие группы, о которых уведомление сказало. */
-    suspend fun markExtrasTold(ids: Set<String>) {
-        editExtras { list -> list.map { if (it.id in ids) it.copy(told = true) else it } }
-    }
-
-    suspend fun markExtraGone(id: String): Boolean {
-        var fresh = false
-        editExtras { list ->
-            list.map {
-                if (it.id != id || it.gone) it
-                else it.copy(gone = true).also { fresh = true }
-            }
-        }
-        return fresh
-    }
 
     /**
      * Перевод со «соседней подгруппы» сборок до 0.1.4 на список групп.
@@ -640,27 +379,6 @@ class ScheduleStore(private val context: Context) {
             prefs.remove(KEY_GENERATED_AT)
             prefs[KEY_FORMAT] = FORMAT
         }
-    }
-
-    private fun readExtras(prefs: Preferences): List<ExtraGroup> =
-        prefs[KEY_EXTRA_GROUPS]
-            ?.let { body -> runCatching { json.decodeFromString<List<ExtraGroup>>(body) }.getOrNull() }
-            .orEmpty()
-
-    private fun writeExtras(prefs: MutablePreferences, groups: List<ExtraGroup>) {
-        if (groups.isEmpty()) prefs.remove(KEY_EXTRA_GROUPS)
-        else prefs[KEY_EXTRA_GROUPS] = json.encodeToString(groups)
-        val keep = groups.map { it.id }.toSet()
-        val schedules = prefs[KEY_EXTRA_SCHEDULES]
-            ?.let { runCatching { json.decodeFromString<JsonObject>(it) }.getOrNull() }
-            ?: return
-        val left = JsonObject(schedules.filterKeys { it in keep })
-        if (left.isEmpty()) prefs.remove(KEY_EXTRA_SCHEDULES)
-        else prefs[KEY_EXTRA_SCHEDULES] = json.encodeToString(left)
-    }
-
-    private suspend fun editExtras(change: (List<ExtraGroup>) -> List<ExtraGroup>) {
-        context.dataStore.edit { writeExtras(it, change(readExtras(it))) }
     }
 
     /** Дата последней перерисовки виджетов: по ней узнаём смену суток. */
@@ -764,68 +482,4 @@ class ScheduleStore(private val context: Context) {
         val fetchedAt: Long,
         val theme: String,
     )
-
-    private companion object {
-        val KEY_GROUP_ID = stringPreferencesKey("group_id")
-        val KEY_SERVER_SINCE = stringPreferencesKey("server_since")
-        val KEY_STALE_NOTIFIED = stringPreferencesKey("stale_notified")
-        val KEY_LISTS_AT = stringPreferencesKey("lists_at")
-        val KEY_GITHUB_AT = stringPreferencesKey("github_at")
-        val KEY_PENDING_CHANGES = stringPreferencesKey("pending_changes")
-        val KEY_CHANGES_HELD = stringPreferencesKey("changes_held")
-        val KEY_UNREACHABLE_SINCE = stringPreferencesKey("unreachable_since")
-        val KEY_GONE_SINCE = stringPreferencesKey("gone_since")
-        val KEY_GONE = stringPreferencesKey("gone")
-        const val GONE_CONFIRM_MILLIS = 60L * 60 * 1000
-        /** Сборки до 0.1.4: снимок без пар соседки. Читается только при переводе. */
-        val KEY_PARTIAL = stringPreferencesKey("schedule_partial")
-        val KEY_EXTRA_GROUPS = stringPreferencesKey("extra_groups")
-        val KEY_EXTRA_SCHEDULES = stringPreferencesKey("extra_schedules")
-        val KEY_GROUP_LABELS = stringPreferencesKey("group_labels")
-        val KEY_CHANNEL_SEEN = stringPreferencesKey("channel_seen")
-        val KEY_WINDOW_FROM = stringPreferencesKey("window_from")
-        val KEY_GROUP2_GONE_SINCE = stringPreferencesKey("group2_gone_since")
-        val KEY_GROUP2_GONE = stringPreferencesKey("group2_gone")
-        val KEY_UNREACHABLE_LAST = stringPreferencesKey("unreachable_last")
-        val KEY_UNREACHABLE_RUN = stringPreferencesKey("unreachable_run")
-        /**
-         * Неудачи, разделённые таким перерывом, — не одна беда. Три часа, а не
-         * час: фоновый заход бывает раз в час с хвостиком, и при часе цепочка
-         * рвалась бы каждый раз.
-         */
-        val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(3)
-        val KEY_GROUP_NAME = stringPreferencesKey("group_name")
-        val KEY_SCHEDULE = stringPreferencesKey("schedule_json")
-        val KEY_GROUPS = stringPreferencesKey("groups_json")
-        val KEY_TEACHERS = stringPreferencesKey("teachers_json")
-        val KEY_FETCHED_AT = stringPreferencesKey("fetched_at")
-        val KEY_GENERATED_AT = stringPreferencesKey("generated_at")
-        val KEY_FORMAT = stringPreferencesKey("format")
-        val KEY_UNSUPPORTED_BUILD = stringPreferencesKey("unsupported_build")
-        const val FORMAT = "2"
-        val KEY_THEME = stringPreferencesKey("theme")
-        val KEY_GLOW = stringPreferencesKey("glow")
-        val KEY_WIDGET_DAY = stringPreferencesKey("widget_day")
-        val KEY_WELCOME = stringPreferencesKey("welcome_seen")
-        val KEY_GROUP2_ID = stringPreferencesKey("group2_id")
-        val KEY_GROUP2_NAME = stringPreferencesKey("group2_name")
-        val KEY_NOTIFY_UPDATES = stringPreferencesKey("notify_updates")
-        val KEY_UPDATE_ANNOUNCED = stringPreferencesKey("update_announced")
-        val KEY_INSTALL_PENDING = stringPreferencesKey("install_pending")
-        val KEY_LAST_INSTALL = stringPreferencesKey("last_install")
-        val KEY_NOTIFY_BEFORE = stringPreferencesKey("notify_before")
-        val KEY_NOTIFY_ON = stringPreferencesKey("notify_on")
-        val KEY_NOTIFY_CHANGES = stringPreferencesKey("notify_changes")
-        val KEY_NOTIFY_SERVER = stringPreferencesKey("notify_server")
-        val KEY_NOTIFY_SUBGROUP = stringPreferencesKey("notify_subgroup")
-        val KEY_PINNED_TEACHERS = stringPreferencesKey("pinned_teachers")
-        val KEY_PINNED_GROUPS = stringPreferencesKey("pinned_groups")
-        val KEY_ROLE = stringPreferencesKey("role")
-        val KEY_TEACHER_ID = stringPreferencesKey("teacher_id")
-        val KEY_TEACHER_NAME = stringPreferencesKey("teacher_name")
-        val KEY_TALLY_OPENS = stringPreferencesKey("tally_opens")
-        val KEY_TALLY_SINCE = stringPreferencesKey("tally_since")
-        val KEY_SERVER_STATUS = stringPreferencesKey("server_status")
-        val KEY_SOURCE_URL = stringPreferencesKey("source_url")
-    }
 }

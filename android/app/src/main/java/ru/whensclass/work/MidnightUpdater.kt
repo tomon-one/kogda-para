@@ -13,6 +13,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ru.whensclass.AppContainer
+import ru.whensclass.data.setLastInstall
+import ru.whensclass.data.takeInstalling
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget

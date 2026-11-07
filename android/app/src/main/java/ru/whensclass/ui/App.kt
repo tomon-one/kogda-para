@@ -50,6 +50,12 @@ import ru.whensclass.data.MAX_GROUPS
 import ru.whensclass.data.subgroupsOf
 import ru.whensclass.data.RefreshResult
 import ru.whensclass.data.ReleaseDto
+import ru.whensclass.data.setNotifyChanges
+import ru.whensclass.data.setNotifyGroupsGone
+import ru.whensclass.data.setNotifyServer
+import ru.whensclass.data.setNotifyUpdates
+import ru.whensclass.data.togglePinnedGroup
+import ru.whensclass.data.togglePinnedTeacher
 import ru.whensclass.notify.LessonAlarms
 import ru.whensclass.widget.ThemeChoice
 
