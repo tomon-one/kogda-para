@@ -281,6 +281,55 @@ def m_reordered_header(rows, today):
     return rows, set()
 
 
+def _neighbours(rows, s: Sheet) -> tuple[int, int]:
+    """Две соседние колонки середины листа, у обеих имя в шапке."""
+    names = rows[s.names[0]]
+    for k in range(len(s.blocks) // 2, len(s.blocks) - 1):
+        a, b = s.blocks[k], s.blocks[k + 1]
+        if names[a].strip() and names[b].strip():
+            return a, b
+    raise LookupError("нет двух соседних названных колонок")
+
+
+def _swap(row, a: int, b: int) -> None:
+    row[a:a + 4], row[b:b + 4] = row[b:b + 4], row[a:a + 4]
+
+
+def m_header_previous_name(rows, today):
+    """Повторная шапка перед будущим понедельником: две соседние группы
+    поменялись колонками вместе с парами, а одна записана прежним видом имени
+    («СИС(а)-926/1»). Чужое имя тогда одно — оно похоже на опечатку."""
+    s = Sheet(rows)
+    at = next(i for i, d in s.days if d > today and d.weekday() == 0)
+    a, b = _neighbours(rows, s)
+    for i in range(at, len(rows)):
+        _swap(rows[i], a, b)
+    names = list(rows[s.names[0]])
+    names[0], names[1] = "", "№"
+    _swap(names, a, b)
+    names[b] = re.sub(r"^([А-ЯЁA-Z]+)", r"\1(а)", names[b], count=1)
+    top = ["Дисциплина" if c >= 2 and v.strip() else "" for c, v in enumerate(names)]
+    rows[at:at] = [top, ["Преподаватель" if v else "" for v in top], names]
+    return rows, set()
+
+
+def m_retyped_with_header(rows, today):
+    """Неделя после сегодняшней набрана заново внизу листа со своей шапкой
+    столбиком, и в ней две соседние группы поменялись колонками (пары тоже).
+    Правда та же, что в чистом листе."""
+    s = Sheet(rows)
+    lo = s.future_day(today)
+    week = dict(s.days)[lo].isocalendar()[:2]
+    days = [i for i, d in s.days if i >= lo and d.isocalendar()[:2] == week]
+    copy = [list(r) for r in rows[lo:s.day_rows(days[-1]).stop]]
+    head = [list(r) for r in rows[s.heads[-1]:s.names[-1] + 1]]
+    a, b = _neighbours(rows, s)
+    for r in head + copy:
+        _swap(r, a, b)
+    rows.extend(head + copy)
+    return rows, set()
+
+
 def m_latin_letter(rows, today):
     """В имени одной группы кириллическая буква заменена латинской двойницей."""
     s = Sheet(rows)
@@ -332,6 +381,8 @@ BREAKS = {
     "римские_номера": (m_roman_numbers, "номера пар римскими цифрами"),
     "неделя_повторена": (m_week_retyped, "последняя неделя ещё раз внизу, слово в слово"),
     "шапка_с_перестановкой": (m_reordered_header, "повторная шапка, две группы поменялись колонками"),
+    "шапка_прежнее_имя": (m_header_previous_name, "повторная шапка, две группы местами, одна прежним видом имени"),
+    "неделя_заново_со_шапкой": (m_retyped_with_header, "неделя заново внизу со своей шапкой, две группы местами"),
     "латинская_буква": (m_latin_letter, "в имени группы латинская буква-двойница"),
     "пары_местами": (m_pairs_swapped, "вторая и третья пара поменялись строками"),
     "пробелы": (m_spaces, "пробелы вокруг имён групп и дат"),
