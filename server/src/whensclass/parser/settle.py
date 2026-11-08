@@ -13,7 +13,7 @@ from ..domain.ids import group_id
 from ..domain.models import GroupRef, Lesson, Snapshot, SourceFormatChanged, a1_column
 from .cells import replaced_of
 from .dates import _parse_date
-from .groups import _warn_once, header_blocks
+from .groups import _warn_once, build_column_map, find_header_rows, header_blocks
 from .rows import _cell
 
 log = logging.getLogger(__name__)
@@ -71,7 +71,15 @@ def _retyped_order(rows: list[list[str]], start: int, min_groups: int) -> list[i
     hi = after[0] if after else start
     if [d for i, d in old] != [d for _, d in tail] or any(i >= hi for i, _ in old):
         return None
-    if any(len(header_blocks([rows[i]], min_groups)) for i in range(lo, len(rows))):
+    # Шапка ниже прежней недели, расставившая группы иначе, чем главная, —
+    # отказ: копия встала бы под главную и читалась бы чужими колонками.
+    # Согласная шапка (её колледж ставит перед новой неделей) не мешает.
+    moved: dict[int, tuple[set[int], str]] = {}
+    try:
+        find_header_rows(rows, build_column_map(rows, min_groups), min_groups, distrust=moved)
+    except SourceFormatChanged:
+        return None
+    if any(cols for i, (cols, _) in moved.items() if i >= lo):
         return None
 
     def fill(at: int) -> int:

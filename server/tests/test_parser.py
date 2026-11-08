@@ -416,7 +416,7 @@ def test_honest_rename_left_of_a_shifted_header_is_still_read(fixture_csv):
     ordered = sorted(c for c in columns if c in by_column and c < len(names_row))
     names_row[ordered[2]] = by_column[ordered[1]]
     names_row[ordered[3]] = by_column[ordered[2]]
-    names_row[ordered[0]] = "ДП(а)-923"
+    names_row[ordered[0]] = "ДЗ(а)-999"
     honest = parse_sheet([list(r) for r in collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)],
                          "фикстура", FIXTURE)
     snap = parse_sheet(rows, "фикстура", FIXTURE)

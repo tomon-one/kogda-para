@@ -289,6 +289,9 @@ def find_header_rows(
     return skip
 
 
+# Буква в скобках у прежнего вида имени группы: «СИС(а)-926/1».
+_PREVIOUS_FORM = re.compile(r"\([^)]*\)")
+
 # Сколько имён повторного заголовка должны стоять не в своих колонках, чтобы
 # это был сдвиг. Сдвиг переставляет все имена правее вставки, а одно чужое
 # имя — опечатка: «ИСП-924/1» вместо «ИСП-924/2».
@@ -379,14 +382,18 @@ def _check_columnar(
 
     strangers: list[tuple[int, list[str], str, set[str] | None]] = []
     renamed: list[tuple[int, list[str], set[str]]] = []
+    here: dict[int, set[str]] = {}
     for col in sorted(cells):
         declared = split_group_names((names_row[col] if col < len(names_row) else "") or "")
         if not declared:
             # Имя не написали — сверять нечего, это не повод падать.
             continue
         ids = {group_id(name) for name in declared}
+        # Прежний вид имени («СИС(а)-926/1») — та же группа: переставленный
+        # вместе с соседом, он чужой в этой колонке, а не переименование.
+        here[col] = ids | {group_id(_PREVIOUS_FORM.sub("", name)) for name in declared}
         known = by_column.get(col)
-        elsewhere = sorted(gid for gid in ids if gid in column_of and column_of[gid] != col)
+        elsewhere = sorted(gid for gid in here[col] if gid in column_of and column_of[gid] != col)
         if elsewhere:
             strangers.append((col, declared, elsewhere[0], known))
             continue
@@ -405,13 +412,17 @@ def _check_columnar(
     split = {col for col, declared, known in renamed if _subgroups_of(declared, known)}
     renamed = [r for r in renamed if r[0] not in split]
 
-    if len(strangers) >= COLUMNAR_STRANGERS_TO_REJECT:
+    # Одно чужое имя — опечатка, только если та же группа стоит и в своей
+    # колонке этой шапки. Иначе соседей переставили, а второе имя записано
+    # незнакомо: читать обе колонки по главному — отдать каждой чужие пары.
+    swapped = [s for s in strangers if s[2] not in here.get(column_of[s[2]], set())]
+    if len(strangers) >= COLUMNAR_STRANGERS_TO_REJECT or swapped:
         col, declared, gid, known = strangers[0]
-        here = f"здесь же {sorted(known)}" if known else "здесь в главном заголовке пусто"
+        there = f"здесь же {sorted(known)}" if known else "здесь в главном заголовке пусто"
         message = (
             f"повторный заголовок в {where}: в колонке {a1_column(col)} стоит {declared}, "
             f"а по главному заголовку {gid!r} живёт в колонке {a1_column(column_of[gid])}, "
-            f"{here}; "
+            f"{there}; "
             f"таких колонок {len(strangers)}"
         )
         if reject:
