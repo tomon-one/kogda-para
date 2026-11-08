@@ -145,6 +145,24 @@ def test_key_never_reaches_alert_or_log(monkeypatch, sent, caplog):
     assert SECRET not in sent[0]["message"] and SECRET not in caplog.text
 
 
+def test_google_busy_without_a_previous_list_does_not_carry_the_key(monkeypatch):
+    """429 на список листов без прежнего списка уходит наверх как есть — его
+    печатают заход, слежка за книгой и канарейка. Ключ из адреса туда не
+    попадает, а тип и код ответа остаются: по ним решают, сеть это или ключ."""
+    import httpx
+
+    key = "AIzaSyD-ключ-в-адресе"
+    monkeypatch.setattr(settings, "exit_ssh", None)
+    monkeypatch.setattr(sheet_index.settings, "sheets_api_key", key)
+    monkeypatch.setattr(sheet_index, "_last_list", [])
+    transport = httpx.MockTransport(lambda request: httpx.Response(429, request=request))
+    monkeypatch.setattr(gsheets, "_client", lambda: httpx.Client(transport=transport))
+    with pytest.raises(httpx.HTTPStatusError) as caught:
+        sheet_index.list_sheets()
+    assert caught.value.response.status_code == 429
+    assert key not in str(caught.value) and "key=***" in str(caught.value)
+
+
 def test_key_in_unexpected_error_does_not_leak(tmp_path, sheet, sent, monkeypatch, caplog):
     """То же для «служба споткнулась»: текст исключения идёт в err, тревогу и
     журнал."""

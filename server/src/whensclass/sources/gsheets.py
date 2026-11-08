@@ -188,6 +188,16 @@ def fetch_sheet_csv(gid: str | None = None, title: str | None = None) -> str:
     return text
 
 
+def hide_key(error: object) -> str:
+    """Прячет ключ API в тексте ошибки.
+
+    httpx кладёт в исключение полный адрес запроса вместе с ?key=..., а ключ
+    держат в файле с правами 600 именно для того, чтобы он не разошёлся по
+    машине, в том числе по журналу.
+    """
+    return re.sub(r"key=[^&\s]+", "key=***", str(error))
+
+
 def list_sheets_via_api(key: str) -> list[SheetInfo]:
     """Список листов через Sheets API. Даёт настоящие gid и полные имена."""
     url = f"https://sheets.googleapis.com/v4/spreadsheets/{settings.spreadsheet_id}"
@@ -196,9 +206,17 @@ def list_sheets_via_api(key: str) -> list[SheetInfo]:
         with _client() as client:
             return client.get(url, params=params)
 
-    relayed, response = _direct_or_exit(direct, "sheets", stdin=key + "\n")
+    try:
+        relayed, response = _direct_or_exit(direct, "sheets", stdin=key + "\n")
+        if response is not None:
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        # Ошибка уходит наверх как есть — по её типу и коду решают, сеть это
+        # или ключ, — но без ключа в тексте: её печатают журнал, тревога и
+        # канарейка, и не каждый вызывающий помнит про hide_key.
+        exc.args = (hide_key(exc),)
+        raise
     if response is not None:
-        response.raise_for_status()
         data = response.json()
     else:
         data = json.loads(relayed or "{}")

@@ -54,14 +54,7 @@ def _api_error(exc: Exception) -> str:
     return f"ответ {code}" if code else type(exc).__name__
 
 
-def hide_key(error: object) -> str:
-    """Прячет ключ API в тексте ошибки.
-
-    httpx кладёт в исключение полный адрес запроса вместе с ?key=..., а ключ
-    держат в файле с правами 600 именно для того, чтобы он не разошёлся по
-    машине, в том числе по журналу.
-    """
-    return re.sub(r"key=[^&\s]+", "key=***", str(error))
+hide_key = gsheets.hide_key
 
 
 # Последний список листов от Sheets API и когда он получен: при сбое API служба
