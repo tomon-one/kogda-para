@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 import urllib.parse
 
 # Дни и месяцы для «вт, 29 сентября», как formatDayDate в приложении.
@@ -105,17 +106,19 @@ def _distance(a: str, b: str) -> int:
 
 
 MAX_FUZZY = 200
+# Пометка зачёта после типа пары («… (Пр) ЗАЧЕТ») остаётся в названии, а пара та же.
+_MARK = re.compile(r" (зачет|зачёт|зачеты|экзамен)$")
 
 
 def same_subject(a: str, b: str) -> bool:
     """Та же пара под чуть другим названием: исправили опечатку, регистр или
     точку («Обествознание» → «Обществознание»), или у одной записи полное
-    «А / Б», у другой — только «А»: это не «убрали» и «добавилась».
-    ScheduleDiff.sameSubject."""
+    «А / Б», у другой — только «А», или колледж дописал к паре «ЗАЧЕТ»: это не
+    «убрали» и «добавилась». ScheduleDiff.sameSubject."""
     if a == b:
         return True
     na, nb = _norm(a), _norm(b)
-    if na == nb:
+    if na == nb or _MARK.sub("", na) == _MARK.sub("", nb):
         return True
     head_a, head_b = _norm(a.split("/")[0]), _norm(b.split("/")[0])
     if head_a and head_a == head_b:

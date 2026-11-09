@@ -127,14 +127,15 @@ object ScheduleDiff {
     /**
      * Та же пара под чуть другим названием: исправили опечатку, регистр или
      * точку («Обествознание» → «Обществознание»), или у одной записи полное
-     * «А / Б», у другой — только «А». Правила те же, что у same_subject в
-     * server/src/whensclass/push/changes.py.
+     * «А / Б», у другой — только «А», или колледж дописал к паре «ЗАЧЕТ».
+     * Правила те же, что у same_subject в server/src/whensclass/push/labels.py.
      */
     internal fun sameSubject(a: String, b: String): Boolean {
         if (a == b) return true
         val na = norm(a)
         val nb = norm(b)
         if (na == nb) return true
+        if (withoutMark(na) == withoutMark(nb)) return true
         val headA = norm(a.substringBefore('/'))
         if (headA.isNotEmpty() && headA == norm(b.substringBefore('/'))) return true
         // Расстояние правки — квадрат длины: на названии в десятки тысяч знаков
@@ -144,6 +145,12 @@ object ScheduleDiff {
     }
 
     private const val MAX_FUZZY = 200
+
+    // Пометка зачёта после типа пары («… (Пр) ЗАЧЕТ») остаётся в названии,
+    // а пара та же.
+    private val MARK = Regex(" (зачет|зачёт|зачеты|экзамен)$")
+
+    private fun withoutMark(subject: String): String = subject.replace(MARK, "")
 
     /**
      * Хост, куда поведёт ссылка, — для «чужой адрес: …». «\» браузер читает
