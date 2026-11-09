@@ -35,7 +35,7 @@ export function parseRoute() {
   if (head === 'pick') {
     return { screen: 'pick', mode: parts[1] === 'self' ? 'self' : parts[1] === 'extra' || parts[1] === 'second' ? 'extra' : 'group' };
   }
-  if (head === 'retakes' || head === 'rooms') return { screen: 'main', kind: head, id: null };
+  if (head === 'retakes' || head === 'rooms' || head === 'exams') return { screen: 'main', kind: head, id: null };
   if (head === 'teachers' || head === 'groups') {
     // Id строит служба из названия: латиница, цифры, дефис. Прочее из адреса
     // в запрос не пускать: «..%2F» nginx раскодирует в чужой путь.
@@ -91,7 +91,7 @@ export function onRoute() {
   if (!chosen && route.screen !== 'pick') {
     // Ссылку на чужое расписание или вкладку из чата не терять: откроется после выбора.
     var pending = route.kind && route.id ? route.kind + '/' + route.id
-      : route.kind === 'retakes' || route.kind === 'rooms' ? route.kind
+      : route.kind === 'retakes' || route.kind === 'rooms' || route.kind === 'exams' ? route.kind
         : (history.state && history.state.pending) || null;
     route = { screen: 'pick', mode: 'group' };
     history.replaceState({ steps: stepsNow(), pending: pending }, '', location.pathname + location.search + '#pick');

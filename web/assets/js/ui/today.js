@@ -1,7 +1,7 @@
 // Главный экран: шапка, вкладки, своё расписание и чужие (TodayScreen.kt,
 // TeacherScreen.kt).
 
-import { h, icon, actionButton, actionLink, dialog, closeDialog, snackbar } from './dom.js';
+import { h, icon, actionButton, actionLink, dialog, closeDialog } from './dom.js';
 import { dayCards } from './days.js';
 import { othersList } from './lists.js';
 import { retakesActive, retakesView } from './retakes.js';
@@ -10,11 +10,6 @@ import { weekStrip } from './week.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE, STATUS_EDITING, openingDate } from '../repo.js';
-
-/** Разделы. Пересдачи и экзамены колледж публикует отдельными листами. */
-var SOON = {
-  exams: ['Экзамены', 'Появятся к сессии — колледж выкладывает их в декабре'],
-};
 
 var CHANNEL_URL = 'https://t.me/kogda_para_news';
 
@@ -26,7 +21,7 @@ export function mainScreen(app) {
   var own = app.chosen();
   var route = app.route;
   // Вкладка: у студента своё — «Студентам», у преподавателя — «Преподавателям».
-  var tab = route.kind === 'retakes' || route.kind === 'rooms' ? route.kind
+  var tab = route.kind === 'retakes' || route.kind === 'rooms' || route.kind === 'exams' ? route.kind
     : route.kind === 'teachers' ? 'teachers'
     : route.kind === 'groups' ? 'students'
     : teacherMode ? 'teachers' : 'students';
@@ -58,7 +53,7 @@ export function mainScreen(app) {
     head.appendChild(row);
     row = null;
   }
-  var rowStays = tab === 'retakes' || tab === 'rooms';
+  var rowStays = tab === 'retakes' || tab === 'rooms' || tab === 'exams';
   if (row && (strip || rowStays)) row.classList.add('float');
   if (row && rowStays) row.classList.add('stays');
   // Полоска — под вторым рядом вкладок, как в приложении, и прилипает под шапкой.
@@ -91,6 +86,9 @@ export function mainScreen(app) {
     content.appendChild(retakesView(app));
   } else if (route.kind === 'rooms') {
     content.appendChild(roomsView(app));
+  } else if (route.kind === 'exams') {
+    // Листа экзаменов в таблице ещё нет: говорим, когда будет, а не показываем пустоту.
+    content.appendChild(explanation('Экзаменов нет', 'Расписание экзаменов колледж выкладывает к сессии, в декабре.'));
   } else {
     ownView(app, content);
     if (teacherMode) {
@@ -211,12 +209,12 @@ function secondTabs(app, current, live) {
     type: 'button', class: 'tab' + (roomsOn ? ' on' : ''), 'aria-current': roomsOn ? 'page' : null, 'data-key': 'tab:rooms',
     onclick: function () { if (!roomsOn) app.go('rooms'); },
   }, h('span', { class: 'tab-label' }, 'Аудитории'));
-  return h('nav', { class: 'tabs soon', 'aria-label': 'Другие разделы' }, [retakes, rooms].concat(['exams'].map(function (key) {
-    return h('button', {
-      type: 'button', class: 'tab muted',
-      onclick: function () { snackbar(SOON[key][1]); },
-    }, h('span', { class: 'tab-label' }, SOON[key][0]));
-  })));
+  var examsOn = current === 'exams';
+  var exams = h('button', {
+    type: 'button', class: 'tab' + (examsOn ? ' on' : ''), 'aria-current': examsOn ? 'page' : null, 'data-key': 'tab:exams',
+    onclick: function () { if (!examsOn) app.go('exams'); },
+  }, h('span', { class: 'tab-label' }, 'Экзамены'));
+  return h('nav', { class: 'tabs soon', 'aria-label': 'Другие разделы' }, retakes, rooms, exams);
 }
 
 /**

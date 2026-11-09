@@ -46,14 +46,12 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
 /** Разделы расписания. Пересдачи и экзамены колледж публикует отдельными листами. */
-enum class Tab(val title: String, val ready: Boolean, val emptyMessage: String = "") {
-    STUDENTS("Студентам", true),
-    TEACHERS("Преподавателям", true),
-    RETAKES("Пересдачи", true),
-    ROOMS("Аудитории", true),
-    // Говорим, какими будут, а не «пока пусто»: пустая вкладка без слов
-    // читается как недоделка.
-    EXAMS("Экзамены", false, "Появятся к сессии — колледж выкладывает их в декабре"),
+enum class Tab(val title: String) {
+    STUDENTS("Студентам"),
+    TEACHERS("Преподавателям"),
+    RETAKES("Пересдачи"),
+    ROOMS("Аудитории"),
+    EXAMS("Экзамены"),
 }
 
 /** Ниже этой высоты (альбомная, половина экрана) шапка и вкладки уезжают при прокрутке. */
@@ -277,9 +275,7 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boole
                 // сначала мельчает, а многоточие — только если и так не влезло.
                 overflow = TextOverflow.Ellipsis,
                 autoSize = FIT,
-                // Неготовые разделы видно, но они приглушены.
-                color = if (tab.ready) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         },
     )

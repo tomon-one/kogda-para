@@ -406,7 +406,6 @@ p a, .point a { text-decoration: underline; }
   .head .tab:last-child::after { background: linear-gradient(to left, transparent, var(--primary) 96px); }
 }
 
-.tab.muted { color: var(--muted); }
 .tabs.soon { margin-bottom: 8px; }
 
 /* Ряд разделов над полоской: виден при открытии, уходит под шапку при листании вниз. */

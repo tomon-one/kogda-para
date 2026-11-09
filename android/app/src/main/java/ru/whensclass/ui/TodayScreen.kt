@@ -46,7 +46,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.RetakesDto
 import ru.whensclass.data.RoomsAnswer
@@ -176,7 +174,6 @@ fun TodayScreen(
             onErrorShown()
         }
     }
-    val scope = rememberCoroutineScope()
 
     var showTally by remember { mutableStateOf(false) }
     if (showTally) {
@@ -304,13 +301,8 @@ fun TodayScreen(
                 // Под плашками: у «Стекла» список заходит под них и под шапку.
                 modifier = Modifier.zIndex(-1f),
                 onPick = { picked ->
-                    if (picked.ready) {
-                        if (picked == Tab.TEACHERS && tab != Tab.TEACHERS) teachersEnterKey++
-                        tab = picked
-                    } else {
-                        // Раздел откроется, когда колледж опубликует эти листы.
-                        scope.launch { snackbar.showSnackbar(picked.emptyMessage) }
-                    }
+                    if (picked == Tab.TEACHERS && tab != Tab.TEACHERS) teachersEnterKey++
+                    tab = picked
                 },
             ) {
                 when (tab) {
@@ -405,6 +397,13 @@ fun TodayScreen(
                                 tab = Tab.TEACHERS
                             })
                         }
+                        return@ScheduleTabs
+                    }
+
+                    // Листа экзаменов в таблице ещё нет: говорим, когда будет, а не
+                    // показываем пустоту — она читается как недоделка.
+                    Tab.EXAMS -> {
+                        Explanation("Экзаменов нет", "Расписание экзаменов колледж выкладывает к сессии, в декабре.")
                         return@ScheduleTabs
                     }
 
