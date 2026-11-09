@@ -15,7 +15,7 @@ import { render, focusKey, measureHead } from './render.js';
 import { parseRoute, go, back, home, onRoute, stepsNow } from './route.js';
 import { emptyList, loadLists, loadRetakes, loadRooms, refresh } from './data.js';
 import { mixedBuild } from './version.js';
-import { applyTheme, closeStaleChanges, checkWorkerUpdate, countOpen, countReturn, registerWorker, testNotice, workerUpdated } from './site.js';
+import { applyTheme, closeReminders, closeStaleChanges, checkWorkerUpdate, countOpen, countReturn, registerWorker, testNotice, workerUpdated } from './site.js';
 
 var installEvent = null;
 
@@ -177,8 +177,11 @@ function pick(mode, row) {
     else if (app.route.screen !== 'settings') go('settings', true);
     else render();
   } else {
+    var before = repo.chosen();
     if (mode === 'self') repo.selectSelf(row);
     else repo.selectGroup(row);
+    // Напоминание о паре прежней группы — прочь, как в приложении.
+    if (before && before.id !== row.id) closeReminders();
     state.wanted = OPENING;
     // Уведомления — о новой своей группе, а не о прежней.
     pushTries = 0;

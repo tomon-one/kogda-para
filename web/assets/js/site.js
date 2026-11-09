@@ -133,3 +133,14 @@ export function closeStaleChanges(today) {
     });
   }).then(null, function () { /* нечего закрывать */ });
 }
+
+/** Сменили свою группу — напоминание о паре прежней больше не про человека. */
+export function closeReminders() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.getRegistration().then(function (registration) {
+    if (!registration || !registration.getNotifications) return null;
+    return registration.getNotifications({ tag: 'lesson' }).then(function (open) {
+      open.forEach(function (n) { n.close(); });
+    });
+  }).then(null, function () { /* нечего закрывать */ });
+}
