@@ -9,7 +9,7 @@ import { roomsView } from './rooms.js';
 import { weekStrip } from './week.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
-import { STATUS_UNREACHABLE, STATUS_EDITING } from '../repo.js';
+import { STATUS_UNREACHABLE, STATUS_EDITING, openingDate } from '../repo.js';
 
 /** Разделы. Пересдачи и экзамены колледж публикует отдельными листами. */
 var SOON = {
@@ -361,7 +361,8 @@ function chosenView(app, kind, id) {
   } else {
     var missing = explainMissing(app, other.schedule, false, null);
     if (other.failed && other.schedule) box.appendChild(h('p', { class: 'nothing' }, 'Не обновилось — на экране прежнее.'));
-    box.appendChild(missing || dayCards(other.schedule, app.now(), platesEl, app.now().date));
+    // Плашки — перед днём, на котором список откроется: вечером это завтра.
+    box.appendChild(missing || dayCards(other.schedule, app.now(), platesEl, openingDate(other.schedule)));
   }
   if (platesEl && !platesEl.parentNode) box.insertBefore(platesEl, box.children[1] || null);
   return box;
