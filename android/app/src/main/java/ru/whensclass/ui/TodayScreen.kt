@@ -88,6 +88,8 @@ fun TodayScreen(
     fetchedAt: Long,
     hasUpdate: Boolean,
     refreshing: Boolean,
+    /** Идёт загрузка, которую ⟳ не показывает (при открытии): без снимка — «загружается», а не «проверьте интернет». */
+    loading: Boolean = false,
     teacherMode: Boolean = false,
     reloadKey: Int = 0,
     groups: List<GroupDto>? = null,
@@ -346,7 +348,7 @@ fun TodayScreen(
                         // других не открыть, и имя из «Пересдач» вело бы в тупик.
                         val noOwnDays = teacherMode && schedule != null && schedule.days.isEmpty()
                         if (teacherMode && !noOwnDays &&
-                            (gone && schedule == null || explainMissing(schedule, today, sourceUrl, loading = refreshing))
+                            (gone && schedule == null || explainMissing(schedule, today, sourceUrl, loading = refreshing || loading))
                         ) {
                             return@ScheduleTabs
                         }
@@ -410,7 +412,7 @@ fun TodayScreen(
                     else -> Unit
                 }
 
-                if (gone && schedule == null || explainMissing(schedule, today, sourceUrl, loading = refreshing)) return@ScheduleTabs
+                if (gone && schedule == null || explainMissing(schedule, today, sourceUrl, loading = refreshing || loading)) return@ScheduleTabs
                 schedule ?: return@ScheduleTabs
 
                 ScheduleDays(

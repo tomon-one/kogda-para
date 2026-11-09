@@ -356,7 +356,10 @@ internal fun App(
 
     // И сразу забираем свежее расписание: после установки новой версии старые
     // данные на экране выглядят как поломка.
-    LaunchedEffect(Unit) { container.repository.refresh() }
+    var opening by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        try { container.repository.refresh() } finally { opening = false }
+    }
     // Кого показываем — зависит от роли: группу или самого преподавателя.
     val chosenName = if (teacherMode) teacherName else groupName
     val current = when {
@@ -637,6 +640,7 @@ internal fun App(
                         fetchedAt = fetchedAt,
                         hasUpdate = update != null,
                         refreshing = refreshing,
+                        loading = opening,
                         refreshFailed = refreshFailed,
                         refreshError = refreshError,
                         onErrorShown = { refreshError = null },
