@@ -664,6 +664,12 @@ internal fun App(
                         onUpdateBadge = {
                             focusUpdate = true
                             screen = Screen.SETTINGS
+                            // «Нужно обновить» пришло раньше, чем полчаса прошлой проверки
+                            // истекли: спросить заново, иначе «Версия» откроется без новой сборки.
+                            if (update == null) scope.launch {
+                                (container.updates.checkForScreen(force = true) as? AppUpdate.Check.Available)
+                                    ?.let { update = it.release }
+                            }
                         },
                         onRefresh = refreshNow,
                     )
