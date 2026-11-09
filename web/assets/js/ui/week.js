@@ -84,6 +84,8 @@ function fill(strip, monday) {
       type: 'button',
       class: 'week-day' + (date === strip.__today ? ' today' : ''),
       'data-date': date,
+      // «Сегодня» — для чтеца; выделенный день — нажатая кнопка (ниже).
+      'aria-current': date === strip.__today ? 'date' : null,
     }, h('span', { class: 'week-name' }, name), h('span', { class: 'week-num' }, String(Number(date.slice(8)))));
     button.addEventListener('click', function () { go(strip, date); });
     days.appendChild(button);
@@ -123,8 +125,7 @@ export function mark(strip, day) {
     var on = buttons[i].getAttribute('data-date') === day;
     if (on) index = i;
     buttons[i].classList.toggle('on', on);
-    if (on) buttons[i].setAttribute('aria-current', 'date');
-    else buttons[i].removeAttribute('aria-current');
+    buttons[i].setAttribute('aria-pressed', on ? 'true' : 'false');
   }
   strip.__days.style.setProperty('--i', String(Math.max(index, 0)));
   strip.classList.toggle('marked', index >= 0);

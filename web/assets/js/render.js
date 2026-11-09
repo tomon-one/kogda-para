@@ -218,6 +218,8 @@ function headHeight() {
 /** Под шапкой прилипает полоска дней: высота шапки меняется и при смене ширины окна. */
 export function measureHead() {
   root.style.setProperty('--head-h', stuck(root.querySelector('.head')) + 'px');
+  // Фокус с клавиатуры — ниже всего, что прилипло сверху (app.css, scroll-padding).
+  document.documentElement.style.setProperty('--covered', headHeight() + 'px');
 }
 
 /** Высота прилипшей шапки; не прилипает (альбомная, app.css) — ноль. */

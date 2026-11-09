@@ -14,6 +14,9 @@ var TIMEOUT_MS = 30000;
 // Раз в сутки подписка пересылается службе, даже если ничего не менялось:
 // браузер мог сменить её сам, служба — потерять.
 var RESYNC_MS = 24 * 60 * 60 * 1000;
+// Ключ службы сверяется не чаще раза в час: сменить его может только автор, а
+// лишний запрос при каждом открытии ни к чему.
+var KEY_CHECK_MS = 60 * 60 * 1000;
 // Куда вести нажатие на уведомление: корень или /tested/.
 var SITE = store.CHANNEL === 'tested' ? 'tested' : 'main';
 
@@ -170,6 +173,7 @@ function keyBytes(text) {
 function subscription(registration) {
   return request('/v1/push/key').then(function (body) {
     var key = body.key;
+    store.set('pushKeyAt', Date.now());
     var saved = store.get(KEY);
     return registration.pushManager.getSubscription().then(function (current) {
       if (current && saved && saved.key && saved.key !== key) {
@@ -307,7 +311,16 @@ export function sync(who) {
   }).then(function (sub) {
     return !sub || !saved.endpoint || sub.endpoint !== saved.endpoint;
   }, function () { return false; });
-  return changed.then(function (differs) {
+  // Служба сменила ключ — прежняя подписка мертва, а выключатели «включено»:
+  // подписаться заново сразу, не дожидаясь суточной пересылки.
+  var rekeyed = changed.then(function (differs) {
+    if (due || differs || !saved.key || Date.now() - (store.get('pushKeyAt') || 0) < KEY_CHECK_MS) return differs;
+    return request('/v1/push/key').then(function (body) {
+      store.set('pushKeyAt', Date.now());
+      return body.key !== saved.key;
+    }, function () { return false; });
+  });
+  return rekeyed.then(function (differs) {
     if (!due && !differs) return false;
     return update(choice(), who).then(function () { return true; }, function () { return 'failed'; });
   });

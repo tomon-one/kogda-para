@@ -85,6 +85,29 @@ test('браузер сменил подписку сам — новый адр�
   assert.deepEqual(calls, []);
 });
 
+test('служба сменила ключ — подписка обновляется в течение часа, не через сутки', async () => {
+  store.set('push', { changes: true, remind: 0, kind: 'group', id: 'isp-1', site: 'main', sent: Date.now(),
+    endpoint: 'https://fcm.googleapis.com/a', key: 'OLD' });
+  current = browserSubscription('https://fcm.googleapis.com/a');
+  store.remove('pushKeyAt');
+  calls = [];
+  down = false;
+  // Старую подписку браузер снимает, новую выдаёт под новый ключ.
+  const subscribe = registration.pushManager.subscribe;
+  registration.pushManager.subscribe = () => Promise.resolve(current = browserSubscription('https://fcm.googleapis.com/b'));
+  try {
+    assert.equal(await push.sync({ kind: 'group', id: 'isp-1' }), true);
+  } finally {
+    registration.pushManager.subscribe = subscribe;
+  }
+  assert.equal(store.get('push').key, 'AAAA');
+  assert.equal(store.get('push').endpoint, 'https://fcm.googleapis.com/b');
+  // Ключ только что сверен — следующее открытие без запросов.
+  calls = [];
+  assert.equal(await push.sync({ kind: 'group', id: 'isp-1' }), false);
+  assert.deepEqual(calls, []);
+});
+
 test('на /tested/ до своего воркера подписка основного сайта не трогается', async () => {
   // Пока воркер /tested/ не встал, браузер отдаёт регистрацию основного
   // сайта (scope /): выключение здесь не должно снимать её подписку.
