@@ -42,7 +42,9 @@ export function mainScreen(app) {
   app.loadRetakes(false);
   var live = retakesActive(app.state.retakes, app.now().date);
   // Полоска дней — у своего расписания, когда оно есть.
-  var strip = !route.kind && app.saved() ? weekStrip(app.scrollTarget(), app.now().date) : null;
+  // Дней нет (воскресенье до выкладки) — без полоски, как в приложении: нажимать некуда.
+  var ownDays = (app.shown() || app.saved() || {}).days || [];
+  var strip = !route.kind && ownDays.length ? weekStrip(app.scrollTarget(), app.now().date) : null;
   var head = h('div', { class: 'head' }, topbar(app, own), channelPlate(app), tabs(app, tab, teacherMode),
     live ? secondTabs(app, tab, true) : null);
   var content = h('main', { class: 'content' });
@@ -50,6 +52,12 @@ export function mainScreen(app) {
   // поэтому он прилипает и уходит при листании вниз, как в приложении. На своих
   // разделах ряд стоит: уходить некуда, он и есть переключатель.
   var row = live ? null : secondTabs(app, tab, false);
+  // Открытый преподаватель или группа: ряд разделов — над именем, в шапке, как
+  // в приложении и как при идущих пересдачах.
+  if (row && route.kind && route.id) {
+    head.appendChild(row);
+    row = null;
+  }
   var rowStays = tab === 'retakes' || tab === 'rooms';
   if (row && (strip || rowStays)) row.classList.add('float');
   if (row && rowStays) row.classList.add('stays');
@@ -181,7 +189,10 @@ function tabs(app, current, teacherMode) {
         var path = opened != null ? opened : mine ? '' : teacherMode ? 'groups' : 'teachers';
         // К открытому из списка — через список, как шли в первый раз: «К списку»
         // и «назад» ведут к нему, а не к своему расписанию.
-        if (path.indexOf('/') > 0) app.go(path.split('/')[0]);
+        if (path.indexOf('/') > 0) {
+          app.state.restoreTop = app.state.openedTop[path] || null;
+          app.go(path.split('/')[0]);
+        }
         app.go(path);
       },
     }, h('span', { class: 'tab-label' }, names[tab]));

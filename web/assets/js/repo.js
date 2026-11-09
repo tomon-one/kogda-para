@@ -306,11 +306,16 @@ function refreshOnce(force) {
   var meta = null;
 
   var busy = null;
+  var silent = null;
   return api.meta().then(function (m) { meta = m; }, function (error) {
     meta = null;
     // 429 — сервер ответил, он занят (лимит nginx на адрес оператора): это не
     // «не отвечает», и плашки сбоя из-за него не будет.
     busy = error instanceof api.HttpError && error.status === 429 ? error : null;
+    // Принял соединение и молчит до тайм-аута: расписание упрётся в тот же
+    // тайм-аут — ещё полминуты крутилки ради той же неудачи. Обрыв без ожидания
+    // не повод: расписание после него приходит.
+    silent = error instanceof api.NetError && error.timeout ? error : null;
   })
     .then(function () {
       var now = Date.now();
@@ -334,7 +339,7 @@ function refreshOnce(force) {
         }
       }
       // Занят — своё и другие группы упрутся в тот же лимит: не тратить его.
-      if (busy) return { kind: 'failed', error: busy };
+      if (busy || silent) return { kind: 'failed', error: busy || silent };
       if (!force && !outdated && meta && meta.gen === store.get('gen')) {
         // Данные те же, но проверку показать надо: иначе кажется, что кнопка
         // обновления не работает.
@@ -351,12 +356,15 @@ function refreshOnce(force) {
         return { group: g, request: r };
       });
       return request.then(null, function (error) {
+        // Пока шёл запрос, выбрали другую: 404 прежней — не про новую.
+        if (subject() !== asked) return 'stale';
         if (isNotFound(error) && meta && health(meta) === 'ok' && noteNotFound('gone', Date.now())) {
           return 'gone';
         }
         throw error;
       }).then(function (fresh) {
         if (fresh === 'gone') return { kind: 'gone' };
+        if (fresh === 'stale') return { kind: 'fresh' };
         clearGone();
         store.remove('unreachable');
         store.set('lastOk', Date.now());

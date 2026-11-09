@@ -93,31 +93,32 @@ export function notifications(app, teacherMode) {
       'Сервер ещё не знает о новом выборе: уведомления пока о прежнем расписании.') : null,
     // Как в приложении: о других группах уведомлений нет.
     teacherMode ? null : h('p', { class: 'muted small' }, 'Только о вашей группе, не о других.'),
-    // Второе нажатие до ответа службы — от выбора первого, а не от того, что
-    // было при отрисовке (app.pushIntended).
-    switchRow('Сообщать об изменениях', now.changes, function (on) {
-      var cur = lost ? now : app.pushIntended();
-      change({ changes: on, remind: cur.remind });
-    }, 'push-changes'),
-    h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.'),
+    // Порядок — как в приложении: напоминание, подсказка, минуты, изменения.
     switchRow('Напоминать о паре', now.remind > 0, function (on) {
       var cur = lost ? now : app.pushIntended();
       change({ changes: cur.changes, remind: on ? (cur.remind || lastRemind()) : 0 });
     }, 'push-remind'),
   ];
   if (now.remind > 0) {
+    body.push(h('p', { class: 'muted small' }, 'Напоминание о первой паре дня или между парами.'));
     // Кнопка с выбранным, выбор — в своём окне: выпадающий список браузера
     // выглядит чужим, и своего времени в нём не задать.
     body.push(h('div', { class: 'value-row' }, h('span', null, 'За сколько предупредить'),
       actionButton(durationShort(now.remind), function () {
         remindDialog(now.remind, function (m) { app.setPush({ changes: app.pushIntended().changes, remind: m }); });
       }, 'fixed', 'remind-minutes', 'За сколько предупредить: ' + durationShort(now.remind) + '. Изменить')));
-    body.push(h('p', { class: 'muted small' }, 'Напоминание о первой паре дня или между парами.'));
     body.push(h('p', { class: 'warning small' }, ios
       ? 'Нестабильно: ' + device[2] + ' может задержать напоминание.'
       : 'Нестабильно: браузер может задержать напоминание или не показать его.' +
         (isAndroid() ? ' Надёжнее — приложение.' : '')));
   }
+  // Второе нажатие до ответа службы — от выбора первого, а не от того, что
+  // было при отрисовке (app.pushIntended).
+  body.push(switchRow('Сообщать об изменениях', now.changes, function (on) {
+    var cur = lost ? now : app.pushIntended();
+    change({ changes: on, remind: cur.remind });
+  }, 'push-changes'));
+  body.push(h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.'));
   if (!ios) {
     // Служба рассылки — по адресу подписки, до неё — по браузеру: у Safari на
     // Mac это Apple, у Edge — Microsoft, а не Google.

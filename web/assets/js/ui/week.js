@@ -206,7 +206,7 @@ function headBottom() {
  * День наверху — первый, который виден под шапкой хотя бы наполовину: край
  * прошлого дня, торчащий из-под полоски, не перехватывает выделение.
  */
-function topDay() {
+export function topDay() {
   var top = headBottom();
   var cards = document.querySelectorAll('[data-day]');
   for (var i = 0; i < cards.length; i++) {

@@ -264,6 +264,23 @@ test('смена группы стирает прежнее расписание
   assert.equal(repo.fetchedAt(), 0);
 });
 
+test('404 прежнего выбора не помечает новую группу пропавшей', async () => {
+  reset();
+  let release;
+  const slow = new Promise((resolve) => { release = resolve; });
+  server = (url) => url === '/v1/meta' ? [200, { gen: 'G1', status: 'ok' }] : [404, { error: 'нет' }];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (url) => (url === '/v1/meta' ? realFetch(url) : slow.then(() => realFetch(url)));
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  const pending = repo.refresh(true);
+  await new Promise((r) => setTimeout(r, 0));
+  repo.selectGroup({ id: 'isp-9', name: 'ИСП-9' });
+  release();
+  await pending;
+  globalThis.fetch = realFetch;
+  assert.equal(repo.goneSuspected(), false);
+});
+
 test('ответ на прежний выбор не записывается', async () => {
   reset();
   let release;

@@ -6,6 +6,7 @@ import { closeDialog } from './ui/dom.js';
 import { MAX_GROUPS } from './schedule.js';
 import { state, nav, app, OPENING } from './state.js';
 import { render } from './render.js';
+import { topDay } from './ui/week.js';
 import { emptyList, loadLists, loadOther } from './data.js';
 
 /** Адрес, присланный человеку без своего выбора: открыть его после выбора. */
@@ -106,6 +107,9 @@ export function onRoute() {
   var isOwn = route.screen === 'main' && !route.kind;
   var enteredList = route.screen === 'main' && (route.kind !== app.route.kind || route.id !== app.route.id);
   var oldRoute = app.route;
+  if (oldRoute.id && (route.kind !== oldRoute.kind || route.id !== oldRoute.id)) {
+    state.openedTop[oldRoute.kind + '/' + oldRoute.id] = topDay();
+  }
   app.route = route;
   // Глубже — справа, назад — слева. Внутри главного экрана шапка и вкладки
   // стоят на месте, едет только содержимое: иначе смена вкладки выглядела бы
@@ -125,6 +129,9 @@ export function onRoute() {
   nav.appear = nav.depth != null && nav.depth < 2 && depth >= 2;
   nav.depth = depth;
   if ((isOwn && !wasOwn) || (route.id && enteredList)) state.wanted = route.id || state.wanted === OPENING ? OPENING : repo.openingDate();
+  // Возврат на вкладку — к пролистанному дню открытого на ней.
+  if (route.id && enteredList && state.restoreTop) state.wanted = state.restoreTop;
+  if (route.id) state.restoreTop = null;
   if (route.id) loadOther(route.kind, route.id);
   // Экран выбора — всегда за свежими (ответ по ETag, без изменений — пустой):
   // после «Выбрать заново» в старом списке нет новой группы.
