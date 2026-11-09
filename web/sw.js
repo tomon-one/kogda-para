@@ -296,6 +296,11 @@ function closeChangedReminders(lines) {
   var today = collegeToday();
   var numbers = [];
   lines.forEach(function (l) {
+    // Только то, что делает напоминание неверным. «Добавилась» группа к паре
+    // преподавателя, правка с подписью в скобках (одна группа из нескольких,
+    // одна половинка блока) — напоминание о паре по-прежнему верно.
+    var head = l[1].split(':')[0];
+    if (!/отменили|убрали|замена|переехала|ссылк|онлайн|очная/.test(head) || /\(/.test(head)) return;
     var m = l[0] === today && /(?:^|\D)(\d) пар/.exec(l[1]);
     if (m) numbers.push(Number(m[1]));
   });
@@ -307,11 +312,24 @@ function closeChangedReminders(lines) {
   }, function () { /* нечего закрывать */ });
 }
 
-/** Закрыть напоминания о закончившихся парах — при любом приходе. */
+/**
+ * Закрыть напоминания о закончившихся парах и «изменилось» о прошедших днях —
+ * при любом приходе (приложение снимает такое в полночь; у воркера часов нет,
+ * в полночь его будит страница, site.js).
+ */
 function closeEnded() {
-  return self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
-    open.forEach(function (n) { if (n.data && n.data.end && Date.now() > n.data.end) n.close(); });
-  }, function () { /* нечего закрывать */ });
+  var today = collegeToday();
+  return Promise.all([
+    self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
+      open.forEach(function (n) { if (n.data && n.data.end && Date.now() > n.data.end) n.close(); });
+    }, function () { /* нечего закрывать */ }),
+    self.registration.getNotifications({ tag: 'changes' }).then(function (open) {
+      open.forEach(function (n) {
+        var lines = (n.data && n.data.lines) || [];
+        if (lines.length && lines.every(function (l) { return l[0] && l[0] < today; })) n.close();
+      });
+    }, function () { /* нечего закрывать */ }),
+  ]);
 }
 
 self.addEventListener('push', function (event) {

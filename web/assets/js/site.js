@@ -116,3 +116,20 @@ export function registerWorker() {
   if (document.readyState === 'complete') start();
   else window.addEventListener('load', start);
 }
+
+/**
+ * «Расписание изменилось» о прошедших днях — прочь (приложение снимает его в
+ * полночь): у воркера своих часов нет, страница открыта — напоминает она.
+ */
+export function closeStaleChanges(today) {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.getRegistration().then(function (registration) {
+    if (!registration || !registration.getNotifications) return null;
+    return registration.getNotifications({ tag: 'changes' }).then(function (open) {
+      open.forEach(function (n) {
+        var lines = (n.data && n.data.lines) || [];
+        if (lines.length && lines.every(function (l) { return l[0] && l[0] < today; })) n.close();
+      });
+    });
+  }).then(null, function () { /* нечего закрывать */ });
+}

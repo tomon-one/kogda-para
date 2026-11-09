@@ -15,7 +15,7 @@ import { render, focusKey, measureHead } from './render.js';
 import { parseRoute, go, back, home, onRoute, stepsNow } from './route.js';
 import { emptyList, loadLists, loadRetakes, loadRooms, refresh } from './data.js';
 import { mixedBuild } from './version.js';
-import { applyTheme, checkWorkerUpdate, countOpen, countReturn, registerWorker, testNotice, workerUpdated } from './site.js';
+import { applyTheme, closeStaleChanges, checkWorkerUpdate, countOpen, countReturn, registerWorker, testNotice, workerUpdated } from './site.js';
 
 var installEvent = null;
 
@@ -237,6 +237,7 @@ function tick() {
     lastDate = date;
     state.wanted = date;
     refresh(false, false);
+    closeStaleChanges(date);
   }
   render();
 }
@@ -325,6 +326,7 @@ loadLists(false);
 testNotice();
 if (repo.chosen()) refresh(false, false);
 registerWorker();
+closeStaleChanges(collegeNow().date);
 // Служба должна знать нынешнюю подписку: браузер мог сменить её сам.
 syncPush();
 // Нажатие на уведомление по открытой странице — к своему расписанию, а не к

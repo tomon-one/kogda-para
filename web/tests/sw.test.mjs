@@ -109,6 +109,26 @@ test('напоминание о паре, которую отменили или
   assert.deepEqual(w.live().map((n) => n.tag), ['changes']);
 });
 
+test('напоминание висит, если изменилось не то, что в нём: добавилась группа, правка одной половинки', async () => {
+  const w = worker();
+  await w.push({ t: 'lesson', title: '10:40 — Химия', body: 'Каб. 102', n: 2, end: Date.now() + 3600000 });
+  await w.push(changes([[TODAY, 'добавилась 2 пара (ИСП-924/2): Химия']], 'teacher:a'));
+  await w.push(changes([[TODAY, '2 пара (Химия, Сильверхенд Д.) переехала в каб. 5']], 'teacher:a'));
+  await w.push(changes([[TODAY, 'убрали 2 пару (ИСП-924/3): Химия']], 'teacher:a'));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(w.live().map((n) => n.tag).sort(), ['changes', 'lesson']);
+});
+
+test('«изменилось» о прошедших днях закрывается любым приходом', async () => {
+  const w = worker();
+  w.shown.push({ title: 'Расписание изменилось', tag: 'changes', data: { lines: [['2000-01-01', 'отменили 1 пару: Право']], who: 'group:a' },
+    closed: false, close() { this.closed = true; } });
+  await w.push({ t: 'lesson', title: '10:40 — Химия', body: 'Каб. 102', n: 2, end: Date.now() + 3600000 });
+  await w.push({ t: 'other', title: 'Проверка' });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(w.live().map((n) => n.tag).sort(), ['lesson', 'other']);
+});
+
 test('«выберите заново» открывает сайт с подсказкой, что служба уже ждала час', async () => {
   const w = worker();
   await w.push({ t: 'gone', title: 'Группы больше нет в таблице', body: 'Откройте сайт…' });
