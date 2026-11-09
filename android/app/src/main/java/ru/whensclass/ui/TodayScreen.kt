@@ -311,6 +311,7 @@ fun TodayScreen(
                         // это список групп, чьё расписание можно посмотреть.
                         tabStates.SaveableStateProvider("groups") {
                             TeacherScreen(
+                                now = now,
                                 teachers = groups,
                                 loadSchedule = loadGroupSchedule,
                                 pinned = pinnedGroups,
@@ -355,6 +356,7 @@ fun TodayScreen(
                                 )
                             }
                             TeacherScreen(
+                                now = now,
                                 teachers = teachers,
                                 loadSchedule = loadTeacherSchedule,
                                 pinned = pinnedTeachers,
@@ -422,6 +424,7 @@ fun TodayScreen(
                     groupsByName = groupsByName,
                     weekStrip = true,
                     underHead = true,
+                    clock = now,
                 )
             }
         }

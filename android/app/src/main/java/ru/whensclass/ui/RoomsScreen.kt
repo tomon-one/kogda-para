@@ -19,12 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,9 +41,13 @@ import androidx.compose.ui.unit.dp
 import ru.whensclass.data.RoomUseDto
 import ru.whensclass.data.RoomsAnswer
 import ru.whensclass.data.RoomsDto
+import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayRange
+import ru.whensclass.widget.lessonTime
+import ru.whensclass.widget.parseTime
 import ru.whensclass.widget.plural
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 
 /**
@@ -126,24 +127,21 @@ internal fun RoomsScreen(
 
     val numbers = shown.bells.keys.mapNotNull { it.toIntOrNull() }.sorted()
     val days = shown.days.ifEmpty { listOf(shown.date) }.take(DAYS_SHOWN)
+    // Время пар — теми же функциями, что у расписания и виджетов: пара идёт до
+    // последней минуты включительно, иначе вкладки расходились бы на звонке.
+    val moment = LocalDateTime.of(today, now)
     // Поздно вечером сегодняшние пары кончились — сразу к следующему дню, с первой пары.
-    val lastEnd = numbers.lastOrNull()?.let { clock(shown.bells[it.toString()]?.getOrNull(1)) }
-    if (ready && active == null && shown.date == today.toString() && days.size > 1 && lastEnd != null && now >= lastEnd) {
+    if (ready && active == null && shown.date == today.toString() && days.size > 1 && openingDay(shown.bells, moment) != today) {
         LaunchedEffect(Unit) { choose(days[1], 0) }
     }
     // Сегодня — идущая или следующая пара, иначе первая.
     val chosen = activePair.takeIf { it in numbers } ?: run {
         if (shown.date != today.toString()) numbers.firstOrNull() ?: 1
-        else numbers.firstOrNull { n -> clock(shown.bells[n.toString()]?.getOrNull(1))?.let { now < it } == true }
+        else numbers.firstOrNull { n -> parseTime(shown.bells[n.toString()]?.getOrNull(1))?.let { now <= it } == true }
             ?: numbers.lastOrNull() ?: 1
     }
     // Идущая сейчас пара — своей рамкой, чтобы её было видно и при другой выбранной.
-    val running = if (shown.date != today.toString()) null else numbers.firstOrNull { n ->
-        val span = shown.bells[n.toString()]
-        val from = clock(span?.getOrNull(0))
-        val to = clock(span?.getOrNull(1))
-        from != null && to != null && now >= from && now < to
-    }
+    val running = runCatching { LocalDate.parse(shown.date) }.getOrNull()?.let { currentLessonNumber(shown.bells, it, moment) }
     val busy = shown.busy[chosen.toString()].orEmpty()
     // Кабинет в списках — с корпусом, если он не главный: «Вход 2, 55», «Восход, 221»,
     // как он стоит в карточках свободных.
@@ -211,9 +209,8 @@ internal fun RoomsScreen(
                     )
                 }
             }
-            val span = shown.bells[chosen.toString()].orEmpty()
             Text(
-                "$chosen пара" + (span.getOrNull(0)?.let { ", $it–" + span.getOrNull(1).orEmpty() } ?: "") +
+                "$chosen пара" + (lessonTime(shown.bells, chosen)?.let { ", $it" } ?: "") +
                     (if (chosen == running) " · идёт сейчас" else ""),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -279,7 +276,7 @@ internal fun RoomsScreen(
                 // ошибка колледжа или перенос: кто-то из них будет в другом месте.
                 Section("Две пары в одном кабинете")
                 Note("По таблице здесь в одно время разные пары — уточните, где ваша.")
-                Card { clashes.forEachIndexed { i, c -> if (i > 0) Divider(); Uses(place(c.room), c.lessons) } }
+                Card { clashes.forEachIndexed { i, c -> if (i > 0) CardDivider(); Uses(place(c.room), c.lessons) } }
             }
         }
         if (busy.isNotEmpty()) {
@@ -291,7 +288,7 @@ internal fun RoomsScreen(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(start = 4.dp, top = 16.dp, bottom = 4.dp),
                 )
-                if (open) Card { busy.toSortedMap().entries.forEachIndexed { i, (room, uses) -> if (i > 0) Divider(); Uses(place(room), uses) } }
+                if (open) Card { busy.toSortedMap().entries.forEachIndexed { i, (room, uses) -> if (i > 0) CardDivider(); Uses(place(room), uses) } }
             }
         }
         item(key = "пояснение") {
@@ -318,9 +315,7 @@ private fun Status(failed: Boolean, missing: Boolean, today: Boolean, answered: 
             "Колледж ещё не выложил расписание.",
         )
         failed -> Explanation("Аудитории не загрузились", failureText(answered, unsupported), onRetry = retry)
-        else -> Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
-            CircularProgressIndicator()
-        }
+        else -> Loading()
     }
 }
 
@@ -329,9 +324,6 @@ private const val ROOMS_FRESH_MILLIS = 5 * 60 * 1000L
 
 /** Сколько дней показывать: сегодня, завтра и следующий учебный — дальше колледж всё равно переставит. */
 private const val DAYS_SHOWN = 3
-
-private fun clock(text: String?): LocalTime? =
-    text?.let { runCatching { LocalTime.parse(it.padStart(5, '0')) }.getOrNull() }
 
 @Composable
 private fun Note(text: String) = Text(
@@ -350,15 +342,8 @@ private fun Section(text: String) = Text(
 )
 
 @Composable
-private fun Card(content: @Composable () -> Unit) = Surface(
-    shape = RoundedCornerShape(20.dp),
-    color = MaterialTheme.colorScheme.surface,
-    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-) { Column { content() } }
-
-@Composable
-private fun Divider() = HorizontalDivider(color = MaterialTheme.colorScheme.divider)
+private fun Card(content: @Composable () -> Unit) =
+    CardFrame(Modifier.fillMaxWidth().padding(top = 8.dp)) { Column { content() } }
 
 @Composable
 private fun RoomChip(room: String) = Text(

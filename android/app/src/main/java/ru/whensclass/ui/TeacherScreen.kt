@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,6 +52,8 @@ fun TeacherScreen(
     onTogglePin: (String) -> Unit = {},
     reloadKey: Int = 0,
     ownSchedule: ScheduleDto? = null,
+    /** Часы экрана по звонкам [ownSchedule]. */
+    now: java.time.LocalDateTime = rememberNow(),
     searchLabel: String = "Поиск по фамилии",
     /** Что за список — для «не загрузился»: экран служит и списком групп. */
     listName: String = "Список преподавателей",
@@ -135,7 +136,8 @@ fun TeacherScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             ScheduleDays(
                 schedule = ownSchedule,
-                today = rememberToday(),
+                today = now.toLocalDate(),
+                clock = now,
                 modifier = Modifier.weight(1f),
                 startDay = startDay,
                 startKey = startKey,
@@ -220,6 +222,7 @@ fun TeacherScreen(
             unsupported = unsupported,
             teacherList = listName == "Список преподавателей",
             plates = plates,
+            today = now.toLocalDate(),
             onBack = { close() },
         )
         return
@@ -234,15 +237,7 @@ fun TeacherScreen(
     // Список отступает от клавиатуры.
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
         plates?.invoke()
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text(searchLabel) },
-            trailingIcon = { ClearSearch(query) { query = "" } },
-            singleLine = true,
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+        SearchField(query, { query = it }, searchLabel, Modifier.padding(horizontal = 16.dp))
 
         val list = teachers
         when {
@@ -345,6 +340,7 @@ private fun ChosenTeacher(
     unsupported: Boolean,
     teacherList: Boolean,
     plates: (@Composable () -> Unit)?,
+    today: java.time.LocalDate,
     onBack: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -392,10 +388,10 @@ private fun ChosenTeacher(
             }
             // Дней нет — не пустой экран, а объяснение с выходом к таблице,
             // как у своего расписания.
-            else -> if (!explainMissing(schedule, rememberToday(), null)) {
+            else -> if (!explainMissing(schedule, today, null)) {
                 ScheduleDays(
                     schedule = schedule,
-                    today = rememberToday(),
+                    today = today,
                     weekStrip = true,
                     header = plates,
                 )

@@ -436,9 +436,9 @@ internal fun App(
                     )
 
                     Screen.GROUPS -> if (pickExtra) {
-                        GroupPickerScreen(
+                        PickerScreen(
                             // Своя и уже выбранные — не в списке: дважды одну не показываем.
-                            groups = groups?.filter { group ->
+                            items = groups?.filter { group ->
                                 group.id != groupId && extraGroups.none { it.id == group.id }
                             },
                             onRetry = retryLists,
@@ -460,8 +460,9 @@ internal fun App(
                         // Список преподавателей: человек выбирает себя. Роль
                         // меняется вместе с выбором, а не до него — иначе на
                         // мгновение показывается чужое расписание.
-                        SelfPickerScreen(
-                            teachers = teachers,
+                        PickerScreen(
+                            items = teachers,
+                            teachers = true,
                             onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
                             onUpdate = toUpdate,
@@ -470,14 +471,14 @@ internal fun App(
                                 pickTeacher = null
                                 screen = groupsFrom
                             },
-                            onStudentMode = { pickTeacher = false },
+                            onSwitchRole = { pickTeacher = false },
                             onPick = { teacher ->
                                 afterPick { container.repository.selectSelfAsTeacher(teacher) }
                             },
                         )
                     } else {
-                        GroupPickerScreen(
-                            groups = groups,
+                        PickerScreen(
+                            items = groups,
                             onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
                             onUpdate = toUpdate,
@@ -486,7 +487,7 @@ internal fun App(
                                 pickTeacher = null
                                 screen = groupsFrom
                             },
-                            onTeacherMode = { pickTeacher = true },
+                            onSwitchRole = { pickTeacher = true },
                             onPick = { group: GroupDto ->
                                 afterPick { container.repository.selectGroup(group) }
                             },

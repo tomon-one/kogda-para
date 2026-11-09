@@ -419,6 +419,25 @@ internal fun ClearSearch(query: String, onClear: () -> Unit) {
     }
 }
 
+/** Поле поиска списков: одно на все экраны, чтобы высота и скругление не расходились. */
+@androidx.compose.runtime.Composable
+internal fun SearchField(query: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) =
+    androidx.compose.material3.OutlinedTextField(
+        value = query,
+        onValueChange = onChange,
+        label = { Text(label) },
+        trailingIcon = { ClearSearch(query) { onChange("") } },
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+    )
+
+/** Крутилка, пока список грузится. */
+@androidx.compose.runtime.Composable
+internal fun Loading() = Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
+    androidx.compose.material3.CircularProgressIndicator()
+}
+
 /**
  * Касание здесь никуда не уходит. У «Стекла» список заходит под шапку, плашки
  * и полоску дней, и промах в щель между ними нажимал кнопку пары под размытием.

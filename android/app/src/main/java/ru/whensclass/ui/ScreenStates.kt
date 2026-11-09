@@ -56,14 +56,7 @@ internal fun ServerBroken(
     editing: Boolean = false,
 ) {
     val context = LocalContext.current
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
+    CardFrame(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             // Сервер не ответил телефону — не «не прочитал таблицу»: таблица тут
             // ни при чём, как и в уведомлении.
@@ -127,14 +120,7 @@ internal fun Unsupported(
     text: String = "Сервер больше не поддерживает эту версию, расписание не обновляется. " +
         "На экране — то, что пришло раньше.",
 ) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
+    CardFrame(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Text(
                 "Нужно обновить приложение",
@@ -159,14 +145,7 @@ internal fun Unsupported(
 @Composable
 internal fun ChannelNotice(onDone: () -> Unit) {
     val context = LocalContext.current
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
+    CardFrame(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -206,14 +185,7 @@ internal const val CHANNEL_URL = "https://t.me/kogda_para_news"
  */
 @Composable
 internal fun Gone(groupName: String, teacherMode: Boolean, onRepick: () -> Unit, shown: Boolean = true) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    ) {
+    CardFrame(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             Text(
                 if (teacherMode) "Вас больше нет в таблице" else "Группы больше нет в таблице",
@@ -346,3 +318,17 @@ internal fun explainMissing(
     }
     return false
 }
+
+/** Рамка карточек и плашек — одна на все экраны, чтобы они не расходились ни на пиксель. */
+@Composable
+internal fun CardFrame(modifier: Modifier = Modifier, content: @Composable () -> Unit) = Surface(
+    shape = RoundedCornerShape(20.dp),
+    color = MaterialTheme.colorScheme.surface,
+    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+    modifier = modifier,
+    content = content,
+)
+
+/** Черта между строками внутри [CardFrame]. */
+@Composable
+internal fun CardDivider() = androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.divider)

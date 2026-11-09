@@ -1,22 +1,16 @@
 package ru.whensclass.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -36,24 +30,30 @@ import ru.whensclass.data.GroupDto
 import ru.whensclass.widget.plural
 
 /**
- * Преподаватель выбирает себя.
- *
- * То же, что выбор группы у студента: дальше приложение работает поверх его
- * расписания — экран, виджеты, напоминания.
+ * Выбор из почти двух сотен — с поиском: без него список бесполезен. Студент
+ * выбирает группу (свою или ещё одну), преподаватель — себя: дальше
+ * приложение работает поверх выбранного расписания — экран, виджеты, напоминания.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SelfPickerScreen(
-    teachers: List<GroupDto>?,
+fun PickerScreen(
+    /** Список держит App: сохранённый — сразу, свежий — следом. */
+    items: List<GroupDto>?,
     onPick: (GroupDto) -> Unit,
+    /** Чей список: группы или преподаватели — от этого заголовок, поиск и подписи. */
+    teachers: Boolean = false,
     onRetry: (() -> Unit)? = null,
+    /** Заголовок: при выборе другой группы — не «Выберите группу», это не смена своей. */
+    title: String = if (teachers) "Найдите себя в списке" else "Выберите группу",
     canGoBack: Boolean = false,
     onBack: () -> Unit = {},
-    onStudentMode: () -> Unit = {},
+    /** Строка смены роли над списком: студенту — «Я преподаватель», преподавателю — «Я студент». */
+    onSwitchRole: (() -> Unit)? = null,
     loadDiagnostics: (suspend () -> String)? = null,
     /** Сервер эту сборку не обслуживает (426): вместо «проверьте интернет» — к обновлению. */
     onUpdate: (() -> Unit)? = null,
 ) {
+    // Набранное переживает поворот.
     var query by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
@@ -61,7 +61,7 @@ fun SelfPickerScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Найдите себя в списке",
+                        title,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
@@ -79,39 +79,29 @@ fun SelfPickerScreen(
             )
         },
     ) { padding ->
-        // От клавиатуры — как в выборе группы.
+        // Список отступает от клавиатуры: при enableEdgeToEdge окно под неё
+        // не ужимается.
         Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Поиск по фамилии") },
-                trailingIcon = { ClearSearch(query) { query = "" } },
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            SearchField(query, { query = it }, if (teachers) "Поиск по фамилии" else "Поиск по названию",
+                Modifier.padding(horizontal = 16.dp))
 
+            val list = items
             when {
-                teachers == null -> Row(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+                list == null -> Loading()
 
-                // До настроек отсюда не дойти: себя ещё не выбрали — адрес
-                // и отчёт здесь же.
-                teachers.isEmpty() && onUpdate != null -> Unsupported(onUpdate, "Сервер больше не поддерживает эту версию: список не загрузится, пока приложение не обновят.")
+                list.isEmpty() && onUpdate != null -> Unsupported(onUpdate, "Сервер больше не поддерживает эту версию: список не загрузится, пока приложение не обновят.")
 
-                teachers.isEmpty() -> LoadFailed("Список преподавателей", loadDiagnostics, onRetry)
+                // До настроек отсюда не дойти, пока ничего не выбрано: адрес и отчёт — здесь же.
+                list.isEmpty() -> LoadFailed(if (teachers) "Список преподавателей" else "Список групп", loadDiagnostics, onRetry)
 
                 else -> {
-                    val filtered = remember(teachers, query) {
-                        if (query.isBlank()) teachers
-                        else teachers.filter { matchesQuery(it.name, query) }
+                    // Отбор — только при смене запроса или списка, не на каждую
+                    // перекомпоновку.
+                    val filtered = remember(list, query) {
+                        if (query.isBlank()) list
+                        else list.filter { matchesQuery(it.name, query) }
                     }
                     if (filtered.isEmpty()) {
-                        // Пустой экран после поиска читается как поломка.
                         Text(
                             "Ничего не нашлось",
                             style = MaterialTheme.typography.bodyMedium,
@@ -122,19 +112,18 @@ fun SelfPickerScreen(
                     LazyColumn(
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
                     ) {
-                        item(key = "роль") { RoleSwitchRow("Я студент", onStudentMode) }
+                        // Преподавателю нужна не группа, а собственное расписание, и наоборот.
+                        onSwitchRole?.let { switchRole ->
+                            item(key = "роль") { RoleSwitchRow(if (teachers) "Я студент" else "Я преподаватель", switchRole) }
+                        }
                         lettered(filtered, name = { it.name }, key = { it.id }, onPick = onPick)
                         // Дно списка — для тех, кто листает, а не ищет.
                         if (query.isBlank()) {
                             item(key = "конец") {
                                 ListEnd(
                                     "Всё. " +
-                                        plural(
-                                            teachers.size,
-                                            "преподаватель",
-                                            "преподавателя",
-                                            "преподавателей",
-                                        ) +
+                                        (if (teachers) plural(list.size, "преподаватель", "преподавателя", "преподавателей")
+                                        else plural(list.size, "группа", "группы", "групп")) +
                                         ".",
                                 )
                             }

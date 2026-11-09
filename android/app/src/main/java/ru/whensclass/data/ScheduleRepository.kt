@@ -1,7 +1,9 @@
 package ru.whensclass.data
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -11,6 +13,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.NonCancellable
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -30,6 +34,9 @@ class ScheduleRepository(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Живёт с процессом, как и сам репозиторий (AppContainer). */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     // Разбор — не на главном потоке: collectAsState собирает поток там же, где
     // идёт отрисовка, а недельный JSON на медленном телефоне разбирается заметно.
     val schedule: Flow<ScheduleDto?> = store.scheduleJson
@@ -40,6 +47,9 @@ class ScheduleRepository(
             body?.let { runCatching { json.decodeFromString<ScheduleDto>(it) }.getOrNull() }
         }
         .flowOn(Dispatchers.Default)
+        // Один разбор на всех: экран собирает и само расписание, и
+        // [shownSchedule] поверх него — без общего потока JSON разбирался дважды.
+        .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     /** Остальные выбранные группы по порядку. */
     val extraGroups: Flow<List<ExtraGroup>> = store.extraGroups.distinctUntilChanged()

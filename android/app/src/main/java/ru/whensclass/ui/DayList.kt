@@ -76,8 +76,13 @@ fun ScheduleDays(
     weekStrip: Boolean = false,
     /** «Стекло»: список заходит под шапку и вкладки, они его размывают. Над списком ничего своего. */
     underHead: Boolean = false,
+    /**
+     * Часы экрана, если они идут по звонкам этого же расписания (своё): вторые
+     * часы перекомпоновывали бы экран на каждом звонке ещё раз.
+     */
+    clock: LocalDateTime? = null,
 ) {
-    val now = rememberNow(schedule.bellsOn(collegeToday()))
+    val now = clock ?: rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
 
     // Открываемся на сегодняшнем дне, а не на понедельнике. Позиция задаётся

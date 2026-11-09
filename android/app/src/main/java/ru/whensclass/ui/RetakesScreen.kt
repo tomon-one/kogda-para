@@ -5,15 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -67,9 +63,7 @@ internal fun RetakesScreen(
         if (failed) {
             Explanation("Пересдачи не загрузились", failureText(answered, unsupported), onRetry = onRetry)
         } else {
-            Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
-                CircularProgressIndicator()
-            }
+            Loading()
         }
         return
     }
@@ -106,15 +100,7 @@ internal fun RetakesScreen(
         }
         item(key = "памятка") { Memo() }
         item(key = "поиск") {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Фамилия или предмет") },
-                trailingIcon = { ClearSearch(query) { query = "" } },
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            )
+            SearchField(query, { query = it }, "Фамилия или предмет")
         }
         if (rows.isEmpty() && moved.isEmpty()) {
             item(key = "пусто") {
@@ -150,7 +136,7 @@ internal fun RetakesScreen(
                     )
                     Card {
                         redirects.forEachIndexed { i, m ->
-                            if (i > 0) Divider()
+                            if (i > 0) CardDivider()
                             RedirectRow(named(m.id, m.name), named(m.toId, m.to))
                         }
                     }
@@ -178,14 +164,8 @@ private fun Memo() {
 }
 
 @Composable
-private fun Card(content: @Composable () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier.fillMaxWidth(),
-    ) { Column { content() } }
-}
+private fun Card(content: @Composable () -> Unit) =
+    CardFrame(Modifier.fillMaxWidth()) { Column { content() } }
 
 /** Кусок общей карточки: скруглён сверху у первой строки и снизу у последней. */
 @Composable
@@ -198,14 +178,11 @@ private fun Piece(index: Int, count: Int, content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column {
-            if (index > 0) Divider()
+            if (index > 0) CardDivider()
             content()
         }
     }
 }
-
-@Composable
-private fun Divider() = HorizontalDivider(color = MaterialTheme.colorScheme.divider)
 
 @Composable
 private fun Line(label: String, text: String, muted: Boolean = false) {
