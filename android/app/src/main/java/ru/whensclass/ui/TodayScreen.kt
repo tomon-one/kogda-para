@@ -277,7 +277,7 @@ fun TodayScreen(
         // В таблицу — к своей колонке и сегодняшнему дню, если сервер
         // рассказал, где они; иначе просто в книгу.
         val plates: @Composable () -> Unit = {
-            if (gone) Gone(groupName, teacherMode, onRepick)
+            if (gone) Gone(groupName, teacherMode, onRepick, shown = schedule != null)
             if (channelNotice) ChannelNotice(onChannelSeen)
             if (unsupported) {
                 Unsupported(onUpdateBadge)
@@ -341,11 +341,26 @@ fun TodayScreen(
                     Tab.TEACHERS -> {
                         // Отсутствие своего расписания преподавателя объясняется так
                         // же, как у студента, — до списка чужих фамилий.
-                        if (teacherMode && explainMissing(schedule, today, sourceUrl, loading = refreshing)) {
+                        // Пропажа без снимка — объяснение на плашке, «проверьте интернет» под ней было бы неправдой.
+                        // Своих дней нет, а ответ есть — объяснение над списком: без него
+                        // других не открыть, и имя из «Пересдач» вело бы в тупик.
+                        val noOwnDays = teacherMode && schedule != null && schedule.days.isEmpty()
+                        if (teacherMode && !noOwnDays &&
+                            (gone && schedule == null || explainMissing(schedule, today, sourceUrl, loading = refreshing))
+                        ) {
                             return@ScheduleTabs
                         }
                         // С ролью — своя память: у преподавателя это его вкладка.
                         tabStates.SaveableStateProvider("teachers:$teacherMode") {
+                          Column {
+                            if (noOwnDays) {
+                                Text(
+                                    "На эти дни ваших пар в таблице нет: колледж их ещё не выложил.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
                             TeacherScreen(
                                 teachers = teachers,
                                 loadSchedule = loadTeacherSchedule,
@@ -355,7 +370,7 @@ fun TodayScreen(
                                 unsupported = unsupported,
                                 plates = if (platesInScreen) plates else null,
                                 // В роли преподавателя своё расписание уже загружено.
-                                ownSchedule = if (teacherMode) schedule else null,
+                                ownSchedule = if (teacherMode && !noOwnDays) schedule else null,
                                 // День, на который нажали в виджете.
                                 startDay = if (teacherMode) startDay else null,
                                 startKey = startKey,
@@ -367,6 +382,7 @@ fun TodayScreen(
                                 enterKey = teachersEnterKey,
                                 onLeaveOpened = { tab = Tab.RETAKES },
                             )
+                          }
                         }
                         return@ScheduleTabs
                     }
@@ -394,7 +410,7 @@ fun TodayScreen(
                     else -> Unit
                 }
 
-                if (explainMissing(schedule, today, sourceUrl, loading = refreshing)) return@ScheduleTabs
+                if (gone && schedule == null || explainMissing(schedule, today, sourceUrl, loading = refreshing)) return@ScheduleTabs
                 schedule ?: return@ScheduleTabs
 
                 ScheduleDays(

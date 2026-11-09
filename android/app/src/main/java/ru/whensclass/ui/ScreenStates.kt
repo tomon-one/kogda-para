@@ -205,7 +205,7 @@ internal const val CHANNEL_URL = "https://t.me/kogda_para_news"
  * идентификатор больше ни на что не указывает. Выход один — выбрать заново.
  */
 @Composable
-internal fun Gone(groupName: String, teacherMode: Boolean, onRepick: () -> Unit) {
+internal fun Gone(groupName: String, teacherMode: Boolean, onRepick: () -> Unit, shown: Boolean = true) {
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -227,7 +227,8 @@ internal fun Gone(groupName: String, teacherMode: Boolean, onRepick: () -> Unit)
                 // его нет 60 дней.
                 (if (teacherMode) "Имя «$groupName» в таблице записали иначе или убрали. "
                  else "Группу «$groupName» переименовали, разделили или убрали. ") +
-                    "На экране — последнее, что было.",
+                    // Показать нечего — так и не говорить, что на экране прежнее.
+                    if (shown) "На экране — последнее, что было." else "Выберите заново.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
