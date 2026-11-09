@@ -145,7 +145,7 @@ function topbar(app, own) {
 export function refreshButton(app) {
   var s = app.state;
   var broken = refreshLabel(app);
-  var spinning = s.refreshing || s.spinningDown;
+  var spinning = s.spinning || s.spinningDown;
   var refreshIcon;
   var label;
   if (s.flash) {

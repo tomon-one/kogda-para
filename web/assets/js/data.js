@@ -227,13 +227,18 @@ var SPIN_MS = 450;
 
 /**
  * Обновить своё расписание. `manual` — нажали ⟳: тогда неудача — плашкой, и
- * заодно перечитывается открытое чужое расписание.
+ * заодно перечитывается открытое чужое расписание. ⟳ крутится и даёт галочку
+ * только от нажатия и выбора группы (`spin`), как в приложении: заходы при
+ * открытии, возврате и раз в час идут молча.
  */
-export function refresh(force, manual) {
+export function refresh(force, manual, spin) {
   if (!repo.chosen()) return;
-  if (!state.refreshing && !state.spinningDown) state.spinStart = Date.now();
+  if (manual || spin) {
+    if (!state.spinning && !state.spinningDown) state.spinStart = Date.now();
+    state.spinning = true;
+    state.flash = false;
+  }
   state.refreshing = true;
-  state.flash = false;
   state.lastRefresh = Date.now();
   if (manual && app.route.id && state.other) {
     state.other.failed = true;
@@ -258,10 +263,12 @@ export function refresh(force, manual) {
       snackbar(failText(result));
     }
     state.refreshing = repo.isRefreshing();
-    if (state.refreshing) {
+    // Видимый оборот кончается с последним заходом, чьим бы он ни был.
+    if (state.refreshing || !state.spinning) {
       render();
       return;
     }
+    state.spinning = false;
     // Значок доводит оборот до конца — хотя бы один целый: замерший на
     // полповороте выглядит зависшим. Потом галочка или крестик.
     state.spinningDown = true;
@@ -269,7 +276,7 @@ export function refresh(force, manual) {
     var turns = Math.max(1, Math.ceil((Date.now() - state.spinStart) / SPIN_MS));
     setTimeout(function () {
       state.spinningDown = false;
-      if (state.refreshing) return;
+      if (state.spinning) return;
       state.flash = true;
       state.flashAt = Date.now();
       if (manual) announce(refreshLabel(app) || 'Расписание обновлено');

@@ -51,20 +51,14 @@ Object.assign(app, {
   },
   setTheme: function (theme) {
     store.set('theme', theme);
-    // Без перестройки экрана: тогда цвета перетекают, а не щёлкают.
-    var html = document.documentElement;
-    html.classList.add('theme-anim');
+    // Без перестройки экрана; цвета меняются сразу, как в приложении.
     applyTheme();
-    setTimeout(function () { html.classList.remove('theme-anim'); }, 400);
   },
   /** «Стекло» (beta): свет за страницей и матовые полосы (glass.css). */
   glass: function () { return store.get('glass') === true; },
   setGlass: function (on) {
     store.set('glass', on);
-    var html = document.documentElement;
-    html.classList.add('theme-anim');
     applyTheme();
-    setTimeout(function () { html.classList.remove('theme-anim'); }, 400);
   },
   installPrompt: function () { return installEvent; },
   install: function () {
@@ -188,7 +182,7 @@ function pick(mode, row) {
     syncPush();
     home();
   }
-  refresh(true, false);
+  refresh(true, false, mode !== 'extra');
 }
 
 // ——— часы ———

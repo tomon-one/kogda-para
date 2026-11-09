@@ -132,12 +132,6 @@
   .link-button:active, .segment:active, .pin-star:active, .tile:active {
     transform: scale(0.96);
   }
-
-  /* Смена темы — цвета перетекают, а не щёлкают. */
-  html.theme-anim,
-  html.theme-anim * {
-    transition: background-color 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s !important;
-  }
 }
 
 @keyframes enter-forward {

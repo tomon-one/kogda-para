@@ -79,9 +79,10 @@
   background:
     radial-gradient(circle 105vw at 55% -4%, var(--glow-top), var(--glow-mid) 50%, transparent 100%),
     radial-gradient(circle 90vw at 0 100%, var(--glow-bottom), transparent 100%);
-  /* На широком экране — не шире колонки расписания: во всю ширину окна свет слепил. */
+  /* На широком экране — не шире колонки расписания: во всю ширину окна свет слепил.
+     На телефоне — как в приложении: центр на 55 % ширины, радиус 105 %. */
   background:
-    radial-gradient(circle min(105vw, 560px) at 50% -4%, var(--glow-top), var(--glow-mid) 50%, transparent 100%),
+    radial-gradient(circle min(105vw, 560px) at 55% -4%, var(--glow-top), var(--glow-mid) 50%, transparent 100%),
     radial-gradient(circle min(90vw, 480px) at 0 100%, var(--glow-bottom), transparent 100%);
 }
 
@@ -166,7 +167,8 @@
    и с зазором под вкладками. */
 :root[data-glass] .week-strip {
   z-index: 12;
-  background: var(--glass-bar);
+  /* Подложка — цвет карточки, как в приложении: размытое под ней высветляется, а не гаснет. */
+  background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--glass-edge);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
@@ -185,7 +187,6 @@
 /* Окна и всплывающее — сплошные: сквозь них читать нечего. */
 :root[data-glass] .dialog,
 :root[data-glass] .snackbar { background: var(--solid); }
-:root[data-glass] .switch::after { background: var(--solid); }
 
 /* ——— плашка в настройках ——— */
 

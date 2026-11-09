@@ -27,6 +27,7 @@
   /* Не плотнее: красный текст выбранного чипа на нём — 4,7:1 (не меньше 4,5). */
   --selected-bg: rgba(194, 3, 2, 0.10);
   --button-border: rgba(194, 3, 2, 0.4);
+  --today-border: rgba(194, 3, 2, 0.35);
   --online: #086b35;
   --tile: #f4f5f7;
   --online-bg: rgba(8, 107, 53, 0.12);
@@ -52,6 +53,7 @@
     --foreign-bg: rgba(255, 255, 255, 0.07);
     --selected-bg: rgba(255, 107, 112, 0.18);
     --button-border: rgba(255, 107, 112, 0.35);
+    --today-border: rgba(255, 107, 112, 0.35);
     --online: #4cc38a;
     --tile: #1c1c1c;
     --online-bg: rgba(76, 195, 138, 0.14);
@@ -77,6 +79,7 @@
   --foreign-bg: rgba(255, 255, 255, 0.07);
   --selected-bg: rgba(255, 107, 112, 0.18);
   --button-border: rgba(255, 107, 112, 0.35);
+  --today-border: rgba(255, 107, 112, 0.35);
   --online: #4cc38a;
   --tile: #1c1c1c;
   --online-bg: rgba(76, 195, 138, 0.14);
@@ -221,7 +224,7 @@ p a, .point a { text-decoration: underline; }
   -webkit-touch-callout: none;
 }
 
-.fetched { font-size: 12px; color: var(--muted); }
+.fetched { font-size: 11px; color: var(--muted); }
 
 .icon-button {
   display: inline-flex;
@@ -248,6 +251,12 @@ p a, .point a { text-decoration: underline; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* «Уменьшить движение» — ⟳ стоит, как в приложении с выключенными анимациями:
+   что идёт работа, видно по неактивной кнопке, итог — галочкой или крестиком. */
+@media (prefers-reduced-motion: reduce) {
+  .icon.spin svg { animation: none; }
+}
+
 /* ——— вкладки ——— */
 
 .tabs { display: flex; }
@@ -263,7 +272,8 @@ p a, .point a { text-decoration: underline; }
   display: flex;
   width: calc(100% - 24px);
   max-width: 420px;
-  margin: 8px auto;
+  /* Над полоской 6, как в приложении (под рядом вкладок у того свои 8). */
+  margin: 6px auto 8px;
   padding: 4px;
   border-radius: 14px;
   background: var(--surface);
@@ -328,8 +338,9 @@ p a, .point a { text-decoration: underline; }
   position: relative;
 }
 
-.week-name { display: block; font-size: 11px; color: var(--muted); }
-.week-num { display: block; font-size: 16px; font-weight: 600; line-height: 20px; }
+/* Подписи полоски — как labelSmall и titleMedium приложения: 11/16 с разрядкой и 16/24. */
+.week-name { display: block; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.5px; color: var(--muted); }
+.week-num { display: block; font-size: 16px; font-weight: 600; line-height: 24px; }
 
 .week-day.on { color: var(--on-primary); }
 .week-day.on .week-name { color: var(--on-primary); }
@@ -349,10 +360,12 @@ p a, .point a { text-decoration: underline; }
 
 .week-day.today.on::after { background: var(--on-primary); }
 
+/* 48 px — высота вкладки Material в приложении. */
 .tab {
   flex: 1;
   min-width: 0;
-  padding: 12px 8px 10px;
+  padding: 14px 8px;
+  line-height: 20px;
   text-align: center;
   font-size: 14px;
   font-weight: 500;
