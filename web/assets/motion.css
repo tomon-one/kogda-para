@@ -26,6 +26,9 @@
      сразу, как в приложении: под плашкой это не видно, а переход цвета считался
      на основном потоке и вдвое резал частоту кадров при листании на телефоне. */
   .week-pill { transition: transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s; }
+  /* Смена недели: ряд дней уезжает в сторону листания (--dir ставит week.js). */
+  .week-enter { animation: week-enter 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .week-leave { animation: week-leave 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
   .switch::after { transition: transform 0.15s; }
 
   .screen.enter-forward > :not(.bottom-bar) {
@@ -227,4 +230,12 @@
 
 @keyframes chip-enter {
   from { background: transparent; border-color: var(--button-border); color: var(--fg); }
+}
+
+@keyframes week-enter {
+  from { transform: translateX(calc(var(--dir, 1) * 100%)); }
+}
+
+@keyframes week-leave {
+  to { transform: translateX(calc(var(--dir, 1) * -100%)); }
 }

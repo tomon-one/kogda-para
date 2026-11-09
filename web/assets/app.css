@@ -275,12 +275,30 @@ p a, .point a { text-decoration: underline; }
   .week-strip { box-shadow: 0 0 0 1px var(--divider); }
 }
 
-.week-pill {
+/* Дни недели — своим рядом: при смене недели новый въезжает, прежний уезжает
+   (motion.css), края полоски их обрезают. */
+.week-strip { overflow: hidden; }
+.week-days {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.week-leave {
   position: absolute;
   top: 4px;
   bottom: 4px;
   left: 4px;
-  width: calc((100% - 8px) / 7);
+  right: 4px;
+}
+.week-leave .week-pill { visibility: hidden; }
+
+.week-pill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% / 7);
   opacity: 0;
   transform: translateX(calc(var(--i, 0) * 100%));
 }

@@ -26,6 +26,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -61,11 +71,18 @@ internal fun WeekStrip(
     // Плашка едет только в отрисовке: при листании полоска не пересчитывается на
     // каждом кадре, а цвет подписи меняется сразу — под плашкой это не видно.
     val pill = remember { androidx.compose.animation.core.Animatable(index.toFloat()) }
-    LaunchedEffect(index) {
-        pill.animateTo(
-            index.toFloat(),
-            androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-        )
+    // Неделя сменилась — плашка уезжает вместе с днями, а не пробегает всю полоску.
+    var pillWeek by remember { mutableStateOf(monday) }
+    LaunchedEffect(index, monday) {
+        if (monday != pillWeek) {
+            pillWeek = monday
+            pill.snapTo(index.toFloat())
+        } else {
+            pill.animateTo(
+                index.toFloat(),
+                androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            )
+        }
     }
     val pillColor = MaterialTheme.colorScheme.primary
     val dark = MaterialTheme.colorScheme.isDark
@@ -98,19 +115,37 @@ internal fun WeekStrip(
                     onPick(monday.plusDays(i.toLong()))
                 }
             }
-            .drawBehind {
-                val cell = size.width / 7
-                drawRoundRect(
-                    pillColor,
-                    topLeft = androidx.compose.ui.geometry.Offset(cell * pill.value, 0f),
-                    size = androidx.compose.ui.geometry.Size(cell, size.height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()),
-                )
-            },
+            .clipToBounds(),
+    ) {
+    // Новая неделя въезжает со стороны листания: вперёд — справа, назад — слева.
+    AnimatedContent(
+        targetState = monday,
+        transitionSpec = {
+            val forward = if (targetState > initialState) 1 else -1
+            val move = androidx.compose.animation.core.tween<IntOffset>(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+            (slideInHorizontally(move) { it * forward } togetherWith slideOutHorizontally(move) { -it * forward })
+                .using(SizeTransform(clip = false))
+        },
+        label = "неделя",
+        modifier = Modifier.weight(1f),
+    ) { week ->
+    // Плашка — у своей недели: у уезжающей её нет.
+    val current = week == monday
+    Row(
+        modifier = Modifier.fillMaxWidth().drawBehind {
+            if (!current) return@drawBehind
+            val cell = size.width / 7
+            drawRoundRect(
+                pillColor,
+                topLeft = androidx.compose.ui.geometry.Offset(cell * pill.value, 0f),
+                size = androidx.compose.ui.geometry.Size(cell, size.height),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()),
+            )
+        },
     ) {
         for (i in 0 until 7) {
-            val date = monday.plusDays(i.toLong())
-            val on = i == index
+            val date = week.plusDays(i.toLong())
+            val on = current && i == index
             val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
             Box(
                 modifier = Modifier
@@ -149,6 +184,8 @@ internal fun WeekStrip(
                 }
             }
         }
+    }
+    }
     }
     }
 }

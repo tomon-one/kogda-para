@@ -62,7 +62,7 @@ export function weekStrip(day, today) {
   strip.__today = today;
   // Экран перестраивается и при обновлении: с дня, что уже выделен, иначе плашка
   // каждый раз съезжала бы на день открытия и возвращалась.
-  var shown = document.querySelector('.week-day.on');
+  var shown = document.querySelector('.week-days:not(.week-leave) .week-day.on');
   var start = picked || (shown && shown.getAttribute('data-date')) || day;
   fill(strip, weekStart(start));
   mark(strip, start);
@@ -72,10 +72,12 @@ export function weekStrip(day, today) {
 }
 
 function fill(strip, monday) {
+  var old = strip.__days;
+  var forward = monday > strip.__monday;
   strip.__monday = monday;
-  while (strip.firstChild) strip.removeChild(strip.firstChild);
+  var days = h('div', { class: 'week-days' });
   // Выделение — одна плашка, она переезжает от дня к дню (motion.css).
-  strip.appendChild(h('span', { class: 'week-pill', 'aria-hidden': 'true' }));
+  days.appendChild(h('span', { class: 'week-pill', 'aria-hidden': 'true' }));
   NAMES.forEach(function (name, i) {
     var date = addDays(monday, i);
     var button = h('button', {
@@ -84,8 +86,30 @@ function fill(strip, monday) {
       'data-date': date,
     }, h('span', { class: 'week-name' }, name), h('span', { class: 'week-num' }, String(Number(date.slice(8)))));
     button.addEventListener('click', function () { go(strip, date); });
-    strip.appendChild(button);
+    days.appendChild(button);
   });
+  strip.__days = days;
+  var leaving = strip.querySelector('.week-leave');
+  if (leaving) strip.removeChild(leaving);
+  var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!old || calm || !strip.isConnected) {
+    if (old) strip.removeChild(old);
+    strip.appendChild(days);
+    return;
+  }
+  // Новая неделя въезжает со стороны листания: вперёд — справа, назад —
+  // слева; прежняя уезжает без плашки (WeekStrip.kt).
+  strip.style.setProperty('--dir', forward ? '1' : '-1');
+  old.classList.add('week-leave');
+  // Без плашки подпись выделенного дня цветом на плашке пропала бы на светлом фоне.
+  var was = old.querySelector('.week-day.on');
+  if (was) was.classList.remove('on');
+  old.addEventListener('animationend', function () {
+    if (old.parentNode) old.parentNode.removeChild(old);
+  });
+  days.classList.add('week-enter');
+  days.addEventListener('animationend', function () { days.classList.remove('week-enter'); });
+  strip.appendChild(days);
 }
 
 /** Выделить день; он из другой недели — сначала перерисовать полоску на неё. */
@@ -93,7 +117,7 @@ export function mark(strip, day) {
   if (!strip || !day) return;
   var monday = weekStart(day);
   if (monday !== strip.__monday) fill(strip, monday);
-  var buttons = strip.querySelectorAll('.week-day');
+  var buttons = strip.__days.querySelectorAll('.week-day');
   var index = -1;
   for (var i = 0; i < buttons.length; i++) {
     var on = buttons[i].getAttribute('data-date') === day;
@@ -102,7 +126,7 @@ export function mark(strip, day) {
     if (on) buttons[i].setAttribute('aria-current', 'date');
     else buttons[i].removeAttribute('aria-current');
   }
-  strip.style.setProperty('--i', String(Math.max(index, 0)));
+  strip.__days.style.setProperty('--i', String(Math.max(index, 0)));
   strip.classList.toggle('marked', index >= 0);
 }
 
