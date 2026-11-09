@@ -84,11 +84,15 @@ class ScheduleRepository(
         )
     }
 
-    /** Есть ли сегодняшний день в том, что лежит на телефоне. */
+    /**
+     * Лежит ли сегодня внутри сохранённого: дни есть и до, и начиная с него.
+     * Воскресенья и праздника в ответе нет — без этого каждый заход в такой
+     * день шёл бы полным путём, хотя снимок свежий.
+     */
     private fun coversToday(saved: ScheduleDto?): Boolean {
         if (saved == null) return false
         val today = ru.whensclass.widget.collegeToday().toString()
-        return saved.days.any { it.date == today }
+        return saved.days.any { it.date >= today } && saved.days.any { it.date <= today }
     }
 
     /**
@@ -449,14 +453,18 @@ class ScheduleRepository(
      * напоминания они не трогают.
      */
     suspend fun addExtraGroups(groups: List<GroupDto>): RefreshResult? {
-        val current = store.currentExtraGroups()
         val own = store.currentGroupId()
-        val added = groups
-            .filter { group -> group.id != own && current.none { it.id == group.id } }
-            .distinctBy { it.id }
-            .map { ExtraGroup(it.id, it.name) }
+        var added = emptyList<ExtraGroup>()
+        // Чтение и запись — одной правкой: фон мог отметить пропажу группы
+        // между ними, и запись прочитанного раньше списка её стёрла бы.
+        store.editExtras { current ->
+            added = groups
+                .filter { group -> group.id != own && current.none { it.id == group.id } }
+                .distinctBy { it.id }
+                .map { ExtraGroup(it.id, it.name) }
+            (current + added).take(MAX_GROUPS - 1)
+        }
         if (added.isEmpty()) return null
-        store.setExtraGroups(current + added)
         // Не пришла добавленная группа — повторить, как только будет связь:
         // её значок без пар читается как «пар нет».
         val result = refresh(force = true)
@@ -468,7 +476,7 @@ class ScheduleRepository(
 
     /** Убрать группу из остальных — вместе с её парами на экране, сразу и без сети. */
     suspend fun removeExtraGroup(id: String) {
-        store.setExtraGroups(store.currentExtraGroups().filter { it.id != id })
+        store.editExtras { list -> list.filter { it.id != id } }
     }
 
     /**
@@ -489,7 +497,14 @@ class ScheduleRepository(
     }
 
     private suspend fun afterSelection(): RefreshResult {
-        val result = refresh(force = true)
+        val result = try {
+            refresh(force = true)
+        } catch (error: CancellationException) {
+            // Выбор записан, а загрузку оборвали («назад» сразу после выбора,
+            // поворот): без повтора снимка не будет до следующего захода.
+            ru.whensclass.work.SyncWorker.now(context)
+            throw error
+        }
         if (result is RefreshResult.Failed) {
             ru.whensclass.work.SyncWorker.now(context)
         }

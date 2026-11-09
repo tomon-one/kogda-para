@@ -9,14 +9,6 @@ import kotlinx.serialization.json.JsonObject
 
 // ScheduleStore: остальные группы — список, их расписания и пропажи.
 
-/**
- * Новый список остальных групп. Расписания убранных — прочь сразу: иначе
- * при повторном выборе группы на экран вернулся бы прошлый снимок.
- */
-suspend fun ScheduleStore.setExtraGroups(groups: List<ExtraGroup>) {
-    context.dataStore.edit { writeExtras(it, groups.take(MAX_GROUPS - 1)) }
-}
-
 suspend fun ScheduleStore.putExtraSchedules(body: String) {
     context.dataStore.edit { it[KEY_EXTRA_SCHEDULES] = body }
 }
@@ -88,6 +80,11 @@ internal fun ScheduleStore.writeExtras(prefs: MutablePreferences, groups: List<E
     else prefs[KEY_EXTRA_SCHEDULES] = json.encodeToString(left)
 }
 
+/**
+ * Правка списка остальных групп одной записью: прочитанное и записанное — из
+ * одного состояния. Расписания убранных — прочь сразу ([writeExtras]): иначе
+ * при повторном выборе группы на экран вернулся бы прошлый снимок.
+ */
 internal suspend fun ScheduleStore.editExtras(change: (List<ExtraGroup>) -> List<ExtraGroup>) {
     context.dataStore.edit { writeExtras(it, change(readExtras(it))) }
 }

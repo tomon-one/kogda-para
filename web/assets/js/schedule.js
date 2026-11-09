@@ -377,8 +377,13 @@ export function freeOwnDay(day, groups) {
 }
 
 /** Есть ли в сохранённом окне сегодняшний день. */
+/**
+ * День внутри снимка: дни есть и до, и начиная с него. Воскресенья и праздника
+ * в ответе нет — снимок с ними вокруг всё равно свежий (как coversToday в приложении).
+ */
 export function coversDay(schedule, date) {
-  return !!schedule && (schedule.days || []).some(function (d) { return d.d === date; });
+  var days = (schedule && schedule.days) || [];
+  return days.some(function (d) { return d.d >= date; }) && days.some(function (d) { return d.d <= date; });
 }
 
 function text(value) {

@@ -11,6 +11,7 @@ import {
   shiftColumn, shortenName, tileLabel,
 } from '../assets/js/format.js';
 import {
+  coversDay,
   bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daySummary, openingDay, daysWithGaps, freeDay, freeOwnDay,
   lessonTime, ownOnly,
   onlyAt, shortLabels, subgroupsOf, unreadNotes, windowMark,
@@ -131,6 +132,14 @@ test('ссылка в таблицу — к блоку группы и дню', 
   // День под повторным заголовком — в колонку дня, и без пар.
   const moved = Object.assign({}, schedule, { days: [{ d: '2026-09-28', row: 76, col: 'GA', l: [] }] });
   assert.equal(sheetLink(moved, '2026-09-28', null), schedule.src_url + '&range=GA76:GD87');
+});
+
+test('воскресенье внутри снимка — снимок свежий, за его краем — нет', () => {
+  const schedule = { days: [{ d: '2026-11-07', l: [] }, { d: '2026-11-09', l: [] }] };
+  assert.equal(coversDay(schedule, '2026-11-08'), true);
+  assert.equal(coversDay(schedule, '2026-11-10'), false);
+  assert.equal(coversDay(schedule, '2026-11-06'), false);
+  assert.equal(coversDay(null, '2026-11-08'), false);
 });
 
 test('окно и пропущенные дни', () => {
