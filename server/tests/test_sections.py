@@ -181,6 +181,46 @@ def test_group_split_into_subgroups_under_the_header_is_read_by_their_names(fixt
     assert set(again.unread["gd-1125-1"]) == set(below)
 
 
+
+def test_subgroup_in_nameless_block_of_the_main_header_gets_group_lessons(fixture_csv, monkeypatch):
+    """Главный заголовок держит пустой блок без имени (колонка под будущую
+    группу), а повторный ставит туда вторую подгруппу. Это раздел группы, а не
+    стёртое имя: над заголовком подгруппа получает пары группы, как обе её
+    сестры, а не «пар нет»."""
+    from whensclass.parser import sections
+
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
+    rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
+    header = _columnar_header(rows)[0]
+    # Дни под заголовком повторяют дни над ним — как в листе, где недель много.
+    above = [i for i, r in enumerate(rows) if i < header and _parse_date(r[0]) is not None]
+    starts = [i for i, r in enumerate(rows) if i > header and _parse_date(r[0]) is not None]
+    for k, start in enumerate(starts):
+        for step in range(12):
+            rows[start + step][2:] = list(rows[above[k % len(above)] + step][2:])
+    for r in rows:
+        r += [""] * 4
+    rows[0][22:26] = ["Дисциплина Преподаватель", "", "", "Ауд."]
+    for k, word in enumerate(("Дисциплина", "Преподаватель")):
+        rows[header + k][22] = word
+    # Под заголовком ещё и две группы правее поменялись местами: без этого
+    # повторный заголовок с главным не спорит и дни под ним не решаются.
+    names = rows[header + 2]
+    names[10], names[22] = "ГД-1125/1", "ГД-1125/2"
+    names[14:22] = names[18:22] + names[14:18]
+    for row in rows[header + 3:]:
+        row[14:26] = row[18:22] + row[14:18] + row[10:14]
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+
+    below = {_parse_date(rows[i][0]) for i in starts}
+    above = [d for d in snap.dates if d not in below]
+    assert not set(snap.unread.get("gd-1125-2", {})) - below
+    whole = snap.schedule["gd-1125"]
+    assert above and all(whole.get(d) for d in above[:3])
+    for k in (1, 2):
+        gid = f"gd-1125-{k}"
+        assert {d: snap.schedule[gid].get(d) for d in above} == {d: whole.get(d) for d in above}, gid
+
 def test_unknown_name_that_is_not_a_subgroup_is_not_a_new_group(fixture_csv, monkeypatch):
     """Под сдвинутым заголовком незнакомое имя без «/N» его группы — не новая
     группа: старое имя из чужого шаблона дало бы двойника."""

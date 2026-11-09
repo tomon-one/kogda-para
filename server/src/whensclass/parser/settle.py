@@ -13,7 +13,7 @@ from ..domain.ids import group_id
 from ..domain.models import GroupRef, Lesson, Snapshot, SourceFormatChanged, a1_column
 from .cells import replaced_of
 from .dates import _parse_date
-from .groups import _warn_once, build_column_map, find_header_rows, header_blocks
+from .groups import SUBGROUP_RE, _warn_once, build_column_map, find_header_rows, header_blocks
 from .rows import _cell
 
 log = logging.getLogger(__name__)
@@ -128,6 +128,13 @@ def _settle_replacements(snapshot: Snapshot) -> None:
             lessons[i] = dataclasses.replace(lesson, teachers=())
 
 
+def _id_or_none(name: str) -> str | None:
+    try:
+        return group_id(name)
+    except ValueError:
+        return None
+
+
 def _adopt_names(
     rows: list[list[str]], groups: list[GroupRef], adopt: dict[int, list[str]], min_groups: int
 ) -> tuple[list[GroupRef], dict[int, int]]:
@@ -154,6 +161,12 @@ def _adopt_names(
         for name in adopt[col]:
             gid = group_id(name)
             if gid in known:
+                continue
+            # Подгруппа известной группы — её раздел, а не стёртое имя: обычной
+            # группой она читалась бы и в днях до раздела, где колонка пуста.
+            # Раздел подхватывает обход дней под повторным заголовком.
+            m = SUBGROUP_RE.fullmatch(name)
+            if m and _id_or_none(m.group(1)) in known:
                 continue
             _warn_once(
                 ("adopt", col, name),
