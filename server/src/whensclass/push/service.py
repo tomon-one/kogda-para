@@ -30,6 +30,7 @@ from ..config import settings
 from ..service import alerts
 from ..storage.atomic import write_json
 from . import changes, webpush
+from .labels import _cancelled
 from .delivery import MAX_PENDING_RETRIES, TIMEOUT, Delivery, Job, _Delayed
 from .messages import (
     MAX_LINE,
@@ -265,6 +266,7 @@ class Push(Delivery, Quiet):
         """Снимок обновился — сравнить сегодня и завтра у каждого, кто подписан."""
         if not self.enabled or before is None or settings.freeze:
             return
+        self._rewrite_reminders(before, before_teachers, snapshot, teachers, today)
         subs = [s for s in self._snapshot_subs() if s.get("changes") and not s.get("gone")]
         if not subs:
             return
@@ -311,6 +313,78 @@ class Push(Delivery, Quiet):
                 jobs.append(Job(sub, changes_message(sub, lines), changes_ttl(lines)))
         log.info("изменения в расписании: %d субъектов, %d уведомлений", len(lines_for), len(jobs))
         self._dispatch(jobs)
+
+    def _rewrite_reminders(self, before, before_teachers, snapshot, teachers, today: dt.date) -> None:
+        """Ушедшее сегодня напоминание о паре, которую потом отменили или
+        перенесли, — переписать, как приложение переписывает своё.
+
+        Только тем, кто без «изменений»: у остальных напоминание закрывает
+        строка об изменении (sw.js). Молча снять уведомление браузер не даёт —
+        на его месте встаёт новое: прежнее закрывает сервис-воркер.
+        """
+        now = self.clock().replace(tzinfo=None)
+        with self._lock:
+            reminded = set(self._reminded) if self._reminded_day == today.isoformat() else set()
+        if not reminded:
+            return
+        subs = [s for s in self._snapshot_subs()
+                if s.get("remind") and not s.get("changes") and not s.get("gone")]
+        zone = zoneinfo.ZoneInfo(settings.timezone)
+
+        def ms(moment: dt.datetime) -> int:
+            return int(moment.replace(tzinfo=zone).timestamp() * 1000)
+
+        plans: dict[tuple[str, str, int], tuple[dict, dict, dict] | None] = {}
+        jobs = []
+        for sub in subs:
+            mark = _mark(sub["endpoint"])
+            numbers = sorted(n for h, n in reminded if h == mark)
+            if not numbers:
+                continue
+            key = (sub["kind"], sub["id"], sub["remind"])
+            if key not in plans:
+                try:
+                    old = _payload(before, before_teachers, key[:2], today, self.known_teacher)
+                    new = _payload(snapshot, teachers, key[:2], today, self.known_teacher)
+                except Exception:  # noqa: BLE001
+                    log.exception("напоминания для %s не пересчитались", key[0])
+                    old = new = None
+                if old is None or new is None:
+                    plans[key] = None
+                else:
+                    day = next((d for d in new.get("days", []) if d["d"] == today.isoformat()), {"l": []})
+                    plans[key] = (
+                        {a["number"]: a for a in changes.reminders(old, key[2], today)},
+                        {a["number"]: a for a in changes.reminders(new, key[2], today)},
+                        # Номера, где пара осталась: напоминание о ней могло
+                        # не попасть в план из-за соседней пары, но пара есть.
+                        {x["n"] for x in day["l"] if not _cancelled(x)},
+                    )
+            plan = plans[key]
+            if plan is None:
+                continue
+            was, now_plan, standing = plan
+            for number in numbers:
+                old_alarm = was.get(number)
+                if old_alarm is None or old_alarm["end"] <= now:
+                    continue
+                fresh = now_plan.get(number)
+                if fresh is not None:
+                    if all(fresh.get(f) == old_alarm.get(f) for f in ("title", "text", "join")):
+                        continue
+                    data = _reminder(sub, fresh, ms(fresh["start"]), ms(fresh["end"]))
+                    end = fresh["end"]
+                elif number in standing:
+                    continue
+                else:
+                    end = old_alarm["end"]
+                    data = message(sub, "lesson", f"Пару отменили — {old_alarm['subject']}"[:MAX_LINE],
+                                   f"{old_alarm['start']:%H:%M}, {number} пара",
+                                   {"end": ms(end), "n": number})
+                jobs.append(Job(sub, data, max(60, int((end - now).total_seconds())), deadline=ms(end) / 1000))
+        if jobs:
+            log.info("напоминания переписаны: %d", len(jobs))
+            self._dispatch(jobs)
 
     def _suspects(self, before, snapshot, today: dt.date) -> dict | None:
         """Группы, чья правка похожа на пары соседа (сдвиг, который отказ не

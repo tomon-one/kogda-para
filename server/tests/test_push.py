@@ -4,6 +4,7 @@
 test_push_changes.py, рассылка — test_push_delivery.py.
 """
 
+import copy
 import dataclasses
 import datetime as dt
 
@@ -239,6 +240,53 @@ def test_reminder_goes_once_at_its_minute(tmp_path, snapshots):
     assert job.ttl == 20 * 60
     # Позже начала пары повторять незачем.
     assert job.deadline == note["data"]["start"] / 1000
+
+
+def _reminded(tmp_path, before, bt, day, changes_on=False):
+    """Подписчик, которому уже ушло напоминание о первой паре; часы — до её конца."""
+    push = Recorder(tmp_path, _vapid())
+    push.subscribe(subscription.parse_subscription(
+        _body(id="isp-924-2", changes=changes_on, remind=20)), day)
+    first = changes.reminders(service._payload(before, bt, ("group", "isp-924-2"), day), 20, day)[0]
+    push.remind(before, bt, now=first["at"])
+    push.sent.clear()
+    push.clock = lambda: first["start"] + dt.timedelta(minutes=10)
+    return push, first
+
+
+def test_reminder_of_cancelled_lesson_is_replaced_for_those_without_changes(tmp_path, snapshots):
+    """Пару отменили после напоминания: у кого «изменения» выключены, на месте
+    напоминания — «Пару отменили» (приложение своё тоже снимает)."""
+    before, bt, after, at, day, _ = snapshots
+    push, first = _reminded(tmp_path, before, bt, day)
+    push.after_refresh(before, bt, after, at, day)
+    assert len(push.sent) == 1
+    note = push.sent[0].message["notification"]
+    assert note["tag"] == "lesson" and note["title"] == f"Пару отменили — {first['subject']}"
+    assert note["data"]["n"] == first["number"] and "start" not in note["data"]
+    # С «изменениями» напоминание закрывает строка об отмене — второго не нужно.
+    push, _ = _reminded(tmp_path / "c", before, bt, day, changes_on=True)
+    push.after_refresh(before, bt, after, at, day)
+    assert [j.message["notification"]["tag"] for j in push.sent] == ["changes"]
+
+
+def test_reminder_is_rewritten_when_room_changes_and_left_after_the_lesson(tmp_path, snapshots):
+    before, bt, _, _, day, _ = snapshots
+    from whensclass.domain.teachers import build_index
+
+    moved = copy.deepcopy(before)
+    lessons = moved.schedule["isp-924-2"][day]
+    lessons[0] = dataclasses.replace(lessons[0], room="999")
+    push, first = _reminded(tmp_path, before, bt, day)
+    push.after_refresh(before, bt, moved, build_index(moved), day)
+    assert len(push.sent) == 1
+    note = push.sent[0].message["notification"]
+    assert note["title"] == first["title"] and "999" in note["body"]
+    # Пара кончилась — переписывать нечего.
+    push.sent.clear()
+    push.clock = lambda: first["end"] + dt.timedelta(minutes=1)
+    push.after_refresh(before, bt, moved, build_index(moved), day)
+    assert push.sent == []
 
 
 def test_without_key_nothing_is_sent(tmp_path, snapshots):
