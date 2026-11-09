@@ -1,5 +1,6 @@
 package ru.whensclass.ui
 
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.draggable
@@ -151,7 +152,9 @@ internal fun WeekStrip(
                 modifier = Modifier
                     .weight(1f)
                     .semantics {
-                        contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}"
+                        // Выбранный и сегодняшний — словами: цвет и точку чтец не видит.
+                        contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" + if (date == today) ", сегодня" else ""
+                        selected = on
                         onClick(label = "Перейти к дню") { onPick(date); true }
                     },
                 contentAlignment = Alignment.Center,

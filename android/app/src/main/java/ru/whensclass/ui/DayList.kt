@@ -1,5 +1,7 @@
 package ru.whensclass.ui
 
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -461,6 +463,8 @@ private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, su
                 past -> MaterialTheme.colorScheme.onSurfaceVariant
                 else -> MaterialTheme.colorScheme.onSurface
             },
+            // Чтецу — заголовок: по дням переходят жестом, как по заголовкам на сайте.
+            modifier = Modifier.semantics { heading() },
         )
         if (summary != null) {
             Text(
