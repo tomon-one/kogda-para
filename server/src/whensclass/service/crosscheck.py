@@ -101,6 +101,8 @@ def compare(snapshot: Snapshot, pairs: list[TeacherPair], today: dt.date) -> lis
         if day not in days:
             continue
         ours = snapshot.schedule.get(gid, {}).get(day, [])
+        # У пары двух преподавателей в их листе две записи — это одна пара группы.
+        theirs = list({(p.number, p.subject): p for p in theirs}.values())
         matched = sum(
             1 for p in theirs
             if any(x.number == p.number and _same_subject(p.subject, x.subject) for x in ours)

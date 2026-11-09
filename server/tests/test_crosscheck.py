@@ -182,6 +182,24 @@ def test_empty_date_frame_of_a_dropped_sheet_is_not_compared():
     assert compare(snap, pairs, today) == []
 
 
+def test_lesson_of_two_teachers_is_one_lesson_of_the_group():
+    """В листе преподавателей пара двух преподавателей — две записи. Для группы
+    это одна пара: из трёх пар группы совпала одна, а не две из четырёх."""
+    import datetime as dt
+
+    from whensclass.domain.models import GroupRef, Lesson, Snapshot
+    from whensclass.parser.teacher_sheet import TeacherPair
+
+    day = dt.date(2026, 10, 5)
+    group = GroupRef(name="ИСП-901", id="isp-901", column=4)
+    snap = Snapshot("лист", groups=[group], dates=[day],
+                    schedule={group.id: {day: [Lesson(number=n, subject=s) for n, s in ((1, "Физика"), (2, "Химия"), (3, "История"))]}})
+    pairs = [TeacherPair(t, day, 1, "Физика", "369", group.name) for t in ("Ковач Т.", "Росси А.")]
+    pairs += [TeacherPair("Ковач Т.", day, n, s, "369", group.name) for n, s in ((2, "Биология"), (3, "Литература"))]
+    [m] = compare(snap, pairs, day)
+    assert (m.matched, m.total) == (1, 3)
+
+
 def test_one_group_with_two_pairs_comes_without_sound(tmp_path, monkeypatch):
     """Колледж поправил один лист без другого — сказать, но не будить."""
     snap = _snapshot([Lesson(number=2, subject="История"), Lesson(number=3, subject="Литература")])
