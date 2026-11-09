@@ -39,7 +39,7 @@ from whensclass.parser.shift import check_shift, shift_seed  # noqa: E402
 from whensclass.service import alerts  # noqa: E402
 from whensclass.service.clock import _today  # noqa: E402
 from whensclass.service.gates import (  # noqa: E402
-    _check_days_emptied, _check_group_drop, _check_lost_names,
+    _check_days_emptied, _check_group_drop, _check_lost_names, _hold_unread,
 )
 from whensclass.service.refresher import _limits  # noqa: E402
 from whensclass.sources import gsheets, sheet_index  # noqa: E402
@@ -133,11 +133,14 @@ def main() -> int:
         text = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
         # Тем же путём и с теми же порогами, что служба: иначе рычаг «опустить
         # пороги на день» сделает канарейку ежедневной ложной тревогой.
-        snapshot = parse_export(
-            text, title or f"gid {gid}", gid, limits=_limits(), around=today
-        )
         store = SnapshotStore(state)
         previous = store.snapshot if store.load() else None
+        # С памятью службы — прежним снимком: непрочитанные дни у неё держат
+        # прежние пары, и без них сверка ниже видела бы стёртые колонки.
+        snapshot = parse_export(
+            text, title or f"gid {gid}", gid, limits=_limits(), around=today, previous=previous
+        )
+        _hold_unread(snapshot, previous)
         check_shift(snapshot, seed=shift_seed(previous, snapshot), previous=previous)
         # Те же сверки с прежним снимком, что у службы: стёртое имя группы
         # при парах на месте и пропажа групп толпой.

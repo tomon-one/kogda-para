@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import gzip
 import json
@@ -40,4 +41,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Ключей нет; --help и опечатка в ключе — справка, а не перезапись файлов.
+    argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
     main()
