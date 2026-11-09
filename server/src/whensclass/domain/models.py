@@ -132,8 +132,11 @@ class Snapshot:
         """Колонка группы в листе, где лежит `day` (или в листе `gid`).
 
         Колонка первого листа на днях второго ведёт в чужую колонку, если
-        раскладка сменилась.
+        раскладка сменилась. День, прочитанный по повторному заголовку с другой
+        раскладкой, — своя колонка дня.
         """
+        if gid is None and day is not None and (moved := self.day_columns.get(group.id, {}).get(day)) is not None:
+            return moved
         if gid is None and day is not None and day in self.places:
             gid = self.places[day].gid
         return self.sheet_columns.get(gid or "", {}).get(group.id, group.column)

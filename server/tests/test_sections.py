@@ -73,6 +73,13 @@ def test_days_read_by_the_repeated_header_remember_their_columns(fixture_csv, mo
     body = schedule_payload(snap, gid, below[0], 1, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
     cols = {x.get("col") for x in body["days"][0]["l"]}
     assert cols == {a1_column(snap.day_columns[gid][below[0]])}
+    # У преподавателя пары этого дня ведут туда же.
+    from whensclass.domain.teachers import build_index
+
+    index = build_index(snap)
+    there = [e for days in map(index.days, index.names) for e in days.get(below[0], [])
+             if group.name in e.group_name.split(", ")]
+    assert there and {e.column for e in there} == {snap.day_columns[gid][below[0]]}
 
 
 def test_block_erased_under_a_shifted_header_is_unread_not_empty(fixture_csv, monkeypatch):
