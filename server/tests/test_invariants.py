@@ -62,15 +62,15 @@ def test_week_retyped_below_the_sheet_is_a_draft(fixture_csv):
 
 
 def test_week_retyped_in_full_below_the_sheet_replaces_the_old_one(fixture_csv):
-    """Те же дни внизу набраны целиком: это новая версия, она и читается.
+    """Вся первая неделя внизу набрана заново: это новая версия, она и читается.
     У одной группы в новой копии второй день пуст — у людей он пуст."""
     rows = rows_of(fixture_csv)
     starts = date_rows(rows)
     plain = parse_sheet(rows_of(fixture_csv), "фикстура", FIXTURE)
     day = plain.dates[1]
     group = next(g for g in plain.groups if plain.schedule.get(g.id, {}).get(day))
-    retyped = [list(r) for r in rows[starts[1]:starts[3]]]
-    for row in retyped[:starts[2] - starts[1]]:
+    retyped = [list(r) for r in rows[starts[0]:starts[4]]]
+    for row in retyped[starts[1] - starts[0]:starts[2] - starts[0]]:
         row[group.column:group.column + 4] = [""] * 4
     snapshot = parse_sheet(rows + retyped, "фикстура", FIXTURE)
     assert snapshot.dates == plain.dates
@@ -78,6 +78,22 @@ def test_week_retyped_in_full_below_the_sheet_replaces_the_old_one(fixture_csv):
     others = [g.id for g in plain.groups if g.id != group.id]
     assert all(snapshot.schedule.get(g) == plain.schedule.get(g) for g in others)
 
+
+
+def test_two_days_copied_below_the_sheet_are_a_draft(fixture_csv):
+    """Под листом два дня недели скопированы блоками, даты ещё старые, и в
+    копии уже правят: так колледж собирает другую неделю. Читается то, что выше."""
+    rows = rows_of(fixture_csv)
+    starts = date_rows(rows)
+    plain = parse_sheet(rows_of(fixture_csv), "фикстура", FIXTURE)
+    day = plain.dates[1]
+    group = next(g for g in plain.groups if plain.schedule.get(g.id, {}).get(day))
+    copy = [list(r) for r in rows[starts[1]:starts[3]]]
+    for row in copy[:starts[2] - starts[1]]:
+        row[group.column:group.column + 4] = [""] * 4
+    snapshot = parse_sheet(rows + copy, "фикстура", FIXTURE)
+    assert snapshot.dates == plain.dates
+    assert snapshot.schedule == plain.schedule
 
 def test_date_in_another_format_is_still_a_date(fixture_csv):
     """«07/09/2026» и «понедельник 07.09.2026» — даты, а не текст рядом с датой."""

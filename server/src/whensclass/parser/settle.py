@@ -7,7 +7,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import re
-from datetime import date
+from datetime import date, timedelta
 
 from ..domain.ids import group_id
 from ..domain.models import GroupRef, Lesson, Snapshot, SourceFormatChanged, a1_column
@@ -51,8 +51,9 @@ def _retyped_order(rows: list[list[str]], start: int, min_groups: int) -> list[i
 
     Колледж вставляет неделю заново целиком (05.11: за одну правку, все дни) и
     старую не стирает сразу; верна новая — она сходится с листом преподавателей.
-    Черновик отличает заполненность: каждый день внизу должен быть не беднее
-    `RETYPED_FULL` прежнего. Шапка между копиями — отказ от подмены: под ней
+    Черновик отличает полнота: внизу все дни недели, какие выше, и каждый не
+    беднее `RETYPED_FULL` прежнего. Несколько дней блоками под листом — заготовка
+    другой недели со старыми датами: правка в ней не для людей. Шапка между копиями — отказ от подмены: под ней
     могли смениться колонки групп, и новая копия читалась бы чужими."""
     def day_at(i: int) -> date | None:
         try:
@@ -70,6 +71,9 @@ def _retyped_order(rows: list[list[str]], start: int, min_groups: int) -> list[i
     after = [i for i, d in marks if lo < i < start and d not in days]
     hi = after[0] if after else start
     if [d for i, d in old] != [d for _, d in tail] or any(i >= hi for i, _ in old):
+        return None
+    weeks = {d - timedelta(d.weekday()) for d in days}
+    if any(d not in days for i, d in marks if i < start and d - timedelta(d.weekday()) in weeks):
         return None
     # Шапка ниже прежней недели, расставившая группы иначе, чем главная, —
     # отказ: копия встала бы под главную и читалась бы чужими колонками.
