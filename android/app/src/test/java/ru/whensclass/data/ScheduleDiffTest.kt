@@ -324,6 +324,18 @@ class ScheduleDiffTest {
     }
 
     @Test
+    fun `группу разделили на подгруппы — у преподавателя пара та же`() {
+        fun teacher(groups: String) = schedule(lesson(3, "Рисунок", room = "301", groups = groups), kind = "teacher")
+        assertEquals(emptyList<String>(), texts(teacher("С-926"), teacher("С-926/1, С-926/2")))
+        assertEquals(emptyList<String>(), texts(teacher("С-926"), teacher("С-926/1")))
+        // Разные подгруппы одной группы — разные группы.
+        assertEquals(
+            listOf("добавилась 3 пара (С-926/2): Рисунок", "убрали 3 пару (С-926/1): Рисунок"),
+            texts(teacher("С-926/1"), teacher("С-926/2")).sorted(),
+        )
+    }
+
+    @Test
     fun `исправили написание — пара та же`() {
         // «Обествознание» → «Обществознание» — не «убрали» и «добавилась».
         for ((old, new) in listOf(

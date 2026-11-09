@@ -95,6 +95,32 @@ def test_teacher_sees_only_the_group_that_joined_or_left():
     assert left == [(TUE, "убрали 5 пару (ПД-925/1, ПД-925/2, ПД-925/3): Физическая культура.")]
 
 
+def test_teacher_quiet_when_group_is_split_into_subgroups():
+    """Колледж разделил группу на подгруппы, пара на месте: не «добавилась»
+    подгруппам и не «убрали» группе. ScheduleDiff.kt — так же."""
+    def teacher(lessons):
+        return {"g": "t1", "gn": "Такемура Г. С.", "kind": "teacher",
+                "days": [{"d": TUE, "l": lessons}]}
+
+    split = changes.compare(
+        teacher([_l(3, "Рисунок", gr="С-926", r="301")]),
+        teacher([_l(3, "Рисунок", gr="С-926/1, С-926/2", r="301")]),
+    )
+    assert split == []
+    # Пара осталась у одной подгруппы — та же пара: о второй судит её запись.
+    one = changes.compare(
+        teacher([_l(3, "Рисунок", gr="С-926", r="301")]),
+        teacher([_l(3, "Рисунок", gr="С-926/1", r="301")]),
+    )
+    assert one == []
+    # Разные подгруппы одной группы — разные группы.
+    other = changes.compare(
+        teacher([_l(3, "Рисунок", gr="С-926/1", r="301")]),
+        teacher([_l(3, "Рисунок", gr="С-926/2", r="301")]),
+    )
+    assert sorted(t for _, t in other) == ["добавилась 3 пара (С-926/2): Рисунок", "убрали 3 пару (С-926/1): Рисунок"]
+
+
 def test_teacher_gets_both_lines_when_the_subject_of_the_same_group_changes():
     """На номере те же группы, но другой предмет — замена: и «убрали»
     прежний, и «добавилась» новый, как у группы."""

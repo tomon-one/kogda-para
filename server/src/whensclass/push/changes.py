@@ -154,8 +154,16 @@ def _compare_number(
         value = lesson.get("gr") or (name if not teacher else None)
         return {p.strip() for p in (value or "").split(",") if p.strip()}
 
+    def related(a: str, b: str) -> bool:
+        """Группа и её подгруппа — та же пара: колледж разделил «С-926» на
+        «С-926/1» и «С-926/2», а пара осталась на месте."""
+        return a == b or b.startswith(a + "/") or a.startswith(b + "/")
+
+    def covered(group: str, among: set[str]) -> bool:
+        return any(related(group, x) for x in among)
+
     def overlap(a: dict, b: dict) -> bool:
-        return bool(groups_of(a) & groups_of(b))
+        return any(covered(g, groups_of(b)) for g in groups_of(a))
 
     def listed(lesson: dict, keep: set[str]) -> str:
         """Только эти группы записи — в её порядке."""
@@ -240,10 +248,10 @@ def _compare_number(
         # ещё не знает.
         label = tag(previous)
         if teacher:
-            added = groups_of(lesson) - before_groups
+            added = {g for g in groups_of(lesson) if not covered(g, before_groups)}
             if added:
                 say(f"добавилась {number} пара ({listed(lesson, added)}): {lesson['s']}")
-            left = groups_of(previous) - after_groups
+            left = {g for g in groups_of(previous) if not covered(g, after_groups)}
             if left:
                 say(f"убрали {number} пару ({listed(previous, left)}): {previous['s']}")
         teachers = lesson.get("t") or []
@@ -285,7 +293,7 @@ def _compare_number(
             # замена, и «убрали» прежний нужен.
             kept = set().union(*(groups_of(x) for x in now if same_subject(x["s"], gone["s"]))) \
                 if now else set()
-            left = groups_of(gone) - kept
+            left = {g for g in groups_of(gone) if not covered(g, kept)}
             if not left:
                 continue
             say(f"убрали {number} пару ({listed(gone, left)}): {gone['s']}")

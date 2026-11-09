@@ -189,7 +189,11 @@ object ScheduleDiff {
         // Чья пара — для строк без названия («переехала», «стала онлайн»).
         fun label(lesson: LessonDto) = if (several && own(lesson)) " (${named(lesson)})" else whose(lesson)
         fun groups(lesson: LessonDto) = groupsOf(lesson, fresh)
-        fun overlap(a: LessonDto, b: LessonDto) = (groups(a) intersect groups(b)).isNotEmpty()
+        // Группа и её подгруппа — та же пара: колледж разделил «С-926» на
+        // «С-926/1» и «С-926/2», а пара осталась на месте.
+        fun related(a: String, b: String) = a == b || b.startsWith("$a/") || a.startsWith("$b/")
+        fun covered(group: String, among: Set<String>) = among.any { related(group, it) }
+        fun overlap(a: LessonDto, b: LessonDto) = groups(a).any { covered(it, groups(b)) }
         // Только эти группы записи — в её порядке.
         fun listed(lesson: LessonDto, keep: Set<String>) =
             lesson.groups.orEmpty().split(",").map { it.trim() }.filter { it in keep }.joinToString(", ")
@@ -274,9 +278,9 @@ object ScheduleDiff {
             // подгруппа ещё не знает.
             val tag = label(previous)
             if (fresh.isTeacher) {
-                val added = groups(lesson) - beforeGroups
+                val added = groups(lesson).filterNot { covered(it, beforeGroups) }.toSet()
                 if (added.isNotEmpty()) say("добавилась $number пара (${listed(lesson, added)}): ${lesson.subject}")
-                val left = groups(previous) - afterGroups
+                val left = groups(previous).filterNot { covered(it, afterGroups) }.toSet()
                 if (left.isNotEmpty()) say("убрали $number пару (${listed(previous, left)}): ${previous.subject}")
             }
             when {
@@ -330,7 +334,7 @@ object ScheduleDiff {
                 // просто склеилась с другой. При другом предмете у тех же групп
                 // это замена, и «убрали» прежний нужен.
                 val kept = now.filter { sameSubject(it.subject, gone.subject) }.flatMap { groups(it) }.toSet()
-                val left = groups(gone) - kept
+                val left = groups(gone).filterNot { covered(it, kept) }.toSet()
                 if (left.isNotEmpty()) say("убрали $number пару (${listed(gone, left)}): ${gone.subject}")
                 return@forEach
             }
