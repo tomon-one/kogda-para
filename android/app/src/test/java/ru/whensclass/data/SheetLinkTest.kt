@@ -48,6 +48,14 @@ class SheetLinkTest {
     }
 
     @Test
+    fun `пара другой выбранной группы не уводит в её колонку`() {
+        val merged = schedule().copy(days = listOf(DayDto("2026-09-14", row = 139, lessons = listOf(
+            LessonDto(number = 1, subject = "Физика", groups = "ИСП-924/2", column = "GA"),
+        ))))
+        assertEquals("$base&range=EQ139:ET150", sheetLink(merged, LocalDate.of(2026, 9, 14), null))
+    }
+
+    @Test
     fun `без сведений от сервера — то, что назвал meta`() {
         assertEquals("https://x/edit", sheetLink(schedule(url = null), LocalDate.of(2026, 9, 14), "https://x/edit"))
         assertNull(sheetLink(null, LocalDate.of(2026, 9, 14), null))

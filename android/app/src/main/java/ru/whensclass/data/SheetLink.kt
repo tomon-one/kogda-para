@@ -22,7 +22,9 @@ fun sheetLink(schedule: ScheduleDto?, day: LocalDate?, fallback: String?): Strin
     // Колонка дня — в днях, прочитанных по повторному заголовку с другой
     // раскладкой (и без пар); колонка пары — у преподавателя и у ответа
     // прежней службы; иначе — колонка группы.
-    val column = dayDto?.column ?: dayDto?.lessons?.firstNotNullOfOrNull { it.column } ?: schedule.column
+    // Пары остальных выбранных групп (склейка) — со своими колонками: не их.
+    val own = dayDto?.lessons?.filter { schedule.isTeacher || it.groups == null || it.groups == schedule.groupName }
+    val column = dayDto?.column ?: own?.firstNotNullOfOrNull { it.column } ?: schedule.column
     val row = dayDto?.row
     // День — по две строки на пару (пара и преподаватели), сколько пар в
     // сетке звонков; без сетки — шесть, как в листе.
