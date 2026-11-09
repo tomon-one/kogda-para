@@ -291,8 +291,11 @@ fun TodayScreen(
         // вместе со списком, иначе неподвижная шапка отнимает у него всё место.
         val platesInList = maxHeight < 480.dp && tab == Tab.STUDENTS && !teacherMode &&
             !schedule?.days.isNullOrEmpty()
+        // Преподаватель и открытые расписания: плашки ставит сам экран — в список
+        // дней, а без него над собой.
+        val platesInScreen = maxHeight < 480.dp && (tab == Tab.TEACHERS || tab == Tab.STUDENTS && teacherMode)
         Column(modifier = Modifier.fillMaxSize()) {
-            if (!platesInList) Column(Modifier.fillMaxWidth().holdTouches()) { plates() }
+            if (!platesInList && !platesInScreen) Column(Modifier.fillMaxWidth().holdTouches()) { plates() }
             ScheduleTabs(
                 current = tab,
                 teacherMode = teacherMode,
@@ -321,6 +324,7 @@ fun TodayScreen(
                                 onTogglePin = onTogglePinnedGroup,
                                 reloadKey = reloadKey,
                                 unsupported = unsupported,
+                                plates = if (platesInScreen) plates else null,
                                 searchLabel = "Поиск по названию группы",
                                 listName = "Список групп",
                                 othersTitle = "Другие группы",
@@ -349,6 +353,7 @@ fun TodayScreen(
                                 onTogglePin = onTogglePinnedTeacher,
                                 reloadKey = reloadKey,
                                 unsupported = unsupported,
+                                plates = if (platesInScreen) plates else null,
                                 // В роли преподавателя своё расписание уже загружено.
                                 ownSchedule = if (teacherMode) schedule else null,
                                 // День, на который нажали в виджете.

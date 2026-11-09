@@ -71,6 +71,11 @@ fun TeacherScreen(
     onLeaveOpened: () -> Unit = {},
     /** Сервер больше не обслуживает эту сборку — «проверьте интернет» было бы неправдой. */
     unsupported: Boolean = false,
+    /**
+     * Плашки сбоя, когда шапке тесно (альбомная): строкой списка дней над днём
+     * открытия, а без списка — над экраном. Над вкладками они отняли бы у списка всё место.
+     */
+    plates: (@Composable () -> Unit)? = null,
     othersTitle: String = "Другие преподаватели",
     // Дно списка — без утверждений про колледж: листы преподавателей в книге
     // есть, скрытые и с именами длиннее 31 символа, и сервер их не читает.
@@ -138,6 +143,7 @@ fun TeacherScreen(
                 startKey = startKey,
                 weekStrip = true,
                 underHead = true,
+                header = plates,
             )
             TextButton(
                 onClick = { browsing = true },
@@ -213,6 +219,7 @@ fun TeacherScreen(
             failedCode = failedCode,
             unsupported = unsupported,
             teacherList = listName == "Список преподавателей",
+            plates = plates,
             onBack = { close() },
         )
         return
@@ -226,6 +233,7 @@ fun TeacherScreen(
 
     // Список отступает от клавиатуры.
     Column(modifier = Modifier.fillMaxSize().imePadding()) {
+        plates?.invoke()
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -336,9 +344,11 @@ private fun ChosenTeacher(
     failedCode: Int?,
     unsupported: Boolean,
     teacherList: Boolean,
+    plates: (@Composable () -> Unit)?,
     onBack: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        if (schedule == null || schedule.days.isEmpty()) plates?.invoke()
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -387,6 +397,7 @@ private fun ChosenTeacher(
                     schedule = schedule,
                     today = rememberToday(),
                     weekStrip = true,
+                    header = plates,
                 )
             }
         }
