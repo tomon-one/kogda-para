@@ -73,8 +73,10 @@ def _too_old(request: Request) -> Response | None:
     """426, если сборка приложения ниже `min_build`: её форматы служба уже не
     держит. /v1/app и /download/ этим не закрываются — по ним и обновляются."""
     raw = request.headers.get("X-App-Build", "")
-    # isdigit пропускает «²», а int() на нём падает: только цифры ASCII.
-    if settings.min_build <= 0 or not (raw.isascii() and raw.isdigit()) or int(raw) >= settings.min_build:
+    # isdigit пропускает «²», а int() на нём падает: только цифры ASCII. Длиннее
+    # 4300 цифр int() не разбирает вовсе — такой сборки нет, числа хватит девяти.
+    if (settings.min_build <= 0 or not (raw.isascii() and raw.isdigit()) or len(raw) > 9
+            or int(raw) >= settings.min_build):
         return None
     return Response(
         status_code=426,

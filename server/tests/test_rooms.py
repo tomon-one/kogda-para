@@ -46,7 +46,7 @@ def test_busy_free_and_clashes():
     assert set(body["busy"]["2"]) == {"270"}
     assert "4" not in body["busy"]                      # онлайн не занимает кабинет
     assert [(c["n"], c["room"]) for c in body["clashes"]] == [(2, "270")]
-    assert body["unread"] == []
+    assert "unread" not in body                         # пустого поля нет
 
 
 def test_unread_group_is_named_and_its_rooms_not_counted():
@@ -54,7 +54,7 @@ def test_unread_group_is_named_and_its_rooms_not_counted():
     snap.unread = {"а": {DAY: False}}
     body = rooms_payload(snap, DAY, {})
     assert body["unread"] == ["А"]
-    assert body["clashes"] == []
+    assert "clashes" not in body
 
 
 def test_stream_is_one_line_and_subgroups_are_not_a_clash():
@@ -65,11 +65,11 @@ def test_stream_is_one_line_and_subgroups_are_not_a_clash():
     snap.schedule["в"][DAY] = [pair("Иванов И.И.")]
     body = rooms_payload(snap, DAY, {})
     assert body["busy"]["5"]["269"] == [{"g": "Б, В", "s": "Физика", "t": ["Иванов И.И."]}]
-    assert body["clashes"] == []
+    assert "clashes" not in body
     snap.schedule["б"][DAY] = []
     snap.schedule["в"][DAY] = []
     snap.schedule["г"][DAY] = [pair("Миллер Д.", "Немецкий"), pair("Уэллс Д.", "Английский")]
-    assert rooms_payload(snap, DAY, {})["clashes"] == []
+    assert "clashes" not in rooms_payload(snap, DAY, {})
 
 
 def test_lesson_with_a_link_in_a_room_takes_the_room():
@@ -98,4 +98,4 @@ def test_dot_before_the_subject_does_not_split_a_stream():
     snap.schedule["в"][DAY] = [Lesson(number=5, subject=".Математика", room="269")]
     body = rooms_payload(snap, DAY, {})
     assert len(body["busy"]["5"]["269"]) == 1 and body["busy"]["5"]["269"][0]["g"] == "Б, В"
-    assert body["clashes"] == []
+    assert "clashes" not in body

@@ -380,6 +380,8 @@ def test_build_below_the_minimum_is_told_to_update(client, monkeypatch):
     assert client.get("/v1/app", headers=old).json()["versionCode"] == 9
     # «²» — цифра для isdigit, но не для int(): не 500, а как без заголовка.
     assert client.get("/v1/meta", headers={"X-App-Build": b"\xb2"}).status_code == 200
+    # Больше 4300 цифр int() не разбирает вовсе: не 500, а как свежая сборка.
+    assert client.get("/v1/meta", headers={"X-App-Build": "9" * 5000}).status_code == 200
     assert client.get("/v1/meta", headers=new).json()["min"] == 8
     monkeypatch.setattr(settings, "min_build", 0)
     assert "min" not in client.get("/v1/meta").json()

@@ -188,6 +188,18 @@ def test_picks_visible_retakes_sheet_and_survives_restart(source, monkeypatch, t
     assert again.payload == source.payload
 
 
+def test_list_that_did_not_reach_the_disk_is_served_and_reported(source, monkeypatch):
+    """Диск полон: свежий список отдаётся из памяти, владелец узнаёт."""
+    def full(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(retakes_service, "write_json", full)
+    _book(monkeypatch, [SheetInfo("График пересдач октябрь 2026", "3")])
+    source.refresh()
+    assert len(source.payload["rows"]) == 3
+    assert [a[0] for a in source.sent] == ["retakes-disk"]
+
+
 def test_unreadable_sheet_keeps_the_previous_list(source, monkeypatch):
     _book(monkeypatch, [SheetInfo("График пересдач октябрь 2026", "3")])
     source.refresh()

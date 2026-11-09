@@ -21,6 +21,7 @@ from ..config import settings
 from ..domain.teachers import TeacherIndex, _surname_initials
 from ..parser.retakes import Redirect, Retake, parse_retakes
 from ..sources import gsheets, sheet_index
+from ..storage.atomic import write_json
 from . import alerts
 
 log = logging.getLogger(__name__)
@@ -148,7 +149,10 @@ class RetakesSource:
             return
         body = {**body, "updated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}
         self.payload = body
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.path)
+        try:
+            write_json(self.path, body)
+        except OSError as exc:
+            # В памяти список свежий, отдаётся; после перезапуска — прежний.
+            log.error("пересдачи не записались на диск: %s", exc)
+            alerts.notify("retakes-disk", f"Пересдачи не записались на диск: {type(exc).__name__}.")
         log.info("пересдачи: %s, строк %d", body["sheet"] or "листа нет", len(body["rows"]))

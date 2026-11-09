@@ -141,7 +141,7 @@ def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]])
                 "name": building,
                 "rooms": [{"room": r, "floor": _floor(building, r)} for r in rooms],
             })
-    return {
+    body = {
         "date": day.isoformat(),
         "bells": bells,
         "buildings": buildings,
@@ -150,3 +150,5 @@ def rooms_payload(snapshot: Snapshot, day: dt.date, bells: dict[str, list[str]])
         # Группы, у которых день не прочитан: их кабинеты не учтены.
         "unread": sorted(unread),
     }
+    # Пустого поля в ответе нет (docs/api.md): клиенты читают его отсутствие как пустое.
+    return {k: v for k, v in body.items() if v or k not in ("busy", "clashes", "unread")}

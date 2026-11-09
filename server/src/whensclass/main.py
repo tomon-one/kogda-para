@@ -91,10 +91,16 @@ async def lifespan(app: FastAPI):
 
     zone = zoneinfo.ZoneInfo(settings.timezone)
     scheduler = BackgroundScheduler(timezone=zone)
+
+    def cron(**fields) -> CronTrigger:
+        # Пояс планировщика к триггеру не переходит: без своего CronTrigger
+        # считает часы по поясу машины, и на UTC заходы днём молчали бы.
+        return CronTrigger(timezone=zone, **fields)
+
     first, last = settings.active_hours
     scheduler.add_job(
         refresher.refresh,
-        CronTrigger(hour=f"{first}-{last}", minute=f"*/{settings.refresh_minutes}"),
+        cron(hour=f"{first}-{last}", minute=f"*/{settings.refresh_minutes}"),
         id="refresh",
         max_instances=1,
         coalesce=True,
@@ -102,7 +108,7 @@ async def lifespan(app: FastAPI):
     # Ночью ищем лист заново: как раз тогда появляется следующая половина месяца.
     scheduler.add_job(
         lambda: refresher.refresh(force=True),
-        CronTrigger(hour=3, minute=30),
+        cron(hour=3, minute=30),
         id="reindex",
     )
 
@@ -111,7 +117,7 @@ async def lifespan(app: FastAPI):
     # час — переход между листами это самое опасное место в службе.
     scheduler.add_job(
         refresher.look_for_new_sheet,
-        CronTrigger(hour=f"{first}-{last}", minute="*/30"),
+        cron(hour=f"{first}-{last}", minute="*/30"),
         id="watch-sheets",
         max_instances=1,
         coalesce=True,
@@ -122,7 +128,7 @@ async def lifespan(app: FastAPI):
     for number, moment in before_each_lesson(settings.refresh_before_lesson_minutes):
         scheduler.add_job(
             refresher.refresh,
-            CronTrigger(hour=moment[0], minute=moment[1]),
+            cron(hour=moment[0], minute=moment[1]),
             id=f"before-lesson-{number}",
             max_instances=1,
             coalesce=True,
@@ -133,7 +139,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(
         lambda: push.remind(store.snapshot, store.teachers if push.count() else None,
                             fresh=refresher.status == "ok"),
-        CronTrigger(minute="*", second=2),
+        cron(minute="*", second=2),
         id="push-remind",
         max_instances=1,
         coalesce=True,
@@ -148,7 +154,7 @@ async def lifespan(app: FastAPI):
     # Google приближают его отказ «429» и для расписания.
     scheduler.add_job(
         retakes.refresh,
-        CronTrigger(hour=f"{first}-{last}", minute=7),
+        cron(hour=f"{first}-{last}", minute=7),
         id="retakes",
         max_instances=1,
         coalesce=True,
@@ -162,7 +168,7 @@ async def lifespan(app: FastAPI):
     crosscheck = CrossCheck(lambda: store.snapshot if refresher.status == "ok" else None, directory)
     scheduler.add_job(
         crosscheck.run,
-        CronTrigger(hour=f"{first}-{last}/3", minute=37),
+        cron(hour=f"{first}-{last}/3", minute=37),
         id="crosscheck",
         max_instances=1,
         coalesce=True,
