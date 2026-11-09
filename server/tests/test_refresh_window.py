@@ -119,6 +119,47 @@ def test_next_sheet_over_the_size_limit_is_left_out_with_an_alarm(
     assert r.status == "ok"
     assert len(sent) == 1 and "'следующий'" in sent[0]["message"], sent
 
+
+def test_week_moved_to_a_new_sheet_is_found_in_the_same_refresh(
+    tmp_path, sent, fixture_csv, monkeypatch
+):
+    """Колледж вынес текущую неделю в новый лист и стёр её из прежнего, а память
+    поиска помнит прежний длиннее. Сегодня пропало — служба забывает память про
+    листы окна и в том же заходе ищет заново, а не стоит в stale до воскресенья."""
+    import csv
+    import io
+
+    from whensclass.parser.dates import date_rows
+
+    rows = read_csv(fixture_csv)
+    starts = sorted(date_rows([r[0] if r else "" for r in rows]).values())
+    head, cut = rows[:starts[0] - 1], starts[4] - 1  # 07.09 — понедельник второй недели
+
+    def text(part):
+        buf = io.StringIO()
+        csv.writer(buf, lineterminator="\n").writerows(part)
+        return buf.getvalue()
+
+    texts = {"лист": fixture_csv}
+    deep = []
+
+    def window(*args, deep=False, **kwargs):
+        if deep and "новый" in texts:
+            return [("лист", "1"), ("новый", "2")]
+        return [("лист", "1")]
+
+    monkeypatch.setattr(sheet_index, "resolve_window", lambda *a, **k: (deep.append(k.get("deep")), window(*a, **k))[1])
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", lambda gid=None, title=None: texts[title])
+    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
+
+    store = SnapshotStore(tmp_path)
+    r = Refresher(store, tmp_path)
+    assert r.refresh(today=TODAY) is True
+    texts.update({"лист": text(rows[:cut]), "новый": text(head + rows[cut:])})
+    assert r.refresh(today=TODAY) is True
+    assert r.status == "ok" and TODAY in store.snapshot.dates
+    assert deep[-1] is True
+
 def _weeks_later(fixture_csv: str, weeks: int) -> str:
     """Тот же лист, но даты на `weeks` недель позже (дни недели те же)."""
     import re

@@ -249,6 +249,16 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
             )
             return False
         except sheet_index.SheetNotFound as exc:
+            if not retried and self._sheets:
+                # Память поиска считала, что окно покрывает сегодня, а в листах
+                # сегодня нет: колледж перенёс неделю в другой лист. Память про
+                # эти листы уже не правда — забыть и искать заново.
+                log.warning("листы окна не покрывают %s, хоть память так считала — ищу заново", today)
+                index = SheetIndex(self.state_dir)
+                for title, _ in self._sheets:
+                    index.forget(title)
+                self._sheets = None
+                return self._refresh(today, force=True, retried=True)
             # Лист прочитан, но отвергнут воротами «пропал сегодняшний день»:
             # это такая же версия листа, как отвергнутая по формату, и
             # разбирать инцидент без неё нечем.
