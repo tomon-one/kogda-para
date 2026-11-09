@@ -312,8 +312,3 @@ export function isChrome() {
 export function isAndroid() {
   return /Android/.test(navigator.userAgent || '');
 }
-
-/** Firefox: у него своя служба рассылки уведомлений — Mozilla, а не Google. */
-export function isFirefox() {
-  return /Firefox\//.test(navigator.userAgent || '');
-}

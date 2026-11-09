@@ -5,10 +5,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,9 +13,7 @@ import ru.whensclass.AppContainer
 import ru.whensclass.data.setLastInstall
 import ru.whensclass.data.takeInstalling
 import ru.whensclass.notify.LessonAlarms
-import ru.whensclass.widget.NextLessonWidget
 import ru.whensclass.widget.ScheduleWidget
-import ru.whensclass.widget.WeekWidget
 
 /**
  * Перерисовка виджетов в момент, когда их содержимое меняется само: смена

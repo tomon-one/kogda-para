@@ -60,7 +60,6 @@ import kotlinx.coroutines.launch
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.RetakesDto
 import ru.whensclass.data.RoomsAnswer
-import ru.whensclass.data.RoomsDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.ScheduleStore
 import ru.whensclass.data.sheetLink
