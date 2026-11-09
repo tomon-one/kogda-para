@@ -97,6 +97,28 @@ def test_next_sheet_with_a_format_error_is_left_out_with_an_alarm(
     assert r.status == "stale" and "лист 'следующий'" in r.last_error
 
 
+
+def test_next_sheet_over_the_size_limit_is_left_out_with_an_alarm(
+    tmp_path, sent, fixture_csv, monkeypatch
+):
+    """Следующий лист больше предела: выпадает из окна, как отвергнутый, а не
+    роняет весь заход. Текущий принят, владельцу — тревога о следующем."""
+    def fetch(gid=None, title=None):
+        if title == "следующий":
+            raise gsheets.SheetTooLarge("лист следующий — 30000000 знаков", title)
+        return fixture_csv
+
+    monkeypatch.setattr(
+        sheet_index, "resolve_window", lambda *a, **k: [("лист", "1"), ("следующий", "2")]
+    )
+    monkeypatch.setattr(gsheets, "fetch_sheet_csv", fetch)
+    monkeypatch.setattr(refresher_mod, "_limits", lambda: FIXTURE)
+
+    r = Refresher(SnapshotStore(tmp_path), tmp_path)
+    assert r.refresh(today=TODAY) is True
+    assert r.status == "ok"
+    assert len(sent) == 1 and "'следующий'" in sent[0]["message"], sent
+
 def _weeks_later(fixture_csv: str, weeks: int) -> str:
     """Тот же лист, но даты на `weeks` недель позже (дни недели те же)."""
     import re

@@ -94,6 +94,9 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
         self._source_hashes: dict[str, str] = {}
         # Листы окна, пропущенные в последнем разборе (заголовок -> почему).
         self._dropped: dict[str, str] = {}
+        # Следующие листы окна больше предела (имя, заголовок, отказ): их текст
+        # не скачан, разбор выпускает их из окна, как отвергнутые.
+        self._too_large: list[tuple[str, str, gsheets.SheetTooLarge]] = []
         self._sheets: list[tuple[str, str | None]] | None = None
         # Имена листов, которые слежка уже видела в книге; None — ещё не
         # смотрела. На диске: иначе лист, заведённый, пока служба
@@ -150,6 +153,7 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
     def _refresh(self, today: dt.date, force: bool, retried: bool = False) -> bool:
         self.checked_at = dt.datetime.now(dt.timezone.utc)
         texts: list[tuple[str, str | None, str, str]] = []
+        self._too_large = []
         try:
             if self._sheets is None or force:
                 # С понедельника, как окно приложения: иначе в воскресенье на
@@ -162,6 +166,14 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
             for title, gid in self._sheets:
                 try:
                     text = gsheets.fetch_sheet_csv(gid=gid, title=title or None)
+                except gsheets.SheetTooLarge as exc:
+                    if not texts:
+                        raise
+                    # Следующий лист больше предела — окно без него, как без
+                    # отвергнутого: правки сегодняшнего листа идут дальше.
+                    log.warning("следующий лист %r больше предела — пока без него", title)
+                    self._too_large.append((title or f"gid {gid}", title, exc))
+                    continue
                 except httpx.HTTPStatusError as exc:
                     # 400 — мёртвый gid (проверено curl), 404 — на всякий
                     # случай. Остальные 4xx (429, 403) — Google на минуту,
@@ -362,6 +374,9 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
         cleared_before, self._cleared_since = self._cleared_since, {}
         # Следующий лист окна, отвергнутый по формату: (имя, отказ).
         self._next_rejected: tuple[str, SourceFormatChanged] | None = None
+        for name, title, exc in self._too_large:
+            self._dropped[title] = f"следующий лист отвергнут: {exc}"
+            self._next_rejected = (name, SheetRejected(title, f"лист {name!r}: {exc}"))
         self._accepting = self._accept_next()
         # С чем сверять: прежний принятый снимок, а по рычагу — ни с чем.
         # История групп для сдвига по соседям (shift_seed) берётся из него и
