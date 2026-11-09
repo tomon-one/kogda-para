@@ -61,6 +61,7 @@ def sent(monkeypatch):
     monkeypatch.setattr(alerts.httpx, "Client", Client)
     monkeypatch.setattr(settings, "ntfy_topic", "тема")
     alerts._last_sent.clear()
+    alerts._pending.clear()
     return box
 
 

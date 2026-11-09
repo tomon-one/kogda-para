@@ -46,6 +46,7 @@ def sent(monkeypatch):
     monkeypatch.setattr(alerts.httpx, "Client", Client)
     monkeypatch.setattr(settings, "ntfy_topic", "тема-для-теста")
     alerts._last_sent.clear()
+    alerts._pending.clear()
     return box
 
 
@@ -63,6 +64,37 @@ def test_same_kind_is_quiet_for_six_hours(sent):
     assert alerts.notify("sheet", "другое") is True
     assert alerts.notify("format", "три", force=True) is True
     assert len(sent.bodies) == 3
+
+
+
+def test_event_alert_that_did_not_go_is_sent_again(monkeypatch, sent):
+    """Тревогу о событии считают разностью снимков, следующий заход её сам не
+    повторит: не принял ntfy — `resend` шлёт снова, пока не уйдёт; устаревшую
+    за шесть часов бросает."""
+    down = {"on": True}
+
+    class Flaky(alerts.httpx.Client):
+        def post(self, url, json=None):
+            if down["on"]:
+                raise alerts.httpx.ConnectError("нет сети")
+            return super().post(url, json=json)
+
+    monkeypatch.setattr(alerts.httpx, "Client", Flaky)
+    assert alerts.notify("emptied", "пропали", force=True, retry=True) is False
+    alerts.resend()
+    assert sent.bodies == []
+    down["on"] = False
+    alerts.resend()
+    alerts.resend()
+    assert [body["message"] for _, body in sent.bodies] == ["в нас проблема. пропали"]
+
+    down["on"] = True
+    alerts.notify("bells", "звонки", force=True, quiet=True, retry=True)
+    later = alerts.time.monotonic() + 6 * 60 * 60
+    monkeypatch.setattr(alerts.time, "monotonic", lambda: later)
+    down["on"] = False
+    alerts.resend()
+    assert len(sent.bodies) == 1
 
 
 def test_without_topic_nothing_is_sent(monkeypatch, sent):

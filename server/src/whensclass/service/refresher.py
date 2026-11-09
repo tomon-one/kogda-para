@@ -126,6 +126,7 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
                     kind="crash",
                 )
             self._mark_running()
+            alerts.resend()
             try:
                 return self._refresh(today or _today(), force)
             except Exception as exc:

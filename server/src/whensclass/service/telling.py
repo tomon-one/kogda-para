@@ -60,7 +60,7 @@ class Telling:
             f"Лист принят, но у групп пропали все пары на будущее: {names}{more}. Колонку "
             "стёрли или группу убрали? Пока это так, у них пустые дни без пометки. "
             "Присмотреться (руководство по серверу, «Когда что-то не так»).",
-            force=True,
+            force=True, retry=True,
         )
 
     def _tell_bells(self, old, snapshot) -> None:
@@ -81,7 +81,7 @@ class Telling:
                 "bells",
                 f"В листе у {day:%d.%m} свои звонки: {spans}{more}. Отдаются у этого дня "
                 "вместо обычных.",
-                force=True, quiet=True,
+                force=True, quiet=True, retry=True,
             )
 
     def _announce(self, before, snapshot, teachers, today: dt.date) -> None:

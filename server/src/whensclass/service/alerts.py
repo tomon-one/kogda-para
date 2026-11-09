@@ -39,6 +39,10 @@ _last_sent: dict[str, float] = {}
 # failing.json.
 _sent_at: dict[str, dt.datetime] = {}
 _state_path: pathlib.Path | None = None
+# Тревоги о событии (`retry`), которые ntfy не принял: их считают разностью
+# снимков, и следующий заход сам их уже не повторит. Вид → (когда случилось,
+# текст, флаги); `resend` пробует снова, пока не ушли или не устарели.
+_pending: dict[str, tuple[float, str, dict]] = {}
 # Своё, короткое: notify зовётся из _fail под замком обновления, и общий
 # таймаут в минуту держал бы замок ровно тогда, когда всё и так плохо.
 _TIMEOUT = 10.0
@@ -51,6 +55,7 @@ def notify(
     good: bool = False,
     quiet: bool = False,
     window: float = _QUIET_SECONDS,
+    retry: bool = False,
 ) -> bool:
     """Отправляет сообщение владельцу. True, если получилось.
 
@@ -58,6 +63,7 @@ def notify(
     часов. Таблица может лежать сутки, и напоминать об этом каждые двадцать
     минут незачем. `good` — не тревога, а «починилось». `quiet` — не беда, а
     сведение (приоритет 2, без звука); `window` — своё окно тишины в секундах.
+    `retry` — тревога о событии: не ушла — `resend` повторит её позже.
     """
     if not settings.ntfy_topic:
         log.debug("оповещения не настроены, пропускаю: %s", text)
@@ -74,12 +80,13 @@ def notify(
     # Публикация JSON-ом в корень, а не POST в /<тема>: так тема не стоит в
     # адресе и не попадёт в текст исключения httpx, а заголовки не надо
     # кодировать ради кириллицы.
-    if not good and not quiet:
-        text = f"в нас проблема. {text}"
+    if retry:
+        since = _pending.get(kind, (now,))[0]
+        _pending[kind] = (since, text, {"force": force, "good": good, "quiet": quiet, "window": window})
     body = {
         "topic": settings.ntfy_topic,
         "title": "Когда пара?",
-        "message": text,
+        "message": text if good or quiet else f"в нас проблема. {text}",
         "priority": 2 if quiet else 3 if good else 4,
         # Сирена — только беде: сведение с ней выглядит как тревога.
         "tags": ["white_check_mark"] if good else ["information_source"] if quiet else ["rotating_light"],
@@ -96,11 +103,23 @@ def notify(
         log.error("оповещение не ушло (%s): %s", kind, type(exc).__name__)
         return False
 
+    _pending.pop(kind, None)
     _last_sent[kind] = now
     _sent_at[kind] = dt.datetime.now(dt.timezone.utc)
     _save()
     log.info("отправлено оповещение (%s)", kind)
     return True
+
+
+def resend() -> None:
+    """Ещё раз отправить тревоги о событиях, которые ntfy не принял; старше
+    шести часов — бросить: о давнем событии владелец узнает по журналу."""
+    for kind, (since, text, flags) in list(_pending.items()):
+        if time.monotonic() - since >= _QUIET_SECONDS:
+            del _pending[kind]
+            log.error("оповещение (%s) так и не ушло, больше не повторяю", kind)
+        else:
+            notify(kind, text, retry=True, **flags)
 
 
 def keep_in(path: pathlib.Path) -> None:
@@ -150,6 +169,7 @@ def remember(kind: str, at: dt.datetime) -> None:
 
 def forget(kind: str) -> None:
     """Забыть, что об этом уже говорили: беда прошла, следующая — новая."""
+    _pending.pop(kind, None)
     if _last_sent.pop(kind, None) is not None:
         _sent_at.pop(kind, None)
         _save()
