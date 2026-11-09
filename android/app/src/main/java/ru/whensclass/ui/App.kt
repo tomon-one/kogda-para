@@ -238,11 +238,14 @@ internal fun App(
         // Свежие — следом и оба разом, а не по очереди.
         if (groups.isNullOrEmpty()) repository.cachedGroups().takeIf { it.isNotEmpty() }?.let { groups = it }
         if (teachers.isNullOrEmpty()) repository.cachedTeachers().takeIf { it.isNotEmpty() }?.let { teachers = it }
-        if (listsFresh) return@LaunchedEffect
+        // Экран выбора — всегда со свежими, как на сайте: группу могли
+        // разделить днём, и «/1» в списке полусуточной давности не нашлась бы.
+        val picking = screen == Screen.GROUPS
+        if (listsFresh && !picking) return@LaunchedEffect
         // Свежие списки — не чаще раза в LISTS_FRESH_MILLIS, если сохранённые
         // есть: как на сайте. «Повторить» и пустой список — сразу.
         val age = System.currentTimeMillis() - container.store.listsFetchedAt()
-        if (!listsRetry && !groups.isNullOrEmpty() && !teachers.isNullOrEmpty() && age in 0 until LISTS_FRESH_MILLIS) {
+        if (!picking && !listsRetry && !groups.isNullOrEmpty() && !teachers.isNullOrEmpty() && age in 0 until LISTS_FRESH_MILLIS) {
             listsFresh = true
             return@LaunchedEffect
         }

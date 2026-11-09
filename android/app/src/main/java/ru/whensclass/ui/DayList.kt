@@ -82,7 +82,9 @@ fun ScheduleDays(
     // при создании списка, а не прокруткой после первого кадра: прокрутка
     // успевает показать понедельник и уехать с него на глазах. Дня нет —
     // ближайший к нему ([dayIndex]).
-    val target = startDay ?: openingDay(schedule.bellsOn(today), now).toString()
+    // День из виджета или напоминания остаётся у экрана и после того, как
+    // прошёл: прошедший — уже не повод открываться на нём.
+    val target = startDay?.takeIf { it >= today.toString() } ?: openingDay(schedule.bellsOn(today), now).toString()
     val rows = remember(days, target, header != null) {
         DayRows(if (header != null && days.isNotEmpty()) dayIndex(days, target) else -1)
     }
@@ -117,9 +119,13 @@ fun ScheduleDays(
     // дня пока нет в окне — ждём, пока обновление его принесёт. Переживает
     // поворот, чтобы тот не отменял пролистанное человеком.
     var wanted by rememberSaveable { mutableStateOf<String?>(target) }
-    val firstToday = rememberSaveable { today.toString() }
+    // День, к которому список уже уводили: поворот после полуночи не уводит снова.
+    var seenToday by rememberSaveable { mutableStateOf(today.toString()) }
     LaunchedEffect(today) {
-        if (today.toString() != firstToday) wanted = today.toString()
+        if (today.toString() != seenToday) {
+            seenToday = today.toString()
+            wanted = today.toString()
+        }
     }
     // Нажали на день в виджете, а экран жив: к этому дню.
     var handledStart by rememberSaveable { mutableIntStateOf(startKey) }

@@ -190,12 +190,13 @@ class ScheduleStore(internal val context: Context) {
 
     suspend fun selectTeacher(id: String, name: String, unchanged: Boolean = false) {
         context.dataStore.edit {
-            it.remove(KEY_GONE_SINCE)
-            it.remove(KEY_GONE)
             it[KEY_TEACHER_ID] = id
             it[KEY_TEACHER_NAME] = name
-            // Повторный выбор себя же — не повод стирать расписание без связи.
+            // Повторный выбор себя же — не повод стирать расписание без связи
+            // и не повод снимать пропажу: снимок прежний.
             if (unchanged) return@edit
+            it.remove(KEY_GONE_SINCE)
+            it.remove(KEY_GONE)
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
             it.remove(KEY_FETCHED_AT)
@@ -269,9 +270,11 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit {
             it[KEY_GROUP_ID] = id
             it[KEY_GROUP_NAME] = name
+            // Та же группа выбрана заново — пропажа не снята: снимок прежний,
+            // плашку и снятые напоминания решит обновление.
+            if (unchanged) return@edit
             it.remove(KEY_GONE_SINCE)
             it.remove(KEY_GONE)
-            if (unchanged) return@edit
             // Расписание прошлой группы и время его загрузки — прочь сразу:
             // иначе рядом с «ещё не загружено» стояло бы «обновлено в …»
             // прежнего выбора.

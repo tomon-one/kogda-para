@@ -161,9 +161,11 @@ fun TeacherScreen(
         pickedId = teacher?.id
         pickedName = teacher?.name.orEmpty()
     }
-    var schedule by remember { mutableStateOf<ScheduleDto?>(null) }
+    // Прочитанное переживает поворот и смену вкладки: без сети иначе вместо
+    // него «Расписание не загрузилось».
+    var schedule by rememberSaveable(stateSaver = ScheduleSaver) { mutableStateOf<ScheduleDto?>(null) }
     // Чьё расписание в [schedule]: у другого открытого — не показывать.
-    var loadedFor by remember { mutableStateOf<String?>(null) }
+    var loadedFor by rememberSaveable { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     // Чем ответил сервер на последнюю неудачу; null — не ответил.
     var failedCode by remember { mutableStateOf<Int?>(null) }
@@ -474,3 +476,11 @@ private fun Centered(content: @Composable () -> Unit) {
         content()
     }
 }
+
+private val savedJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+/** Открытое расписание — в сохраняемом состоянии экрана строкой JSON. */
+private val ScheduleSaver = androidx.compose.runtime.saveable.Saver<ScheduleDto?, String>(
+    save = { it?.let { schedule -> savedJson.encodeToString(ScheduleDto.serializer(), schedule) } },
+    restore = { runCatching { savedJson.decodeFromString(ScheduleDto.serializer(), it) }.getOrNull() },
+)
