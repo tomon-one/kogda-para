@@ -71,6 +71,8 @@ data class DayDto(
     @SerialName("l") val lessons: List<LessonDto> = emptyList(),
     /** Строка листа, где стоит дата этого дня, — чтобы ссылка подвела к ней. */
     @SerialName("row") val row: Int? = null,
+    /** Колонка группы в этот день, если день прочитан по повторному заголовку с другой раскладкой. */
+    @SerialName("col") val column: String? = null,
     /** Свои звонки дня: номер пары → начало и конец. Пусто — обычные ([ScheduleDto.bellsOf]). */
     @SerialName("bl") val ownBells: Map<String, List<String>> = emptyMap(),
     /**

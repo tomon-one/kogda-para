@@ -73,6 +73,13 @@ def test_days_read_by_the_repeated_header_remember_their_columns(fixture_csv, mo
     body = schedule_payload(snap, gid, below[0], 1, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
     cols = {x.get("col") for x in body["days"][0]["l"]}
     assert cols == {a1_column(snap.day_columns[gid][below[0]])}
+    assert body["days"][0]["col"] == a1_column(snap.day_columns[gid][below[0]])
+    # Пустой день под тем же заголовком — колонка у самого дня.
+    lessons, snap.schedule[gid][below[0]] = snap.schedule[gid][below[0]], []
+    empty = schedule_payload(snap, gid, below[0], 1, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    snap.schedule[gid][below[0]] = lessons
+    assert empty["days"][0]["l"] == []
+    assert empty["days"][0]["col"] == a1_column(snap.day_columns[gid][below[0]])
     # У преподавателя пары этого дня ведут туда же.
     from whensclass.domain.teachers import build_index
 

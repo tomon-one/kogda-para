@@ -146,9 +146,10 @@ export function sheetLink(schedule, day, fallback) {
     // Дня в ответе нет (воскресенье, каникулы) — ближайший следующий.
     for (var j = 0; j < days.length && !found; j++) if (days[j].d > day) found = days[j];
   }
-  // Колонка пары — у преподавателя и в днях, прочитанных по повторному
-  // заголовку с другой раскладкой; иначе — колонка группы.
-  var column = null;
+  // Колонка дня — в днях, прочитанных по повторному заголовку с другой
+  // раскладкой (и без пар); колонка пары — у преподавателя и у ответа
+  // прежней службы; иначе — колонка группы.
+  var column = found && found.col || null;
   if (found) {
     for (var k = 0; k < (found.l || []).length && !column; k++) column = found.l[k].col || null;
   }

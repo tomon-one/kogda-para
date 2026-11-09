@@ -302,10 +302,12 @@ def schedule_payload(
         if day in placed:
             out_day["row"] = placed[day].row
         if (moved := snapshot.day_columns.get(group_id, {}).get(day)) is not None:
-            # День прочитан по повторному заголовку с другой раскладкой: у пар
-            # своя колонка, как у преподавателя, — ссылка ведёт в неё.
+            # День прочитан по повторному заголовку с другой раскладкой: ссылка
+            # ведёт в колонку дня — и в пустом дне, где пар с колонкой нет.
+            # У пар — для клиентов, что колонку дня не знают.
+            out_day["col"] = a1_column(moved)
             for item in out_day["l"]:
-                item["col"] = a1_column(moved)
+                item["col"] = out_day["col"]
         if bells and (own := own_bells(snapshot, day, bells)):
             out_day["bl"] = own
         if marks and (mark := _unread_mark(snapshot, group_id, day)):

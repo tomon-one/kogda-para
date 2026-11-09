@@ -42,6 +42,12 @@ class SheetLinkTest {
     }
 
     @Test
+    fun `день под повторным заголовком — в колонку дня, и без пар`() {
+        val moved = schedule().copy(days = listOf(DayDto("2026-09-14", row = 139, column = "GA")))
+        assertEquals("$base&range=GA139:GD150", sheetLink(moved, LocalDate.of(2026, 9, 14), null))
+    }
+
+    @Test
     fun `без сведений от сервера — то, что назвал meta`() {
         assertEquals("https://x/edit", sheetLink(schedule(url = null), LocalDate.of(2026, 9, 14), "https://x/edit"))
         assertNull(sheetLink(null, LocalDate.of(2026, 9, 14), null))

@@ -128,6 +128,9 @@ test('ссылка в таблицу — к блоку группы и дню', 
   // У преподавателя колонка — у первой пары дня.
   const teacher = { src_url: 'https://s#gid=1', bells: {}, days: [{ d: '2026-09-28', row: 10, l: [{ col: 'AB' }] }] };
   assert.equal(sheetLink(teacher, '2026-09-28', null), 'https://s#gid=1&range=AB10:AE21');
+  // День под повторным заголовком — в колонку дня, и без пар.
+  const moved = Object.assign({}, schedule, { days: [{ d: '2026-09-28', row: 76, col: 'GA', l: [] }] });
+  assert.equal(sheetLink(moved, '2026-09-28', null), schedule.src_url + '&range=GA76:GD87');
 });
 
 test('окно и пропущенные дни', () => {
