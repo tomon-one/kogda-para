@@ -20,10 +20,12 @@ def fixture_csv() -> str:
 
 @pytest.fixture(autouse=True)
 def _fresh_header_warnings():
-    """Неувязки заголовка пишутся в журнал раз на процесс — тестам нужен чистый."""
-    from whensclass.parser import groups
+    """Неувязки заголовка пишутся в журнал раз на процесс — тестам нужен чистый.
+    Кэш разбора пар — тоже: из кэша пара приходит без своего предупреждения."""
+    from whensclass.parser import cells, groups
 
     groups._warned.clear()
+    cells.parse_lesson.cache_clear()
 
 
 @pytest.fixture(autouse=True)

@@ -7,6 +7,7 @@ docs/source-format.md.
 
 from __future__ import annotations
 
+import functools
 import logging
 import re
 
@@ -343,6 +344,9 @@ def replaced_of(lesson: Lesson) -> str | None:
     return None
 
 
+# В листе одни и те же три ячейки повторяются из недели в неделю: на 160 тысяч
+# пар разных входов около 15 тысяч. Пара неизменяема, её можно отдавать общей.
+@functools.lru_cache(maxsize=1 << 15)
 def parse_lesson(
     number: int,
     subject_raw: str | None,
