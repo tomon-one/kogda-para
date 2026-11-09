@@ -147,6 +147,19 @@ class Failing:
         except OSError as exc:
             log.warning("отметка захода не записалась: %s", exc)
 
+    def stopping(self) -> None:
+        """Службу останавливают командой (выкладка, перезапуск): заход, который
+        оборвётся вместе с ней, — не смерть посреди разбора, в счёт не идёт."""
+        try:
+            if not self._running_path.exists():
+                return
+            if self._crashes:
+                self._running_path.write_text(str(self._crashes), "utf-8")
+            else:
+                self._running_path.unlink(missing_ok=True)
+        except OSError as exc:
+            log.warning("отметка захода не снялась при остановке: %s", exc)
+
     def _clear_running(self) -> None:
         self._crashes = 0
         try:

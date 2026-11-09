@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import re
+import time
 import zoneinfo
 from contextlib import asynccontextmanager
 
@@ -70,6 +71,14 @@ async def lifespan(app: FastAPI):
     logging.getLogger("httpx").setLevel(logging.WARNING)
     directory = state_dir()
     directory.mkdir(parents=True, exist_ok=True)
+    # Запись, оборванную остановкой, выдаёт временный файл рядом (у снимка — до
+    # 12 МБ). Свежие не трогать: их может писать канарейка.
+    for tmp in directory.glob(".*.tmp"):
+        try:
+            if time.time() - tmp.stat().st_mtime > 60 * 60:
+                tmp.unlink()
+        except OSError:
+            pass
 
     if settings.exit_ssh and not re.fullmatch(r"[^@\s]+@[^:\s]+:\d+", settings.exit_ssh):
         log.error(
@@ -178,6 +187,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         scheduler.shutdown(wait=False)
+        refresher.stopping()
 
 
 app = FastAPI(

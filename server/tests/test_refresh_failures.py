@@ -273,6 +273,22 @@ def test_single_interrupted_refresh_is_quiet(tmp_path, sheet, sent):
     assert sent == []
 
 
+def test_stop_by_command_mid_refresh_is_not_a_crash(tmp_path, sheet, sent):
+    """Выкладка останавливает службу посреди захода: сколько бы раз подряд, это
+    не смерть от памяти — тревоги нет. А прежний настоящий обрыв помнится."""
+    for _ in range(3):
+        r = Refresher(SnapshotStore(tmp_path), tmp_path)
+        r._mark_running()
+        r.stopping()
+    assert not (tmp_path / "refresh.running").exists()
+    (tmp_path / "refresh.running").write_text("1", "utf-8")
+    r = Refresher(SnapshotStore(tmp_path), tmp_path)
+    r._mark_running()
+    r.stopping()
+    assert (tmp_path / "refresh.running").read_text("utf-8") == "1"
+    assert sent == []
+
+
 def test_network_blip_during_format_failure_is_not_a_new_alarm(tmp_path, sent, fixture_csv):
     """Лист отвергнут по формату, через час один таймаут Google. Льгота сети —
     от первого сетевого отказа, а не от начала сбоя: тревоги «таблица не
