@@ -381,7 +381,7 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
         """
         self._dropped = {}
         self._suspicions: list[str] = []
-        cleared_before, self._cleared_since = self._cleared_since, {}
+        cleared_ok = self._cleared_held()
         # Следующий лист окна, отвергнутый по формату: (имя, отказ).
         self._next_rejected: tuple[str, SourceFormatChanged] | None = None
         for name, title, exc in self._too_large:
@@ -462,15 +462,17 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
             if dropped:
                 self._suspicions.append(dropped)
             _check_days_emptied(previous, snapshot, today, dropped=bool(self._dropped),
-                                cleared_ok=self._cleared_held(cleared_before))
+                                cleared_ok=cleared_ok)
             teachers = build_index(snapshot)
         except ValueError as exc:
             raise SourceFormatChanged(f"разбор споткнулся о значение: {exc}") from exc
         return snapshot, teachers
 
-    def _cleared_held(self, before: dict):
+    def _cleared_held(self):
         """Проверка для `_check_days_emptied`: день пуст у всех групп не меньше
-        DAY_CLEARED_HOLD. `before` — отсчёты прошлого разбора, день без него — с нуля."""
+        DAY_CLEARED_HOLD. Зовётся раз на разбор: отсчёты прошлого разбора живут,
+        только если день снова пуст у всех, — иначе с нуля."""
+        before, self._cleared_since = self._cleared_since, {}
         now = dt.datetime.now(dt.timezone.utc)
 
         def held(day: dt.date) -> bool:

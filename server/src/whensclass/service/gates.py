@@ -88,7 +88,7 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
                 continue
             had = [
                 g.id for g in previous.groups
-                if previous.schedule.get(g.id, {}).get(day) and day not in previous.unread.get(g.id, {})
+                if _had_read(previous, g.id, day)
             ]
             if len(had) >= DAY_EMPTIED_MIN_GROUPS:
                 raise ChangedAgainstPrevious(
@@ -103,7 +103,7 @@ def _check_days_emptied(previous, current, today: dt.date, dropped: bool = False
         # раннего: это не то, что стояло в листе, и сверять с ним нечего.
         had = [
             g.id for g in previous.groups
-            if previous.schedule.get(g.id, {}).get(day) and day not in previous.unread.get(g.id, {})
+            if _had_read(previous, g.id, day)
         ]
         if len(had) < DAY_EMPTIED_MIN_GROUPS:
             continue
@@ -164,7 +164,7 @@ def groups_emptied(previous, current, today: dt.date, dropped: bool = False) -> 
             continue
         had = [
             d for d in days
-            if previous.schedule.get(g.id, {}).get(d) and d not in previous.unread.get(g.id, {})
+            if _had_read(previous, g.id, d)
         ]
         now = current.schedule.get(g.id, {})
         # Пропавшее — хвост: дни после последнего, где пары ещё есть.
@@ -199,6 +199,13 @@ def _check_lost_names(previous, current, gid: str | None) -> None:
                 f"в главном заголовке у колонки {a1_column(column)} пропало имя группы "
                 f"{group.name}, а пары под ним на месте ({current.unnamed[column]})"
             )
+
+
+def _had_read(previous, gid: str, day: dt.date) -> bool:
+    """У группы в прежнем снимке были пары этого дня, прочитанные из листа. День,
+    который прежний снимок не прочитал, держался на парах ещё более раннего: это
+    не то, что стояло в листе, и сверять с ним нечего."""
+    return bool(previous.schedule.get(gid, {}).get(day)) and day not in previous.unread.get(gid, {})
 
 
 def _check_today_kept(previous, current, today: dt.date) -> None:

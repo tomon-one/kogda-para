@@ -392,6 +392,14 @@ def test_bare_practice_on_neighbours_is_not_a_shift(fixture_csv):
         after.schedule[gid][day] = [Lesson(number=1, subject="Учебная практика")]
         before.schedule[gid][day] = []
     assert neighbour_runs(after, before, day) == set()
+    # Практика стояла у первых двух и продлена на следующих: у новых — пара
+    # соседа, но узнать по ней сдвиг нельзя.
+    for i, gid in enumerate(groups):
+        before.schedule[gid][day] = (
+            [Lesson(number=1, subject="Учебная практика")] if i < 2
+            else [Lesson(number=1, subject=f"Предмет {i}", teachers=(f"Иванов {i}",), room=str(270 + i))]
+        )
+    assert neighbour_runs(after, before, day) == set()
 
     # Пары с преподавателем и аудиторией, съехавшие на соседа, — по-прежнему сдвиг.
     def lesson(i):

@@ -135,10 +135,28 @@ def test_same_mismatch_is_told_once_across_restarts_and_failed_reads(tmp_path, m
 
 
 def test_unreadable_teacher_sheet_is_a_quiet_alert(tmp_path, monkeypatch):
-    sent = []
+    sent, quiet = [], []
     snap = _snapshot([Lesson(number=2, subject="Физика"), Lesson(number=3, subject="Химия")])
-    _run(tmp_path, monkeypatch, snap, lambda gid, title=None: "не тот лист", sent)
-    assert sent == ["crosscheck-sheet"]
+    _run(tmp_path, monkeypatch, snap, lambda gid, title=None: "не тот лист", sent, quiet)
+    assert sent == ["crosscheck-sheet"] and quiet == [True]
+
+
+def test_two_neighbours_off_on_one_day_wake_the_owner(tmp_path, monkeypatch):
+    """Обе группы в один день разошлись с листом преподавателей — похоже на
+    сдвиг колонки: тревога со звуком."""
+    sheet = _sheet(list(csv.reader(io.StringIO(SHEET))) + [
+        ["Петров Пётр Петрович", "1", "", "", "", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", "", "", "", "", ""],
+        ["", "2", "10.40-12.10", "Право (Лек)", "", "", "253", "", "", "", ""],
+        ["", "", "", "Б-1", "", "", "", "", "", "", ""],
+        ["", "3", "12.30-14.00", "Экономика (Пр)", "", "", "254", "", "", "", ""],
+        ["", "", "", "Б-1", "", "", "", "", "", "", ""],
+    ])
+    snap = _snapshot([Lesson(number=2, subject="История"), Lesson(number=3, subject="Литература")])
+    snap.schedule["b-1"][MON] = [Lesson(number=2, subject="Музыка"), Lesson(number=3, subject="Рисование")]
+    sent, quiet = [], []
+    _run(tmp_path, monkeypatch, snap, lambda gid, title=None: sheet, sent, quiet)
+    assert sent == ["crosscheck"] and quiet == [False]
 
 
 def test_google_asking_to_slow_down_skips_the_check(tmp_path, monkeypatch):

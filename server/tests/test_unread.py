@@ -357,6 +357,18 @@ def test_same_unread_days_remind_once_a_day_new_ones_at_once(tmp_path, sheet, se
     assert refresher.refresh(today=DAY, force=True) and len(sent) == 3
 
 
+def test_unread_day_never_read_stays_unknown_on_the_next_refresh(tmp_path, sheet, sent, fixture_csv):
+    """Неделя пришла впервые с непрочитанным днём, следующий заход — тот же
+    лист. День так и не был прочитан: прежние версии по-прежнему видят край перед
+    ним, а не пустой день с «Пар нет»."""
+    store = SnapshotStore(tmp_path)
+    refresher = Refresher(store, tmp_path)
+    sheet["text"] = spilled(fixture_csv, BP)
+    for _ in range(2):
+        assert refresher.refresh(today=DAY, force=True)
+        assert store.snapshot.unread["bp-1126"] == {DAY: False}
+
+
 def test_quiet_group_gets_no_alert_but_keeps_its_mark(monkeypatch):
     from whensclass.domain.models import GroupRef, Snapshot
     from whensclass.service import refresher as refresher_mod

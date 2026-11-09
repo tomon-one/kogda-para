@@ -275,6 +275,16 @@ def test_published_day_emptied_for_many_groups_is_rejected():
     # прочитался пустым — не «вырезан».
     before.unread = {g.id: {day: True} for g in groups[:12]}
     gates._check_days_emptied(before, sheet(12), day)
+    # Так же, когда такой день вырезан из листа вместе с датой.
+    later = dt.date(2026, 9, 30)
+    wide = Snapshot("лист", groups=groups, dates=[past, day, later],
+                    schedule={g.id: {d: pair for d in (past, day, later)} for g in groups})
+    cut = Snapshot("лист", groups=groups, dates=[past, later],
+                   schedule={g.id: {past: pair, later: pair} for g in groups})
+    with pytest.raises(ChangedAgainstPrevious, match="пропал из листа вместе с датой"):
+        gates._check_days_emptied(wide, cut, past)
+    wide.unread = {g.id: {day: True} for g in groups}
+    gates._check_days_emptied(wide, cut, past)
 
 
 def test_holiday_and_day_cleared_everywhere_are_not_a_cut_day():
@@ -346,8 +356,8 @@ def test_day_cleared_everywhere_is_accepted_after_an_hour_and_the_count_restarts
     day = dt.date(2026, 11, 5)
 
     def ask(cleared: bool) -> bool:
-        before, r._cleared_since = r._cleared_since, {}
-        return r._cleared_held(before)(day) if cleared else False
+        held = r._cleared_held()  # раз на разбор, как в службе
+        return held(day) if cleared else False
 
     assert not ask(True)
     now[0] += dt.timedelta(minutes=40)
@@ -452,6 +462,9 @@ def test_group_that_lost_all_future_lessons_is_reported_not_rejected():
     assert gates.groups_emptied(before, snap(short), today) == []
     # Не прочитаны — там держится прежнее, это не «пропали».
     assert gates.groups_emptied(before, snap(cut, {"g-1": {days[2]: False}}), today) == []
+    # Прежний снимок сам их не прочитал (держал ещё более ранние пары) — тоже не в счёт.
+    unread_before = snap(full, {"g-1": {d: True for d in days[2:]}})
+    assert gates.groups_emptied(unread_before, snap(cut), today) == []
     assert gates.groups_emptied(None, snap(cut), today) == []
     # Выпал следующий лист: его дни пусты у всех — не «у группы стёрли».
     frame = {g.id: {d: pair for d in days[:2]} for g in groups}
