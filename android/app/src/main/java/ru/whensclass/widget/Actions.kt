@@ -42,7 +42,10 @@ class ShiftDayAction : ActionCallback {
             prefs.toMutablePreferences().apply {
                 this[ScheduleWidget.KEY_DAY_OFFSET] = next
                 // Вернулись на день открытия: дальше он снова считается по звонкам.
-                if (next == 0) remove(ScheduleWidget.KEY_DAY_BASE) else this[ScheduleWidget.KEY_DAY_BASE] = base.toEpochDay()
+                // Только если по звонкам он тот же: листали днём, а вернулись
+                // после последнего звонка — иначе «‹» показал бы тот же завтрашний день.
+                if (next == 0 && base == dayBase(null, schedule, now)) remove(ScheduleWidget.KEY_DAY_BASE)
+                else this[ScheduleWidget.KEY_DAY_BASE] = base.toEpochDay()
             }
         }
         ScheduleWidget().update(context, glanceId)

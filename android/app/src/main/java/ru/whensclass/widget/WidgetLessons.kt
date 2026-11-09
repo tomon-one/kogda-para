@@ -70,7 +70,8 @@ internal fun Lessons(
         return (left / rowHeight).toInt().coerceAtLeast(1).coerceAtMost(lessons.size)
     }
 
-    var fits = room(0.dp)
+    // Больше десяти детей контейнер не покажет — сверх них без «ещё N» пропадали бы пары.
+    var fits = room(0.dp).coerceAtMost(MAX_CHILDREN)
     var start = windowStart(lessons, bells, day, fits, now)
     val labels = (if (start > 0) 1 else 0) + (if (start + fits < lessons.size) 1 else 0)
     if (labels > 0) {
@@ -254,8 +255,15 @@ private fun freeHeight(height: Dp, reserved: Dp, fit: Fit, scale: Float): Dp =
 internal fun pairsRoom(height: Dp, reserved: Dp, fit: Fit): Int =
     (freeHeight(height, reserved, fit, fit.scale) / rowHeight(fit, fit.scale)).toInt()
 
-/** Сколько из [count] пар будет видно: не вошедшие сами занимают строку «ещё N». */
+/**
+ * Сколько из [count] пар будет видно: не вошедшие сами занимают строку «ещё N»,
+ * а скрытых двух и больше посреди дня — ещё и «прошло N» ([Lessons]). Одна пара — минимум.
+ */
 internal fun pairsShown(height: Dp, reserved: Dp, fit: Fit, count: Int): Int {
     val room = pairsRoom(height, reserved, fit)
-    return if (count > room) pairsRoom(height, reserved + 17.dp * fit.scale, fit) else room
+    if (count <= room) return room
+    val line = 17.dp * fit.scale
+    val one = pairsRoom(height, reserved + line, fit)
+    val shown = if (count - one < 2) one else pairsRoom(height, reserved + line * 2, fit)
+    return shown.coerceAtLeast(1)
 }

@@ -58,5 +58,8 @@ class WeekFitTest {
         assertEquals(1, pairsShown(175.dp, 19.dp, fit, 3))
         // Две пары входят и со сводкой: строки «ещё» нет.
         assertEquals(2, pairsShown(175.dp, 19.dp, fit, 2))
+        // Скрытых две и больше — посреди дня и «прошло N», и «ещё N»: обе строки в счёт.
+        val room = pairsRoom(400.dp, 0.dp, fit)
+        assertEquals(pairsRoom(400.dp, 34.dp, fit), pairsShown(400.dp, 0.dp, fit, room + 5))
     }
 }

@@ -121,7 +121,8 @@ class NextLessonWidget : GlanceAppWidget() {
                         style = TextStyle(
                             fontSize = 11.sp,
                             color = when {
-                                failed || broken || gone -> colors.error
+                                // Правка таблицы — не сбой: приглушённо, как у «Дня» и экрана.
+                                failed || (broken && !editing) || gone || unsupported -> colors.error
                                 busy || done -> colors.accent
                                 else -> colors.textDim
                             },
@@ -180,7 +181,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     place = if (tight) places(next) else null,
                 )
                 val headColor = when {
-                    broken || gone -> colors.error
+                    (broken && !editing) || gone -> colors.error
                     ongoing -> colors.accent
                     else -> colors.textDim
                 }
