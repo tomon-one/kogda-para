@@ -24,9 +24,16 @@ TEXT = re.compile(
 FORBIDDEN = {
     "имя": re.compile(r"Tomon"),
     "аудит": re.compile(r"[Аа]удит(?!ор)|прогон[ауео]?\s+\d|присест|подсадн"),
-    "номер находки": re.compile(r"(?<![\w.-])[КВМНW]\d{1,3}(?![\w.-])"),
+    "номер находки": re.compile(
+        r"(?<![\w.'\"-])[КВМНWБ]\d{1,3}(?![\w.-])|(?<![\w.-])п\d+-\d+|\b(?:крит|kl|sl|st)-\d"
+    ),
+    # Дата решения: «Тема (28.09): …», «… С 29.09.2026.», «Снято с сервера 27.09».
+    # Даты из таблицы колледжа и выпусков — факты, а не история: их не трогает.
+    "дата решения": re.compile(
+        r"\([0-3]\d\.[01]\d\):|(?<!\w)С [0-3]\d\.[01]\d\.20\d\d\.|[Сс]нято с сервера\s+\d|(?<!\w)С [0-3]\d\.[01]\d\s"
+    ),
     "рабочий файл": re.compile(
-        r"handoff\.md|current\.md|bugs\.md|docs/deploy\.md|audit-prep|"
+        r"handoff\.md|current\.md|bugs\.md|tasks\.md|docs/deploy\.md|release-process|state-server|audit-prep|"
         r"easter-eggs|hardening-20|\.claude/"
     ),
 }

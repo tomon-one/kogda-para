@@ -1,5 +1,5 @@
-# /etc/systemd/system/whensclass.service — ставит владелец. Снято с сервера
-# 27.09.2026. Запуск и сокет переопределяет drop-in whensclass.service.d/
+# /etc/systemd/system/whensclass.service — ставит владелец. Снято с сервера.
+# Запуск и сокет переопределяет drop-in whensclass.service.d/
 # hardening.conf: служба слушает unix-сокет, а не 127.0.0.1:8081.
 [Unit]
 Description=WhensClass schedule API

@@ -1,4 +1,4 @@
-# /etc/systemd/system/whensclass.socket — ставит владелец. С 29.09.2026.
+# /etc/systemd/system/whensclass.socket — ставит владелец.
 # Сокет службы держит systemd, а не uvicorn: на перезапуске и выкладке запросы
 # ждут в очереди, а не падают. Раньше сокет создавал uvicorn и оставлял на
 # месте только потому, что на сервере Python 3.12: с 3.13 asyncio стирает его
