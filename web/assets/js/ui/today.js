@@ -1,7 +1,7 @@
 // Главный экран: шапка, вкладки, своё расписание и чужие (TodayScreen.kt,
 // TeacherScreen.kt).
 
-import { h, icon, actionButton, actionLink, dialog, closeDialog } from './dom.js';
+import { h, icon, actionButton, actionLink, dialog, closeDialog, spinner } from './dom.js';
 import { dayCards } from './days.js';
 import { othersList } from './lists.js';
 import { retakesActive, retakesView } from './retakes.js';
@@ -10,6 +10,7 @@ import { weekStrip } from './week.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE, STATUS_EDITING, openingDate } from '../repo.js';
+import { SECTIONS, isSection, tabOrder } from '../state.js';
 
 var CHANNEL_URL = 'https://t.me/kogda_para_news';
 
@@ -21,7 +22,7 @@ export function mainScreen(app) {
   var own = app.chosen();
   var route = app.route;
   // Вкладка: у студента своё — «Студентам», у преподавателя — «Преподавателям».
-  var tab = route.kind === 'retakes' || route.kind === 'rooms' || route.kind === 'exams' ? route.kind
+  var tab = isSection(route.kind) ? route.kind
     : route.kind === 'teachers' ? 'teachers'
     : route.kind === 'groups' ? 'students'
     : teacherMode ? 'teachers' : 'students';
@@ -53,7 +54,7 @@ export function mainScreen(app) {
     head.appendChild(row);
     row = null;
   }
-  var rowStays = tab === 'retakes' || tab === 'rooms' || tab === 'exams';
+  var rowStays = isSection(tab);
   if (row && (strip || rowStays)) row.classList.add('float');
   if (row && rowStays) row.classList.add('stays');
   // Полоска — под вторым рядом вкладок, как в приложении, и прилипает под шапкой.
@@ -171,50 +172,44 @@ export function refreshButton(app) {
   return refresh;
 }
 
+var TAB_NAMES = {
+  students: 'Студентам', teachers: 'Преподавателям', retakes: 'Пересдачи', rooms: 'Аудитории', exams: 'Экзамены',
+};
+
+/** Кнопка вкладки; [extra] — свои атрибуты поверх (подсветка идущих пересдач). */
+function tabButton(tab, on, onclick, extra) {
+  return h('button', Object.assign({
+    type: 'button', class: 'tab' + (on ? ' on' : ''), 'aria-current': on ? 'page' : null, 'data-key': 'tab:' + tab,
+    onclick: function () { if (!on) onclick(); },
+  }, extra || {}), h('span', { class: 'tab-label' }, TAB_NAMES[tab]));
+}
+
 function tabs(app, current, teacherMode) {
-  var order = teacherMode ? ['teachers', 'students'] : ['students', 'teachers'];
-  var names = { students: 'Студентам', teachers: 'Преподавателям' };
-  return h('nav', { class: 'tabs', 'aria-label': 'Разделы' }, order.map(function (tab) {
-    var on = tab === current;
-    return h('button', {
-      type: 'button', class: 'tab' + (on ? ' on' : ''), 'aria-current': on ? 'page' : null, 'data-key': 'tab:' + tab,
-      onclick: function () {
-        if (on) return;
-        // Вкладка — к тому, что на ней было открыто (TodayScreen.kt: вкладки
-        // помнят своё); в первый раз своя — своё расписание, чужая — список.
-        var mine = teacherMode ? tab === 'teachers' : tab === 'students';
-        var opened = app.state.opened[teacherMode + tab];
-        var path = opened != null ? opened : mine ? '' : teacherMode ? 'groups' : 'teachers';
-        // К открытому из списка — через список, как шли в первый раз: «К списку»
-        // и «назад» ведут к нему, а не к своему расписанию.
-        if (path.indexOf('/') > 0) {
-          app.state.restoreTop = app.state.openedTop[path] || null;
-          app.go(path.split('/')[0]);
-        }
-        app.go(path);
-      },
-    }, h('span', { class: 'tab-label' }, names[tab]));
+  return h('nav', { class: 'tabs', 'aria-label': 'Разделы' }, tabOrder(teacherMode).map(function (tab) {
+    return tabButton(tab, tab === current, function () {
+      // Вкладка — к тому, что на ней было открыто (TodayScreen.kt: вкладки
+      // помнят своё); в первый раз своя — своё расписание, чужая — список.
+      var mine = teacherMode ? tab === 'teachers' : tab === 'students';
+      var opened = app.state.opened[teacherMode + tab];
+      var path = opened != null ? opened : mine ? '' : teacherMode ? 'groups' : 'teachers';
+      // К открытому из списка — через список, как шли в первый раз: «К списку»
+      // и «назад» ведут к нему, а не к своему расписанию.
+      if (path.indexOf('/') > 0) {
+        app.state.restoreTop = app.state.openedTop[path] || null;
+        app.go(path.split('/')[0]);
+      }
+      app.go(path);
+    });
   }));
 }
 
 function secondTabs(app, current, live) {
-  var on = current === 'retakes';
-  var retakes = h('button', {
-    type: 'button', class: 'tab' + (on ? ' on' : '') + (live ? ' live' : ''), title: live ? 'Пересдачи идут' : null,
-    'aria-label': live ? 'Пересдачи идут' : null, 'aria-current': on ? 'page' : null, 'data-key': 'tab:retakes',
-    onclick: function () { if (!on) app.go('retakes'); },
-  }, h('span', { class: 'tab-label' }, 'Пересдачи'));
-  var roomsOn = current === 'rooms';
-  var rooms = h('button', {
-    type: 'button', class: 'tab' + (roomsOn ? ' on' : ''), 'aria-current': roomsOn ? 'page' : null, 'data-key': 'tab:rooms',
-    onclick: function () { if (!roomsOn) app.go('rooms'); },
-  }, h('span', { class: 'tab-label' }, 'Аудитории'));
-  var examsOn = current === 'exams';
-  var exams = h('button', {
-    type: 'button', class: 'tab' + (examsOn ? ' on' : ''), 'aria-current': examsOn ? 'page' : null, 'data-key': 'tab:exams',
-    onclick: function () { if (!examsOn) app.go('exams'); },
-  }, h('span', { class: 'tab-label' }, 'Экзамены'));
-  return h('nav', { class: 'tabs soon', 'aria-label': 'Другие разделы' }, retakes, rooms, exams);
+  return h('nav', { class: 'tabs soon', 'aria-label': 'Другие разделы' }, SECTIONS.map(function (tab) {
+    // Пересдачи идут — вкладка горит и говорит об этом чтецу.
+    var extra = tab === 'retakes' && live
+      ? { class: 'tab' + (current === tab ? ' on' : '') + ' live', title: 'Пересдачи идут', 'aria-label': 'Пересдачи идут' } : null;
+    return tabButton(tab, tab === current, function () { app.go(tab); }, extra);
+  }));
 }
 
 /**
@@ -327,7 +322,7 @@ function explainMissing(app, schedule, loading, fallback) {
 
 function explanation(title, text, link, busy, action) {
   return h('div', { class: 'explanation' },
-    busy ? h('div', { class: 'spinner' }) : null,
+    busy ? h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Загрузка' }) : null,
     h('h2', null, title),
     h('p', null, text),
     link ? actionLink('Открыть таблицу колледжа', link) : null,
@@ -360,7 +355,7 @@ function chosenView(app, kind, id) {
         h('h2', { class: 'chosen-name' }, name)),
       h('button', { type: 'button', class: 'text-button', onclick: function () { app.toList(kind); } }, 'К списку')));
   if (!ready || other.loading) {
-    box.appendChild(h('div', { class: 'centered' }, h('div', { class: 'spinner' })));
+    box.appendChild(spinner());
   } else if (other.notFound) {
     // Сервер ответил: такого нет. Не «проверьте интернет» — ссылка устарела.
     box.appendChild(explanation(kind === 'teachers' ? 'Такого преподавателя нет в таблице' : 'Такой группы нет в таблице',

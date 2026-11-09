@@ -1,36 +1,15 @@
 // Списки групп и преподавателей: выбор себя (GroupPickerScreen.kt,
 // SelfPickerScreen.kt) и чужие расписания во вкладке (TeacherScreen.kt).
 
-import { h, clear, icon, actionButton, externalLink } from './dom.js';
+import { h, clear, icon, actionButton, externalLink, spinner, searchField } from './dom.js';
 import { lettered, matchesQuery } from '../search.js';
 import { plural } from '../time.js';
 import { ordinalGroup } from '../format.js';
 
 var TELEGRAM = 'https://t.me/toomonn';
 
-function searchField(app, key, label, onChange) {
-  var input = h('input', {
-    type: 'search', class: 'search', placeholder: label, 'aria-label': label,
-    autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false',
-    'data-query': key,
-  });
-  input.value = app.state.queries[key] || '';
-  // Через свойство поля: при перестройке экрана поле переезжает в новый, а
-  // список — уже другой узел.
-  input.__onChange = onChange;
-  input.addEventListener('input', function () {
-    app.state.queries[key] = input.value;
-    input.__onChange();
-  });
-  return input;
-}
-
 function listEnd(text) {
   return h('p', { class: 'list-end' }, text);
-}
-
-function spinner() {
-  return h('div', { class: 'centered' }, h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Загрузка' }));
 }
 
 /** Список не загрузился — куда написать, повтор и сведения для отчёта. */

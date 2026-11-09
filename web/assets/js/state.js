@@ -5,6 +5,14 @@ export var root = document.getElementById('app');
 
 export var OPENING = 'opening';
 
+/** Разделы второго ряда вкладок, по порядку: у каждого свой адрес (#retakes). */
+export var SECTIONS = ['retakes', 'rooms', 'exams'];
+
+export function isSection(kind) { return SECTIONS.indexOf(kind) >= 0; }
+
+/** Порядок верхних вкладок: у преподавателя его раздел первым. */
+export function tabOrder(teacherMode) { return teacherMode ? ['teachers', 'students'] : ['students', 'teachers']; }
+
 export var state = {
   refreshing: false,
   flash: false,

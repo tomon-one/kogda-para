@@ -24,15 +24,17 @@ export function persistent() {
   return storage !== null;
 }
 
+/** Значение строкой, как лежит: по ней сверяют, не изменилось ли, без разбора. */
+export function raw(key) {
+  if (memory.hasOwnProperty(key)) return memory[key];
+  if (!storage) return null;
+  try { return storage.getItem(PREFIX + key); } catch (e) { return null; }
+}
+
 export function get(key) {
-  var raw = null;
-  if (memory.hasOwnProperty(key)) {
-    raw = memory[key];
-  } else if (storage) {
-    try { raw = storage.getItem(PREFIX + key); } catch (e) { raw = null; }
-  }
-  if (raw == null) return null;
-  try { return JSON.parse(raw); } catch (e) { return null; }
+  var text = raw(key);
+  if (text == null) return null;
+  try { return JSON.parse(text); } catch (e) { return null; }
 }
 
 export function set(key, value) {

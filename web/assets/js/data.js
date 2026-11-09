@@ -52,10 +52,10 @@ export function loadLists(force) {
   });
 }
 
-var retakesLoading = false;
-var retakesAt = 0;
 /** Лист пересдач меняется редко, служба смотрит его раз в час. */
 var RETAKES_FRESH_MS = 30 * 60 * 1000;
+/** Занятость кабинетов меняется вместе с расписанием: не старше пяти минут. */
+var ROOMS_FRESH_MS = 5 * 60 * 1000;
 /** Не загрузилось — сама пробует снова не чаще этого: связь могла вернуться. */
 var RETRY_MS = 2 * 60 * 1000;
 
@@ -65,65 +65,58 @@ var RETRY_SHOWN_MS = 600;
 /** Почему раздел не загрузился — для текста: сервер ответил ошибкой — дело не в интернете. */
 function failedBy(error) { return error instanceof HttpError ? 'server' : 'net'; }
 
-/** Лист пересдач: при первом открытии вкладки и когда полежал полчаса. */
-export function loadRetakes(force) {
-  if (retakesLoading) return;
-  if (!force && state.retakes && state.retakes !== 'failed' && Date.now() - retakesAt < RETAKES_FRESH_MS) return;
-  if (!force && state.retakes === 'failed' && Date.now() - retakesAt < RETRY_MS) return;
-  retakesLoading = true;
+var sections = {};
+
+/**
+ * Раздел с сервера под ключом [key] (он же — ключ причины сбоя): при первом
+ * открытии и когда полежал [freshMs]. [slot] читает и пишет его в state.
+ * [on404] — чем считать 404 (кабинеты: дня в таблице нет), иначе это сбой.
+ */
+function loadSection(key, freshMs, slot, fetch, force, on404) {
+  var mark = sections[key] || (sections[key] = { loading: false, at: 0 });
+  if (mark.loading) return;
+  var have = slot.get();
+  var age = Date.now() - mark.at;
+  if (!force && have && have !== 'failed' && age < freshMs) return;
+  if (!force && have === 'failed' && age < RETRY_MS) return;
+  mark.loading = true;
   var started = Date.now();
-  if (force && state.retakes === 'failed') {
-    state.retakes = null;
+  if (force && have === 'failed') {
+    slot.set(null);
     render();
   }
-  api.retakes().then(function (body) {
-    retakesLoading = false;
-    retakesAt = Date.now();
-    state.retakes = body;
+  fetch().then(function (body) {
+    mark.loading = false;
+    mark.at = Date.now();
+    slot.set(body);
     render();
   }, function (error) {
     setTimeout(function () {
-      retakesLoading = false;
-      retakesAt = Date.now();
+      mark.loading = false;
+      mark.at = Date.now();
+      var missing = on404 && error instanceof HttpError && error.status === 404;
       // Уже показанный список не прячем из-за одного неудачного запроса.
-      if (!state.retakes || state.retakes === 'failed') state.retakes = 'failed';
-      state.failedBy.retakes = failedBy(error);
+      var shown = slot.get();
+      if (missing || !shown || shown === 'failed') slot.set(missing ? on404 : 'failed');
+      state.failedBy[key] = failedBy(error);
       render();
     }, force ? Math.max(0, RETRY_SHOWN_MS - (Date.now() - started)) : 0);
   });
 }
 
-var roomsLoading = {};
-var roomsAt = {};
-/** Занятость кабинетов меняется вместе с расписанием: не старше пяти минут. */
-var ROOMS_FRESH_MS = 5 * 60 * 1000;
+/** Лист пересдач: при первом открытии вкладки и когда полежал полчаса. */
+export function loadRetakes(force) {
+  loadSection('retakes', RETAKES_FRESH_MS, {
+    get: function () { return state.retakes; },
+    set: function (value) { state.retakes = value; },
+  }, api.retakes, force);
+}
 
 export function loadRooms(date, force) {
-  if (roomsLoading[date]) return;
-  var have = state.rooms[date];
-  if (!force && have && have !== 'failed' && Date.now() - (roomsAt[date] || 0) < ROOMS_FRESH_MS) return;
-  if (!force && have === 'failed' && Date.now() - (roomsAt[date] || 0) < RETRY_MS) return;
-  roomsLoading[date] = true;
-  var started = Date.now();
-  if (force && have === 'failed') {
-    state.rooms[date] = null;
-    render();
-  }
-  api.rooms(date).then(function (body) {
-    roomsLoading[date] = false;
-    roomsAt[date] = Date.now();
-    state.rooms[date] = body;
-    render();
-  }, function (error) {
-    setTimeout(function () {
-      roomsLoading[date] = false;
-      roomsAt[date] = Date.now();
-      var missing = error instanceof HttpError && error.status === 404;
-      if (missing || !have || have === 'failed') state.rooms[date] = missing ? 'missing' : 'failed';
-      state.failedBy['rooms:' + date] = failedBy(error);
-      render();
-    }, force ? Math.max(0, RETRY_SHOWN_MS - (Date.now() - started)) : 0);
-  });
+  loadSection('rooms:' + date, ROOMS_FRESH_MS, {
+    get: function () { return state.rooms[date]; },
+    set: function (value) { state.rooms[date] = value; },
+  }, function () { return api.rooms(date); }, force, 'missing');
 }
 
 var otherTicket = 0;

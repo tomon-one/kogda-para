@@ -580,3 +580,18 @@ test('другая группа, не ответившая при перевод
   assert.ok(requests.some((url) => url.startsWith('/v1/schedule/isp-2?')));
   assert.equal(store.get('extraSchedules')['isp-2'].days[0].un, 'missing');
 });
+
+test('разобранное расписание запоминается до новой записи в хранилище', () => {
+  reset();
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  store.set('schedule', schedule('isp-1', 'ИСП-1', 'G1'));
+  const first = repo.saved();
+  assert.equal(repo.saved(), first);
+  assert.equal(repo.shown(), repo.shown());
+  store.set('schedule', schedule('isp-1', 'ИСП-1', 'G2'));
+  assert.notEqual(repo.saved(), first);
+  assert.equal(repo.saved().gen, 'G2');
+  store.set('extras', [{ id: 'isp-2', name: 'ИСП-2' }]);
+  store.set('extraSchedules', { 'isp-2': schedule('isp-2', 'ИСП-2', 'G2') });
+  assert.deepEqual(repo.shown().groupNames, ['ИСП-1', 'ИСП-2']);
+});

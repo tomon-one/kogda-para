@@ -2,7 +2,7 @@
 // по преподавателям, без групп и предметов; даты служба разбирает по дням, а что
 // преподаватель ведёт сейчас, берёт из расписания (docs/api.md, /v1/retakes).
 
-import { h, clear, actionButton } from './dom.js';
+import { h, clear, spinner, loadFailed, searchField } from './dom.js';
 import { matchesQuery } from '../search.js';
 import { dayRange, plural } from '../time.js';
 
@@ -18,10 +18,6 @@ export function retakesActive(data, today) {
     if (!row.slots || !row.slots.length) return true;
     return row.slots.some(function (s) { return s.to >= today; });
   });
-}
-
-function spinner() {
-  return h('div', { class: 'centered' }, h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Загрузка' }));
 }
 
 function line(label, text, cls) {
@@ -96,9 +92,8 @@ export function retakesView(app) {
     return wrap;
   }
   if (data === 'failed') {
-    wrap.appendChild(h('div', { class: 'load-failed' },
-      h('p', null, 'Пересдачи не загрузились. ' + failureText(app.state.failedBy.retakes)),
-      h('div', null, actionButton('Повторить', function () { app.loadRetakes(true); }))));
+    wrap.appendChild(loadFailed('Пересдачи не загрузились. ' + failureText(app.state.failedBy.retakes),
+      function () { app.loadRetakes(true); }));
     return wrap;
   }
   app.loadRetakes(false);
@@ -153,16 +148,7 @@ export function retakesView(app) {
     }
   }
 
-  var input = h('input', {
-    type: 'search', class: 'search', placeholder: 'Фамилия или предмет', 'aria-label': 'Поиск по фамилии или предмету',
-    autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false', 'data-query': KEY,
-  });
-  input.value = app.state.queries[KEY] || '';
-  input.__onChange = fill;
-  input.addEventListener('input', function () {
-    app.state.queries[KEY] = input.value;
-    input.__onChange();
-  });
+  var input = searchField(app, KEY, 'Фамилия или предмет', fill, 'Поиск по фамилии или предмету');
 
   wrap.appendChild(h('h2', { class: 'retakes-title' }, data.title || 'Пересдачи'));
   wrap.appendChild(memo());

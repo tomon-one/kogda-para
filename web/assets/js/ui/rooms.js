@@ -2,43 +2,24 @@
 // какие заняты и где накладки (docs/api.md, /v1/rooms). «По расписанию» —
 // всерьёз: ключей, переносов и мероприятий таблица колледжа не знает.
 
-import { h, actionButton } from './dom.js';
+import { h, spinner, loadFailed } from './dom.js';
 import { addDays, dayTitle, plural } from '../time.js';
+import { currentLessonNumber, lessonTime, openingDay, parseTime } from '../schedule.js';
 import { failureText } from './retakes.js';
 
-function spinner() {
-  return h('div', { class: 'centered' }, h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Загрузка' }));
-}
-
-function minutes(clock) {
-  var m = /^(\d{1,2}):(\d{2})/.exec(clock || '');
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-}
+// Время пар — функциями расписания (schedule.js): пара идёт до звонка
+// включительно, иначе вкладки расходились бы на звонке.
 
 /** Пара по умолчанию: сегодня — идущая или следующая, иначе первая. */
-function defaultPair(body, today, nowSec) {
+function defaultPair(body, now) {
   var numbers = Object.keys(body.bells || {}).map(Number).sort(function (a, b) { return a - b; });
   if (!numbers.length) return 1;
-  if (body.date !== today) return numbers[0];
-  var now = Math.floor(nowSec / 60);
+  if (body.date !== now.date) return numbers[0];
   for (var i = 0; i < numbers.length; i++) {
-    var end = minutes(body.bells[numbers[i]][1]);
-    if (now != null && end != null && now < end) return numbers[i];
+    var end = parseTime(body.bells[numbers[i]][1]);
+    if (end != null && now.sec <= end) return numbers[i];
   }
   return numbers[numbers.length - 1];
-}
-
-/** Идущая сейчас пара дня или null: её кнопка — своей рамкой. */
-function runningPair(body, today, nowSec) {
-  if (body.date !== today) return null;
-  var now = Math.floor(nowSec / 60);
-  var numbers = Object.keys(body.bells || {}).map(Number);
-  for (var i = 0; i < numbers.length; i++) {
-    var span = body.bells[numbers[i]];
-    var from = minutes(span[0]), to = minutes(span[1]);
-    if (from != null && to != null && now >= from && now < to) return numbers[i];
-  }
-  return null;
 }
 
 function chip(label, on, onclick, key) {
@@ -150,9 +131,9 @@ export function roomsView(app) {
       st.date = null;
       return roomsView(app);
     }
-    wrap.appendChild(h('div', { class: 'load-failed' },
-      h('p', null, body === 'missing' ? 'Сегодняшнего дня в таблице колледжа нет.' : 'Аудитории не загрузились. ' + failureText(app.state.failedBy['rooms:' + date])),
-      body === 'failed' ? h('div', null, actionButton('Повторить', function () { app.loadRooms(date, true); })) : null));
+    wrap.appendChild(loadFailed(
+      body === 'missing' ? 'Сегодняшнего дня в таблице колледжа нет.' : 'Аудитории не загрузились. ' + failureText(app.state.failedBy['rooms:' + date]),
+      body === 'failed' ? function () { app.loadRooms(date, true); } : null));
     return wrap;
   }
 
@@ -166,8 +147,7 @@ export function roomsView(app) {
   // сегодня: иначе «дня нет» вернуло бы сюда, а отсюда снова туда, без конца.
   if (!st.date && body.date === now.date && days.length > 1 && numbers.length &&
       app.state.rooms[days[1]] !== 'missing') {
-    var lastEnd = minutes((body.bells[numbers[numbers.length - 1]] || [])[1]);
-    if (lastEnd != null && Math.floor(now.sec / 60) >= lastEnd) {
+    if (openingDay(body.bells, now) !== now.date) {
       st.date = days[1];
       // Как при нажатии «Завтра»: на другом дне — с первой пары.
       st.pair = null;
@@ -177,8 +157,8 @@ export function roomsView(app) {
 
   wrap.appendChild(dayChips(days, body.date));
 
-  var pair = st.pair || defaultPair(body, now.date, now.sec);
-  var running = runningPair(body, now.date, now.sec);
+  var pair = st.pair || defaultPair(body, now);
+  var running = currentLessonNumber(body.bells, body.date, now);
   wrap.appendChild(h('div', null, h('span', { class: 'chips-label muted' }, 'Пара'), h('div', { class: 'chips pairs' }, numbers.map(function (n) {
     var c = chip(String(n), n === pair, function () {
       if (n === pair) return;
@@ -190,8 +170,7 @@ export function roomsView(app) {
     }
     return n === pair && n === st.pair ? chipEntering(c, st) : c;
   }))));
-  var span = body.bells[pair] || [];
-  wrap.appendChild(entering(h('p', { class: 'room-when' }, pair + ' пара' + (span[0] ? ', ' + span[0] + '–' + (span[1] || '') : '')
+  wrap.appendChild(entering(h('p', { class: 'room-when' }, pair + ' пара' + (lessonTime(body.bells, pair) ? ', ' + lessonTime(body.bells, pair) : '')
     + (pair === running ? ' · идёт сейчас' : '')), st));
 
   var busy = (body.busy || {})[pair] || {};

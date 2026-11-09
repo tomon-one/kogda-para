@@ -312,3 +312,35 @@ export function isChrome() {
 export function isAndroid() {
   return /Android/.test(navigator.userAgent || '');
 }
+
+/** Крутилка, пока раздел грузится; чтец экрана говорит «Загрузка». */
+export function spinner() {
+  return h('div', { class: 'centered' }, h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Загрузка' }));
+}
+
+/** Раздел не загрузился: почему и, если есть смысл, «Повторить». */
+export function loadFailed(text, onRetry) {
+  return h('div', { class: 'load-failed' }, h('p', null, text),
+    onRetry ? h('div', null, actionButton('Повторить', onRetry)) : null);
+}
+
+/**
+ * Поле поиска списка; набранное живёт в app.state.queries[key] и переживает
+ * перестройку экрана. [spoken] — для чтеца, если подсказки в поле мало.
+ */
+export function searchField(app, key, label, onChange, spoken) {
+  var input = h('input', {
+    type: 'search', class: 'search', placeholder: label, 'aria-label': spoken || label,
+    autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false',
+    'data-query': key,
+  });
+  input.value = app.state.queries[key] || '';
+  // Через свойство поля: при перестройке экрана поле переезжает в новый, а
+  // список — уже другой узел.
+  input.__onChange = onChange;
+  input.addEventListener('input', function () {
+    app.state.queries[key] = input.value;
+    input.__onChange();
+  });
+  return input;
+}

@@ -170,16 +170,29 @@ export function openingDate(schedule) {
   return openingDay(bellsOn(schedule || saved(), now.date), now);
 }
 
+// Разобранное запоминается по строке в хранилище: экран спрашивает его по
+// нескольку раз за отрисовку и каждые 10 с, а разбор недели — заметная работа.
+// Возвращённое не меняют: cleanSchedule и combineGroups дают новые объекты.
+var savedMemo = { raw: undefined, value: null };
+var shownMemo = { key: undefined, value: null };
+
 /** Сохранённое расписание, приведённое к форме; испорченное — забыть. */
 export function saved() {
+  var raw = store.raw('schedule');
+  if (raw === savedMemo.raw) return savedMemo.value;
   var body = store.get('schedule');
-  if (!body) return null;
-  try {
-    return cleanSchedule(body);
-  } catch (e) {
-    dropSchedule();
-    return null;
+  var value = null;
+  if (body) {
+    try {
+      value = cleanSchedule(body);
+    } catch (e) {
+      dropSchedule();
+      savedMemo = { raw: store.raw('schedule'), value: null };
+      return null;
+    }
   }
+  savedMemo = { raw: raw, value: value };
+  return value;
 }
 
 export function fetchedAt() {
@@ -205,6 +218,14 @@ function extraSchedules() {
  */
 export function shown() {
   var main = saved();
+  var key = [savedMemo.raw, store.raw('extras'), store.raw('extraSchedules'), isTeacher()];
+  var same = shownMemo.key && key.every(function (part, i) { return part === shownMemo.key[i]; });
+  if (same) return shownMemo.value;
+  shownMemo = { key: key, value: shownOf(main) };
+  return shownMemo.value;
+}
+
+function shownOf(main) {
   // Своя среди остальных бывает только из старого выбора — дважды не показываем.
   var list = extras().filter(function (g) { return !main || g.id !== main.g; });
   if (!main || !list.length) return main;

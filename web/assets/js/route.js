@@ -4,7 +4,7 @@ import * as repo from './repo.js';
 import * as store from './store.js';
 import { closeDialog } from './ui/dom.js';
 import { MAX_GROUPS } from './schedule.js';
-import { state, nav, app, OPENING } from './state.js';
+import { state, nav, app, OPENING, isSection, tabOrder } from './state.js';
 import { render } from './render.js';
 import { topDay } from './ui/week.js';
 import { emptyList, loadLists, loadOther } from './data.js';
@@ -35,7 +35,7 @@ export function parseRoute() {
   if (head === 'pick') {
     return { screen: 'pick', mode: parts[1] === 'self' ? 'self' : parts[1] === 'extra' || parts[1] === 'second' ? 'extra' : 'group' };
   }
-  if (head === 'retakes' || head === 'rooms' || head === 'exams') return { screen: 'main', kind: head, id: null };
+  if (isSection(head)) return { screen: 'main', kind: head, id: null };
   if (head === 'teachers' || head === 'groups') {
     // Id строит служба из названия: латиница, цифры, дефис. Прочее из адреса
     // в запрос не пускать: «..%2F» nginx раскодирует в чужой путь.
@@ -91,7 +91,7 @@ export function onRoute() {
   if (!chosen && route.screen !== 'pick') {
     // Ссылку на чужое расписание или вкладку из чата не терять: откроется после выбора.
     var pending = route.kind && route.id ? route.kind + '/' + route.id
-      : route.kind === 'retakes' || route.kind === 'rooms' || route.kind === 'exams' ? route.kind
+      : isSection(route.kind) ? route.kind
         : (history.state && history.state.pending) || null;
     route = { screen: 'pick', mode: 'group' };
     history.replaceState({ steps: stepsNow(), pending: pending }, '', location.pathname + location.search + '#pick');
@@ -148,9 +148,8 @@ function tabOf(route) {
   return route.kind === 'teachers' ? 'teachers' : 'students';
 }
 
-/** Порядок вкладок: у преподавателя его раздел первым. */
 function tabIndex(tab) {
-  return (repo.isTeacher() ? ['teachers', 'students'] : ['students', 'teachers']).indexOf(tab);
+  return tabOrder(repo.isTeacher()).indexOf(tab);
 }
 
 function depthOf(route) {
