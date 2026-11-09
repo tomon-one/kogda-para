@@ -412,9 +412,12 @@ class ScheduleRepository(
         // Смотрим до смены роли: после неё «та же группа» уже не значит
         // «ничего не изменилось» — у преподавателя лежит чужое расписание.
         val unchanged = !store.teacherMode() && store.currentGroupId() == group.id
-        choiceLock.withLock {
-            store.setTeacherMode(false)
-            store.selectGroup(group.id, group.name, unchanged)
+        withContext(NonCancellable) {
+            choiceLock.withLock {
+                store.setTeacherMode(false)
+                store.selectGroup(group.id, group.name, unchanged)
+            }
+            followChoice()
         }
         return afterSelection()
     }
@@ -422,9 +425,12 @@ class ScheduleRepository(
     /** Преподаватель выбрал себя — дальше всё работает как у студента. */
     suspend fun selectSelfAsTeacher(teacher: GroupDto): RefreshResult {
         val unchanged = store.teacherMode() && store.teacherId.first() == teacher.id
-        choiceLock.withLock {
-            store.setTeacherMode(true)
-            store.selectTeacher(teacher.id, teacher.name, unchanged)
+        withContext(NonCancellable) {
+            choiceLock.withLock {
+                store.setTeacherMode(true)
+                store.selectTeacher(teacher.id, teacher.name, unchanged)
+            }
+            followChoice()
         }
         return afterSelection()
     }
@@ -464,9 +470,17 @@ class ScheduleRepository(
      * работа, как только будет сеть.
      */
     /** Итог загрузки — для значка ⟳ на экране. */
-    private suspend fun afterSelection(): RefreshResult {
+    /**
+     * Виджеты и будильники — за записанным выбором, в одном неотменяемом куске
+     * с ним: выбор, записанный при уходе с экрана, иначе оставил бы напоминания
+     * прежней группы.
+     */
+    private suspend fun followChoice() {
         updateWidgets()
         LessonAlarms.reschedule(context)
+    }
+
+    private suspend fun afterSelection(): RefreshResult {
         val result = refresh(force = true)
         if (result is RefreshResult.Failed) {
             ru.whensclass.work.SyncWorker.now(context)
@@ -638,11 +652,12 @@ class ScheduleRepository(
                     // Окна нет — снимок записан сборкой до 81-й, где обрубок не
                     // помечался: «добавилась пара» по нему было бы ложным.
                     val comparable = store.windowFrom() != null
-                    store.putSchedule(json.encodeToString(fresh), fresh.generatedAt, windowFrom = windowMark(from))
-                    // Записанное — уже на телефоне: объявить и переставить будильники
-                    // надо, даже если корутину отменили (ушли из приложения), иначе
-                    // сработал бы будильник об отменённой паре.
+                    // Запись — внутри: отменённое посреди записи ожидание (ушли из
+                    // приложения) оставляет снимок на телефоне, а объявить и
+                    // переставить будильники следующий заход уже не сможет — для
+                    // него снимок свежий. Иначе сработал бы будильник об отменённой паре.
                     withContext(NonCancellable) {
+                        store.putSchedule(json.encodeToString(fresh), fresh.generatedAt, windowFrom = windowMark(from))
                         updateWidgets()
                         // Об изменениях — только своей группы: остальные на экране
                         // для справки, и уведомлять о каждой их замене — шум.
