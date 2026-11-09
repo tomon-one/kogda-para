@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -67,7 +66,7 @@ fun ScheduleDays(
     modifier: Modifier = Modifier,
     startDay: String? = null,
     startKey: Int = 0,
-    /** Первой строкой списка — например, плашки, когда шапке тесно. */
+    /** Строкой перед днём, на котором список открылся, — например, плашки, когда шапке тесно. */
     header: (@Composable () -> Unit)? = null,
     /** Подписи выбранных групп у пар: названиями или номерами. */
     groupsByName: Boolean = true,
@@ -78,31 +77,38 @@ fun ScheduleDays(
 ) {
     val now = rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
-    val shift = if (header != null) 1 else 0
 
     // Открываемся на сегодняшнем дне, а не на понедельнике. Позиция задаётся
     // при создании списка, а не прокруткой после первого кадра: прокрутка
     // успевает показать понедельник и уехать с него на глазах. Дня нет —
     // ближайший к нему ([dayIndex]).
     val target = startDay ?: openingDay(schedule.bellsOn(today), now).toString()
-    val opening = remember(days, target) { dayIndex(days, target) + shift }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = opening)
+    val rows = remember(days, target, header != null) {
+        DayRows(if (header != null && days.isNotEmpty()) dayIndex(days, target) else -1)
+    }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = rows.toward(dayIndex(days, target)))
 
-    // Поворот: в альбомной плашки уходят в список первой строкой ([header]), и
-    // номер строки, сохранённый в книжной, показал бы день раньше. Помним день.
+    // Поворот: в альбомной плашки уходят в список строкой ([header]), и
+    // номер строки, сохранённый в книжной, показал бы другой день. Помним день.
     var topDay by rememberSaveable { mutableStateOf<String?>(null) }
     var topOffset by rememberSaveable { mutableIntStateOf(0) }
     val restored = remember { topDay to topOffset }
     val daysNow by rememberUpdatedState(days)
-    val shiftNow by rememberUpdatedState(shift)
+    val rowsNow by rememberUpdatedState(rows)
     LaunchedEffect(listState) {
         val (day, offset) = restored
         if (day != null && daysNow.isNotEmpty()) {
-            listState.scrollToItem(dayIndex(daysNow, day) + shiftNow, offset)
+            val index = dayIndex(daysNow, day)
+            // День стоял вровень с верхом — с плашками над ним, если они там.
+            if (offset == 0) listState.scrollToItem(rowsNow.toward(index))
+            else listState.scrollToItem(rowsNow.of(index), offset)
         }
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .collect { (index, offset) ->
-                daysNow.getOrNull(index - shiftNow)?.let { topDay = it.date; topOffset = offset }
+            .collect { (row, offset) ->
+                // Наверху плашки — помним день под ними, вровень с верхом.
+                val index = rowsNow.day(row)
+                if (index == null) daysNow.getOrNull(row)?.let { topDay = it.date; topOffset = 0 }
+                else daysNow.getOrNull(index)?.let { topDay = it.date; topOffset = offset }
             }
     }
 
@@ -133,7 +139,7 @@ fun ScheduleDays(
     LaunchedEffect(wanted, days) {
         val want = wanted ?: return@LaunchedEffect
         if (days.isEmpty()) return@LaunchedEffect
-        listState.scrollToItem(dayIndex(days, want) + shift)
+        listState.scrollToItem(rows.toward(dayIndex(days, want)))
         if (days.any { it.date >= want }) wanted = null
     }
 
@@ -155,13 +161,13 @@ fun ScheduleDays(
 
     // Какой день наверху — для выделения в полоске: первый, который виден хотя бы
     // наполовину; край прошлого дня, торчащий сверху, выделение не перехватывает.
-    val shownDay by remember(days, shift) {
+    val shownDay by remember(days, rows) {
         derivedStateOf {
             val info = listState.layoutInfo
             val item = info.visibleItemsInfo.firstOrNull {
-                it.index >= shift && it.offset + it.size - maxOf(it.offset, 0) >= it.size / 2
-            } ?: info.visibleItemsInfo.lastOrNull { it.index >= shift }
-            item?.let { days.getOrNull(it.index - shift)?.date }
+                rows.day(it.index) != null && it.offset + it.size - maxOf(it.offset, 0) >= it.size / 2
+            } ?: info.visibleItemsInfo.lastOrNull { rows.day(it.index) != null }
+            item?.let { rows.day(it.index)?.let(days::getOrNull)?.date }
         }
     }
 
@@ -233,14 +239,14 @@ fun ScheduleDays(
                 touched = false
                 scope.launch {
                     // Видимый день — мягкой прокруткой с замедлением в конце; далёкий — как умеет список.
-                    val seen = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index + shift }
+                    val seen = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == rows.toward(index) }
                     if (seen != null) {
                         listState.animateScrollBy(
                             seen.offset.toFloat(),
                             androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.FastOutSlowInEasing),
                         )
                     } else {
-                        listState.animateScrollToItem(index + shift)
+                        listState.animateScrollToItem(rows.toward(index))
                     }
                 }
             },
@@ -265,15 +271,17 @@ fun ScheduleDays(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = top, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        header?.let { item(key = "header") { it() } }
-        itemsIndexed(days, key = { _, day -> day.date }) { index, day ->
-            Box(modifier = Modifier.appear(appearing.value, index + shift - firstAtStart)) {
+        days.forEachIndexed { index, day ->
+            if (header != null && index == rows.headerAt) item(key = "header") { header() }
+            item(key = day.date) {
+            Box(modifier = Modifier.appear(appearing.value, rows.of(index) - firstAtStart)) {
             DayCard(
                 day, schedule.bellsOf(day), now, teacher = schedule.isTeacher,
                 groups = schedule.groupNames, groupsByName = groupsByName,
                 nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
                 idle = idle,
             )
+            }
             }
         }
     }

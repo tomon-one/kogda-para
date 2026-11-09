@@ -21,6 +21,26 @@ internal fun dayIndex(days: List<DayDto>, date: String): Int {
 }
 
 /**
+ * Строки списка дней, где перед днём [headerAt] стоят плашки (−1 — их нет):
+ * плашки над днём, на котором список открылся, видны сразу, а не выше
+ * понедельника.
+ */
+internal class DayRows(val headerAt: Int) {
+    /** Строка дня [index]. */
+    fun of(index: Int): Int = if (headerAt in 0..index) index + 1 else index
+
+    /** Куда листать к дню: к плашкам, если они над ним. */
+    fun toward(index: Int): Int = if (index == headerAt) headerAt else of(index)
+
+    /** День строки; null — строка плашек. */
+    fun day(row: Int): Int? = when {
+        headerAt < 0 || row < headerAt -> row
+        row == headerAt -> null
+        else -> row - 1
+    }
+}
+
+/**
  * Дни, которых в ответе нет, а по листу колледжа они есть: воскресений в
  * листе не бывает вовсе, сервер их не присылает, и так же молча пропал бы
  * любой будний день без строки. Такой день становится пустой карточкой

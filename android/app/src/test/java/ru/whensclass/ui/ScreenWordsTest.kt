@@ -38,4 +38,21 @@ class ScreenWordsTest {
         assertEquals(2, dayIndex(days, "2026-09-24"))
         assertEquals(0, dayIndex(emptyList(), "2026-09-24"))
     }
+
+    @Test
+    fun `плашки — строкой над днём, на котором список открылся`() {
+        // Дни 0..4, плашки перед днём 2: строки 0, 1, плашки, 2, 3, 4.
+        val rows = DayRows(2)
+        assertEquals(listOf(0, 1, 3, 4, 5), (0..4).map(rows::of))
+        assertEquals(listOf(0, 1, null, 2, 3, 4), (0..5).map(rows::day))
+        // К дню 2 — вместе с плашками над ним, к остальным — к самому дню.
+        assertEquals(2, rows.toward(2))
+        assertEquals(4, rows.toward(3))
+        assertEquals(1, rows.toward(1))
+        // Плашек нет — строка и есть день.
+        val plain = DayRows(-1)
+        assertEquals(listOf(0, 1, 2), (0..2).map(plain::of))
+        assertEquals(listOf(0, 1, 2), (0..2).map(plain::day))
+        assertEquals(2, plain.toward(2))
+    }
 }
