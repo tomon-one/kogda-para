@@ -50,7 +50,7 @@ import ru.whensclass.widget.plural
 @Composable
 fun TeacherScreen(
     teachers: List<GroupDto>?,
-    loadSchedule: suspend (String) -> ScheduleDto?,
+    loadSchedule: suspend (String) -> ru.whensclass.data.ScheduleAnswer,
     pinned: List<String> = emptyList(),
     onTogglePin: (String) -> Unit = {},
     reloadKey: Int = 0,
@@ -69,6 +69,8 @@ fun TeacherScreen(
     enterKey: Int = 0,
     /** Открытого из «Пересдач» закрыли («К списку», «назад») — туда и вернуться, как на сайте. */
     onLeaveOpened: () -> Unit = {},
+    /** Сервер больше не обслуживает эту сборку — «проверьте интернет» было бы неправдой. */
+    unsupported: Boolean = false,
     othersTitle: String = "Другие преподаватели",
     // Дно списка — без утверждений про колледж: листы преподавателей в книге
     // есть, скрытые и с именами длиннее 31 символа, и сервер их не читает.
@@ -157,6 +159,8 @@ fun TeacherScreen(
     // Чьё расписание в [schedule]: у другого открытого — не показывать.
     var loadedFor by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    // Чем ответил сервер на последнюю неудачу; null — не ответил.
+    var failedCode by remember { mutableStateOf<Int?>(null) }
     // ⟳ не дошёл до сервера — на экране прежнее, как на сайте.
     var reloadFailed by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -186,7 +190,9 @@ fun TeacherScreen(
     LaunchedEffect(pickedId, reloadKey) {
         val teacher = picked ?: return@LaunchedEffect
         loading = true
-        val fresh = loadSchedule(teacher.id)
+        val answer = loadSchedule(teacher.id)
+        val fresh = answer.body
+        failedCode = answer.code
         // Не загрузилось у того же — прежнее остаётся: человек его читал.
         val same = loadedFor == teacher.id && schedule != null
         reloadFailed = fresh == null && same
@@ -204,6 +210,9 @@ fun TeacherScreen(
             schedule = schedule.takeIf { loadedFor == chosen.id },
             loading = loading,
             reloadFailed = reloadFailed && !loading,
+            failedCode = failedCode,
+            unsupported = unsupported,
+            teacherList = listName == "Список преподавателей",
             onBack = { close() },
         )
         return
@@ -324,6 +333,9 @@ private fun ChosenTeacher(
     schedule: ScheduleDto?,
     loading: Boolean,
     reloadFailed: Boolean,
+    failedCode: Int?,
+    unsupported: Boolean,
+    teacherList: Boolean,
     onBack: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -356,7 +368,15 @@ private fun ChosenTeacher(
             loading && schedule == null -> Centered { CircularProgressIndicator() }
             schedule == null -> Centered {
                 Text(
-                    "Расписание не загрузилось. Проверьте интернет и нажмите ⟳ вверху.",
+                    when {
+                        // Сервер ответил: такого нет — ссылка или имя устарели.
+                        failedCode == 404 && teacherList ->
+                            "Такого преподавателя нет в таблице. Найдите его в списке."
+                        failedCode == 404 -> "Такой группы нет в таблице. Найдите её в списке."
+                        unsupported || failedCode != null ->
+                            "Расписание не загрузилось. " + failureText(true, unsupported, "его")
+                        else -> "Расписание не загрузилось. Проверьте интернет и нажмите ⟳ вверху."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }

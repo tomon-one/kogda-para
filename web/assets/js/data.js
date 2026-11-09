@@ -147,7 +147,7 @@ export function loadOther(kind, id) {
     if (r.schedule || r.notFound || !prev) {
       state.other = {
         kind: kind, id: id, loading: false, schedule: r.schedule || null, at: r.schedule ? Date.now() : null,
-        notFound: !!r.notFound, failed: !r.schedule && !r.notFound, ticket: ticket,
+        notFound: !!r.notFound, failed: !r.schedule && !r.notFound, answered: !!r.answered, ticket: ticket,
       };
     } else {
       state.other = { kind: kind, id: id, loading: false, schedule: prev.schedule, at: prev.at, failed: true, ticket: ticket };

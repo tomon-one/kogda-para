@@ -357,7 +357,9 @@ function chosenView(app, kind, id) {
     box.appendChild(explanation(kind === 'teachers' ? 'Такого преподавателя нет в таблице' : 'Такой группы нет в таблице',
       'Ссылка устарела или название в таблице поменяли. Найдите в списке.'));
   } else if (!other.schedule) {
-    box.appendChild(h('p', { class: 'nothing' }, 'Расписание не загрузилось. Проверьте интернет и нажмите ⟳ вверху.'));
+    box.appendChild(h('p', { class: 'nothing' }, other.answered
+      ? 'Расписание не загрузилось. Сервер не смог его отдать. Повторите позже.'
+      : 'Расписание не загрузилось. Проверьте интернет и нажмите ⟳ вверху.'));
   } else {
     var missing = explainMissing(app, other.schedule, false, null);
     if (other.failed && other.schedule) box.appendChild(h('p', { class: 'nothing' }, 'Не обновилось — на экране прежнее.'));

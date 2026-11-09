@@ -76,6 +76,7 @@ internal fun RoomsScreen(
     today: LocalDate,
     now: LocalTime,
     memory: RoomsMemory = remember { RoomsMemory() },
+    unsupported: Boolean = false,
 ) {
     // Выбранные день и пара — на тот день, когда их выбрали: назавтра вкладка
     // снова открывается на сегодняшнем, а не на прошедшем.
@@ -119,7 +120,7 @@ internal fun RoomsScreen(
     val shown = body
     val ready = shown != null && loadedFor == request
     if (shown == null) {
-        Status(failed, missing, active == null, answered) { retry++ }
+        Status(failed, missing, active == null, answered, unsupported) { retry++ }
         return
     }
 
@@ -180,7 +181,7 @@ internal fun RoomsScreen(
             }
         }
         if (!ready) {
-            item(key = "статус") { Status(failed, missing, active == null, answered) { retry++ } }
+            item(key = "статус") { Status(failed, missing, active == null, answered, unsupported) { retry++ } }
         } else {
         item(key = "пары") {
             ChipsLabel("Пара")
@@ -310,13 +311,13 @@ internal fun RoomsScreen(
 
 /** Загрузка, сбой или «дня в таблице нет» — с повтором, где он поможет. */
 @Composable
-private fun Status(failed: Boolean, missing: Boolean, today: Boolean, answered: Boolean, retry: () -> Unit) {
+private fun Status(failed: Boolean, missing: Boolean, today: Boolean, answered: Boolean, unsupported: Boolean, retry: () -> Unit) {
     when {
         missing -> Explanation(
             if (today) "Ближайших дней в таблице нет" else "Этого дня в таблице нет",
             "Колледж ещё не выложил расписание.",
         )
-        failed -> Explanation("Аудитории не загрузились", failureText(answered), onRetry = retry)
+        failed -> Explanation("Аудитории не загрузились", failureText(answered, unsupported), onRetry = retry)
         else -> Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
             CircularProgressIndicator()
         }

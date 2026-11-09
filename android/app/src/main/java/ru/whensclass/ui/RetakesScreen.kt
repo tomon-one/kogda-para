@@ -58,13 +58,14 @@ internal fun RetakesScreen(
      * «Фамилия И.О.», инициалы читаются хуже; нет в списке — как в листе.
      */
     teachers: List<GroupDto>? = null,
+    unsupported: Boolean = false,
 ) {
     val fullNames = remember(teachers) { teachers.orEmpty().associate { it.id to it.name } }
     fun named(id: String?, written: String) = id?.let { fullNames[it] } ?: written
     fun nameOf(row: RetakeDto) = named(row.teacherId, row.teacher)
     if (retakes == null) {
         if (failed) {
-            Explanation("Пересдачи не загрузились", failureText(answered), onRetry = onRetry)
+            Explanation("Пересдачи не загрузились", failureText(answered, unsupported), onRetry = onRetry)
         } else {
             Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
                 CircularProgressIndicator()
@@ -285,6 +286,12 @@ private fun RedirectRow(name: String, to: String) {
     }
 }
 
-/** Почему раздел не загрузился: сервер ответил ошибкой — дело не в интернете. */
-internal fun failureText(answered: Boolean) =
-    if (answered) "Сервер не смог их отдать. Повторите позже." else "Нет связи с сервером. Проверьте интернет."
+/**
+ * Почему раздел не загрузился: сервер ответил ошибкой — дело не в интернете;
+ * сборку он больше не обслуживает — повтор не поможет, нужна новая.
+ */
+internal fun failureText(answered: Boolean, unsupported: Boolean = false, what: String = "их") = when {
+    unsupported -> "Нужно обновить приложение: сервер больше не отдаёт данные этой версии."
+    answered -> "Сервер не смог $what отдать. Повторите позже."
+    else -> "Нет связи с сервером. Проверьте интернет."
+}

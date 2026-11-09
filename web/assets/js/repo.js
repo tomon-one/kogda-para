@@ -424,7 +424,8 @@ export function isRefreshing() {
 
 /**
  * Чужое расписание — по запросу, не хранится: {schedule} или {notFound} —
- * сервер такого не знает (ссылка устарела, опечатка), или {} — не загрузилось.
+ * сервер такого не знает (ссылка устарела, опечатка), или {} — не загрузилось
+ * ({answered} — сервер ответил ошибкой, дело не в интернете).
  */
 export function otherSchedule(kind, id) {
   var from = weekStart(collegeNow().date);
@@ -438,6 +439,7 @@ export function otherSchedule(kind, id) {
       return {};
     }
   }, function (error) {
-    return isNotFound(error) ? { notFound: true } : {};
+    if (isNotFound(error)) return { notFound: true };
+    return error instanceof api.HttpError ? { answered: true } : {};
   });
 }

@@ -403,8 +403,16 @@ class ScheduleRepository(
         }
 
     /** Расписание преподавателя — берём по запросу, на телефоне не храним. */
-    suspend fun teacherSchedule(teacherId: String): ScheduleDto? = withContext(Dispatchers.IO) {
-        runCatching { api.teacher(teacherId, from = weekStart(), days = DAYS) }.getOrNull()
+    suspend fun teacherSchedule(teacherId: String): ScheduleAnswer = withContext(Dispatchers.IO) {
+        loadOpened { api.teacher(teacherId, from = weekStart(), days = DAYS) }
+    }
+
+    /** Открытое расписание и код ошибки, если сервер ответил ею: «проверьте интернет» — только без ответа. */
+    private suspend fun loadOpened(load: () -> ScheduleDto): ScheduleAnswer {
+        val answer = runCatching(load)
+        val code = (answer.exceptionOrNull() as? HttpFailure)?.code
+        if (code == 426) markUnsupported()
+        return ScheduleAnswer(answer.getOrNull(), code)
     }
 
     /** Студент выбрал группу — заодно это и означает, что он студент. */
@@ -489,8 +497,8 @@ class ScheduleRepository(
     }
 
     /** Расписание группы — для просмотра чужого, без смены роли. */
-    suspend fun groupSchedule(groupId: String): ScheduleDto? = withContext(Dispatchers.IO) {
-        runCatching { api.schedule(groupId, from = weekStart(), days = DAYS) }.getOrNull()
+    suspend fun groupSchedule(groupId: String): ScheduleAnswer = withContext(Dispatchers.IO) {
+        loadOpened { api.schedule(groupId, from = weekStart(), days = DAYS) }
     }
 
     /**
@@ -688,5 +696,8 @@ class ScheduleRepository(
 
 /** Ответ /v1/rooms: `missing` — дня в таблице нет, а не сбой связи. */
 data class RoomsAnswer(val body: RoomsDto?, val missing: Boolean = false, val answered: Boolean = false)
+
+/** Открытое расписание; body null — не пришло, `code` — чем ответил сервер (null — не ответил). */
+data class ScheduleAnswer(val body: ScheduleDto?, val code: Int? = null)
 
 data class RetakesAnswer(val body: RetakesDto?, val answered: Boolean = false)

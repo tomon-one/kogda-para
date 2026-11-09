@@ -81,7 +81,7 @@ fun TodayScreen(
     startKey: Int = 0,
     groupName: String,
     teachers: List<GroupDto>?,
-    loadTeacherSchedule: suspend (String) -> ScheduleDto?,
+    loadTeacherSchedule: suspend (String) -> ru.whensclass.data.ScheduleAnswer,
     pinnedTeachers: List<String> = emptyList(),
     onTogglePinnedTeacher: (String) -> Unit = {},
     schedule: ScheduleDto?,
@@ -91,7 +91,7 @@ fun TodayScreen(
     teacherMode: Boolean = false,
     reloadKey: Int = 0,
     groups: List<GroupDto>? = null,
-    loadGroupSchedule: suspend (String) -> ScheduleDto? = { null },
+    loadGroupSchedule: suspend (String) -> ru.whensclass.data.ScheduleAnswer = { ru.whensclass.data.ScheduleAnswer(null) },
     pinnedGroups: List<String> = emptyList(),
     onTogglePinnedGroup: (String) -> Unit = {},
     selfTeacherId: String? = null,
@@ -320,6 +320,7 @@ fun TodayScreen(
                                 pinned = pinnedGroups,
                                 onTogglePin = onTogglePinnedGroup,
                                 reloadKey = reloadKey,
+                                unsupported = unsupported,
                                 searchLabel = "Поиск по названию группы",
                                 listName = "Список групп",
                                 othersTitle = "Другие группы",
@@ -347,6 +348,7 @@ fun TodayScreen(
                                 pinned = pinnedTeachers,
                                 onTogglePin = onTogglePinnedTeacher,
                                 reloadKey = reloadKey,
+                                unsupported = unsupported,
                                 // В роли преподавателя своё расписание уже загружено.
                                 ownSchedule = if (teacherMode) schedule else null,
                                 // День, на который нажали в виджете.
@@ -366,7 +368,7 @@ fun TodayScreen(
 
                     Tab.ROOMS -> {
                         tabStates.SaveableStateProvider("rooms") {
-                            RoomsScreen(loadRooms, today, now.toLocalTime(), roomsMemory)
+                            RoomsScreen(loadRooms, today, now.toLocalTime(), roomsMemory, unsupported)
                         }
                         return@ScheduleTabs
                     }
@@ -375,7 +377,7 @@ fun TodayScreen(
                         tabStates.SaveableStateProvider("retakes") {
                             // Не загрузились — при входе на вкладку пробовать снова, а не ждать возврата в приложение.
                             LaunchedEffect(Unit) { if (retakesFailed) onRetryRetakes() }
-                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes, answered = retakesAnswered, teachers = teachers, onOpenTeacher = { id ->
+                            RetakesScreen(retakes, retakesFailed, today, onRetryRetakes, answered = retakesAnswered, unsupported = unsupported, teachers = teachers, onOpenTeacher = { id ->
                                 openTeacher = id
                                 openTeacherKey++
                                 tab = Tab.TEACHERS
