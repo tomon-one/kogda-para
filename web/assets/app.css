@@ -267,7 +267,7 @@ p a, .point a { text-decoration: underline; }
 .week-strip {
   position: -webkit-sticky;
   position: sticky;
-  top: calc(var(--head-h, 0px) + var(--row-shift, 0px) + 8px);
+  top: calc(var(--head-h, 0px) + var(--row-shift, 0px) + 6px);
   z-index: 9;
   display: flex;
   width: calc(100% - 24px);
