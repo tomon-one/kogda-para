@@ -68,7 +68,28 @@ export function weekStrip(day, today) {
   mark(strip, start);
   // Экран перестроен и прокручен — выделить день, который на самом деле наверху.
   window.requestAnimationFrame(function () { mark(strip, picked || topDay() || day); });
+  swipeWeeks(strip);
   return strip;
+}
+
+/** Палец вбок по полоске — соседняя неделя (влево — следующая), как в приложении. */
+function swipeWeeks(strip) {
+  var x = null;
+  var y = 0;
+  strip.addEventListener('touchstart', function (e) {
+    x = e.touches.length === 1 ? e.touches[0].clientX : null;
+    if (x !== null) y = e.touches[0].clientY;
+  }, { passive: true });
+  strip.addEventListener('touchend', function (e) {
+    if (x === null) return;
+    var dx = e.changedTouches[0].clientX - x;
+    var dy = e.changedTouches[0].clientY - y;
+    x = null;
+    // Короткое или больше вниз, чем вбок, — это листание страницы, а не недели.
+    if (Math.abs(dx) < 48 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+    var on = strip.__days.querySelector('.week-day.on');
+    go(strip, addDays(on ? on.getAttribute('data-date') : strip.__monday, dx < 0 ? 7 : -7));
+  }, { passive: true });
 }
 
 function fill(strip, monday) {
