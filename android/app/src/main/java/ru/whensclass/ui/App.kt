@@ -270,6 +270,11 @@ internal fun App(
     // Навигация своя, поэтому системному «назад» о ней надо сказать: иначе
     // оно закрывает приложение с любого экрана.
     BackHandler(enabled = screen != Screen.TODAY) {
+        // Сменили роль кнопкой на экране выбора — назад к прежнему выбору, как стрелка.
+        if (screen == Screen.GROUPS && !pickExtra && pickTeacher != null && pickTeacher != teacherMode) {
+            pickTeacher = null
+            return@BackHandler
+        }
         val back = if (screen == Screen.GROUPS) groupsFrom else Screen.TODAY
         pickExtra = false
         pickTeacher = null
@@ -466,10 +471,12 @@ internal fun App(
                             onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
                             onUpdate = toUpdate,
-                            canGoBack = chosenName != null,
+                            // Пришли сюда кнопкой «Я преподаватель» — назад к выбору группы.
+                            canGoBack = chosenName != null || pickTeacher == true && !teacherMode,
                             onBack = {
+                                val switched = pickTeacher == true && !teacherMode
                                 pickTeacher = null
-                                screen = groupsFrom
+                                if (!switched) screen = groupsFrom
                             },
                             onSwitchRole = { pickTeacher = false },
                             onPick = { teacher ->
@@ -482,10 +489,11 @@ internal fun App(
                             onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
                             onUpdate = toUpdate,
-                            canGoBack = chosenName != null,
+                            canGoBack = chosenName != null || pickTeacher == false && teacherMode,
                             onBack = {
+                                val switched = pickTeacher == false && teacherMode
                                 pickTeacher = null
-                                screen = groupsFrom
+                                if (!switched) screen = groupsFrom
                             },
                             onSwitchRole = { pickTeacher = true },
                             onPick = { group: GroupDto ->
