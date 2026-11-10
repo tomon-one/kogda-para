@@ -158,9 +158,9 @@ def _day(day: int, month: int, today: dt.date, year: str | None = None) -> dt.da
         except ValueError:
             return None
     found = []
-    for year in (today.year - 1, today.year, today.year + 1):
+    for near in (today.year - 1, today.year, today.year + 1):
         try:
-            found.append(dt.date(year, month, day))
+            found.append(dt.date(near, month, day))
         except ValueError:
             pass
     return min(found, key=lambda d: abs((d - today).days), default=None)

@@ -14,7 +14,7 @@ from whensclass.service.bells import BELLS, own_bells
 from whensclass.service.refresher import Refresher
 from whensclass.storage.snapshot_store import SnapshotStore, _from_dict, _to_dict
 
-GEN = dt.datetime(2026, 9, 8, 3, 0, tzinfo=dt.timezone.utc)
+GEN = dt.datetime(2026, 9, 8, 3, 0, tzinfo=dt.UTC)
 TODAY = dt.date(2026, 9, 2)
 SHORT_DAY = dt.date(2026, 9, 3)
 # Сокращённые пары, как колледж записал их в листе на 05.10.2026.

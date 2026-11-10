@@ -12,6 +12,7 @@ import json
 import logging
 import urllib.parse
 import zoneinfo
+from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
 from starlette.concurrency import run_in_threadpool
@@ -19,8 +20,8 @@ from starlette.concurrency import run_in_threadpool
 from ..config import settings
 from ..push.subscription import BadSubscription, parse_keys, parse_subscription
 from ..service.bells import BELLS, own_bells
-from ..service.rooms import rooms_payload
 from ..service.refresher import state_dir
+from ..service.rooms import rooms_payload
 from .etag import etag_for, matches
 from .payloads import (
     groups_payload,
@@ -308,12 +309,12 @@ def retakes(request: Request) -> Response:
 def teacher(
     request: Request,
     teacher_id: str,
-    start: dt.date | None = Query(None, alias="from"),
-    days: int = Query(settings.default_days, ge=1, le=14),
+    start: Annotated[dt.date | None, Query(alias="from")] = None,
+    days: Annotated[int, Query(ge=1, le=14)] = settings.default_days,
 ) -> Response:
     if refused := _too_old(request):
         return refused
-    store, refresher = _state(request)
+    store, _refresher = _state(request)
     if (bad := _bad_from(start)) is not None:
         return bad
     if store.snapshot is None or store.teachers is None:
@@ -333,12 +334,12 @@ def teacher(
 def schedule(
     request: Request,
     group_id: str,
-    start: dt.date | None = Query(None, alias="from"),
-    days: int = Query(settings.default_days, ge=1, le=14),
+    start: Annotated[dt.date | None, Query(alias="from")] = None,
+    days: Annotated[int, Query(ge=1, le=14)] = settings.default_days,
 ) -> Response:
     if refused := _too_old(request):
         return refused
-    store, refresher = _state(request)
+    store, _refresher = _state(request)
     if (bad := _bad_from(start)) is not None:
         return bad
     if store.snapshot is None:

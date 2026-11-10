@@ -105,7 +105,7 @@ def notify(
 
     _pending.pop(kind, None)
     _last_sent[kind] = now
-    _sent_at[kind] = dt.datetime.now(dt.timezone.utc)
+    _sent_at[kind] = dt.datetime.now(dt.UTC)
     _save()
     log.info("отправлено оповещение (%s)", kind)
     return True
@@ -161,7 +161,7 @@ def remember(kind: str, at: dt.datetime) -> None:
     выкладке: без этого перезапуск посреди сбоя сразу повторит тревогу. Время
     последней тревоги лежит в alerts.json, keep_in поднимает его отсюда.
     """
-    ago = (dt.datetime.now(dt.timezone.utc) - at).total_seconds()
+    ago = (dt.datetime.now(dt.UTC) - at).total_seconds()
     if 0 <= ago < _LONGEST_WINDOW:
         _last_sent[kind] = time.monotonic() - ago
         _sent_at[kind] = at

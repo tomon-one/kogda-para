@@ -147,7 +147,7 @@ class RetakesSource:
         old.pop("updated", None)
         if old == body:
             return
-        body = {**body, "updated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}
+        body = {**body, "updated": dt.datetime.now(dt.UTC).isoformat(timespec="seconds")}
         self.payload = body
         try:
             write_json(self.path, body)

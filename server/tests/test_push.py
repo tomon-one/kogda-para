@@ -14,7 +14,6 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from whensclass.push import changes, service, subscription, webpush
 from whensclass.push.webpush import b64encode
 
-
 # --- подписки ------------------------------------------------------------------
 
 
@@ -333,7 +332,7 @@ def test_freeze_stops_reminders_and_changes(tmp_path, snapshots, monkeypatch):
 
 def test_one_failing_subject_does_not_silence_the_rest(tmp_path, snapshots, monkeypatch):
     """Сбой подсчёта у одной группы не роняет сводку остальным."""
-    before, bt, after, at, day, first = snapshots
+    before, bt, after, at, day, _first = snapshots
     push = Recorder(tmp_path, _vapid())
     push.subscribe(subscription.parse_subscription(_body(id="isp-924-2")), day)
     push.subscribe(subscription.parse_subscription(
@@ -385,10 +384,10 @@ def test_gone_group_gets_one_notice_then_is_dropped(tmp_path, snapshots, monkeyp
 def test_teacher_without_lessons_now_still_gets_changes(tmp_path, snapshots):
     """У почасовика пару отдали замене — в новом снимке его нет, но он был в
     прежних: и приложение, и сайт говорят «убрали»."""
-    before, bt, after, at, day, _ = snapshots
+    _before, bt, after, _at, day, _ = snapshots
     tid = next(iter(bt.names))
     known = {tid: bt.names[tid]}
-    for gid, by_date in after.schedule.items():
+    for by_date in after.schedule.values():
         for d, lessons in by_date.items():
             by_date[d] = [dataclasses.replace(x, teachers=tuple(t for t in x.teachers
                                                                   if t != bt.names[tid]))
@@ -405,7 +404,7 @@ def test_teacher_subscription_follows_a_corrected_spelling(tmp_path, snapshots):
     """Колледж исправил опечатку в имени в том же обновлении, где отменил
     пару: подписка по прежнему id получает отмену, хотя ответ пришёл под
     другим id."""
-    before, bt, after, at, day, first = snapshots
+    before, bt, after, _at, day, first = snapshots
     name = first.teachers[0]
     fixed = name[:-1] + ("а" if name[-1] != "а" else "о")
     for by_date in after.schedule.values():
@@ -428,7 +427,7 @@ def test_shift_of_two_neighbours_is_not_sent_to_them(tmp_path, snapshots, monkey
     """Сдвиг у двух соседних групп отказом не ловится (порог — три): им —
     ничего, а не уведомление с парами соседа, владельцу — тревога; остальным
     — как обычно."""
-    before, bt, after, at, day, first = snapshots
+    before, bt, _after, _at, day, _first = snapshots
     import copy
 
     shifted = copy.deepcopy(before)
@@ -455,7 +454,7 @@ def test_shift_of_two_neighbours_is_not_sent_to_them(tmp_path, snapshots, monkey
 def test_vertical_shift_of_a_column_is_not_sent_to_it(tmp_path, snapshots, monkeypatch):
     """Пары колонки съехали по вертикали (номера под вопросом), а лист принят:
     её подписчикам — ничего, владельцу — тревога (vertical_groups в _suspects)."""
-    before, bt, after, at, day, first = snapshots
+    before, bt, _after, _at, day, _first = snapshots
     import copy
 
     gid = "isp-924-2"

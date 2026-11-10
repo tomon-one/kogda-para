@@ -40,10 +40,12 @@ import tempfile
 REPO = pathlib.Path.cwd()
 sys.path.insert(0, str(REPO / "server" / "src"))
 
-from whensclass.api.published import published  # noqa: E402
-from whensclass.service import alerts, refresher as refresher_mod  # noqa: E402
-from whensclass.sources import gsheets, sheet_index  # noqa: E402
-from whensclass.storage import history, snapshot_store  # noqa: E402
+from whensclass.api.published import published
+from whensclass.service import alerts
+from whensclass.service import refresher as refresher_mod
+from whensclass.sources import gsheets, sheet_index
+from whensclass.storage import history, snapshot_store
+
 
 def _archive() -> pathlib.Path:
     import os

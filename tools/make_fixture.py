@@ -24,8 +24,8 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "server" / "src"))
 
-from whensclass.parser.export import collapse_export  # noqa: E402
-from whensclass.parser.groups import build_column_map  # noqa: E402
+from whensclass.parser.export import collapse_export
+from whensclass.parser.groups import build_column_map
 
 # Группы, ради которых фикстура и существует: своя, составная колонка,
 # и те, где встречаются отмена и вебинар (подбираются автоматически).

@@ -247,7 +247,8 @@ def test_new_sheet_with_two_dates_is_found(tmp_path, monkeypatch, fixture_csv):
 
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     third = [i for i, r in enumerate(rows) if r and r[0].strip()[:2].isdigit()][2]
-    import csv, io
+    import csv
+    import io
     out = io.StringIO()
     csv.writer(out).writerows(rows[:third])
     monkeypatch.setattr(si.settings, "min_groups", FIXTURE.min_groups)

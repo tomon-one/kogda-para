@@ -338,7 +338,7 @@ def _check_name_subjects(snapshot: Snapshot) -> None:
     """Отказ, если в дне у нескольких пар вместо названия — ФИО: строки пар и
     преподавателей поменялись местами (сдвиг ячеек на одну строку)."""
     per_day: dict[date, list[str]] = {}
-    for gid, by_date in snapshot.schedule.items():
+    for by_date in snapshot.schedule.values():
         for day, lessons in by_date.items():
             for lesson in lessons:
                 if FIO_RE.fullmatch(lesson.subject):

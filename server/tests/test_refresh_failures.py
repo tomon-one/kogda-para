@@ -15,13 +15,13 @@ import pytest
 from whensclass.config import settings
 from whensclass.parser.csv_schedule import FIXTURE
 from whensclass.parser.export import parse_csv
-from whensclass.service import alerts, refresher as refresher_mod
+from whensclass.service import alerts
+from whensclass.service import refresher as refresher_mod
 from whensclass.service.failing import FETCH_GRACE
 from whensclass.service.refresher import Refresher
 from whensclass.sources import gsheets, sheet_index
 from whensclass.storage import history
 from whensclass.storage.snapshot_store import SnapshotStore
-
 
 TODAY = dt.date(2026, 9, 8)
 
@@ -78,7 +78,7 @@ def test_bad_snapshot_on_disk_does_not_break_teachers(tmp_path, fixture_csv):
     lesson = by[day][0]
     by[day][0] = type(lesson)(**{**lesson.__dict__, "teachers": lesson.teachers + (".",)})
     store = SnapshotStore(tmp_path)
-    store.put(snapshot, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    store.put(snapshot, dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     again = SnapshotStore(tmp_path)
     assert again.load()
     assert "." not in again.teachers.names.values()
@@ -139,7 +139,7 @@ def test_disk_alert_is_not_repeated_every_refresh(tmp_path, sheet, sent, monkeyp
 
 def test_restart_during_failure_does_not_repeat_alert(tmp_path, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
-    store.put(parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    store.put(parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     Refresher(store, tmp_path)._fail("формат таблицы изменился: x", kind="format")
     assert len(sent) == 1
     alerts._last_sent.clear()           # новый процесс — пустая память
@@ -153,7 +153,7 @@ def test_restart_during_failure_does_not_repeat_alert(tmp_path, sent, fixture_cs
 
 def test_network_blip_is_not_shown_as_failure(tmp_path, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
-    store.put(parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    store.put(parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     r = Refresher(store, tmp_path)
     r._fail("таблица не прочиталась: ReadTimeout", kind="fetch")
     assert r.status == "ok" and sent == []
@@ -258,7 +258,7 @@ def test_huge_sheet_keeps_the_snapshot_and_alerts(tmp_path, sheet, sent, monkeyp
 
 def test_crash_mid_refresh_twice_is_reported(tmp_path, sheet, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
-    store.put(parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    store.put(parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     (tmp_path / "refresh.running").write_text("2", "utf-8")  # два захода не кончились
     r = Refresher(store, tmp_path)
     r.refresh(today=TODAY)
@@ -296,7 +296,7 @@ def test_network_blip_during_format_failure_is_not_a_new_alarm(tmp_path, sent, f
     перезапуска помнится для каждого вида."""
     store = SnapshotStore(tmp_path)
     store.put(
-        parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
+        parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.UTC)
     )
     r = Refresher(store, tmp_path)
     r._fail("формат таблицы изменился: x", kind="format")
@@ -389,7 +389,7 @@ def test_network_grace_is_half_an_hour_by_the_clock(tmp_path, sent, fixture_csv)
     прошёл бы и FETCH_GRACE в секунду."""
     store = SnapshotStore(tmp_path)
     store.put(
-        parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
+        parse_csv(fixture_csv, "ф", FIXTURE), dt.datetime(2026, 9, 8, tzinfo=dt.UTC)
     )
     r = Refresher(store, tmp_path)
     r._fail("таблица не прочиталась: ReadTimeout", kind="fetch")
@@ -410,7 +410,7 @@ def test_snapshot_survives_the_disk_whole(tmp_path, fixture_csv):
 
     snapshot = parse_export(fixture_csv, "лист", "656498718", limits=FIXTURE)
     store = SnapshotStore(tmp_path)
-    store.put(snapshot, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    store.put(snapshot, dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     loaded = SnapshotStore(tmp_path)
     assert loaded.load()
     assert loaded.snapshot == snapshot

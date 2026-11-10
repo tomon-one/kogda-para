@@ -12,7 +12,6 @@ import zoneinfo
 
 from ..config import settings
 
-
 # Изменения живут у службы рассылки до конца последнего дня в сводке, но не
 # меньше минуты (`changes_ttl`).
 CHANGES_TTL_MIN = 60

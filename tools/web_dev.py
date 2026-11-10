@@ -36,7 +36,7 @@ CSP = ("default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'non
 
 def make_handler(api: str, web: pathlib.Path):
     class Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802 — имя задаёт http.server
+        def do_GET(self) -> None:
             path = self.path.split("?", 1)[0]
             if path.startswith("/v1/") or path == "/healthz":
                 self.proxy()

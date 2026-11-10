@@ -18,7 +18,7 @@ class FakeStore:
 
         self.snapshot = snapshot
         self.teachers = build_index(snapshot) if snapshot is not None else None
-        self.generated = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
+        self.generated = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.UTC)
         self.known = known or {}
 
     def known_teacher(self, teacher_id):
@@ -27,7 +27,7 @@ class FakeStore:
 
 class FakeRefresher:
     status = "ok"
-    checked_at = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
+    checked_at = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.UTC)
     failing_since = None
     last_error = None
 
@@ -132,7 +132,7 @@ def test_health_is_503_when_stale_or_today_is_uncovered(fixture_csv, monkeypatch
 
     refresher.status = "stale"
     refresher.last_error = "формат таблицы изменился: повторный заголовок"
-    refresher.failing_since = dt.datetime(2026, 9, 11, 4, 0, tzinfo=dt.timezone.utc)
+    refresher.failing_since = dt.datetime(2026, 9, 11, 4, 0, tzinfo=dt.UTC)
     response = client.get("/healthz")
     assert response.status_code == 503
     assert "повторный заголовок" in response.json()["reason"]
@@ -220,7 +220,7 @@ def test_teacher_without_lessons_this_sheet_is_not_gone(tmp_path, fixture_csv):
 
     store = SnapshotStore(tmp_path)
     before = parse_csv(fixture_csv, "лист", FIXTURE)
-    store.put(before, dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc))
+    store.put(before, dt.datetime(2026, 9, 7, tzinfo=dt.UTC))
     tid, name = next(iter(store.teachers.names.items()))
     after = parse_csv(fixture_csv, "лист", FIXTURE)
     after.schedule = {
@@ -228,7 +228,7 @@ def test_teacher_without_lessons_this_sheet_is_not_gone(tmp_path, fixture_csv):
                     for x in lessons] for day, lessons in by_date.items()}
         for gid, by_date in after.schedule.items()
     }
-    store.put(after, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    store.put(after, dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     assert tid not in store.teachers.names
 
     app = FastAPI()
@@ -354,7 +354,7 @@ def test_broken_snapshot_on_disk_falls_back_to_the_previous(tmp_path, fixture_cs
 
     store = SnapshotStore(tmp_path)
     snapshot = parse_csv(fixture_csv, "лист", FIXTURE)
-    generated = dt.datetime(2026, 9, 7, 3, 32, tzinfo=dt.timezone.utc)
+    generated = dt.datetime(2026, 9, 7, 3, 32, tzinfo=dt.UTC)
     store.put(snapshot, generated)
     store.put(snapshot, generated + dt.timedelta(minutes=20))
     (tmp_path / "snapshot.json").write_text("{обрыв записи", "utf-8")

@@ -17,8 +17,8 @@ from whensclass.api.payloads import meta_payload, schedule_payload, teacher_payl
 from whensclass.domain.models import SourceFormatChanged
 from whensclass.domain.teachers import build_index
 from whensclass.parser.csv_schedule import FIXTURE
-from whensclass.push.changes import compare
 from whensclass.parser.export import parse_csv, read_csv
+from whensclass.push.changes import compare
 from whensclass.service.gates import _hold_unread
 from whensclass.service.refresher import Refresher
 from whensclass.storage.snapshot_store import SnapshotStore
@@ -155,7 +155,7 @@ def test_unread_day_keeps_previous_lessons_and_says_so(tmp_path, sheet, sent, fi
     assert any("больше нет" in b["message"] for b in sent)
 
 
-GEN = dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
+GEN = dt.datetime(2026, 9, 8, tzinfo=dt.UTC)
 
 
 def _days(body: dict) -> dict[str, dict]:

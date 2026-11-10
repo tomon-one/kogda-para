@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 import re
 from collections.abc import Callable
@@ -154,7 +155,7 @@ def build_column_map(rows: list[list[str]], min_groups: int = MIN_GROUPS) -> lis
         )
 
     starts = sorted(columns)
-    steps = {b - a for a, b in zip(starts, starts[1:])}
+    steps = {b - a for a, b in itertools.pairwise(starts)}
     if any(step % _BLOCK_WIDTH for step in steps):
         # Шаг 3 или 5 — вставили или удалили колонку, карта поехала.
         raise SourceFormatChanged(

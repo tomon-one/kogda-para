@@ -5,14 +5,13 @@
 import datetime as dt
 
 import pytest
-
 from test_refresh_failures import TODAY
+
 from whensclass.config import settings
 from whensclass.service import refresher as refresher_mod
 from whensclass.service.refresher import Refresher
 from whensclass.sources import gsheets, sheet_index, sheet_memory
 from whensclass.storage.snapshot_store import SnapshotStore
-
 
 # --- Мёртвый ключ -----------------------------------------------------------
 
@@ -101,7 +100,7 @@ def test_google_asking_to_slow_down_is_not_blamed_on_the_key(monkeypatch, sent):
 
     monkeypatch.setattr(gsheets, "list_sheets_via_api", busy)
     monkeypatch.setattr(sheet_index, "_last_list", [gsheets.SheetInfo("расписание групп 01.-19.09", "1")])
-    monkeypatch.setattr(sheet_index, "_last_list_at", dt.datetime.now(dt.timezone.utc))
+    monkeypatch.setattr(sheet_index, "_last_list_at", dt.datetime.now(dt.UTC))
     for _ in range(3):
         assert [s.gid for s in sheet_index.list_sheets()] == ["1"]
     assert sent == []
@@ -112,7 +111,7 @@ def test_recent_list_is_taken_without_asking_google(monkeypatch):
     monkeypatch.setattr(sheet_index.settings, "sheets_api_key", "ключ")
     monkeypatch.setattr(gsheets, "list_sheets_via_api", lambda key: calls.append(key) or [])
     monkeypatch.setattr(sheet_index, "_last_list", [gsheets.SheetInfo("расписание групп 01.-19.09", "1")])
-    monkeypatch.setattr(sheet_index, "_last_list_at", dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=40))
+    monkeypatch.setattr(sheet_index, "_last_list_at", dt.datetime.now(dt.UTC) - dt.timedelta(minutes=40))
     assert [s.gid for s in sheet_index.list_sheets(max_age=dt.timedelta(hours=1))] == ["1"]
     assert calls == []
     sheet_index.list_sheets(max_age=dt.timedelta(minutes=30))

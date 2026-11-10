@@ -5,7 +5,8 @@ import pytest
 
 from whensclass.config import settings
 from whensclass.parser.csv_schedule import FIXTURE
-from whensclass.service import alerts, refresher as refresher_mod
+from whensclass.service import alerts
+from whensclass.service import refresher as refresher_mod
 from whensclass.sources import gsheets, sheet_index
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"

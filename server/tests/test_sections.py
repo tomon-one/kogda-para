@@ -1,8 +1,8 @@
 """Дни под повторным заголовком с другой раскладкой: запасной разбор, подгруппы."""
 
 import pytest
-
 from test_parser import _columnar_header
+
 from whensclass.domain.models import a1_column
 from whensclass.parser.csv_schedule import FIXTURE, parse_sheet
 from whensclass.parser.dates import _parse_date
@@ -63,20 +63,20 @@ def test_days_read_by_the_repeated_header_remember_their_columns(fixture_csv, mo
     from whensclass.parser import sections
 
     monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
-    honest, rows, below = _week_from_another_template(fixture_csv, days=2)
+    _honest, rows, below = _week_from_another_template(fixture_csv, days=2)
     snap = parse_sheet(rows, "фикстура", FIXTURE)
     moved = {gid for gid, days in snap.day_columns.items() if set(days) == set(below[:2])}
     assert moved
-    gid = sorted(moved)[0]
+    gid = min(moved)
     group = next(g for g in snap.groups if g.id == gid)
     assert snap.day_columns[gid][below[0]] != group.column
-    body = schedule_payload(snap, gid, below[0], 1, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    body = schedule_payload(snap, gid, below[0], 1, dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     cols = {x.get("col") for x in body["days"][0]["l"]}
     assert cols == {a1_column(snap.day_columns[gid][below[0]])}
     assert body["days"][0]["col"] == a1_column(snap.day_columns[gid][below[0]])
     # Пустой день под тем же заголовком — колонка у самого дня.
     lessons, snap.schedule[gid][below[0]] = snap.schedule[gid][below[0]], []
-    empty = schedule_payload(snap, gid, below[0], 1, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    empty = schedule_payload(snap, gid, below[0], 1, dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     snap.schedule[gid][below[0]] = lessons
     assert empty["days"][0]["l"] == []
     assert empty["days"][0]["col"] == a1_column(snap.day_columns[gid][below[0]])
@@ -324,6 +324,7 @@ def test_repeated_header_with_an_extra_or_missing_head_row_is_still_a_header(fix
 def test_day_empty_by_both_headers_is_empty_not_unread():
     """Спорный день без единой пары: чьи пары — вопроса нет, день не «не прочитан»."""
     import datetime as dt
+
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
     from whensclass.parser import sections as cs
 
@@ -345,6 +346,7 @@ def test_day_empty_by_both_headers_is_empty_not_unread():
 def test_day_empty_only_for_doubtful_groups_stays_unread():
     """Пары есть у групп вне спорных: пустота спорной колонки — не выходной."""
     import datetime as dt
+
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
     from whensclass.parser import sections as cs
 
@@ -359,6 +361,7 @@ def test_day_empty_only_for_doubtful_groups_stays_unread():
 def test_subgroup_of_next_sheet_gets_group_lessons_in_current_sheet():
     """Подгруппа названа только в следующем листе: в днях текущего она — группа."""
     import datetime as dt
+
     from whensclass.domain.models import GroupRef, Lesson, Snapshot
     from whensclass.parser.sections import fill_subgroup
 

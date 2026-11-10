@@ -10,7 +10,6 @@ import pytest
 
 from whensclass.push import changes
 
-
 # --- изменения (ScheduleDiff) ----------------------------------------------------
 
 

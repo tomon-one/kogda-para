@@ -63,7 +63,7 @@ class Delivery:
         никто не читает."""
         try:
             self._deliver(job, attempt)
-        except Exception as exc:  # noqa: BLE001 — страховка потока пула
+        except Exception as exc:
             log.warning("уведомление не ушло (%s): %s", _host(job.sub["endpoint"]),
                         type(exc).__name__)
             self._failed(job.sub, "error", type(exc).__name__)
@@ -211,7 +211,7 @@ class _Delayed:
                 heapq.heappop(self._heap)
             try:
                 action()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.exception("повтор уведомления упал")
 
 

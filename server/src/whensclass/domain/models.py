@@ -145,7 +145,7 @@ class Snapshot:
     def coverage(self) -> tuple[date, date] | None:
         return (self.dates[0], self.dates[-1]) if self.dates else None
 
-    def merged_with(self, other: "Snapshot") -> "Snapshot":
+    def merged_with(self, other: Snapshot) -> Snapshot:
         """Приклеивает соседний лист.
 
         Листы колледжа идут подряд и не пересекаются по датам, а состав групп
@@ -165,7 +165,7 @@ class Snapshot:
         known = {g.id for g in self.groups}
         combined.groups += [g for g in other.groups if g.id not in known]
 
-        def busy(snapshot: "Snapshot") -> set[date]:
+        def busy(snapshot: Snapshot) -> set[date]:
             return {day for by in snapshot.schedule.values() for day, ls in by.items() if ls}
 
         mine, theirs = busy(self), busy(other)

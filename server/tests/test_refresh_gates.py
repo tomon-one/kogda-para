@@ -9,12 +9,13 @@ ok, а прочерк вместо имени группы — выглядет�
 import datetime as dt
 
 import pytest
-
 from test_refresh_failures import TODAY, a_teacher
+
 from whensclass.parser import cells
 from whensclass.parser.csv_schedule import FIXTURE
 from whensclass.parser.export import parse_csv, read_csv
-from whensclass.service import gates, levers, refresher as refresher_mod
+from whensclass.service import gates, levers
+from whensclass.service import refresher as refresher_mod
 from whensclass.service.refresher import Refresher
 from whensclass.storage.snapshot_store import SnapshotStore
 
@@ -100,7 +101,7 @@ def test_far_from_is_422_not_500(fixture_csv, monkeypatch):
 
     class Store:
         snapshot = parse_csv(fixture_csv, "ф", FIXTURE)
-        generated = dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc)
+        generated = dt.datetime(2026, 9, 8, tzinfo=dt.UTC)
         teachers = None
 
     class Ref:
@@ -342,7 +343,7 @@ def test_day_cleared_everywhere_is_accepted_after_an_hour_and_the_count_restarts
     меньше часа; вернулись пары хоть у одной группы — отсчёт сначала."""
     from whensclass.service import refresher as refresher_mod
 
-    now = [dt.datetime(2026, 11, 5, 3, 0, tzinfo=dt.timezone.utc)]
+    now = [dt.datetime(2026, 11, 5, 3, 0, tzinfo=dt.UTC)]
 
     class Clock(dt.datetime):
         @classmethod

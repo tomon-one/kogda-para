@@ -28,7 +28,7 @@ class _Ssh:
         self.stdout, self.returncode, self.stderr = stdout, returncode, stderr
         self.calls: list[tuple[list[str], bytes]] = []
 
-    def __call__(self, command, input=None, capture_output=True, timeout=None):
+    def __call__(self, command, input=None, capture_output=True, timeout=None, check=False):
         self.calls.append((command, input))
         return subprocess.CompletedProcess(command, self.returncode, self.stdout, self.stderr)
 

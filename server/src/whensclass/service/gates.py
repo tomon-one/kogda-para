@@ -13,7 +13,6 @@ import datetime as dt
 from ..domain.models import ChangedAgainstPrevious, a1_column
 from ..sources import sheet_index
 
-
 # Набор групп упал больше чем на 30 % между двумя снимками одного и того же
 # листа — это не «колледж убрал группы», а сломанный заголовок: 105 из 187
 # групп проходят порог в сто, и 80 групп молча получают 404. Самая крупная

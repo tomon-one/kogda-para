@@ -85,7 +85,7 @@ def list_sheets(max_age: dt.timedelta | None = None) -> list[SheetInfo]:
     """
     global _api_failures, _last_list, _last_list_at
 
-    if max_age and _last_list and _last_list_at and dt.datetime.now(dt.timezone.utc) - _last_list_at < max_age:
+    if max_age and _last_list and _last_list_at and dt.datetime.now(dt.UTC) - _last_list_at < max_age:
         return _last_list
     if not settings.sheets_api_key:
         # Без тревоги служба месяцами жила бы памятью листов: слежка, пересдачи
@@ -117,7 +117,7 @@ def list_sheets(max_age: dt.timedelta | None = None) -> list[SheetInfo]:
                 "уйдёт в stale. Проверить ключ и его ограничение по адресу "
                 "сервера — руководство по серверу, «Ключ Sheets API».",
             )
-        now = dt.datetime.now(dt.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
         if _last_list and _last_list_at and now - _last_list_at < _LIST_KEEP:
             log.info("список листов — прежний, от %s", _last_list_at)
             return _last_list
@@ -133,7 +133,7 @@ def list_sheets(max_age: dt.timedelta | None = None) -> list[SheetInfo]:
         alerts.notify("key-ok", "Само исправилось. Sheets API снова отвечает: ключ работает.",
                       force=True, good=True)
     _api_failures = 0
-    _last_list, _last_list_at = sheets, dt.datetime.now(dt.timezone.utc)
+    _last_list, _last_list_at = sheets, dt.datetime.now(dt.UTC)
     return sheets
 
 

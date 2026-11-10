@@ -1,6 +1,7 @@
 """Обход листа целиком — на урезанной фикстуре живой таблицы."""
 
 import datetime as dt
+import itertools
 
 import pytest
 
@@ -9,7 +10,9 @@ from whensclass.parser.csv_schedule import FIXTURE, parse_sheet
 from whensclass.parser.dates import _parse_date
 from whensclass.parser.export import collapse_export, parse_csv, read_csv
 from whensclass.parser.groups import (
-    build_column_map, find_header_rows, split_group_names,
+    build_column_map,
+    find_header_rows,
+    split_group_names,
 )
 
 
@@ -218,7 +221,7 @@ def test_repeated_header_with_shifted_columns_leaves_the_days_below_unread(fixtu
     # оказывается имя соседа слева.
     ordered = sorted(c for c in columns if c in by_column and c < len(names_row))
     honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
-    for left, right in zip(ordered, ordered[1:]):
+    for left, right in itertools.pairwise(ordered):
         names_row[right] = by_column[left]
 
     snap = parse_sheet(rows, "фикстура", FIXTURE)
@@ -301,7 +304,7 @@ def test_repeated_header_with_unknown_column_is_a_broken_main_header(fixture_csv
     header = _columnar_header(rows)
     if header is None:
         pytest.skip("в фикстуре нет повторного заголовка «столбиком»")
-    i, columns, names_row = header
+    i, _columns, names_row = header
     # Приписываем блок справа от последней группы: заголовок его объявляет,
     # а главный заголовок про него не знает.
     col = max(known) + 4
@@ -352,7 +355,7 @@ def test_nameless_block_with_lessons_is_reported(fixture_csv):
     rows = collapse_export(read_csv(fixture_csv), FIXTURE.min_groups)
     honest = parse_sheet([list(r) for r in rows], "фикстура", FIXTURE)
     honest.sheet_columns = {"1": {g.id: g.column for g in honest.groups}}
-    i, _, names_row = _columnar_header(rows)
+    _i, _, names_row = _columnar_header(rows)
     rows[0][10] = "Дисциплина Преподаватель"
     names_row[10] = ""
     broken = parse_sheet(rows, "фикстура", FIXTURE)

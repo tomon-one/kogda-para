@@ -5,6 +5,7 @@
 import datetime as dt
 
 from test_refresh_failures import TODAY, a_teacher, cell_replace
+
 from whensclass.config import settings
 from whensclass.parser.csv_schedule import FIXTURE
 from whensclass.parser.export import read_csv
@@ -12,7 +13,6 @@ from whensclass.service import refresher as refresher_mod
 from whensclass.service.refresher import Refresher
 from whensclass.sources import gsheets, sheet_index
 from whensclass.storage.snapshot_store import SnapshotStore
-
 
 # --- Недописанный следующий лист -------------------------------------------
 

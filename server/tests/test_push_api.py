@@ -6,8 +6,8 @@ import threading
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from test_push import Recorder, _body, _vapid
+
 from whensclass.push import service
 
 

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -395,7 +396,7 @@ def _validate(
             f"нашёл всего {len(snapshot.dates)} дней, ожидал не меньше {limits.min_dates}",
             starts=min(snapshot.dates, default=None),
         )
-    for k, (a, b) in enumerate(zip(seen_order, seen_order[1:])):
+    for k, (a, b) in enumerate(itertools.pairwise(seen_order)):
         if b <= a:
             # Первое нарушение, со строкой листа, а не весь столбец дат (24
             # сентября 2026 колледж собирал новую неделю из скопированных
@@ -406,7 +407,7 @@ def _validate(
                 f"стоит после {a:%d.%m.%Y}"
             )
     gaps = [
-        (a, b) for a, b in zip(seen_order, seen_order[1:]) if (b - a).days > limits.max_gap_days
+        (a, b) for a, b in itertools.pairwise(seen_order) if (b - a).days > limits.max_gap_days
     ]
     if gaps:
         # Опечатка в месяце у одной даты: остальные проверки её пропустят,

@@ -22,7 +22,7 @@ class Failing:
 
     def _freeze(self) -> None:
         """Заморожено владельцем: прежний снимок, stale, в сеть не ходим."""
-        self.checked_at = dt.datetime.now(dt.timezone.utc)
+        self.checked_at = dt.datetime.now(dt.UTC)
         if self.failing_since is None:
             self.failing_since = self.checked_at
             log.warning("служба заморожена (WHENSCLASS_FREEZE) — в таблицу не хожу")
@@ -40,7 +40,7 @@ class Failing:
             return "empty"
         if self.failing_since is None:
             return "ok"
-        now = now or dt.datetime.now(dt.timezone.utc)
+        now = now or dt.datetime.now(dt.UTC)
         if self._fetch_only and now - self.failing_since < FETCH_GRACE:
             # Чих Google: владельцу о нём не говорят полчаса, и телефонам
             # незачем полчаса показывать «сбой на нашем сервере».
@@ -48,7 +48,7 @@ class Failing:
         return "stale"
 
     def _fail(self, message: str, kind: str = "error", public: str | None = None) -> None:
-        now = dt.datetime.now(dt.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
         first = self.failing_since is None
         if first:
             self.failing_since = now
@@ -92,7 +92,7 @@ class Failing:
         since = self.failing_since
         if since is None:
             return
-        lying = dt.datetime.now(dt.timezone.utc) - since
+        lying = dt.datetime.now(dt.UTC) - since
         if self._alerted:
             healed = not self._lever_used and since >= self._started
             alerts.notify(

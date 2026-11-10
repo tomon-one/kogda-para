@@ -10,15 +10,14 @@ import datetime as dt
 import json
 
 import pytest
+from conftest import GOLDEN
 
 from whensclass.api.payloads import groups_payload, schedule_payload
 from whensclass.domain.models import GroupRef, Lesson, Snapshot
 from whensclass.parser.csv_schedule import FIXTURE
 from whensclass.parser.export import parse_csv
 
-from conftest import GOLDEN
-
-GENERATED = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
+GENERATED = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.UTC)
 START = dt.date(2026, 9, 7)
 
 

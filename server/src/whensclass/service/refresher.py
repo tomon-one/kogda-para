@@ -28,16 +28,20 @@ from ..parser.shift import check_shift, shift_seed
 from ..sources import gsheets, sheet_index
 from ..sources.sheet_memory import SheetIndex
 from ..storage import history
+from ..storage.snapshot_store import SnapshotStore
 from . import alerts
 from .clock import _today
 from .failing import CRASHES_TO_ALERT, Failing
 from .gates import (
-    _check_days_emptied, _check_group_drop, _check_lost_names, _check_today_kept, _hold_unread,
+    _check_days_emptied,
+    _check_group_drop,
+    _check_lost_names,
+    _check_today_kept,
+    _hold_unread,
 )
 from .levers import Levers
 from .sheet_watch import SheetWatch
 from .telling import Telling
-from ..storage.snapshot_store import SnapshotStore
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +53,7 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
         self.status = "empty"          # empty | ok | stale
         # «Само исправилось» — только если починилось без рук: без рычага и
         # без перезапуска (выкладки) посреди сбоя.
-        self._started = dt.datetime.now(dt.timezone.utc)
+        self._started = dt.datetime.now(dt.UTC)
         self._lever_used = False
         self.checked_at: dt.datetime | None = None
         # С какого момента и почему не обновляемся. Лежит на диске: «лежим с
@@ -151,7 +155,7 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
 
 
     def _refresh(self, today: dt.date, force: bool, retried: bool = False) -> bool:
-        self.checked_at = dt.datetime.now(dt.timezone.utc)
+        self.checked_at = dt.datetime.now(dt.UTC)
         texts: list[tuple[str, str | None, str, str]] = []
         self._too_large = []
         try:
@@ -307,11 +311,11 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
         if snapshot.unread:
             snapshot.unread_since = (
                 old.unread_since if old is not None and old.unread and old.unread_since
-                else dt.datetime.now(dt.timezone.utc)
+                else dt.datetime.now(dt.UTC)
             )
         before = (old, self.store.teachers) if self.on_update else (None, None)
         try:
-            self.store.put(snapshot, dt.datetime.now(dt.timezone.utc), teachers=teachers)
+            self.store.put(snapshot, dt.datetime.now(dt.UTC), teachers=teachers)
         except OSError as exc:
             # Диск: в памяти снимок уже свежий, телефоны его получат, но
             # перезапуск поднимет прежний. Хеши не запоминаем — следующий
@@ -473,7 +477,7 @@ class Refresher(Failing, SheetWatch, Levers, Telling):
         DAY_CLEARED_HOLD. Зовётся раз на разбор: отсчёты прошлого разбора живут,
         только если день снова пуст у всех, — иначе с нуля."""
         before, self._cleared_since = self._cleared_since, {}
-        now = dt.datetime.now(dt.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
 
         def held(day: dt.date) -> bool:
             first = self._cleared_since[day] = before.get(day, now)

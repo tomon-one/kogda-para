@@ -9,7 +9,7 @@ from whensclass.domain.teachers import build_index, teacher_id
 from whensclass.parser.csv_schedule import FIXTURE
 from whensclass.parser.export import parse_csv
 
-GENERATED = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.timezone.utc)
+GENERATED = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.UTC)
 
 
 @pytest.fixture(scope="module")
@@ -128,7 +128,7 @@ def test_column_follows_the_sheet_of_the_day():
     second.places = {dt.date(2026, 9, 14): SheetPlace(gid="2", row=5)}
     second.sheet_columns = {"2": {"a-1": 10}}
     merged = first.merged_with(second)
-    generated = dt.datetime(2026, 9, 12, tzinfo=dt.timezone.utc)
+    generated = dt.datetime(2026, 9, 12, tzinfo=dt.UTC)
     assert schedule_payload(merged, "a-1", dt.date(2026, 9, 12), 1, generated)["col"] == "C"
     body = schedule_payload(merged, "a-1", dt.date(2026, 9, 14), 1, generated)
     assert body["col"] == "K" and body["src_url"].endswith("#gid=2")
@@ -174,7 +174,7 @@ def test_group_missing_from_the_next_sheet_gets_no_foreign_column_and_no_free_da
     second.places = {monday: SheetPlace(gid="2", row=5)}
     second.sheet_columns = {"2": {"b-2": 2}}
     merged = first.merged_with(second)
-    generated = dt.datetime(2026, 9, 26, tzinfo=dt.timezone.utc)
+    generated = dt.datetime(2026, 9, 26, tzinfo=dt.UTC)
 
     body = schedule_payload(merged, "a-1", monday, 1, generated, today=saturday)
     assert body["days"] == [] and "col" not in body
@@ -242,7 +242,7 @@ def test_full_name_with_a_typo_is_the_same_teacher():
     assert [len(index.days(main)[d]) for d in days] == [1, 1, 2]
     assert index.aliases == {typo: main, teacher_id("Безухов Д. К."): main}
     body = teacher_answer(snap, index, lambda _tid: None, typo, days[0], 3,
-                          dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc))
+                          dt.datetime(2026, 9, 7, tzinfo=dt.UTC))
     assert body["g"] == main and body["gn"] == "Безухов Даниил Кириллович"
 
 
@@ -269,7 +269,7 @@ def test_old_id_of_a_corrected_name_answers_with_the_corrected_one():
     }
     assert same_person(index, "Безухов Данил Кириллович") == main
     assert same_person(index, "Каренина Алла Аркадьевна") is None
-    generated = dt.datetime(2026, 9, 7, tzinfo=dt.timezone.utc)
+    generated = dt.datetime(2026, 9, 7, tzinfo=dt.UTC)
     for old in (teacher_id("Безухов Данил Кириллович"), teacher_id("Безухов Д. К.")):
         body = teacher_answer(snap, index, known.get, old, day, 1, generated)
         assert body["g"] == main

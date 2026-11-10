@@ -5,8 +5,8 @@ import datetime as dt
 import json
 
 import pytest
-
 from test_push import _body, _vapid
+
 from whensclass.push import delivery, messages, service, subscription, webpush
 from whensclass.push.webpush import b64encode
 
@@ -96,7 +96,7 @@ def test_undeliverable_subscription_is_dropped_only_if_the_service_works(sending
     """Пять отказов подряд — подписка снята, если та же служба рассылки за это
     время доставляла другим. Сбой всей службы (или нашего ключа) подписки не
     стирает."""
-    push, answers, later = sending
+    push, answers, _later = sending
     dead = subscription.parse_subscription(_body(endpoint="https://web.push.apple.com/dead"))
     alive = subscription.parse_subscription(_body(endpoint="https://web.push.apple.com/alive"))
     for sub in (dead, alive):
@@ -127,7 +127,7 @@ def test_undeliverable_subscription_is_dropped_only_if_the_service_works(sending
 
 
 def test_any_error_in_sending_is_logged_not_lost(sending, monkeypatch, caplog):
-    push, answers, later = sending
+    push, _answers, _later = sending
     sub = subscription.parse_subscription(_body())
     push._subs[sub["endpoint"]] = sub
 
@@ -140,7 +140,7 @@ def test_any_error_in_sending_is_logged_not_lost(sending, monkeypatch, caplog):
 
 
 def test_too_large_message_is_ours_not_the_subscriptions(sending, monkeypatch):
-    push, answers, later = sending
+    push, _answers, _later = sending
     sub = subscription.parse_subscription(_body())
     push._subs[sub["endpoint"]] = sub
 
@@ -155,7 +155,7 @@ def test_too_large_message_is_ours_not_the_subscriptions(sending, monkeypatch):
 
 def test_reminder_is_not_sent_after_the_lesson_started(sending):
     """Очередь продержала напоминание до начала пары — оно уже не уходит."""
-    push, answers, later = sending
+    push, answers, _later = sending
     sub = subscription.parse_subscription(_body())
     answers.append(webpush.Result(201))
     push._send(delivery.Job(sub, messages.message(sub, "lesson", "т", "б"), 600, deadline=1))
@@ -170,7 +170,7 @@ def test_retry_queue_is_bounded():
 
 def test_whole_service_failing_alarms_the_owner(sending, monkeypatch):
     """Сплошной отказ службы рассылки — тревога владельцу, а не только журнал."""
-    push, answers, later = sending
+    push, answers, _later = sending
     said = []
     monkeypatch.setattr(service.alerts, "notify", lambda kind, text, **k: said.append((kind, text)))
     sub = subscription.parse_subscription(_body())
@@ -204,7 +204,7 @@ def test_made_up_host_never_delivered_is_dropped(sending, monkeypatch):
 
     import httpx
 
-    push, answers, later = sending
+    push, _answers, _later = sending
     fake = subscription.parse_subscription(_body(endpoint="https://x1.notify.windows.com/w/?token=1"))
     push._subs[fake["endpoint"]] = fake
 
@@ -234,7 +234,7 @@ def test_made_up_host_never_delivered_is_dropped(sending, monkeypatch):
 def test_full_house_evicts_a_never_delivered_subscription(sending, monkeypatch):
     """Потолок подписок забит мусором — новая подписка встаёт на место самой
     старой, которой ни разу не доставили; доставленные не трогаются."""
-    push, answers, later = sending
+    push, _answers, _later = sending
     monkeypatch.setattr(service, "MAX_SUBSCRIPTIONS", 2)
     monkeypatch.setattr(push, "_dispatch", lambda jobs: None)
     delivered = subscription.parse_subscription(_body(endpoint="https://web.push.apple.com/ok"))
@@ -252,7 +252,7 @@ def test_full_house_evicts_a_never_delivered_subscription(sending, monkeypatch):
 def test_resent_subscription_keeps_its_delivered_mark(sending, monkeypatch):
     """Страница пересылает подписку раз в сутки — отметка о доставке остаётся:
     иначе под потолком настоящая уйдёт раньше свежего мусора."""
-    push, answers, later = sending
+    push, _answers, _later = sending
     monkeypatch.setattr(service, "MAX_SUBSCRIPTIONS", 2)
     monkeypatch.setattr(push, "_dispatch", lambda jobs: None)
     real = subscription.parse_subscription(_body(endpoint="https://web.push.apple.com/real"))

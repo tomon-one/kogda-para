@@ -106,7 +106,7 @@ def test_without_topic_nothing_is_sent(monkeypatch, sent):
 def test_failure_state_survives_restart_and_recovery_reports_duration(tmp_path, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
     store.put(parse_csv(fixture_csv, "фикстура", FIXTURE),
-              dt.datetime(2026, 9, 11, 3, 40, tzinfo=dt.timezone.utc))
+              dt.datetime(2026, 9, 11, 3, 40, tzinfo=dt.UTC))
     refresher = Refresher(store, tmp_path)
 
     refresher._fail("формат таблицы изменился: повторный заголовок", kind="format")
@@ -129,7 +129,7 @@ def test_failure_state_survives_restart_and_recovery_reports_duration(tmp_path, 
     again._recovered()
     assert again.failing_since is None and again.last_error is None
     assert not (tmp_path / "failing.json").exists()
-    url, body = sent.bodies[-1]
+    _url, body = sent.bodies[-1]
     assert "снова обновляется" in body["message"] and body["priority"] == 3
     # Лежали минуты — говорим в минутах, а не «лежало 0.0 ч».
     assert " мин, с " in body["message"]
@@ -147,7 +147,7 @@ def test_recovery_duration_is_human():
 def test_network_blip_is_silent_until_half_an_hour(tmp_path, sent, fixture_csv):
     store = SnapshotStore(tmp_path)
     store.put(parse_csv(fixture_csv, "фикстура", FIXTURE),
-              dt.datetime(2026, 9, 11, 3, 40, tzinfo=dt.timezone.utc))
+              dt.datetime(2026, 9, 11, 3, 40, tzinfo=dt.UTC))
     refresher = Refresher(store, tmp_path)
     refresher._fail("таблица не прочиталась: ReadTimeout", kind="fetch",
                     public="таблица не прочиталась: ReadTimeout")

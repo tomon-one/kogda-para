@@ -34,9 +34,12 @@ from dataclasses import replace
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-import replay  # noqa: E402  (тот же стенд службы: сеть, архив и тревоги подменены)
-from replay import Bench, read, stamp  # noqa: E402
-from whensclass.api.published import published  # noqa: E402
+import itertools
+
+import replay
+from replay import Bench, read, stamp
+
+from whensclass.api.published import published
 
 _DATE = re.compile(r"(\d{1,2})[./](\d{1,2})[./](\d{2,4})")
 WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
@@ -203,7 +206,7 @@ def m_weeks_swapped(rows, today):
         if d > today:
             weeks.setdefault(d.isocalendar()[:2], []).append(i)
     keys = sorted(weeks)
-    for a, b in zip(keys, keys[1:]):
+    for a, b in itertools.pairwise(keys):
         first, second = weeks[a], weeks[b]
         lo, mid = first[0], second[0]
         hi = s.day_rows(second[-1]).stop

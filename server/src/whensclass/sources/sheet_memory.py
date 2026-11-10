@@ -135,11 +135,11 @@ def _recent_miss(state_dir: pathlib.Path, day: dt.date) -> bool:
         at = dt.datetime.fromisoformat(misses[day.isoformat()])
     except (OSError, ValueError, KeyError, TypeError):
         return False
-    return dt.datetime.now(dt.timezone.utc) - at < MISS_TTL
+    return dt.datetime.now(dt.UTC) - at < MISS_TTL
 
 
 def _remember_miss(state_dir: pathlib.Path, day: dt.date) -> None:
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     try:
         misses = json.loads(_misses_path(state_dir).read_text("utf-8"))
     except (OSError, ValueError):

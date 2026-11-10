@@ -13,7 +13,10 @@ import re
 
 from ..domain.models import Lesson
 from ..domain.teachers import PATRONYMIC_RE
-from .groups import _distance, _warn_once  # неувязка листа — состояние, а не событие: в журнал раз
+from .groups import (  # неувязка листа — состояние, а не событие: в журнал раз
+    _distance,
+    _warn_once,
+)
 
 log = logging.getLogger(__name__)
 

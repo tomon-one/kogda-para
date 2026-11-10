@@ -13,9 +13,9 @@ import gzip
 import io
 
 import pytest
-
 from conftest import FIXTURES
 from test_invariants import synthetic_sheet
+
 from whensclass.domain.models import Lesson, SourceFormatChanged
 from whensclass.parser.csv_schedule import FIXTURE, parse_sheet
 from whensclass.parser.export import collapse_export, parse_export, read_csv

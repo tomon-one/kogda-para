@@ -30,8 +30,8 @@ from ..config import settings
 from ..service import alerts
 from ..storage.atomic import write_json
 from . import changes, webpush
-from .labels import _cancelled
 from .delivery import MAX_PENDING_RETRIES, TIMEOUT, Delivery, Job, _Delayed
+from .labels import _cancelled
 from .messages import (
     MAX_LINE,
     MAX_PAYLOAD,
@@ -279,7 +279,7 @@ class Push(Delivery, Quiet):
                 if old is None or new is None:
                     continue
                 lines = changes.change_lines(old, new, today, same=True)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 # Сбой одного не глушит остальных.
                 log.exception("изменения для %s не посчитались", key[0])
                 continue
@@ -346,7 +346,7 @@ class Push(Delivery, Quiet):
                 try:
                     old = _payload(before, before_teachers, key[:2], today, self.known_teacher)
                     new = _payload(snapshot, teachers, key[:2], today, self.known_teacher)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     log.exception("напоминания для %s не пересчитались", key[0])
                     old = new = None
                 if old is None or new is None:
@@ -395,7 +395,7 @@ class Push(Delivery, Quiet):
             # И пары, съехавшие по вертикали в одной колонке: лист принят с
             # подозрением, номера пар под вопросом.
             ids = neighbour_runs(snapshot, before, today) | vertical_groups(snapshot, before)
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("сверка с соседями для уведомлений упала")
             return None
         if not ids:
@@ -511,7 +511,7 @@ def _payload(
     from ..service.bells import BELLS
 
     kind, subject = key
-    generated = dt.datetime.now(dt.timezone.utc)
+    generated = dt.datetime.now(dt.UTC)
     if kind == "group":
         return schedule_payload(snapshot, subject, today, 2, generated, bells=BELLS, today=today)
     if teachers is None:

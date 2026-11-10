@@ -30,20 +30,23 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server" / "src"))
 
-import datetime as dt  # noqa: E402
+import datetime as dt
 
-from whensclass.config import settings  # noqa: E402
-from whensclass.domain.models import SourceFormatChanged  # noqa: E402
-from whensclass.parser.export import parse_export  # noqa: E402
-from whensclass.parser.shift import check_shift, shift_seed  # noqa: E402
-from whensclass.service import alerts  # noqa: E402
-from whensclass.service.clock import _today  # noqa: E402
-from whensclass.service.gates import (  # noqa: E402
-    _check_days_emptied, _check_group_drop, _check_lost_names, _hold_unread,
+from whensclass.config import settings
+from whensclass.domain.models import SourceFormatChanged
+from whensclass.parser.export import parse_export
+from whensclass.parser.shift import check_shift, shift_seed
+from whensclass.service import alerts
+from whensclass.service.clock import _today
+from whensclass.service.gates import (
+    _check_days_emptied,
+    _check_group_drop,
+    _check_lost_names,
+    _hold_unread,
 )
-from whensclass.service.refresher import _limits  # noqa: E402
-from whensclass.sources import gsheets, sheet_index  # noqa: E402
-from whensclass.storage.snapshot_store import SnapshotStore  # noqa: E402
+from whensclass.service.refresher import _limits
+from whensclass.sources import gsheets, sheet_index
+from whensclass.storage.snapshot_store import SnapshotStore
 
 # Сертификат, который отдаёт nginx: продлевается сам, но перезагрузку nginx
 # после продления делает хук, который зависит от `nginx -t` по чужим сайтам
@@ -65,8 +68,8 @@ def cert_days_left(host: str) -> int:
     with socket.create_connection((host, 443), timeout=15) as raw:
         with context.wrap_socket(raw, server_hostname=host) as tls:
             not_after = tls.getpeercert()["notAfter"]
-    expires = dt.datetime.fromtimestamp(ssl.cert_time_to_seconds(not_after), dt.timezone.utc)
-    return (expires - dt.datetime.now(dt.timezone.utc)).days
+    expires = dt.datetime.fromtimestamp(ssl.cert_time_to_seconds(not_after), dt.UTC)
+    return (expires - dt.datetime.now(dt.UTC)).days
 
 
 def check_cert(quiet: bool) -> None:

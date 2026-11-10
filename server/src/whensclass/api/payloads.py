@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from ..config import settings
 from ..domain.models import Lesson, SheetPlace, Snapshot, a1_column
@@ -396,6 +396,6 @@ def meta_payload(
 
 
 def _iso(value: datetime) -> str:
-    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace(
+    return value.astimezone(UTC).replace(microsecond=0).isoformat().replace(
         "+00:00", "Z"
     )

@@ -12,7 +12,6 @@ from datetime import date, timedelta
 from ..domain.models import Snapshot
 from ..domain.teachers import TeacherIndex
 
-
 # День после сегодняшнего, где пары есть меньше чем у половины групп против
 # самого полного дня листа, колледж ещё не дописал. Будни — 0,85–1,0 от самого
 # полного, субботы — 0,65–0,94 (архив 2–26 сентября 2026); недописанный

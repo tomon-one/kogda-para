@@ -99,6 +99,8 @@ def _via_exit(*args: str, stdin: str | None = None) -> str:
     ]
     result = subprocess.run(
         command, input=(stdin or "").encode(), capture_output=True, timeout=settings.http_timeout + 60,
+        # Код возврата разбирается ниже: у curl -f, ssh и тайм-аута — свои слова.
+        check=False,
     )
     why = result.stderr.decode("utf-8", "replace").strip()[:300]
     # curl -f на exit: Google ответил кодом ошибки. Это ответ Google, а не

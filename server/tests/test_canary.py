@@ -114,11 +114,11 @@ def test_one_sheet_against_a_two_sheet_snapshot_is_not_a_cut_day(canary, monkeyp
     from whensclass.parser.export import parse_csv
     from whensclass.storage.snapshot_store import SnapshotStore
 
-    module, sent = canary
+    module, _sent = canary
     monkeypatch.setattr(module, "_today", lambda: dt.date(2026, 9, 8))
     snapshot = parse_csv(fixture_csv, "лист", FIXTURE)
     snapshot.sheet_columns = {str(i): {} for i in range(sheets)}
-    SnapshotStore(tmp_path).put(snapshot, dt.datetime(2026, 9, 8, tzinfo=dt.timezone.utc))
+    SnapshotStore(tmp_path).put(snapshot, dt.datetime(2026, 9, 8, tzinfo=dt.UTC))
     seen = []
     monkeypatch.setattr(module, "_check_days_emptied",
                         lambda previous, current, today, dropped=False: seen.append(dropped))
