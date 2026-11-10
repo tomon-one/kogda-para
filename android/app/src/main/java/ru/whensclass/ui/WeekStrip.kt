@@ -85,6 +85,8 @@ internal fun WeekStrip(
             )
         }
     }
+    var sideways by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val weekSwipe = with(androidx.compose.ui.platform.LocalDensity.current) { 48.dp.toPx() }
     val pillColor = MaterialTheme.colorScheme.primary
     val dark = MaterialTheme.colorScheme.isDark
     // У «Стекла» полоска висит над списком: размыто только под ней самой,
@@ -109,6 +111,21 @@ internal fun WeekStrip(
             .draggable(
                 rememberDraggableState { onDrag(it) },
                 androidx.compose.foundation.gestures.Orientation.Vertical,
+            )
+            // Вбок — соседняя неделя: палец влево — следующая. Ось выбирает первое
+            // заметное движение, так что листание вверх-вниз с полоски не мешает.
+            .draggable(
+                rememberDraggableState { sideways += it },
+                androidx.compose.foundation.gestures.Orientation.Horizontal,
+                onDragStarted = { sideways = 0f },
+                onDragStopped = { velocity ->
+                    val step = when {
+                        sideways < -weekSwipe || velocity < -WEEK_FLING -> 1L
+                        sideways > weekSwipe || velocity > WEEK_FLING -> -1L
+                        else -> 0L
+                    }
+                    if (step != 0L) onPick(shownDay().plusWeeks(step))
+                },
             )
             .pointerInput(monday) {
                 detectTapGestures { offset ->
@@ -192,3 +209,6 @@ internal fun WeekStrip(
     }
     }
 }
+
+/** Скорость броска вбок (пикселей в секунду), с которой неделя сменится и без 48 dp пути. */
+private const val WEEK_FLING = 1500f
