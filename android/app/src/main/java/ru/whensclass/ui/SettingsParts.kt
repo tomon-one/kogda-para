@@ -1,11 +1,11 @@
 package ru.whensclass.ui
 
+import androidx.core.net.toUri
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.widget.Toast
 import android.os.Build
 import android.provider.Settings
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,7 +49,7 @@ internal fun Link(text: String, url: String) {
             .clickable {
                 runCatching {
                     context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        Intent(Intent.ACTION_VIEW, url.toUri())
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
                 }
@@ -177,12 +177,13 @@ internal fun BackgroundWork(phone: ru.whensclass.notify.PhoneState, exactAlarms:
                     "напоминание не придёт, пока приложение не открыть. Нажмите пункты по очереди.",
                 modifier = Modifier.padding(bottom = 6.dp),
             )
+            val appName = androidx.compose.ui.res.stringResource(ru.whensclass.R.string.app_name)
             steps.forEach { step ->
                 // Имя — как у этого приложения: у tested-сборки оно своё.
                 ExternalRow(
                     step.label,
                     checked = if (step.battery) phone.unrestricted else null,
-                    hint = step.hint.replace("«Когда пара?»", "«${context.getString(ru.whensclass.R.string.app_name)}»"),
+                    hint = step.hint.replace("«Когда пара?»", "«$appName»"),
                 ) {
                     if (!Background.open(context, step)) {
                         Toast.makeText(
@@ -293,7 +294,7 @@ private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
             context.startActivity(
                 Intent(
                     Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                    Uri.parse("package:${context.packageName}"),
+                    "package:${context.packageName}".toUri(),
                 ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }.isSuccess
@@ -305,7 +306,7 @@ private fun ExactAlarms(allowed: Boolean, reminders: Boolean) {
             ).show()
             runCatching {
                 context.startActivity(
-                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri())
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             }
@@ -389,7 +390,7 @@ private fun PhoneLimits(phone: ru.whensclass.notify.PhoneState) {
                         context.startActivity(
                             Intent(
                                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.parse("package:${context.packageName}"),
+                                "package:${context.packageName}".toUri(),
                             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                         )
                     }

@@ -90,7 +90,7 @@ class NextLessonWidget : GlanceAppWidget() {
                         ),
                     ),
             ) {
-                if (lesson == null || next == null) {
+                if (lesson == null) {
                     Text(
                         noNextLesson(
                             state?.groupName, schedule, today, broken, editing = editing,

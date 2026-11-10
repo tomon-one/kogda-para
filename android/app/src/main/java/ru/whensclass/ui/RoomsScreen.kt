@@ -221,6 +221,8 @@ internal fun RoomsScreen(
             item(key = "корпус:" + building.name) {
                 val free = building.rooms.filter { it.room !in busy }
                 // Сменили день или пару — кабинеты въезжают: видно, что список другой.
+                // Прежний гаснет за 90 мс — показывать в нём прежние кабинеты незачем.
+                @Suppress("UnusedContentLambdaTargetStateParameter")
                 AnimatedContent(
                     targetState = shown.date to chosen,
                     transitionSpec = {

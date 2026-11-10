@@ -1,5 +1,6 @@
 package ru.whensclass.notify
 
+import androidx.core.net.toUri
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -199,7 +200,7 @@ object Notifications {
     private fun joinIntent(context: Context, url: String): PendingIntent = PendingIntent.getActivity(
         context,
         ID_LESSON + 1000,
-        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 

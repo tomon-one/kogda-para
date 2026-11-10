@@ -173,14 +173,14 @@ internal fun App(
     var retakesFailed by remember { mutableStateOf(false) }
     // Не пришёл, хотя сервер ответил (ошибкой), — а не «нет связи».
     var retakesAnswered by remember { mutableStateOf(false) }
-    var retakesAt by remember { mutableStateOf(0L) }
-    var retakesRetry by remember { mutableStateOf(0) }
+    var retakesAt by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    var retakesRetry by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val roomsMemory = remember { RoomsMemory() }
     // Свежие списки за этот заход уже пришли — дальше хватит их.
     var listsFresh by remember { mutableStateOf(false) }
     // «Повторить» — в сеть, даже если сохранённые моложе 12 часов.
     var listsRetry by remember { mutableStateOf(false) }
-    var reloadKey by remember { mutableStateOf(0) }
+    var reloadKey by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     // Какой список показывать на экране выбора: null — по текущей роли.
     var pickTeacher by rememberSaveable { mutableStateOf<Boolean?>(null) }
     // Тот же экран, но выбирают не свою группу, а ещё одну к ней.

@@ -78,9 +78,9 @@ internal fun ScheduleTabs(
     current: Tab,
     teacherMode: Boolean,
     onPick: (Tab) -> Unit,
+    modifier: Modifier = Modifier,
     live: Boolean = false,
     rowStays: Boolean = false,
-    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val tabsBottom = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }

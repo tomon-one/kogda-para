@@ -1,7 +1,7 @@
 package ru.whensclass.ui
 
+import androidx.core.net.toUri
 import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -73,14 +73,14 @@ internal fun OnlineLink(url: String, muted: Boolean = false) {
  * от настоящей.
  */
 private fun linkEnd(url: String): String? =
-    runCatching { Uri.parse(url).pathSegments }
+    runCatching { url.toUri().pathSegments }
         .getOrNull()
         ?.lastOrNull { it.isNotBlank() }
         ?.takeLast(16)
 
 /** «https://my.mts-link.ru/j/144...» -> «my.mts-link.ru»: запасной вид без пути. */
 private fun host(url: String): String =
-    runCatching { Uri.parse(url).host }.getOrNull()?.removePrefix("www.") ?: url
+    runCatching { url.toUri().host }.getOrNull()?.removePrefix("www.") ?: url
 
 @Composable
 private fun LinkButton(label: String, color: Color, onClick: () -> Unit) {
@@ -106,7 +106,7 @@ private fun LinkButton(label: String, color: Color, onClick: () -> Unit) {
 }
 
 internal fun openLink(context: android.content.Context, url: String) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(intent) }.onFailure {
         Toast.makeText(context, "Нечем открыть ссылку", Toast.LENGTH_SHORT).show()

@@ -411,8 +411,6 @@ fun TodayScreen(
                         Explanation("Экзаменов нет", "Расписание экзаменов колледж выкладывает к сессии, в декабре.")
                         return@ScheduleTabs
                     }
-
-                    else -> Unit
                 }
 
                 if (gone && schedule == null || explainMissing(schedule, today, sourceUrl, loading = refreshing || loading)) return@ScheduleTabs

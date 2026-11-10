@@ -1,12 +1,12 @@
 package ru.whensclass.widget
 
+import androidx.core.net.toUri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.action.clickable
 import android.content.Intent
-import android.net.Uri
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.layout.Column
@@ -192,5 +192,5 @@ internal fun MissingHint(
 
 /** Таблица колледжа в браузере: первоисточник, когда дня у нас нет. */
 private fun openSource(url: String): Intent =
-    Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    Intent(Intent.ACTION_VIEW, url.toUri())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

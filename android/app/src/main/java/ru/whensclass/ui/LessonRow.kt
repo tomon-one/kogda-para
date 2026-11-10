@@ -271,7 +271,7 @@ internal fun LessonRow(
 
 /** Место занятия — единственная выделенная пометка в строке. */
 @Composable
-private fun Place(text: String, muted: Boolean = false, modifier: Modifier = Modifier) {
+private fun Place(text: String, modifier: Modifier = Modifier, muted: Boolean = false) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,

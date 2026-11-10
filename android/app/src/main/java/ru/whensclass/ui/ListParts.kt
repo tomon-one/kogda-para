@@ -1,7 +1,7 @@
 package ru.whensclass.ui
 
+import androidx.core.net.toUri
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -179,7 +179,7 @@ internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?, 
                 .clickable {
                     runCatching {
                         context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/toomonn"))
+                            Intent(Intent.ACTION_VIEW, "https://t.me/toomonn".toUri())
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                         )
                     }

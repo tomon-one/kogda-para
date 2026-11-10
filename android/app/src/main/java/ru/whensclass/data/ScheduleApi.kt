@@ -155,7 +155,7 @@ class ScheduleApi(
             .header("X-App-Build", appBuild(BuildConfig.VERSION_CODE, channel).toString())
             .build()
         client.newCall(request).execute().use { response ->
-            val body = response.body?.string().orEmpty()
+            val body = response.body.string()
             if (!response.isSuccessful) {
                 throw HttpFailure(response.code, path)
             }

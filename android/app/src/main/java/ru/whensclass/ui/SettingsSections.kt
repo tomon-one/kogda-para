@@ -229,7 +229,7 @@ internal fun VersionSection(
                 // Заранее: иначе системный запрос на установку из этого
                 // источника выглядит подозрительно, и осторожный человек
                 // отказывает. Имя — как у этого приложения: у tested оно своё.
-                val name = LocalContext.current.getString(ru.whensclass.R.string.app_name)
+                val name = androidx.compose.ui.res.stringResource(ru.whensclass.R.string.app_name)
                 Text(
                     "В первый раз Android попросит разрешить «$name» установку " +
                         "приложений: так она ставит обновление самой себе. Другие " +

@@ -401,7 +401,7 @@ private fun DayCard(
         // аудиторию не прочесть.
         Column {
             val notes = unreadNotes(day) + listOfNotNull(
-                BIRTHDAY.takeIf { isToday && !teacher && date?.monthValue == 4 && date.dayOfMonth == 2 },
+                BIRTHDAY.takeIf { isToday && !teacher && date.monthValue == 4 && date.dayOfMonth == 2 },
                 date?.takeIf { isToday }?.let { holidayNote(it.monthValue, it.dayOfMonth) },
             )
             DayHeader(

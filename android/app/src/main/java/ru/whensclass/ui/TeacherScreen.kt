@@ -88,7 +88,7 @@ fun TeacherScreen(
     var browsing by rememberSaveable { mutableStateOf(false) }
     // Нажали на свой день виджета или своё уведомление — к своему расписанию,
     // а не к открытому коллеге. Только на новое нажатие, не на поворот.
-    var handledKey by rememberSaveable { mutableStateOf(startKey) }
+    var handledKey by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(startKey) }
     LaunchedEffect(startKey) {
         if (startKey != handledKey) {
             handledKey = startKey
@@ -99,7 +99,7 @@ fun TeacherScreen(
     var pickedName by rememberSaveable { mutableStateOf("") }
     // С нуля, а не с нынешнего [openKey]: вкладку открывает само нажатие на имя,
     // и при первом входе на неё ключ уже новый — его надо исполнить.
-    var handledOpen by rememberSaveable { mutableStateOf(0) }
+    var handledOpen by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
     // Открытый из «Пересдач» — не память вкладки: нажатие на саму вкладку
     // возвращает то, что было открыто на ней (как на сайте).
     var viaOpen by rememberSaveable { mutableStateOf(false) }
@@ -120,7 +120,7 @@ fun TeacherScreen(
             pickedName = teachers?.firstOrNull { it.id == openId }?.name.orEmpty()
         }
     }
-    var handledEnter by rememberSaveable { mutableStateOf(enterKey) }
+    var handledEnter by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(enterKey) }
     LaunchedEffect(enterKey) {
         if (enterKey != handledEnter) {
             handledEnter = enterKey
@@ -421,10 +421,10 @@ private fun TeacherRow(
     pinned: Boolean,
     onOpen: () -> Unit,
     onTogglePin: () -> Unit,
+    modifier: Modifier = Modifier,
     isSelf: Boolean = false,
     /** Строка внутри общей карточки буквы ([lettered]): своей подложки нет. */
     inCard: Boolean = false,
-    modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,

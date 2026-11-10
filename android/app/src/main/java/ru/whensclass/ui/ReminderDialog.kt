@@ -112,7 +112,7 @@ internal fun ReminderDialog(current: Int, onDismiss: () -> Unit, onPick: (Int) -
     var own by rememberSaveable { mutableStateOf(if (quick) "" else current.toString()) }
     val minutes = own.toIntOrNull()
     val valid = minutes != null && minutes in REMIND_MIN..REMIND_MAX
-    val submit = { if (valid) onPick(minutes!!) }
+    val submit = { if (valid) onPick(minutes) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(

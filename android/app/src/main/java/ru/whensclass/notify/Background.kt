@@ -1,9 +1,9 @@
 package ru.whensclass.notify
 
+import androidx.core.net.toUri
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -305,7 +305,7 @@ object Background {
         }
         is SettingsTarget.Action -> Intent(target.action).apply {
             target.pkg?.let { setPackage(it) }
-            if (target.withPackage) data = Uri.parse("package:${context.packageName}")
+            if (target.withPackage) data = "package:${context.packageName}".toUri()
             target.extras.forEach { (key, value) -> putExtra(key, value) }
         }
     }
