@@ -295,6 +295,12 @@ test('поиск и буквы', () => {
   assert.equal(matchesQuery('Арасака Ёринобу', 'еринобу'), true);
   assert.equal(matchesQuery('ИСП-924/1', 'дп'), false);
   assert.equal(matchesQuery('что угодно', '  '), true);
+  assert.equal(matchesQuery('Алагян Оник Левонович', 'alag'), true);
+  assert.equal(matchesQuery('Хабибуллина Анна', 'khabib'), true);
+  assert.equal(matchesQuery('ИСП-924/1', 'isp924'), true);
+  assert.equal(matchesQuery('ИСП-924/1', 'bcg'), true);
+  assert.equal(matchesQuery('Жданов Юрий', ';lfyjd'), true);
+  assert.equal(matchesQuery('Алагян Оник Левонович', 'zzz'), false);
   assert.equal(letterOf('Ёринобу Арасака'), 'Е');
   assert.equal(letterOf('01-26.РКИ'), '0–9');
   assert.equal(letterOf('«Кавычки»'), '#');

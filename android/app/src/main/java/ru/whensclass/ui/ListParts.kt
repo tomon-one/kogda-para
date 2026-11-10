@@ -30,8 +30,32 @@ import androidx.compose.ui.unit.dp
  */
 internal fun matchesQuery(name: String, query: String): Boolean {
     val wanted = searchKey(query)
-    return wanted.isEmpty() || searchKey(name).contains(wanted)
+    if (wanted.isEmpty()) return true
+    val key = searchKey(name)
+    if (key.contains(wanted)) return true
+    // Набрано в английской раскладке: «bcg» — это «исп». До searchKey: «;», «,»
+    // и «[» в раскладке — буквы.
+    val swapped = searchKey(query.lowercase().map { LAYOUT_TO.getOrElse(LAYOUT_FROM.indexOf(it)) { _ -> it } }.joinToString(""))
+    if (swapped.isNotEmpty() && key.contains(swapped)) return true
+    // Латиницей: «alag» — «Алагян»; kh или h, ts или c — как кто привык.
+    val latin = looseLatin(wanted)
+    return latin.any { it in 'a'..'z' } && looseLatin(key.map { TRANSLIT[it] ?: it.toString() }.joinToString("")).contains(latin)
 }
+
+private const val LAYOUT_FROM = "qwertyuiop[]asdfghjkl;'zxcvbnm,.`"
+private const val LAYOUT_TO = "йцукенгшщзхъфывапролджэячсмитьбюё"
+
+private val TRANSLIT = mapOf(
+    'а' to "a", 'б' to "b", 'в' to "v", 'г' to "g", 'д' to "d", 'е' to "e", 'ж' to "zh", 'з' to "z",
+    'и' to "i", 'й' to "y", 'к' to "k", 'л' to "l", 'м' to "m", 'н' to "n", 'о' to "o", 'п' to "p",
+    'р' to "r", 'с' to "s", 'т' to "t", 'у' to "u", 'ф' to "f", 'х' to "h", 'ц' to "c", 'ч' to "ch",
+    'ш' to "sh", 'щ' to "sch", 'ъ' to "", 'ы' to "y", 'ь' to "", 'э' to "e", 'ю' to "yu", 'я' to "ya",
+)
+
+/** Латиница без разночтений записи: обе стороны сравнения — через неё. */
+private fun looseLatin(text: String): String = text
+    .replace("shch", "sch").replace("kh", "h").replace("ts", "c").replace('j', 'y').replace('w', 'v')
+    .replace("x", "ks").replace("ia", "ya").replace("iu", "yu")
 
 private fun searchKey(text: String): String =
     text.lowercase().replace('ё', 'е').filter { it.isLetterOrDigit() }

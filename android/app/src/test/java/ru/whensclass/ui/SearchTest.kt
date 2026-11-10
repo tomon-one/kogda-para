@@ -23,6 +23,20 @@ class SearchTest {
     }
 }
 
+class SearchLayoutTest {
+    @Test
+    fun `латиница и английская раскладка находят по-русски`() {
+        assertTrue(matchesQuery("Алагян Оник Левонович", "alag"))
+        assertTrue(matchesQuery("Хабибуллина Анна", "khabib"))
+        assertTrue(matchesQuery("Хабибуллина Анна", "habib"))
+        assertTrue(matchesQuery("ИСП-924/1", "isp924"))
+        assertTrue(matchesQuery("ИСП-924/1", "bcg"))
+        assertTrue(matchesQuery("Жданов Юрий", ";lfyjd"))
+        assertFalse(matchesQuery("ИСП-924/1", "dp"))
+        assertFalse(matchesQuery("Алагян Оник Левонович", "zzz"))
+    }
+}
+
 class LetterTest {
     @org.junit.Test
     fun `разделы по первой букве`() {
