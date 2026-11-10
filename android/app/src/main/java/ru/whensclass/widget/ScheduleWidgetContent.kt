@@ -362,7 +362,8 @@ private fun TapButton(
         label,
         style = TextStyle(fontSize = 15.sp, color = color),
         // Отступы внутри кликабельной области, иначе нажатие ловит только текст.
-        modifier = modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+        // Около 40×40 dp: шапка «Дня» и так в две строки, а палец меньше не ловит.
+        modifier = modifier.padding(horizontal = 18.dp, vertical = 10.dp),
     )
 }
 

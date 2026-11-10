@@ -216,7 +216,7 @@ private fun Header(
                 )
                 // Всегда: пропадая, значок менял бы ширину строки.
                 Text(
-                    " ↻",
+                    " ⟳",
                     maxLines = 1,
                     style = TextStyle(
                         fontSize = 11.sp,
