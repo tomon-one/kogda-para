@@ -68,10 +68,10 @@ private fun topTabs(teacherMode: Boolean): List<Tab> =
     if (teacherMode) listOf(Tab.TEACHERS, Tab.STUDENTS) else listOf(Tab.STUDENTS, Tab.TEACHERS)
 
 /**
- * Вкладки над разделом и сам раздел ([content]). Нижний ряд — пересдачи и
- * экзамены — уезжает вместе со списком и возвращается, когда список докручен до
- * верха, как на сайте: пока эти разделы пусты, он только отнимает место. Выбран
- * раздел из нижнего ряда или идут пересдачи ([live]) — ряд стоит.
+ * Вкладки над разделом и сам раздел ([content]). Нижний ряд — пересдачи,
+ * аудитории, экзамены — уезжает вместе со списком и возвращается, когда список
+ * докручен до верха, как на сайте. Выбран раздел из нижнего ряда, идут пересдачи
+ * ([live]) или человек так настроил ([rowStays]) — ряд стоит.
  */
 @Composable
 internal fun ScheduleTabs(
@@ -79,6 +79,7 @@ internal fun ScheduleTabs(
     teacherMode: Boolean,
     onPick: (Tab) -> Unit,
     live: Boolean = false,
+    rowStays: Boolean = false,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -86,11 +87,11 @@ internal fun ScheduleTabs(
     val top = topTabs(teacherMode)
     // В альбомной ряды уезжают всегда: шапка иначе отнимает больше половины высоты.
     val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < SHORT_SCREEN_DP
-    val pinned by rememberUpdatedState((current.ordinal >= 2 || live) && !short)
+    val pinned by rememberUpdatedState((current.ordinal >= 2 || live || rowStays) && !short)
     var rowHeight by remember { mutableIntStateOf(0) }
     // Насколько нижний ряд уехал вверх: от минус его высоты до нуля.
     var shift by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(current, live) { shift = 0f }
+    LaunchedEffect(current, live, rowStays) { shift = 0f }
     val collapse = remember {
         object : NestedScrollConnection {
             fun move(dy: Float): Float {

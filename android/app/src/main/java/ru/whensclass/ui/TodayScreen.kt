@@ -73,6 +73,8 @@ import ru.whensclass.widget.plural
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
+    /** Нижний ряд вкладок стоит при листании (настройка «Второй ряд вкладок не уезжает»). */
+    rowStays: Boolean = false,
     startDay: String? = null,
     /** Растёт на каждое открытие с днём по живому экрану (onNewIntent). */
     startKey: Int = 0,
@@ -298,6 +300,7 @@ fun TodayScreen(
                 current = tab,
                 teacherMode = teacherMode,
                 live = retakes?.activeOn(today) == true,
+                rowStays = rowStays,
                 // Под плашками: у «Стекла» список заходит под них и под шапку.
                 modifier = Modifier.zIndex(-1f),
                 onPick = { picked ->

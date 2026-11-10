@@ -226,6 +226,13 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit { it[KEY_GLOW] = if (on) "1" else "0" }
     }
 
+    /** Ряд «Пересдачи · Аудитории · Экзамены» стоит при листании. По умолчанию уезжает. */
+    val rowStays: Flow<Boolean> = context.dataStore.data.map { it[KEY_ROW_STAYS] == "1" }
+
+    suspend fun setRowStays(on: Boolean) {
+        context.dataStore.edit { it[KEY_ROW_STAYS] = if (on) "1" else "0" }
+    }
+
     suspend fun currentGroupId(): String? = groupId.first()
 
     /**

@@ -43,6 +43,7 @@ internal val KEY_UNSUPPORTED_BUILD = stringPreferencesKey("unsupported_build")
 internal const val FORMAT = "2"
 internal val KEY_THEME = stringPreferencesKey("theme")
 internal val KEY_GLOW = stringPreferencesKey("glow")
+internal val KEY_ROW_STAYS = stringPreferencesKey("row_stays")
 internal val KEY_WIDGET_DAY = stringPreferencesKey("widget_day")
 internal val KEY_WELCOME = stringPreferencesKey("welcome_seen")
 internal val KEY_GROUP2_ID = stringPreferencesKey("group2_id")

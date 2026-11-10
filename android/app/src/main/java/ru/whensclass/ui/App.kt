@@ -109,6 +109,7 @@ internal fun App(
     // Null — ещё не прочитано: первый кадр иначе мелькал бы обычной тёмной.
     val glowStored by container.store.glow.collectAsState(initial = null)
     val glow = glowStored == true
+    val rowStays by container.store.rowStays.collectAsState(initial = false)
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
     val loaded by container.store.loaded.collectAsState(initial = false)
     val notifyBefore by container.store.notifyBefore
@@ -508,6 +509,8 @@ internal fun App(
                         theme = theme,
                         glow = glow,
                         onGlow = { on -> scope.launch { container.store.setGlow(on) } },
+                        rowStays = rowStays,
+                        onRowStays = { on -> scope.launch { container.store.setRowStays(on) } },
                         update = update,
                         installing = installing,
                         notifyBefore = notifyBefore,
@@ -619,6 +622,7 @@ internal fun App(
                     )
 
                     Screen.TODAY -> TodayScreen(
+                        rowStays = rowStays,
                         retakes = retakes,
                         retakesFailed = retakesFailed,
                         retakesAnswered = retakesAnswered,

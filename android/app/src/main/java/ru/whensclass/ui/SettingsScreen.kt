@@ -93,6 +93,8 @@ fun SettingsScreen(
     /** «Стекло» (beta) у тёмной темы. */
     glow: Boolean = false,
     onGlow: (Boolean) -> Unit = {},
+    rowStays: Boolean = false,
+    onRowStays: (Boolean) -> Unit = {},
     onChangeGroup: () -> Unit,
     onAddGroup: () -> Unit = {},
     onAddSubgroup: (ru.whensclass.data.GroupDto) -> Unit = {},
@@ -237,6 +239,13 @@ fun SettingsScreen(
                 onPick = onTheme,
             )
             GlassToggle(glow, onGlow)
+            SwitchRow(
+                "Второй ряд вкладок не уезжает",
+                checked = rowStays,
+                onCheckedChange = onRowStays,
+                hint = "«Пересдачи», «Аудитории» и «Экзамены» остаются на месте, когда листаете расписание. " +
+                    "В альбомной уезжают всё равно: иначе парам мало места.",
+            )
         }
 
         VersionSection(
