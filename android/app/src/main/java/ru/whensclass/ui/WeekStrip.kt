@@ -47,7 +47,7 @@ import java.time.LocalDate
 // Полоска дней недели над списком.
 
 /** Поле над полоской дней. */
-private val STRIP_TOP = 6.dp
+internal val STRIP_TOP = 6.dp
 
 private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
