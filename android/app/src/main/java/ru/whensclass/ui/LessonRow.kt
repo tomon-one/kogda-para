@@ -46,9 +46,12 @@ import ru.whensclass.widget.roomLabel
 import ru.whensclass.widget.lessonTime
 import ru.whensclass.widget.shortenName
 
-/** Ширина колонки времени: номер и начало пары; значкам групп под ними нужно больше. */
+/**
+ * Ширина колонки времени: номер и начало пары. Одна и со значками групп под ними:
+ * три номера в ряд и «/1» влезают, длинное чужое название ужимается многоточием —
+ * зато название пары у своего и у открытого расписания начинается в одном месте.
+ */
 private val TIME_COLUMN = 72.dp
-private val TIME_COLUMN_MARKS = 92.dp
 
 /** Уже этого (ширина экрана в dp, делённая на шрифт) — время над названием, а не сбоку. */
 private const val STACK_BELOW_DP = 340
@@ -75,7 +78,7 @@ internal fun LessonRow(
     val main = if (past || foreign) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
     // Колонка растёт со шрифтом: время в sp, колонка в dp.
     val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-    val timeColumn = (if (groups.isEmpty()) TIME_COLUMN else TIME_COLUMN_MARKS) * scale
+    val timeColumn = TIME_COLUMN * scale
     // Тесно (крупный шрифт или масштаб экрана) — время строкой над названием:
     // сбоку оно оставляет названию слишком мало, и длинные слова рвутся.
     val stacked = LocalConfiguration.current.screenWidthDp / scale < STACK_BELOW_DP
