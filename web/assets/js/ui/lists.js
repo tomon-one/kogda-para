@@ -1,5 +1,4 @@
-// Списки групп и преподавателей: выбор себя (GroupPickerScreen.kt,
-// SelfPickerScreen.kt) и чужие расписания во вкладке (TeacherScreen.kt).
+// Списки групп и преподавателей: выбор себя (PickerScreen.kt) и чужие расписания во вкладке (TeacherScreen.kt).
 
 import { h, clear, icon, actionButton, externalLink, spinner, searchField } from './dom.js';
 import { lettered, matchesQuery } from '../search.js';
