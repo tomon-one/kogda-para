@@ -368,7 +368,7 @@ function refreshOnce(force) {
         return { kind: 'fresh' };
       }
       // Своё и остальные — разом. На экран своё попадает вместе с ними: их
-      // молчание ограничено тайм-аутом запроса, 30 секунд.
+      // молчание ограничено тайм-аутом запроса, 15 секунд (api.js).
       var request = (teacherMode ? api.teacher(own.id, from, DAYS) : api.schedule(own.id, from, DAYS))
         .then(cleanSchedule);
       var extraRequests = others.map(function (g) {

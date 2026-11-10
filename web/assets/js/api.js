@@ -4,7 +4,8 @@
 // ETag и 304 браузер обрабатывает сам: `cache: 'no-cache'` велит ему каждый
 // раз сверяться с сервером, а не отдавать сохранённое молча.
 
-var TIMEOUT_MS = 30000;
+// Ответы — единицы килобайт: дольше 15 с ждать незачем, человек смотрит на ⟳.
+var TIMEOUT_MS = 15000;
 
 export function HttpError(status) {
   this.name = 'HttpError';
@@ -28,7 +29,7 @@ function getJson(path) {
   var timeout = new Promise(function (resolve, reject) {
     timer = setTimeout(function () {
       if (controller) controller.abort();
-      reject(new NetError('сервер не ответил за 30 секунд', true));
+      reject(new NetError('сервер не ответил за ' + TIMEOUT_MS / 1000 + ' секунд', true));
     }, TIMEOUT_MS);
   });
   var init = { cache: 'no-cache', credentials: 'omit' };

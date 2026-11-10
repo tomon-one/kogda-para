@@ -175,7 +175,7 @@ function failText(result) {
     return 'Не удалось обновить: сервер ответил ' + error.status;
   }
   if (error instanceof NetError) {
-    return error.timeout ? 'Не удалось обновить: сервер не ответил за 30 секунд'
+    return error.timeout ? 'Не удалось обновить: сервер не ответил за 15 секунд'
       : 'Не удалось обновить: нет связи с сервером';
   }
   return 'Не удалось обновить: сервер прислал непонятный ответ';
