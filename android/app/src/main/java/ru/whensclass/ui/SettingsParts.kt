@@ -130,8 +130,8 @@ internal fun PinWidgets() {
     }
     Section("Виджеты") {
         Hint("Добавить на домашний экран — лаунчер спросит, куда поставить.")
-        // Три кнопки одним рядом, одной ширины и высоты: «Ближайшая пара» на
-        // узком экране мельчает, а не растягивает ряд.
+        // Три кнопки одним рядом, одной высоты; ширина — по надписи, чтобы у всех
+        // трёх был один размер букв. Мельчает «Ближайшая пара» только на совсем узком.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -142,7 +142,7 @@ internal fun PinWidgets() {
             ActionButton(
                 label = "Ближайшая пара",
                 onClick = { pin(NextLessonWidgetReceiver::class.java) },
-                modifier = tile,
+                modifier = Modifier.weight(1.7f),
                 side = 4.dp,
             )
         }
