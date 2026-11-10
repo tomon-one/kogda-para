@@ -26,5 +26,6 @@ export function welcomeScreen(app) {
     h('p', { class: 'welcome-android' },
       'На Android есть приложение — с виджетами и напоминаниями: ',
       externalLink('скачать', '/download/latest.apk'), '.'),
-    h('p', { class: 'signature' }, 'Создано Tomon'));
+    h('p', { class: 'signature' }, 'Создано Tomon'),
+    h('p', { class: 'signature' }, 'Собрано задолго до рассвета'));
 }
