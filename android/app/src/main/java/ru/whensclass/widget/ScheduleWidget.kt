@@ -59,7 +59,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 state?.fetchedAt ?: 0L,
                 colors,
                 now = now,
-                offset = currentOffset(),
+                offset = dayOffset(currentState(KEY_DAY_BASE)?.let { LocalDate.ofEpochDay(it) }, currentOffset(), now),
                 base = currentState(KEY_DAY_BASE)?.let { LocalDate.ofEpochDay(it) },
                 busy = refreshing(),
                 done = currentState(KEY_DONE) == true,
@@ -181,6 +181,14 @@ class ScheduleWidget : GlanceAppWidget() {
 }
 
 /** От какого дня листает дневной виджет: сохранённый (не вчерашний) или день открытия сейчас. */
+/**
+ * Сдвиг листания: листали в прошлые сутки — не в счёт. Сброс на смене суток делает
+ * будильник, но где фон ограничен, он не приходит, и вчерашний сдвиг лёг бы на
+ * новый день открытия.
+ */
+internal fun dayOffset(stored: LocalDate?, offset: Int, now: LocalDateTime): Int =
+    if (stored != null && stored.isBefore(now.toLocalDate())) 0 else offset
+
 internal fun dayBase(stored: LocalDate?, schedule: ScheduleDto?, now: LocalDateTime): LocalDate =
     stored?.takeIf { !it.isBefore(now.toLocalDate()) }
         ?: ru.whensclass.ui.openingDay(schedule?.bellsOn(now.toLocalDate()).orEmpty(), now)

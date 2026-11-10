@@ -36,7 +36,11 @@ class ShiftDayAction : ActionCallback {
             )
             val low = firstOffset(schedule, base)
             val high = maxOf(low, lastOffset(schedule, base))
-            val current = prefs[ScheduleWidget.KEY_DAY_OFFSET] ?: 0
+            val current = dayOffset(
+                prefs[ScheduleWidget.KEY_DAY_BASE]?.let { java.time.LocalDate.ofEpochDay(it) },
+                prefs[ScheduleWidget.KEY_DAY_OFFSET] ?: 0,
+                now,
+            )
             // Назад — в прожитые дни недели: они уже лежат на телефоне.
             val next = (current + step).coerceIn(low, high)
             prefs.toMutablePreferences().apply {
