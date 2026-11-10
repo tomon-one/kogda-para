@@ -18,6 +18,10 @@ class ScreenWordsTest {
             refreshFailure(HttpFailure(503, "/v1/meta")),
         )
         assertEquals("Не удалось обновить: нет связи с сервером", refreshFailure(java.io.IOException()))
+        assertEquals(
+            "Не удалось обновить: сбой на сервере, на экране прежнее. Повторите позже",
+            refreshFailure(HttpFailure(500, "/v1/meta")),
+        )
     }
 
     @Test
