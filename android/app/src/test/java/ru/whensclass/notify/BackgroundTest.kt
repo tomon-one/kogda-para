@@ -34,7 +34,8 @@ class BackgroundTest {
         assertEquals("Redmi", Vendor.XIAOMI.title("Redmi"))
         assertEquals("Xiaomi", Vendor.XIAOMI.title("Xiaomi"))
         assertEquals("Infinix", Vendor.TRANSSION.title("Infinix"))
-        assertEquals("Tecno", Vendor.TRANSSION.title("TECNO"))
+        assertEquals("TECNO", Vendor.TRANSSION.title("TECNO"))
+        assertEquals("TECNO", Vendor.TRANSSION.title("tecno"))
     }
 
     @Test

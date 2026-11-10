@@ -26,7 +26,7 @@ enum class Vendor(
     HUAWEI("Huawei", pinInRecents = true),
     HONOR("Honor", pinInRecents = true),
     SAMSUNG("Samsung", pinInRecents = false),
-    TRANSSION("Tecno", pinInRecents = true),
+    TRANSSION("TECNO", pinInRecents = true),
     /** OPPO, realme и OnePlus — прошивка ColorOS (у realme — realme UI на ней). */
     OPPO("OPPO", pinInRecents = true),
     VIVO("vivo", pinInRecents = true);
