@@ -70,7 +70,7 @@ internal fun WeekStrip(
     val monday = shown.minusDays((shown.dayOfWeek.value - 1).toLong())
     val index = shown.dayOfWeek.value - 1
     // Плашка едет только в отрисовке: при листании полоска не пересчитывается на
-    // каждом кадре, а цвет подписи меняется сразу — под плашкой это не видно.
+    // каждом кадре. Цвет подписей переходит за то же время (ниже).
     val pill = remember { androidx.compose.animation.core.Animatable(index.toFloat()) }
     // Неделя сменилась — плашка уезжает вместе с днями, а не пробегает всю полоску.
     var pillWeek by remember { mutableStateOf(monday) }
@@ -147,15 +147,18 @@ internal fun WeekStrip(
         label = "неделя",
         modifier = Modifier.weight(1f),
     ) { week ->
-    // Плашка — у своей недели: у уезжающей её нет.
+    // Уезжающая неделя увозит свою плашку на том дне, где она стояла: иначе, пока
+    // новая не въехала, выделения нет вовсе.
     val current = week == monday
+    val kept = remember { androidx.compose.runtime.mutableIntStateOf(index) }
+    if (current) androidx.compose.runtime.SideEffect { kept.intValue = index }
+    val marked = if (current) index else kept.intValue
     Row(
         modifier = Modifier.fillMaxWidth().drawBehind {
-            if (!current) return@drawBehind
             val cell = size.width / 7
             drawRoundRect(
                 pillColor,
-                topLeft = androidx.compose.ui.geometry.Offset(cell * pill.value, 0f),
+                topLeft = androidx.compose.ui.geometry.Offset(cell * (if (current) pill.value else kept.intValue.toFloat()), 0f),
                 size = androidx.compose.ui.geometry.Size(cell, size.height),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx()),
             )
@@ -163,15 +166,25 @@ internal fun WeekStrip(
     ) {
         for (i in 0 until 7) {
             val date = week.plusDays(i.toLong())
-            val on = current && i == index
-            val fg = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            val on = i == marked
+            // Цвет подписи меняется вместе с ездой плашки, а не до неё.
+            val fg by androidx.compose.animation.animateColorAsState(
+                if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                label = "подпись дня",
+            )
+            val nameColor by androidx.compose.animation.animateColorAsState(
+                if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                androidx.compose.animation.core.tween(360, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                label = "день недели",
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .semantics {
                         // Выбранный и сегодняшний — словами: цвет и точку чтец не видит.
                         contentDescription = "${WEEK_NAMES[i]}, ${date.dayOfMonth}" + if (date == today) ", сегодня" else ""
-                        selected = on
+                        selected = current && on
                         onClick(label = "Перейти к дню") { onPick(date); true }
                     },
                 contentAlignment = Alignment.Center,
@@ -183,7 +196,7 @@ internal fun WeekStrip(
                     Text(
                         WEEK_NAMES[i],
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (on) fg else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = nameColor,
                     )
                     Text(
                         date.dayOfMonth.toString(),

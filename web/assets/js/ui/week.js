@@ -121,12 +121,10 @@ function fill(strip, monday) {
     return;
   }
   // Новая неделя въезжает со стороны листания: вперёд — справа, назад —
-  // слева; прежняя уезжает без плашки (WeekStrip.kt).
+  // слева; прежняя увозит свою плашку, иначе пока новая не въехала, выделения
+  // нет вовсе (WeekStrip.kt).
   strip.style.setProperty('--dir', forward ? '1' : '-1');
   old.classList.add('week-leave');
-  // Без плашки подпись выделенного дня цветом на плашке пропала бы на светлом фоне.
-  var was = old.querySelector('.week-day.on');
-  if (was) was.classList.remove('on');
   old.addEventListener('animationend', function () {
     if (old.parentNode) old.parentNode.removeChild(old);
   });

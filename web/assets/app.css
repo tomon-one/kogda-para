@@ -302,7 +302,6 @@ p a, .point a { text-decoration: underline; }
   left: 4px;
   right: 4px;
 }
-.week-leave .week-pill { visibility: hidden; }
 
 .week-pill {
   position: absolute;
