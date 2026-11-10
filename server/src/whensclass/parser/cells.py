@@ -408,6 +408,14 @@ def parse_lesson(
         teachers = teachers[-1:]
         why = f"замена: {swap.group('why')}"
         note = f"{note}; {why}" if note else why
+    bare = None if swap else _REPLACED_RE.search(subject)
+    if bare and not subject[bare.end():].strip() and subject[: bare.start()].strip(" ,;.-"):
+        # «X (Пр) ЗАМЕНА» и пусто после слова: пара та же, а два ФИО — прежний
+        # и новый преподаватель, как у замены с причиной.
+        subject = subject[: bare.start()].strip(" ,;.-")
+        why = "замена преподавателя" if len(teachers) > 1 else "замена"
+        teachers = teachers[-1:]
+        note = f"{note}; {why}" if note else why
     replaced = replaced_subject(subject)
     if replaced is not None:
         old_name, subject = replaced

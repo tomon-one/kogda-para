@@ -370,6 +370,18 @@ def test_replaced_teacher_keeps_the_lesson(subject):
     assert lesson.note.startswith("замена: ") and "вместо" not in lesson.note
 
 
+@pytest.mark.parametrize("teachers, expected, note", [
+    ("Банкрофт Мириам Олеговна Райкер Элиас Иванович", ("Райкер Элиас Иванович",), "замена преподавателя"),
+    ("Райкер Элиас Иванович", ("Райкер Элиас Иванович",), "замена"),
+])
+def test_replaced_word_at_the_end_is_not_in_the_name(teachers, expected, note):
+    """«X (Пр) ЗАМЕНА» без второй пары: слово не остаётся в названии, ведёт последний."""
+    lesson = parse_lesson(1, "Основы алгоритмизации и программирования (Пр) ЗАМЕНА", "", teachers)
+    assert lesson.subject == "Основы алгоритмизации и программирования"
+    assert lesson.kind == "Пр" and not lesson.cancelled
+    assert lesson.teachers == expected and lesson.note == note
+
+
 def test_word_replacement_alone_is_not_a_replacement():
     lesson = parse_lesson(1, "Замена", "", "")
     assert lesson.subject == "Замена" and lesson.note is None
