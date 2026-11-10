@@ -82,7 +82,10 @@ internal fun <T> LazyListScope.lettered(
     name: (T) -> String,
     key: (T) -> Any,
     onPick: (T) -> Unit,
+    /** Своя строка вместо названия (у преподавателей — со звёздочкой); нажатие — её дело. */
+    row: (@Composable (T) -> Unit)? = null,
 ) {
+    val custom = row
     list.groupBy { letterOf(name(it)) }.forEach { (letter, rows) ->
         item(key = "буква $letter") {
             Text(
@@ -102,15 +105,19 @@ internal fun <T> LazyListScope.lettered(
                     .clip(RoundedCornerShape(top, top, bottom, bottom))
                     .background(MaterialTheme.colorScheme.surface),
             ) {
-                Text(
-                    name(row),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .clickable { onPick(row) }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                )
+                if (custom != null) {
+                    custom(row)
+                } else {
+                    Text(
+                        name(row),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clickable { onPick(row) }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                    )
+                }
                 if (index != rows.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 16.dp),

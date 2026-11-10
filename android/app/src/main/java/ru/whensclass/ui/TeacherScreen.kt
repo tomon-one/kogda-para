@@ -266,14 +266,16 @@ fun TeacherScreen(
                     found.filter { it.id !in pinned && it.id != selfId }
                 }
 
+                // Без общего зазора: строки одной буквы — одна карточка ([lettered]);
+                // отдельные карточки сверху отступают сами.
                 LazyColumn(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     self?.let { own ->
                         item(key = "self-title") { SectionTitle("Ваше расписание") }
                         item(key = "self") {
                             TeacherRow(
+                                modifier = Modifier.padding(bottom = 6.dp),
                                 teacher = own,
                                 pinned = own.id in pinned,
                                 isSelf = true,
@@ -290,6 +292,7 @@ fun TeacherScreen(
                             contentType = { "teacher" },
                         ) { teacher ->
                             TeacherRow(
+                                modifier = Modifier.padding(bottom = 6.dp),
                                 teacher = teacher,
                                 pinned = true,
                                 isSelf = teacher.id == selfId,
@@ -312,13 +315,15 @@ fun TeacherScreen(
                     if (others.isNotEmpty() && (self != null || favourites.isNotEmpty())) {
                         item(key = "others") { SectionTitle(othersTitle) }
                     }
-                    items(others, key = { it.id }, contentType = { "teacher" }) { teacher ->
+                    // По буквам, как в «Найдите себя»: одна карточка на букву.
+                    lettered(others, name = { it.name }, key = { it.id }, onPick = { pick(it) }) { teacher ->
                         TeacherRow(
                             teacher = teacher,
                             pinned = false,
                             isSelf = teacher.id == selfId,
                             onOpen = { pick(teacher) },
                             onTogglePin = { onTogglePin(teacher.id) },
+                            inCard = true,
                         )
                     }
                     if (query.isBlank()) {
@@ -417,13 +422,20 @@ private fun TeacherRow(
     onOpen: () -> Unit,
     onTogglePin: () -> Unit,
     isSelf: Boolean = false,
+    /** Строка внутри общей карточки буквы ([lettered]): своей подложки нет. */
+    inCard: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface),
+        modifier = if (inCard) {
+            modifier.fillMaxWidth()
+        } else {
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surface)
+        },
     ) {
             Column(
                 modifier = Modifier
