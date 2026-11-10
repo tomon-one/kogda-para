@@ -43,6 +43,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -237,9 +239,13 @@ fun ScheduleDays(
         }
     }
     var stripHeight by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // Палец на полоске листает список — через ту же цепочку, что и сам список:
+    // иначе шапка и ряды вкладок в альбомной не уезжают (ScheduleTabs, TodayScreen).
+    val stripScroll = remember { androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher() }
+    val stripConnection = remember { object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {} }
     val strip: @Composable (Modifier) -> Unit = { stripModifier ->
         WeekStrip(
-            modifier = stripModifier,
+            modifier = stripModifier.nestedScroll(stripConnection, stripScroll),
             glass = if (glass) source else null,
             // Лямбдой: день читается внутри полоски, и при листании перерисовывается
             // только она, а не весь список.
@@ -266,7 +272,10 @@ fun ScheduleDays(
             onDrag = { delta ->
                 touched = true
                 if (listState.canScrollForward) picked = null
-                listState.dispatchRawDelta(-delta)
+                val source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput
+                val left = delta - stripScroll.dispatchPreScroll(Offset(0f, delta), source).y
+                val used = -listState.dispatchRawDelta(-left)
+                stripScroll.dispatchPostScroll(Offset(0f, used), Offset(0f, left - used), source)
             },
         )
     }
