@@ -184,7 +184,10 @@ fun ScheduleDays(
             val item = info.visibleItemsInfo.firstOrNull {
                 rows.day(it.index) != null && it.offset + it.size - maxOf(it.offset, 0) >= it.size / 2
             } ?: info.visibleItemsInfo.lastOrNull { rows.day(it.index) != null }
-            item?.let { rows.day(it.index)?.let(days::getOrNull)?.date }
+            // Видны одни плашки (альбомная, окно низкое) — выделен день под ними, а не сегодня.
+            val index = item?.let { rows.day(it.index) }
+                ?: rows.headerAt.takeIf { at -> at >= 0 && info.visibleItemsInfo.any { it.index == at } }
+            index?.let(days::getOrNull)?.date
         }
     }
 
