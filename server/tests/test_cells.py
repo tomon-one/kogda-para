@@ -79,6 +79,13 @@ def test_two_teachers_in_one_cell():
     assert lesson.teachers == ("Ковач Т. Л.", "Ортега К. Ф.")
 
 
+def test_trailing_dot_after_whole_word_is_dropped():
+    """«Физическая культура.» — как без точки; точка сокращения остаётся."""
+    assert parse_lesson(1, "Физическая культура.", "", "").subject == "Физическая культура"
+    assert parse_lesson(1, "Физическая культура. (Пр)", "", "").subject == "Физическая культура"
+    assert parse_lesson(1, "Иностр. яз.", "", "").subject == "Иностр. яз."
+
+
 def test_unknown_kind_survives():
     """Незнакомый тип не должен ронять разбор всего дня."""
     lesson = parse_lesson(1, "Практика (Вебинар)", "", "")

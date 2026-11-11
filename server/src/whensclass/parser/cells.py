@@ -433,6 +433,11 @@ def parse_lesson(
         subject = subject[: in_room.start()].strip(" ,;.")
 
     subject, kind = _split_kind(subject)
+    # «Физическая культура.» — точка после целого слова лишняя; после
+    # сокращения («Иностр. яз.») она часть слова и остаётся.
+    last = subject.rstrip(".").rsplit(" ", 1)[-1]
+    if subject.endswith(".") and len(last) >= 5 and last.isalpha():
+        subject = subject.rstrip(".").rstrip()
     if replaced is not None and subject.isupper():
         # «ЗАМЕНА КУРАТОРСКИЙ ЧАС».
         subject = subject[:1] + subject[1:].lower()
