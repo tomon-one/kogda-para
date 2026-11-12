@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.zIndex
@@ -283,14 +285,14 @@ fun TodayScreen(
                 Unsupported(onUpdateBadge)
             } else if (serverBroken) {
                 ServerBroken(
-                    sheetLink(schedule, today, sourceUrl), serverSince, now, unreachable, editing,
+                    sheetLink(schedule, today, sourceUrl), serverSince, unreachable, editing,
                 )
             }
         }
         // Мало высоты (альбомная ориентация, половина экрана): плашки едут
         // вместе со списком, иначе неподвижная шапка отнимает у него всё место.
-        val platesInList = maxHeight < 480.dp && tab == Tab.STUDENTS && !teacherMode &&
-            !schedule?.days.isNullOrEmpty()
+        // Дней нет — плашки над объяснением, которое тоже листается.
+        val platesInList = maxHeight < 480.dp && tab == Tab.STUDENTS && !teacherMode
         // Преподаватель и открытые расписания: плашки ставит сам экран — в список
         // дней, а без него над собой.
         val platesInScreen = maxHeight < 480.dp && (tab == Tab.TEACHERS || tab == Tab.STUDENTS && teacherMode)
@@ -413,7 +415,12 @@ fun TodayScreen(
                     }
                 }
 
-                if (gone && schedule == null || explainMissing(schedule, today, sourceUrl, loading = refreshing || loading)) return@ScheduleTabs
+                val listPlates = if (platesInList) plates else null
+                if (gone && schedule == null) {
+                    listPlates?.let { Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { it() } }
+                    return@ScheduleTabs
+                }
+                if (explainMissing(schedule, today, sourceUrl, loading = refreshing || loading, header = listPlates)) return@ScheduleTabs
                 schedule ?: return@ScheduleTabs
 
                 ScheduleDays(
@@ -421,7 +428,7 @@ fun TodayScreen(
                     today = today,
                     startDay = startDay,
                     startKey = startKey,
-                    header = if (platesInList) plates else null,
+                    header = listPlates,
                     groupsByName = groupsByName,
                     weekStrip = true,
                     underHead = true,

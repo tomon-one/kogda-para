@@ -29,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.ZoneId
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.ScheduleStore
@@ -50,12 +49,19 @@ import ru.whensclass.widget.plural
 internal fun ServerBroken(
     sourceUrl: String?,
     since: String?,
-    now: LocalDateTime,
     unreachable: Boolean = false,
     /** Колледж правит таблицу (сказал автор): ожидание, а не сбой. */
     editing: Boolean = false,
 ) {
     val context = LocalContext.current
+    // Свои часы: часы экрана идут по звонкам, и «уже N часов» отставало бы до звонка.
+    var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(java.time.Instant.now()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            now = java.time.Instant.now()
+        }
+    }
     CardFrame(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
             // Сервер не ответил телефону — не «не прочитал таблицу»: таблица тут
@@ -87,10 +93,10 @@ internal fun ServerBroken(
                     // Не «получено» и не дата правки: до сбоя сервер читал таблицу
                     // исправно, значит на экране она — какой была к его началу.
                     if (editing) {
-                        "С ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}. " +
+                        "С ${formatSince(it, now)}. " +
                             "На экране — таблица, какой она была до правки."
                     } else {
-                        "Сбой с ${formatSince(it, now.atZone(ru.whensclass.widget.COLLEGE_ZONE).toInstant())}. " +
+                        "Сбой с ${formatSince(it, now)}. " +
                             "На экране — таблица, какой она была до сбоя."
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -289,12 +295,15 @@ internal fun explainMissing(
     today: java.time.LocalDate,
     sourceUrl: String?,
     loading: Boolean = false,
+    /** Плашки над объяснением (низкий экран, см. [Explanation]). */
+    header: (@Composable () -> Unit)? = null,
 ): Boolean {
     if (schedule == null && loading) {
         Explanation(
             title = "Расписание загружается",
             text = "Обычно это несколько секунд.",
             busy = true,
+            header = header,
         )
         return true
     }
@@ -302,6 +311,7 @@ internal fun explainMissing(
         Explanation(
             title = "Расписание ещё не загружено",
             text = "Проверьте интернет и нажмите ⟳ вверху. Не помогает — напишите автору в Telegram: @toomonn.",
+            header = header,
         )
         return true
     }
@@ -313,6 +323,7 @@ internal fun explainMissing(
             text = "Колледж их ещё не выложил — или расписание застряло на сервере. " +
                 "Проверить можно в таблице колледжа.",
             sourceUrl = sheetLink(schedule, today, sourceUrl),
+            header = header,
         )
         return true
     }

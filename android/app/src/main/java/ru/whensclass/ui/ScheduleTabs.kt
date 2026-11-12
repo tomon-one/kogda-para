@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -208,10 +209,15 @@ internal fun Explanation(
     busy: Boolean = false,
     /** «Повторить» под текстом: отдельной строкой после [Explanation] ей не осталось бы места. */
     onRetry: (() -> Unit)? = null,
+    /** Плашки над объяснением — когда экран низкий и над вкладками им не место. */
+    header: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    // Листается: в альбомной и при крупном шрифте объяснению может не хватить высоты.
+    Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+    header?.invoke()
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (busy) {
@@ -241,6 +247,7 @@ internal fun Explanation(
             )
         }
         onRetry?.let { ActionButton(label = "Повторить", onClick = it, modifier = Modifier.fillMaxWidth()) }
+    }
     }
 }
 
