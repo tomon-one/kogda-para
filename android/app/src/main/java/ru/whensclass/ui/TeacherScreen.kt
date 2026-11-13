@@ -23,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.gestures.draggable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -348,10 +349,17 @@ private fun ChosenTeacher(
     today: java.time.LocalDate,
     onBack: () -> Unit,
 ) {
+    // Палец на строке с именем листает список, как с полоски: в альбомной
+    // строка и полоска — почти весь экран над парами.
+    val dragSink = remember { mutableStateOf<((Float) -> Unit)?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         if (schedule == null || schedule.days.isEmpty()) plates?.invoke()
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp)
+                .draggable(
+                    androidx.compose.foundation.gestures.rememberDraggableState { dragSink.value?.invoke(it) },
+                    androidx.compose.foundation.gestures.Orientation.Vertical,
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -399,6 +407,7 @@ private fun ChosenTeacher(
                     today = today,
                     weekStrip = true,
                     header = plates,
+                    dragSink = dragSink,
                 )
             }
         }

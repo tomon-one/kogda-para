@@ -85,6 +85,11 @@ fun ScheduleDays(
      * часы перекомпоновывали бы экран на каждом звонке ещё раз.
      */
     clock: LocalDateTime? = null,
+    /**
+     * Сюда список кладёт, чем листать его извне: строка над полоской (имя
+     * открытого преподавателя) листает так же, как сама полоска.
+     */
+    dragSink: androidx.compose.runtime.MutableState<((Float) -> Unit)?>? = null,
 ) {
     val now = clock ?: rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
@@ -248,6 +253,15 @@ fun ScheduleDays(
     // иначе шапка и ряды вкладок в альбомной не уезжают (ScheduleTabs, TodayScreen).
     val stripScroll = remember { androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher() }
     val stripConnection = remember { object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {} }
+    val drag: (Float) -> Unit = { delta ->
+        touched = true
+        if (listState.canScrollForward) picked = null
+        val source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput
+        val left = delta - stripScroll.dispatchPreScroll(Offset(0f, delta), source).y
+        val used = -listState.dispatchRawDelta(-left)
+        stripScroll.dispatchPostScroll(Offset(0f, used), Offset(0f, left - used), source)
+    }
+    if (dragSink != null) androidx.compose.runtime.SideEffect { dragSink.value = drag }
     val strip: @Composable (Modifier) -> Unit = { stripModifier ->
         WeekStrip(
             modifier = stripModifier.nestedScroll(stripConnection, stripScroll),
@@ -274,14 +288,7 @@ fun ScheduleDays(
                     }
                 }
             },
-            onDrag = { delta ->
-                touched = true
-                if (listState.canScrollForward) picked = null
-                val source = androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput
-                val left = delta - stripScroll.dispatchPreScroll(Offset(0f, delta), source).y
-                val used = -listState.dispatchRawDelta(-left)
-                stripScroll.dispatchPostScroll(Offset(0f, used), Offset(0f, left - used), source)
-            },
+            onDrag = drag,
         )
     }
     val list: @Composable (Modifier, androidx.compose.ui.unit.Dp) -> Unit = { listModifier, top ->
