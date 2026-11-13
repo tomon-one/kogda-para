@@ -219,7 +219,9 @@ window.addEventListener('scroll', function () {
 function headBottom() {
   var head = document.querySelector('.head');
   var strip = document.querySelector('.week-strip');
-  var top = head ? head.getBoundingClientRect().bottom : 0;
+  // Шапка не прилипает (альбомная) — после прокрутки её над полоской не будет.
+  var sticky = head && window.getComputedStyle(head).position === 'sticky';
+  var top = sticky ? head.getBoundingClientRect().bottom : 0;
   if (!strip) return top;
   // Прилипает полоска не вплотную к шапке, а на свой top (у «Стекла» с зазором).
   var stuck = parseFloat(window.getComputedStyle(strip).top);
