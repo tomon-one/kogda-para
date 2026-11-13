@@ -156,6 +156,10 @@ export function mark(strip, day) {
 var picked = null;
 var touched = false;
 
+// День встаёт на 8 под полоской, как в приложении (headBottom — на 14 под ней):
+// край прошлого дня в промежутке не торчит.
+var LANDING = 6;
+
 /** К дню — плавной прокруткой (без неё, если в системе «уменьшить движение»). */
 function go(strip, date) {
   var cards = document.querySelectorAll('[data-day]');
@@ -163,7 +167,7 @@ function go(strip, date) {
   for (var i = 0; i < cards.length && !card; i++) if (cards[i].getAttribute('data-day') >= date) card = cards[i];
   card = card || cards[cards.length - 1];
   if (!card) return;
-  var y = card.getBoundingClientRect().top + window.pageYOffset - headBottom() - 8;
+  var y = card.getBoundingClientRect().top + window.pageYOffset - headBottom() + LANDING;
   var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Выделен день, к которому пришли: нажатого (воскресенье, невыложенный
   // будень) в списке может не быть — как в приложении.

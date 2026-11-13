@@ -268,7 +268,8 @@ function scrollToWanted() {
   // Плашки сбоя стоят перед сегодняшним днём — показать и их.
   var prev = card.previousElementSibling;
   var target = prev && prev.className === 'plates' ? prev : card;
-  var y = target.getBoundingClientRect().top + window.pageYOffset - headHeight() - 8;
+  // На 8 под полоской, как в приложении (headHeight — как раз на 8 под ней).
+  var y = target.getBoundingClientRect().top + window.pageYOffset - headHeight();
   // Первый день — с самого верха, вместе со вкладками.
   window.scrollTo(0, index === 0 && target === card ? 0 : Math.max(0, y));
   if (days.some(function (d) { return d.d >= state.wanted; })) state.wanted = null;

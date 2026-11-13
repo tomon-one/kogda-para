@@ -34,24 +34,26 @@
 /* Как в приложении: подпись над рядом, кнопки дня и пары делят строку поровну —
    шесть номеров не переносятся и на 320 px. Промежутки — полями, не flex gap:
    его нет в старых Safari (app.css). */
-.rooms .chips-label { display: block; margin: 8px 4px 4px; font-size: 13px; }
-.rooms .chips { display: flex; margin: 0 -3px 2px; }
-.rooms .chips .chip { flex: 1 1 0; min-width: 0; margin: 0 3px 6px; padding-left: 4px; padding-right: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rooms .chips-label { display: block; margin: 8px 4px 8px; font-size: 12px; line-height: 16px; }
+/* Видимый чип — 32 в строке 48 (поле под палец, как у FilterChip): ниже ещё 8. */
+.rooms .chips { display: flex; margin: 0 -3px; padding-bottom: 8px; }
+.rooms .chips .chip { flex: 1 1 0; min-width: 0; margin: 0 3px; padding-left: 4px; padding-right: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rooms .chips .chip.now { padding-left: 3px; padding-right: 3px; }
 .room-when { margin: 2px 4px 4px; font-size: 14px; font-weight: 600; }
-.chip { padding: 6px 12px; border-radius: 10px; border: 1px solid var(--outline); font-size: 14px; color: var(--fg); }
-.chip.on { background: var(--selected-bg); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+/* FilterChip приложения: 32 высотой, угол 8, выбранный — заливка без рамки, остальные — тонкая рамка. */
+.chip { padding: 0 12px; border-radius: 8px; border: 1px solid var(--chip-border); font-size: 14px; font-weight: 500; line-height: 30px; color: var(--muted); }
+.chip.on { background: var(--chip-bg); border-color: transparent; color: var(--fg); }
 /* Идущая сейчас пара в «Аудиториях» — рамкой потолще, видна и при другой выбранной. */
-.chip.now { border: 2px solid var(--primary); padding: 5px 11px; font-weight: 700; }
+.chip.now { border: 2px solid var(--primary); padding: 0 11px; line-height: 28px; font-weight: 700; }
 .room-note { margin: 12px 4px 8px; font-size: 12px; color: var(--muted); }
 .room-card { margin-top: 8px; padding: 12px 16px; }
-.room-building { font-weight: 600; }
-.room-count { font-size: 14px; margin-bottom: 6px; }
+.room-building { font-size: 16px; line-height: 24px; font-weight: 600; }
+.room-count { font-size: 14px; line-height: 20px; margin-bottom: 6px; }
 .room-floor { display: flex; align-items: baseline; margin-top: 6px; }
 /* В одну строку и шире при крупном тексте: «эта / ж» не читается. */
-.room-floor-label { flex: none; min-width: 46px; margin-right: 6px; font-size: 13px; white-space: nowrap; }
+.room-floor-label { flex: none; min-width: 46px; margin-right: 6px; font-size: 12px; line-height: 16px; white-space: nowrap; }
 /* Ровно под «свободно N из M», без своего поля. */
-.room-card .nothing { padding: 0; margin-top: 6px; font-size: 13px; }
+.room-card .nothing { padding: 0; margin-top: 6px; font-size: 12px; line-height: 16px; }
 .room-free { display: flex; flex-wrap: wrap; margin-bottom: -6px; }
 .room-free .room-chip { margin: 0 5px 6px 0; }
 /* Свободный кабинет — зелёным: красный читался как «занято». */

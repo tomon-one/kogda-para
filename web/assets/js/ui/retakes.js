@@ -98,7 +98,9 @@ export function retakesView(app) {
   }
   app.loadRetakes(false);
   if (!data.rows || !data.rows.length) {
-    wrap.appendChild(h('p', { class: 'nothing' }, 'Действующего графика пересдач в таблице колледжа нет.'));
+    wrap.appendChild(h('div', { class: 'explanation' },
+      h('h2', null, 'Пересдач нет'),
+      h('p', null, 'Действующего графика пересдач в таблице колледжа нет.')));
     return wrap;
   }
 

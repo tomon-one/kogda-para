@@ -123,9 +123,9 @@ export function othersList(app, kind, selfId) {
     var favourites = found.filter(function (r) { return pins.indexOf(r.id) >= 0 && r.id !== selfId; });
     var others = found.filter(function (r) { return pins.indexOf(r.id) < 0 && r.id !== selfId; });
 
-    function row(item, isSelf) {
+    function row(item, isSelf, inCard) {
       var on = pins.indexOf(item.id) >= 0;
-      return h('div', { class: 'pin-row' },
+      return h('div', { class: 'pin-row' + (inCard ? ' in-card' : '') },
         h('button', { type: 'button', class: 'pin-open', 'data-key': 'open:' + item.id, onclick: function () { app.go(kind + '/' + encodeURIComponent(item.id)); } },
           h('span', null, item.name),
           isSelf ? h('span', { class: 'self-mark' }, 'это вы') : null),
@@ -161,7 +161,12 @@ export function othersList(app, kind, selfId) {
     if (others.length && (self || favourites.length)) {
       results.appendChild(h('h3', { class: 'section-title' }, teachers ? 'Другие преподаватели' : 'Другие группы'));
     }
-    others.forEach(function (r) { results.appendChild(row(r, false)); });
+    // По буквам, как в «Найдите себя»: одна карточка на букву.
+    lettered(others, function (r) { return r.name; }).forEach(function (section) {
+      results.appendChild(h('div', { class: 'letter-section' },
+        h('h3', { class: 'letter' }, section.letter),
+        h('div', { class: 'list-card' }, section.rows.map(function (r) { return row(r, false, true); }))));
+    });
     if (!query.trim()) {
       results.appendChild(listEnd('Всё. ' + (teachers
         ? plural(list.length, 'преподаватель', 'преподавателя', 'преподавателей')

@@ -30,8 +30,8 @@ html:has(.screen.with-bottom) { scroll-padding-bottom: 80px; }
 }
 
 .explanation .spinner { margin-bottom: 16px; }
-.explanation h2 { font-size: 16px; font-weight: 600; }
-.explanation p { margin-top: 8px; font-size: 14px; color: var(--muted); }
+.explanation h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.explanation p { margin-top: 8px; font-size: 14px; line-height: 20px; color: var(--muted); }
 
 /*
   Размеры кнопок — одни на весь сайт, как в приложении (Controls.kt). Высота

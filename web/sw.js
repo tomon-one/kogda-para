@@ -28,6 +28,7 @@ var FILES = [
   'assets/motion.css',
   'assets/boot.js',
   'assets/icon.svg',
+  'assets/logo-ngok.svg',
   'assets/icon-192.png',
   'assets/icon-512.png',
   'assets/apple-touch-icon.png',

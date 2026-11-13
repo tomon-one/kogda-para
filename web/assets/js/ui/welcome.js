@@ -5,12 +5,13 @@ import { h, externalLink } from './dom.js';
 var SHEET = 'https://docs.google.com/spreadsheets/d/1FiMov0r4UUDKT6A56NWMImpoUakDC2YDevgaOpJQ7Qc/edit';
 
 function point(title, body) {
-  return h('div', { class: 'point' }, h('h2', null, title), h('p', null, body));
+  return h('div', { class: 'point' }, h('span', { class: 'point-dot', 'aria-hidden': 'true' }),
+    h('div', { class: 'point-text' }, h('h2', null, title), h('p', null, body)));
 }
 
 export function welcomeScreen(app) {
   return h('div', { class: 'screen welcome' },
-    h('img', { class: 'welcome-icon', src: 'assets/icon.svg', alt: '', width: '96', height: '96' }),
+    h('img', { class: 'welcome-logo', src: 'assets/logo-ngok.svg', alt: '', width: '81', height: '44' }),
     h('h1', null, 'Когда пара?'),
     h('p', { class: 'welcome-sub' }, 'Расписание НГОК в браузере'),
     point('Сделано студентом', 'Для студентов и преподавателей. Колледж к сайту отношения не имеет.'),

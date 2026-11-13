@@ -26,6 +26,9 @@
   --foreign-bg: rgba(0, 0, 0, 0.05);
   /* Не плотнее: красный текст выбранного чипа на нём — 4,7:1 (не меньше 4,5). */
   --selected-bg: rgba(194, 3, 2, 0.10);
+  /* Чип «День»/«Пара»: secondaryContainer и outlineVariant приложения. */
+  --chip-bg: #fadadb;
+  --chip-border: #c9cbcf;
   --button-border: rgba(194, 3, 2, 0.4);
   --today-border: rgba(194, 3, 2, 0.35);
   --online: #086b35;
@@ -52,6 +55,8 @@
     --mark-bg: rgba(255, 107, 112, 0.12);
     --foreign-bg: rgba(255, 255, 255, 0.07);
     --selected-bg: rgba(255, 107, 112, 0.18);
+  --chip-bg: #3d2224;
+  --chip-border: #3a3a3a;
     --button-border: rgba(255, 107, 112, 0.35);
     --today-border: rgba(255, 107, 112, 0.35);
     --online: #4cc38a;
@@ -78,6 +83,8 @@
   --mark-bg: rgba(255, 107, 112, 0.12);
   --foreign-bg: rgba(255, 255, 255, 0.07);
   --selected-bg: rgba(255, 107, 112, 0.18);
+  --chip-bg: #3d2224;
+  --chip-border: #3a3a3a;
   --button-border: rgba(255, 107, 112, 0.35);
   --today-border: rgba(255, 107, 112, 0.35);
   --online: #4cc38a;
@@ -158,7 +165,7 @@ p a, .point a { text-decoration: underline; }
 }
 
 .muted { color: var(--muted); }
-.small { font-size: 13px; }
+.small { font-size: 12px; line-height: 16px; }
 .strong { font-weight: 600; }
 
 .boot {
@@ -419,6 +426,18 @@ p a, .point a { text-decoration: underline; }
 
 /* Зазор — частью ряда: в пустом проезжали бы карточки. */
 .screen > .tabs.float { padding-bottom: 8px; }
+
+/* Над полоской ещё 6 — тоже фоном: кольцо полоски по углам закруглено, и в углах
+   проглядывал край проезжающей карточки. Рисуется ниже ряда, высоту не меняет. */
+:root:not([data-glass]) .screen > .tabs.float::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -6px;
+  left: 0;
+  height: 6px;
+  background: var(--bg);
+}
 
 .row-hidden > .tabs.float {
   top: calc(var(--head-h, 0px) - var(--row-h, 0px));
