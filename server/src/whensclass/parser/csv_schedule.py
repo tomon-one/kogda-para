@@ -211,6 +211,8 @@ def parse_sheet(
                         f"дата {found:%d.%m.%Y} в {where(i)} уже была в {first_row[found]}"
                     )
                 first_row[found] = where(i)
+                if sheet_rows is not None and i < len(sheet_rows):
+                    snapshot.day_rows[found] = sheet_rows[i]
                 date_order.append(found)
                 date_where.append(where(i))
             current = found

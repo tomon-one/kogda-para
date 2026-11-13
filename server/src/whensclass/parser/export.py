@@ -103,6 +103,9 @@ def parse_export(
     snapshot = parse_sheet(
         collapsed, sheet_title, limits, around=around, sheet_rows=numbers, previous=previous
     )
+    # Строка, откуда день прочитан, а не первое вхождение даты: с копией
+    # недели внизу листа они расходятся.
+    places.update({day: SheetPlace(gid=gid, row=row) for day, row in snapshot.day_rows.items()})
     snapshot.places = places
     if gid:
         snapshot.sheet_columns = {gid: {g.id: g.column for g in snapshot.groups}}

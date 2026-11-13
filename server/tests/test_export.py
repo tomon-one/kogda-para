@@ -47,3 +47,23 @@ def test_export_remembers_sheet_rows_of_days(fixture_csv):
     rows = [snapshot.places[d].row for d in sorted(snapshot.places)]
     assert rows[:3] == [6, 18, 30]
     assert all(p.gid == "656498718" for p in snapshot.places.values())
+
+
+def test_link_leads_to_the_retyped_copy_of_a_week(fixture_csv):
+    """Неделя набрана заново внизу листа и читается оттуда — ссылка «открыть
+    таблицу» ведёт туда же, а не к прежней копии сверху."""
+    import csv
+    import io
+
+    from whensclass.parser.export import parse_export
+
+    raw = read_csv(fixture_csv)
+    starts = [i for i, r in enumerate(raw) if r and r[0].strip()[:2].isdigit()]
+    copy = [list(r) for r in raw[starts[0]:starts[4]]]
+    out = io.StringIO()
+    csv.writer(out, lineterminator="\n").writerows(raw + copy)
+    snapshot = parse_export(out.getvalue(), "фикстура", gid="656498718", limits=FIXTURE)
+    first = min(snapshot.places)
+    assert snapshot.places[first].row == len(raw) + 1
+    later = sorted(snapshot.places)[4]
+    assert snapshot.places[later].row == starts[4] + 1

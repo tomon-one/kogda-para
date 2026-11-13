@@ -116,6 +116,9 @@ class Snapshot:
     # Блоки главного заголовка без имени: колонка -> сколько под ней пар.
     # Только для проверки при обновлении, на диск не пишется.
     unnamed: dict[int, int] = field(default_factory=dict)
+    # Дата -> строка листа, откуда разбор прочитал её день: с копией недели
+    # внизу это не первое вхождение даты. Ссылке «открыть таблицу»; на диск — через `places`.
+    day_rows: dict[date, int] = field(default_factory=dict, compare=False)
     # Дни групп, которые разбор не прочитал: id группы -> дата -> знал ли её
     # прежний снимок (True — тогда в schedule её прежние пары, если были).
     unread: dict[str, dict[date, bool]] = field(default_factory=dict)
