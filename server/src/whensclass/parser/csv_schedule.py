@@ -30,7 +30,7 @@ from .rows import (
     _teacher_row,
 )
 from .sections import _Doubt, _section_columns, _settle_moved
-from .settle import _adopt_names, _draft_tail, _retyped_order, _settle_replacements
+from .settle import _adopt_names, _draft_tail, _retyped_weeks, _settle_replacements
 
 log = logging.getLogger(__name__)
 
@@ -84,12 +84,21 @@ def parse_sheet(
     draft = _draft_tail(rows)
     if draft is not None:
         at = sheet_rows[draft] if sheet_rows is not None and draft < len(sheet_rows) else draft
-        order = _retyped_order(rows, draft, limits.min_groups)
-        if order is not None:
-            _warn_once(
-                ("заново", at), "со строки %s до конца листа — те же дни набраны заново "
-                "и не беднее прежних: читаю их вместо прежних", at, logger=log,
-            )
+        retyped = _retyped_weeks(rows, draft, limits.min_groups)
+        if retyped is not None:
+            order, end = retyped
+            if end < len(rows):
+                cut = sheet_rows[end] if sheet_rows is not None and end < len(sheet_rows) else end
+                _warn_once(
+                    ("заново", at, cut), "со строки %s — те же дни набраны заново и не беднее "
+                    "прежних: читаю их вместо прежних; со строки %s до конца листа — "
+                    "черновик: не читаю", at, cut, logger=log,
+                )
+            else:
+                _warn_once(
+                    ("заново", at), "со строки %s до конца листа — те же дни набраны заново "
+                    "и не беднее прежних: читаю их вместо прежних", at, logger=log,
+                )
             rows = [rows[i] for i in order]
             if sheet_rows is not None:
                 sheet_rows = [sheet_rows[i] for i in order]

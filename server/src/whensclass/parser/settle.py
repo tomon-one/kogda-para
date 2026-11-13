@@ -95,6 +95,36 @@ def _retyped_order(rows: list[list[str]], start: int, min_groups: int) -> list[i
     return list(range(lo)) + list(range(start, len(rows))) + list(range(hi, start))
 
 
+def _retyped_weeks(
+    rows: list[list[str]], start: int, min_groups: int
+) -> tuple[list[int], int] | None:
+    """Как `_retyped_order`, но копия внизу может кончаться черновиком: под
+    набранной заново неделей колледж начинает набирать следующую. Берётся
+    самая длинная часть копии целыми неделями от её начала, набранная
+    полностью; (порядок строк, где кончается она — ниже черновик) или None."""
+    def week(i: int) -> date | None:
+        try:
+            day = _parse_date(_cell(rows[i], 0))
+        except SourceFormatChanged:
+            return None
+        return None if day is None else day - timedelta(day.weekday())
+
+    ends = [len(rows)]
+    last = None
+    for i in range(start, len(rows)):
+        monday = week(i)
+        if monday is None:
+            continue
+        if last is not None and monday != last:
+            ends.insert(1, i)
+        last = monday
+    for end in ends:
+        order = _retyped_order(rows[:end], start, min_groups)
+        if order is not None:
+            return order, end
+    return None
+
+
 def _topic(subject: str) -> str:
     """Первые два слова названия: «Иностранный язык .Английский ячзык» и
     «Иностранный язык, Английский» — один предмет."""

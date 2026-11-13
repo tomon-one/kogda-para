@@ -79,6 +79,32 @@ def test_week_retyped_in_full_below_the_sheet_replaces_the_old_one(fixture_csv):
     assert all(snapshot.schedule.get(g) == plain.schedule.get(g) for g in others)
 
 
+def test_draft_of_next_week_under_a_retyped_one_does_not_hide_it(fixture_csv):
+    """Под набранной заново первой неделей колледж начал набирать вторую:
+    первая читается из новой копии, вторая — сверху, как без черновика."""
+    rows = rows_of(fixture_csv)
+    starts = date_rows(rows)
+    plain = parse_sheet(rows_of(fixture_csv), "фикстура", FIXTURE)
+    day = plain.dates[1]
+    group = next(g for g in plain.groups if plain.schedule.get(g.id, {}).get(day))
+    retyped = [list(r) for r in rows[starts[0]:starts[4]]]
+    for row in retyped[starts[1] - starts[0]:starts[2] - starts[0]]:
+        row[group.column:group.column + 4] = [""] * 4
+    draft = [list(r) for r in rows[starts[4]:starts[6]]]
+    for row in draft[len(draft) // 3:]:
+        row[2:] = [""] * (len(row) - 2)
+    snapshot = parse_sheet(rows + retyped + draft, "фикстура", FIXTURE)
+    assert snapshot.dates == plain.dates
+    assert not snapshot.schedule.get(group.id, {}).get(day)
+    others = [g.id for g in plain.groups if g.id != group.id]
+    assert all(snapshot.schedule.get(g) == plain.schedule.get(g) for g in others)
+    later = [d for d in plain.dates if d >= plain.dates[4]]
+    assert all(
+        snapshot.schedule.get(group.id, {}).get(d) == plain.schedule.get(group.id, {}).get(d)
+        for d in later
+    )
+
+
 
 def test_two_days_copied_below_the_sheet_are_a_draft(fixture_csv):
     """Под листом два дня недели скопированы блоками, даты ещё старые, и в
