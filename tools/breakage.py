@@ -317,7 +317,7 @@ def m_header_previous_name(rows, today):
 
 
 def m_retyped_with_header(rows, today):
-    """Неделя после сегодняшней набрана заново внизу листа со своей шапкой
+    """Неделя с будущего понедельника набрана заново внизу листа со своей шапкой
     столбиком, и в ней две соседние группы поменялись колонками (пары тоже).
     Правда та же, что в чистом листе."""
     s = Sheet(rows)
@@ -332,6 +332,28 @@ def m_retyped_with_header(rows, today):
     rows.extend(head + copy)
     return rows, set()
 
+
+
+def m_retyped_then_draft(rows, today):
+    """Неделя с будущего понедельника набрана заново внизу, прежняя копия сверху
+    устарела (у второй и третьей пары занятия местами), а под новой начата
+    следующая неделя: набраны два первых дня. Правда — новая копия, то есть чистый лист."""
+    s = Sheet(rows)
+    lo = next(i for i, d in s.days if d > today and d.weekday() == 0)
+    week = dict(s.days)[lo].isocalendar()[:2]
+    days = [i for i, d in s.days if i >= lo and d.isocalendar()[:2] == week]
+    hi = s.day_rows(days[-1]).stop
+    copy = [list(r) for r in rows[lo:hi]]
+    nxt = [i for i, d in s.days if i >= hi and d.isocalendar()[:2] != week]
+    later = dict(s.days)[nxt[0]].isocalendar()[:2]
+    nxt = [i for i in nxt if dict(s.days)[i].isocalendar()[:2] == later]
+    draft = [list(r) for r in rows[nxt[0]:s.day_rows(nxt[1]).stop]]
+    for d in days:
+        p2 = d + 2
+        for k in range(2):
+            rows[p2 + k][2:], rows[p2 + 2 + k][2:] = rows[p2 + 2 + k][2:], rows[p2 + k][2:]
+    rows.extend(copy + draft)
+    return rows, set()
 
 
 def m_two_days_copied(rows, today):
@@ -400,6 +422,7 @@ BREAKS = {
     "шапка_с_перестановкой": (m_reordered_header, "повторная шапка, две группы поменялись колонками"),
     "шапка_прежнее_имя": (m_header_previous_name, "повторная шапка, две группы местами, одна прежним видом имени"),
     "неделя_заново_со_шапкой": (m_retyped_with_header, "неделя заново внизу со своей шапкой, две группы местами"),
+    "заново_и_черновик": (m_retyped_then_draft, "неделя заново внизу, сверху устарела, под ней два дня следующей"),
     "два_дня_скопированы": (m_two_days_copied, "два дня блоками под листом, в копии правят"),
     "латинская_буква": (m_latin_letter, "в имени группы латинская буква-двойница"),
     "пары_местами": (m_pairs_swapped, "вторая и третья пара поменялись строками"),
