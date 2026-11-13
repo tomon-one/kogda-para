@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
 import android.widget.Toast
@@ -305,13 +307,19 @@ private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Тесно (крупный шрифт, узкий экран) — метка уходит строкой ниже целиком,
+            // а не буквами столбиком.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text("Стекло", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.width(6.dp))
                 Text(
                     "beta",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    softWrap = false,
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
                         .padding(horizontal = 6.dp, vertical = 1.dp),
