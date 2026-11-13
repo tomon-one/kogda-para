@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -268,6 +270,9 @@ fun SettingsScreen(
     }
 }
 
+/** Уже этого (ширина экрана в dp, делённая на шрифт) — плашка «Стекла» без картинки. */
+private const val GLASS_PREVIEW_MIN_DP = 250
+
 /**
  * Плашка «Стекла»: слева — как оно выглядит (лист со светом, матовая полоска,
  * карточки), справа — название с меткой beta, пояснение и тумблер. Нажимается целиком.
@@ -276,6 +281,7 @@ fun SettingsScreen(
 private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
     val dark = MaterialTheme.colorScheme.isDark
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+    val tight = LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale < GLASS_PREVIEW_MIN_DP
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -286,26 +292,30 @@ private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val glass = if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.75f)
-        Box(
-            modifier = Modifier
-                .size(width = 56.dp, height = 64.dp)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
-                .drawBehind {
-                    glowBackdrop(dark)
-                    val side = 6.dp.toPx()
-                    val corner = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
-                    listOf(10.dp to 10.dp, 26.dp to 14.dp, 44.dp to 14.dp).forEach { (top, height) ->
-                        drawRoundRect(
-                            glass,
-                            topLeft = androidx.compose.ui.geometry.Offset(side, top.toPx()),
-                            size = androidx.compose.ui.geometry.Size(size.width - side * 2, height.toPx()),
-                            cornerRadius = corner,
-                        )
-                    }
-                },
-        )
-        Spacer(Modifier.width(12.dp))
+        // Тесно (крупный шрифт на узком экране) — без картинки: иначе тексту
+        // остаётся столбик в несколько букв, и слова рвутся посреди.
+        if (!tight) {
+            val glass = if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.75f)
+            Box(
+                modifier = Modifier
+                    .size(width = 56.dp, height = 64.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                    .drawBehind {
+                        glowBackdrop(dark)
+                        val side = 6.dp.toPx()
+                        val corner = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
+                        listOf(10.dp to 10.dp, 26.dp to 14.dp, 44.dp to 14.dp).forEach { (top, height) ->
+                            drawRoundRect(
+                                glass,
+                                topLeft = androidx.compose.ui.geometry.Offset(side, top.toPx()),
+                                size = androidx.compose.ui.geometry.Size(size.width - side * 2, height.toPx()),
+                                cornerRadius = corner,
+                            )
+                        }
+                    },
+            )
+            Spacer(Modifier.width(12.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             // Тесно (крупный шрифт, узкий экран) — метка уходит строкой ниже целиком,
             // а не буквами столбиком.
