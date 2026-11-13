@@ -16,25 +16,20 @@ import ru.whensclass.R
 import ru.whensclass.ui.MainActivity
 
 /**
- * Уведомления приложения — каждый вид в своём канале: напоминание о паре
- * человек хочет слышать, изменения — видеть, а о новой сборке достаточно
- * узнать молча. Так любое можно отключить в системных настройках, не трогая
- * остальные.
+ * Уведомления приложения — каждый вид в своём канале: любое можно отключить в системных настройках,
+ * не трогая остальные.
  */
 object Notifications {
 
     const val CHANNEL_LESSON = "lesson_soon"
     const val CHANNEL_CHANGES = "schedule_changes"
     const val CHANNEL_UPDATE = "app_update"
-    // Id канала пропажи — от «соседней подгруппы» сборок до 0.1.4: новый id
-    // оставил бы у людей прежний канал висеть в настройках телефона.
+    // Id канала пропажи — от «соседней подгруппы» сборок до 0.1.4: новый id оставил бы у людей
+    // прежний канал висеть в настройках.
     const val CHANNEL_SERVER = "server_down"
     const val CHANNEL_SUBGROUP = "subgroup_gone"
 
-    /**
-     * Названия каналов, как их показывает телефон: ими же говорят настройки
-     * («Уведомления «…» выключены») и отчёт.
-     */
+    /** Названия каналов, как их показывает телефон: ими же говорят настройки и отчёт. */
     private val NAMES = mapOf(
         CHANNEL_LESSON to "Скоро пара",
         CHANNEL_CHANGES to "Изменения в расписании",
@@ -48,8 +43,7 @@ object Notifications {
     private const val ID_LESSON = 1
     private const val ID_CHANGES = 2
     private const val ID_UPDATE = 3
-    // У каждого вида свой id: с общим новое уведомление затирает
-    // непрочитанное другого вида.
+    // У каждого вида свой id: с общим новое уведомление затирает непрочитанное другого вида.
     private const val ID_SERVER = 4
     private const val ID_SUBGROUP = 5
 
@@ -93,8 +87,8 @@ object Notifications {
     }
 
     /**
-     * Разрешено ли показывать уведомления: и разрешение Android 13+, и
-     * выключатель в настройках телефона, который бывает на любой версии.
+     * Разрешено ли показывать уведомления: и разрешение Android 13+, и выключатель в настройках
+     * телефона (бывает на любой версии).
      */
     fun allowed(context: Context): Boolean {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
@@ -128,9 +122,9 @@ object Notifications {
     }.getOrNull()
 
     /**
-     * Ссылку на вебинар дописали после того, как напоминание пришло (её часто
-     * дают в день пары), сменили или убрали: то же напоминание — с новой
-     * кнопкой «Войти» или без неё, без нового звука. `url` null — кнопку снять.
+     * Ссылку на вебинар дописали после напоминания (её часто дают в день пары), сменили или убрали:
+     * то же напоминание с новой кнопкой «Войти» или без неё, без нового звука. `url` null — снять
+     * кнопку.
      */
     @android.annotation.SuppressLint("MissingPermission")
     fun addJoin(context: Context, url: String?) {
@@ -152,8 +146,8 @@ object Notifications {
                 builder.addAction(android.app.Notification.Action.Builder(null, JOIN, joinIntent(context, it)).build())
             }
             builder.setOnlyAlertOnce(true)
-            // Срок снятия система отсчитывает от каждого показа: задать оставшийся
-            // до конца пары, иначе напоминание провисит лишнюю пару.
+            // Срок снятия система отсчитывает от каждого показа: задать оставшееся до конца пары,
+            // иначе напоминание провисит лишнюю пару.
             if (until > 0) builder.setTimeoutAfter(left)
             builder.addExtras(android.os.Bundle().apply { putString(EXTRA_LESSON_URL, url) })
             NotificationManagerCompat.from(context).notify(ID_LESSON, builder.build())
@@ -168,9 +162,8 @@ object Notifications {
     }.getOrNull()
 
     /**
-     * Пару перевели в другой кабинет (или сменился преподаватель) после того,
-     * как напоминание пришло: то же напоминание — с новым текстом, без нового
-     * звука, иначе до конца пары в шторке висел бы старый кабинет.
+     * Пару перевели в другой кабинет (или сменился преподаватель) после напоминания: то же
+     * напоминание с новым текстом, без звука, иначе в шторке висел бы старый кабинет.
      */
     @android.annotation.SuppressLint("MissingPermission")
     fun replaceLessonText(context: Context, text: String) {
@@ -214,9 +207,8 @@ object Notifications {
         show(context, CHANNEL_SUBGROUP, ID_SUBGROUP, title, text, day = null) && !channelOff(context, CHANNEL_SUBGROUP)
 
     /**
-     * Сервер лежит дольше двух часов. true — показано: только тогда сбой
-     * засчитывается объявленным, иначе после выдачи разрешения посреди сбоя
-     * уведомление не пришло бы никогда.
+     * Сервер лежит дольше двух часов. true — показано: только тогда сбой засчитывается объявленным,
+     * иначе после выдачи разрешения посреди сбоя уведомление не пришло бы.
      */
     fun serverDown(context: Context, title: String, text: String): Boolean =
         show(context, CHANNEL_SERVER, ID_SERVER, title, text, day = null) && !channelOff(context, CHANNEL_SERVER)
@@ -253,18 +245,16 @@ object Notifications {
     }.getOrDefault(false)
 
     /**
-     * Нажатие открывает настройки на кнопке установки — идти искать не надо.
-     * true — уведомление ушло в систему; false — уведомления запрещены.
+     * Нажатие открывает настройки на кнопке установки. true — уведомление ушло в систему; false —
+     * уведомления запрещены.
      */
     fun newVersion(context: Context, title: String, text: String): Boolean =
-        // Канал выключен — система уведомление молча выбросит, и сборка не
-        // должна считаться объявленной, как и у сбоя.
+        // Канал выключен — система уведомление молча выбросит, и сборка не должна считаться объявленной, как и у сбоя.
         show(context, CHANNEL_UPDATE, ID_UPDATE, title, text, day = null, update = true) &&
             !channelOff(context, CHANNEL_UPDATE)
 
-    // Разрешение проверяет allowed() в первой строке, а SecurityException, если
-    // его отберут между проверкой и показом, ловит runCatching: lint видит
-    // только вызов notify.
+    // Разрешение проверяет allowed() в первой строке, а SecurityException при отзыве между
+    // проверкой и показом ловит runCatching: lint видит только вызов notify.
     @android.annotation.SuppressLint("MissingPermission")
     private fun show(
         context: Context,

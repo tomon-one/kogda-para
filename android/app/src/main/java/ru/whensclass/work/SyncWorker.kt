@@ -23,9 +23,8 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         val result = container.repository.refresh()
         // Заодно смотрим, не вышла ли новая сборка.
         runCatching { container.updates.announceIfNew(container.store) }
-        // Повтор с паузой — только у разовой работы: у периодической retry()
-        // подменяет час экспоненциальной паузой до пяти часов, а она и так
-        // придёт через час.
+        // Повтор с паузой — только у разовой работы: у периодической retry() подменяет час
+        // экспоненциальной паузой до пяти часов.
         return when {
             result is RefreshResult.Failed && ONE_SHOT_TAG in tags -> Result.retry()
             else -> Result.success()
@@ -48,11 +47,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         }
 
         /**
-         * Обновить прямо сейчас: открыли приложение, сменили группу, нажали кнопку.
-         *
-         * Без setExpedited: на Android 8–11 срочная работа требует
-         * getForegroundInfo, без него WorkManager 2.11 валит её до doWork.
-         * Обычная разовая работа с сетью и так запускается почти сразу.
+         * Обновить прямо сейчас: открыли приложение, сменили группу, нажали кнопку. Без
+         * setExpedited: на Android 8–11 срочная работа требует getForegroundInfo, без него
+         * WorkManager 2.11 валит её до doWork.
          */
         fun now(context: Context) {
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
@@ -60,9 +57,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 .setConstraints(
                     Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
                 )
-                // Повторяет только разовая (periodic всегда success): без своей
-                // паузы WorkManager берёт 30 с с удвоением, и серия отказов за
-                // полчаса набирала бы «сервер не отвечает» сама.
+                // Повторяет только разовая (periodic всегда success): без своей паузы WorkManager
+                // берёт 30 с с удвоением, и серия отказов за полчаса набрала бы «сервер не
+                // отвечает» сама.
                 .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 10, TimeUnit.MINUTES)
                 .build()
             WorkManager.getInstance(context)

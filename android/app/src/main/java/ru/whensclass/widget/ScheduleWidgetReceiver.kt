@@ -14,12 +14,10 @@ class ScheduleWidgetReceiver : OwnWidgetReceiver() {
         appWidgetIds: IntArray,
     ) {
         val ids = ownIds(context, appWidgetManager, appWidgetIds)
-        // Чужая рассылка без наших id не должна и дёргать сеть: каждое
-        // SyncWorker.now отменяет идущее обновление.
+        // Чужая рассылка без наших id не должна дёргать сеть: каждое SyncWorker.now отменяет идущее обновление.
         if (ids.isEmpty()) return
         super.onUpdate(context, appWidgetManager, ids)
-        // Виджет только что поставили на экран — не заставлять человека ждать
-        // ближайшего часового обновления.
+        // Виджет только что поставили — не заставлять ждать ближайшего часового обновления.
         SyncWorker.now(context)
     }
 }

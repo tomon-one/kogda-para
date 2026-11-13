@@ -61,10 +61,7 @@ import ru.whensclass.widget.collegeToday
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayTitle
 
-/**
- * Дни расписания списком. Общий для вкладок «Студентам» и «Преподавателям»:
- * различие лишь в том, что у преподавателя вместо его имени стоит группа.
- */
+/** Дни расписания списком. Общий для «Студентам» и «Преподавателям»: у преподавателя вместо его имени стоит группа. */
 @Composable
 fun ScheduleDays(
     schedule: ScheduleDto,
@@ -81,33 +78,28 @@ fun ScheduleDays(
     /** «Стекло»: список заходит под шапку и вкладки, они его размывают. Над списком ничего своего. */
     underHead: Boolean = false,
     /**
-     * Часы экрана, если они идут по звонкам этого же расписания (своё): вторые
-     * часы перекомпоновывали бы экран на каждом звонке ещё раз.
+     * Часы экрана, если идут по звонкам этого же расписания (своё): вторые часы перекомпоновывали
+     * бы экран на каждом звонке.
      */
     clock: LocalDateTime? = null,
-    /**
-     * Сюда список кладёт, чем листать его извне: строка над полоской (имя
-     * открытого преподавателя) листает так же, как сама полоска.
-     */
+    /** Сюда список кладёт, чем листать его извне: строка над полоской (имя преподавателя) листает как сама полоска. */
     dragSink: androidx.compose.runtime.MutableState<((Float) -> Unit)?>? = null,
 ) {
     val now = clock ?: rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
 
-    // Открываемся на сегодняшнем дне, а не на понедельнике. Позиция задаётся
-    // при создании списка, а не прокруткой после первого кадра: прокрутка
-    // успевает показать понедельник и уехать с него на глазах. Дня нет —
-    // ближайший к нему ([dayIndex]).
-    // День из виджета или напоминания остаётся у экрана и после того, как
-    // прошёл: прошедший — уже не повод открываться на нём.
+    // Открываемся на сегодняшнем дне, а не на понедельнике: позиция задаётся при создании списка,
+    // иначе прокрутка успела бы показать понедельник. Дня нет — ближайший ([dayIndex]). День из
+    // виджета или напоминания остаётся и после того, как прошёл: прошедший не повод открываться на
+    // нём.
     val target = startDay?.takeIf { it >= today.toString() } ?: openingDay(schedule.bellsOn(today), now).toString()
     val rows = remember(days, target, header != null) {
         DayRows(if (header != null && days.isNotEmpty()) dayIndex(days, target) else -1)
     }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = rows.toward(dayIndex(days, target)))
 
-    // Поворот: в альбомной плашки уходят в список строкой ([header]), и
-    // номер строки, сохранённый в книжной, показал бы другой день. Помним день.
+    // Поворот: в альбомной плашки уходят в список строкой ([header]), и номер строки из книжной
+    // показал бы другой день. Помним день.
     var topDay by rememberSaveable { mutableStateOf<String?>(null) }
     var topOffset by rememberSaveable { mutableIntStateOf(0) }
     val restored = remember { topDay to topOffset }
@@ -130,10 +122,8 @@ fun ScheduleDays(
             }
     }
 
-    // Какой день ещё надо показать: экран живёт и через ночь, а начальная
-    // позиция задаётся один раз. Новые сутки — снова сегодняшний день; нужного
-    // дня пока нет в окне — ждём, пока обновление его принесёт. Переживает
-    // поворот, чтобы тот не отменял пролистанное человеком.
+    // Какой день ещё надо показать: экран живёт и через ночь, а начальная позиция одна. Новые сутки
+    // — снова сегодняшний; нужного дня нет в окне — ждём обновление. Переживает поворот.
     var wanted by rememberSaveable { mutableStateOf<String?>(target) }
     // День, к которому список уже уводили: поворот после полуночи не уводит снова.
     var seenToday by rememberSaveable { mutableStateOf(today.toString()) }
@@ -151,8 +141,7 @@ fun ScheduleDays(
             wanted = startDay ?: openingDay(schedule.bellsOn(today), now).toString()
         }
     }
-    // Человек сам повёл список — ждать обещанного дня больше не надо, иначе
-    // следующее обновление утащит его обратно.
+    // Человек сам повёл список — ждать обещанного дня не надо, иначе обновление утащит его обратно.
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect {
             if (it is androidx.compose.foundation.interaction.DragInteraction.Start) wanted = null
@@ -165,9 +154,8 @@ fun ScheduleDays(
         if (days.any { it.date >= want }) wanted = null
     }
 
-    // Экран открыт и никто его не трогал [IDLE_MILLIS] — в пустой сегодняшний
-    // день другая строка ([freeDay]). Счёт — пока экран на виду; касание или
-    // прокрутка — сначала.
+    // Экран открыт и нетронут [IDLE_MILLIS] — в пустой сегодняшний день другая строка ([freeDay]).
+    // Счёт — пока экран на виду; касание или прокрутка — сначала.
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     val visible = lifecycle.currentStateFlow.collectAsState().value
         .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
@@ -181,8 +169,7 @@ fun ScheduleDays(
         }
     }
 
-    // Какой день наверху — для выделения в полоске: первый, который виден хотя бы
-    // наполовину; край прошлого дня, торчащий сверху, выделение не перехватывает.
+    // Какой день наверху — для выделения в полоске: первый, видимый хотя бы наполовину.
     val shownDay by remember(days, rows) {
         derivedStateOf {
             val info = listState.layoutInfo
@@ -196,9 +183,8 @@ fun ScheduleDays(
         }
     }
 
-    // Нажатый в полоске день держит выделение, пока человек сам не поведёт список,
-    // а у конца списка — пока список стоит в самом низу: последние дни не докрутить
-    // до верха, и выделение иначе уходило к дню, который наверху.
+    // Нажатый в полоске день держит выделение, пока человек сам не поведёт список; у конца списка —
+    // пока он стоит внизу: последние дни не докрутить до верха.
     var picked by remember { mutableStateOf<String?>(null) }
     var touched by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
@@ -220,12 +206,10 @@ fun ScheduleDays(
         }
     }
     val scope = rememberCoroutineScope()
-    // Дни всплывают по очереди один раз — когда список только появился (как на сайте).
-    // Только при первом открытии приложения: при возврате на вкладку список
-    // показывается сразу, иначе переключение вкладок подтормаживало.
+    // Дни всплывают по очереди один раз, когда список только появился (как на сайте), и только при
+    // первом открытии: иначе переключение вкладок подтормаживало.
     val appearing = remember { mutableStateOf(!appearedOnce) }
-    // Номер первой видимой строки при появлении — один раз: следить за ним при
-    // листании значило бы перерисовывать каждую карточку на каждом шаге.
+    // Номер первой видимой строки при появлении — один раз: слежение при листании перерисовывало бы каждую карточку.
     val firstAtStart = remember { listState.firstVisibleItemIndex }
     LaunchedEffect(Unit) {
         appearedOnce = true
@@ -239,9 +223,8 @@ fun ScheduleDays(
     val darkGlass = MaterialTheme.colorScheme.isDark
     val screen = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
     val tabsBottom = if (underHead) LocalTabsBottom.current else null
-    // Сколько от верха списка до верха экрана: на столько список вытянут вверх,
-    // под вкладки и шапку. Только растёт — когда ряд вкладок уезжает, верх списка
-    // поднимается, и вытянутый край не должен отставать на кадр.
+    // Сколько от верха списка до верха экрана: на столько список вытянут под вкладки и шапку.
+    // Только растёт: когда ряд вкладок уезжает, вытянутый край не должен отставать на кадр.
     var reach by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val source = remember(blurLayer, listState, darkGlass, screen, tabsBottom) {
         GlassSource(blurLayer, darkGlass, androidx.compose.ui.geometry.Size(screen.width.toFloat(), screen.height.toFloat()), tabsBottom) {
@@ -249,8 +232,8 @@ fun ScheduleDays(
         }
     }
     var stripHeight by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    // Палец на полоске листает список — через ту же цепочку, что и сам список:
-    // иначе шапка и ряды вкладок в альбомной не уезжают (ScheduleTabs, TodayScreen).
+    // Палец на полоске листает список той же цепочкой, что и сам список: иначе шапка и ряды вкладок
+    // в альбомной не уезжают.
     val stripScroll = remember { androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher() }
     val stripConnection = remember { object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {} }
     val drag: (Float) -> Unit = { delta ->
@@ -266,8 +249,7 @@ fun ScheduleDays(
         WeekStrip(
             modifier = stripModifier.nestedScroll(stripConnection, stripScroll),
             glass = if (glass) source else null,
-            // Лямбдой: день читается внутри полоски, и при листании перерисовывается
-            // только она, а не весь список.
+            // Лямбдой: день читается внутри полоски, и при листании перерисовывается только она.
             shownDay = { (picked ?: shownDay)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today },
             today = today,
             onPick = { date ->
@@ -324,8 +306,8 @@ fun ScheduleDays(
         Box(modifier = modifier.fillMaxSize()) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val under = if (tabsBottom == null) {
-                // Не под шапкой (открытое расписание): над полоской отступ, и в нём
-                // уходящая под полоску пара была бы видна чётко, обрезанной.
+                // Не под шапкой (открытое расписание): над полоской отступ, и в нём уходящая под
+                // полоску пара была бы видна чётко.
                 Modifier.drawWithContent {
                     clipRect(top = STRIP_TOP.toPx()) { this@drawWithContent.drawContent() }
                 }
@@ -358,8 +340,8 @@ private const val APPEAR_MILLIS = 700L
 private var appearedOnce = false
 
 /**
- * Всплытие карточки: снизу и из прозрачного, по очереди с шагом 45 мс (motion.css
- * сайта, `.days.appear`). Только видимые при появлении; потом — как есть.
+ * Всплытие карточки: снизу и из прозрачного, по очереди с шагом 45 мс (motion.css сайта,
+ * `.days.appear`). Только видимые при появлении.
  */
 @Composable
 private fun Modifier.appear(active: Boolean, order: Int): Modifier {
@@ -393,8 +375,7 @@ private fun DayCard(
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
     val isToday = date == today
     val past = date != null && date.isBefore(today)
-    // Момент — параметром от часов со звонками (rememberNow в ScheduleDays),
-    // иначе подсветка не двигается со звонком, пока экран открыт.
+    // Момент — параметром от часов со звонками (rememberNow в ScheduleDays): иначе подсветка не двигается со звонком.
     val current = if (isToday) currentLessonNumber(bells, today, now) else null
 
     Surface(
@@ -406,8 +387,7 @@ private fun DayCard(
             if (isToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
         ),
     ) {
-        // Прошедший день не выбрасываем, но приглушаем — цветом, а не
-        // прозрачностью: при прозрачности контраст падает так, что вчерашнюю
+        // Прошедший день не выбрасываем, а приглушаем цветом, не прозрачностью: при ней вчерашнюю
         // аудиторию не прочесть.
         Column {
             val notes = unreadNotes(day) + listOfNotNull(
@@ -445,13 +425,11 @@ private fun DayCard(
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                 )
             } else {
-                // Своих пар нет, а у выбранных групп есть: это уже сказала сводка под
-                // датой («Пары только у …»), у самих пар подпись не повторяем.
-                // Отменённые сводка не считает — у них подпись остаётся.
+                // Своих пар нет, а у выбранных групп есть: это сказала сводка под датой, подпись не
+                // повторяем; отменённые сводка не считает — у них подпись остаётся.
                 val allForeign = groups.isNotEmpty() && day.lessons.none { 0 in it.slots }
                 day.lessons.forEach { lesson ->
-                    // Отменённая пара в своё время — не «идёт сейчас». Пара
-                    // только у других групп — тоже: человек на ней не сидит.
+                    // Отменённая пара в своё время и пара только у других групп — не «идёт сейчас».
                     val foreign = groups.isNotEmpty() && 0 !in lesson.slots
                     LessonRow(
                         lesson, bells,

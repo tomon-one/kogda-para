@@ -8,9 +8,9 @@ import android.os.Bundle
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 
 /**
- * Только свои id. Приёмники виджетов экспортированы — иначе система не
- * доставит им обновление, — а APPWIDGET_UPDATE не защищённая рассылка: чужое
- * приложение может прислать id одного виджета приёмнику другого.
+ * Только свои id. Приёмники экспортированы (иначе система не доставит обновление), а
+ * APPWIDGET_UPDATE не защищённая рассылка: чужое приложение может прислать id одного виджета
+ * приёмнику другого.
  */
 internal fun GlanceAppWidgetReceiver.ownIds(
     context: Context,
@@ -23,10 +23,9 @@ internal fun GlanceAppWidgetReceiver.ownIds(
 }
 
 /**
- * Приёмник виджета, который слушает только свои id — во всех входах, а не
- * только в onUpdate: чужое приложение может прислать DEBUG_UPDATE (Glance
- * подставит все настоящие id), APPWIDGET_UPDATE_OPTIONS с id чужого виджета и
- * APPWIDGET_DELETED (сотрёт состояние виджета).
+ * Приёмник виджета, слушающий только свои id — во всех входах, не только в onUpdate: чужое
+ * приложение может прислать DEBUG_UPDATE (Glance подставит все id), APPWIDGET_UPDATE_OPTIONS с
+ * чужим id и APPWIDGET_DELETED (сотрёт состояние).
  */
 abstract class OwnWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -46,8 +45,8 @@ abstract class OwnWidgetReceiver : GlanceAppWidgetReceiver() {
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-        // Настоящий удалённый виджет в списках системы уже не значится, а
-        // живой — значится: живые id (любого из трёх виджетов) не стираем.
+        // Настоящий удалённый виджет в списках системы не значится, а живой значится: живые id
+        // (любого из трёх виджетов) не стираем.
         val manager = AppWidgetManager.getInstance(context)
         val live = RECEIVERS.flatMap { cls ->
             runCatching { manager.getAppWidgetIds(ComponentName(context, cls)).toList() }.getOrDefault(emptyList())

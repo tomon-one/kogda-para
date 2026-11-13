@@ -1,5 +1,5 @@
 // Расписание: окно дней, пропущенные дни, другие выбранные группы, идущая пара.
-// Правила — как в приложении (ScheduleRepository.kt, ScheduleMerge.kt,
+// Правила те же, что в приложении (ScheduleRepository.kt, ScheduleMerge.kt,
 // DayList.kt, DayFormat.kt).
 
 import { addDays, dayOfYear, isDate, plural, weekday } from './time.js';
@@ -30,7 +30,7 @@ function copy(obj, changes) {
   return Object.assign({}, obj, changes);
 }
 
-/** Только свои пары: без пар соседней подгруппы и без своей подписи — перевод снимка до веб-0.2.0. */
+/** Только свои пары, без соседней подгруппы и своей подписи: перевод снимка до веб-0.2.0. */
 export function ownOnly(schedule) {
   return copy(schedule, {
     days: (schedule.days || []).map(function (day) {

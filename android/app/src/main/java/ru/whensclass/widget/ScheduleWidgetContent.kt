@@ -37,10 +37,7 @@ import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.sheetLink
 import ru.whensclass.ui.MainActivity
 
-/**
- * Содержимое дневного виджета — отдельно от [ScheduleWidget], чтобы его можно
- * было отрисовать при отладке без установки на телефон.
- */
+/** Содержимое дневного виджета — отдельно от [ScheduleWidget], чтобы отрисовать при отладке без установки. */
 @Composable
 fun ScheduleWidgetContent(
     schedule: ScheduleDto?,
@@ -62,18 +59,16 @@ fun ScheduleWidgetContent(
 ) {
     val context = LocalContext.current
     val size = LocalSize.current
-    // Оболочки вроде Nova дают сжать виджет ниже объявленного минимума —
-    // тогда убираем то, без чего можно, начиная с логотипа. Узость считается
-    // с учётом крупного шрифта: время в sp, колонка в dp.
+    // Оболочки вроде Nova дают сжать виджет ниже минимума — тогда убираем то, без чего можно,
+    // начиная с логотипа. Узость — с учётом крупного шрифта: время в sp, колонка в dp.
     val scale = fontScale()
     val fit = Fit(narrow = size.width < 220.dp * scale, dense = size.height < 120.dp, scale = scale)
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            // Нажатие по пустому месту открывает приложение. Стрелки,
-            // обновление и копирование ссылки перехватывают своё сами:
-            // у Glance ближний обработчик выигрывает у дальнего.
+            // Нажатие по пустому месту открывает приложение; стрелки, обновление и копирование
+            // перехватывают своё сами (в Glance ближний обработчик выигрывает).
             .clickable(actionStartActivity(openDay(context, day)))
             .background(colors.background)
             .cornerRadius(20.dp)
@@ -96,8 +91,7 @@ fun ScheduleWidgetContent(
             editing,
             gone,
             unsupported,
-            // Пары дня прежние или неполные: сервер его не прочитал. Пустой
-            // такой день говорит это строкой ниже.
+            // Пары дня прежние или неполные: сервер его не прочитал; пустой такой день говорит это строкой ниже.
             schedule?.days?.firstOrNull { it.date == day.toString() }
                 ?.let { it.unread != null && it.lessons.isNotEmpty() } == true,
             fit,
@@ -130,24 +124,21 @@ fun ScheduleWidgetContent(
             today.lessons.isEmpty() && today.unread != null -> MissingHint(
                 "Сервер не прочитал этот день в таблице", colors, sheetLink(schedule, day, sourceUrl),
             )
-            // Свободный день: «нажмите, чтобы обновить» читалось бы как «не
-            // загрузилось», поэтому нажатие ведёт в приложение. Фраза — та же,
-            // что на экране в этот день.
+            // Свободный день: «нажмите, чтобы обновить» читалось бы как «не загрузилось», поэтому
+            // нажатие ведёт в приложение. Фраза та же, что на экране.
             today.lessons.isEmpty() -> MissingHint(
                 ru.whensclass.ui.freeDay(
                     day.toString(), schedule.isTeacher,
                     nextFree = schedule.days.firstOrNull { it.date == day.plusDays(1).toString() }
                         ?.let { ru.whensclass.ui.freeOwnDay(it, schedule.groupNames) } == true,
-                    // Время — как на экране: «до полудня» своя фраза (к полудню
-                    // виджет перерисовывается, MidnightUpdater). Только простоя
-                    // экрана виджет не знает.
+                    // Время — как на экране: «до полудня» своя фраза (к полудню виджет
+                    // перерисовывается, MidnightUpdater); простоя экрана виджет не знает.
                     now = collegeNow(),
                 ),
                 colors, open = actionStartActivity(openDay(context, day)),
             )
             else -> {
-                // Сводка дня, как на экране: «2 пары · до 12:10». Пары важнее: на
-                // низком виджете и там, где строка сводки отняла бы пару, её нет.
+                // Сводка дня, как на экране: «2 пары · до 12:10». Пары важнее: на низком виджете её нет.
                 val summaryHeight = (4 + 15 * fit.scale).dp
                 val summary = if (fit.dense) null else ru.whensclass.ui.daySummary(today.lessons, schedule.groupNames, schedule.bellsOf(today))
                     ?.takeIf {
@@ -178,16 +169,13 @@ fun ScheduleWidgetContent(
 }
 
 /**
- * До какого дня вперёд есть данные — в тех же шагах, что и листание. Не по
- * длине списка: расписание приходит с понедельника, вместе с прожитыми днями.
+ * До какого дня вперёд есть данные — в шагах листания. Не по длине списка: расписание приходит с
+ * понедельника, вместе с прожитыми днями.
  */
 internal fun lastOffset(schedule: ScheduleDto?, today: LocalDate): Int =
     offsets(schedule, today).maxOrNull()?.coerceIn(0, ScheduleWidget.MAX_OFFSET) ?: 0
 
-/**
- * Насколько далеко назад есть данные: прожитые дни недели лежат на телефоне,
- * и листать к ним можно, как и на экране приложения.
- */
+/** Насколько далеко назад есть данные: прожитые дни недели лежат на телефоне, и листать к ним можно, как на экране. */
 internal fun firstOffset(schedule: ScheduleDto?, today: LocalDate): Int =
     offsets(schedule, today).minOrNull()?.coerceIn(-ScheduleWidget.MAX_OFFSET, 0) ?: 0
 
@@ -226,8 +214,8 @@ private fun Header(
         modifier = GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Логотип колледжа — одни контуры, без своего фона; красим цветом темы:
-        // фирменный красный на чёрном сливается. На узком виджете уходит первым.
+        // Логотип колледжа — одни контуры; красим цветом темы: фирменный красный на чёрном
+        // сливается. На узком виджете уходит первым.
         if (!fit.narrow) {
             Image(
                 provider = ImageProvider(R.drawable.logo_ngok),
@@ -244,8 +232,7 @@ private fun Header(
         Column(modifier = GlanceModifier.defaultWeight()) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                // Нажатие на шапку открывает приложение: там неделя целиком
-                // и настройки.
+                // Нажатие на шапку открывает приложение: там неделя целиком и настройки.
                 modifier = GlanceModifier.fillMaxWidth().clickable(openApp),
             ) {
                 Text(
@@ -264,12 +251,10 @@ private fun Header(
                     if (groupName.count { it == ' ' } >= 2) shortenName(groupName) else groupName,
                     maxLines = 1,
                     style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                    // Имя уступает место: статус и ⟳ меряются первыми, иначе на
-                    // узком виджете они режутся.
+                    // Имя уступает место: статус и ⟳ меряются первыми, иначе на узком виджете режутся.
                     modifier = GlanceModifier.defaultWeight().clickable(openApp),
                 )
-                // Пометка дня — здесь, а не у даты: рядом со стрелками ей не
-                // хватало места.
+                // Пометка дня — здесь, а не у даты: рядом со стрелками ей не хватало места.
                 if (unread) {
                     Text(
                         " · не прочитан",
@@ -278,20 +263,18 @@ private fun Header(
                         modifier = GlanceModifier.clickable(openApp),
                     )
                 }
-                // Время последней проверки — служебная мелочь, поэтому тем же
-                // приглушённым цветом; краснеет, только когда данные протухли.
+                // Время последней проверки — служебная мелочь: приглушённым цветом, краснеет только
+                // когда данные протухли.
                 Text(
                     when {
                         busy -> " · обновление…"
                         failed -> " · не обновилось"
-                        // Пропажа и сбой — не «обновлено»: ответ пришёл, но
-                        // расписание в нём прежнее. Группы в таблице нет —
-                        // нажатие ведёт в приложение, к «выбрать заново».
+                        // Пропажа и сбой — не «обновлено»: ответ пришёл, но расписание в нём
+                        // прежнее. Группы нет в таблице — нажатие ведёт к «выбрать заново».
                         gone -> " · нет в таблице"
                         unsupported -> " · обновите приложение"
-                        // Сбой показываем и тогда, когда пары на экране есть:
-                        // снимок прежний. Коротко — подробности на плашке в
-                        // приложении.
+                        // Сбой показываем и когда пары на экране есть (снимок прежний); коротко —
+                        // подробности на плашке в приложении.
                         serverBroken -> if (editing) " · правка таблицы" else " · сбой"
                         done -> " · обновлено"
                         else -> " · " + formatFetchedShort(fetchedAt, nowMillis)
@@ -309,10 +292,9 @@ private fun Header(
                         if (gone || unsupported) openApp else actionRunCallback<RefreshAction>(),
                     ),
                 )
-                // Отдельным текстом, а не хвостом времени: внутри одного текста
-                // значок встаёт по базовой линии букв и висит выше цифр.
-                // Показывается всегда, иначе меняется высота строки и виджет
-                // подпрыгивает.
+                // Отдельным текстом, а не хвостом времени: внутри одного текста значок встаёт по
+                // базовой линии и висит выше цифр. Показывается всегда: иначе высота строки
+                // меняется.
                 Text(
                     " ⟳",
                     maxLines = 1,
@@ -361,8 +343,8 @@ private fun TapButton(
     Text(
         label,
         style = TextStyle(fontSize = 15.sp, color = color),
-        // Отступы внутри кликабельной области, иначе нажатие ловит только текст.
-        // Около 40×40 dp: шапка «Дня» и так в две строки, а палец меньше не ловит.
+        // Отступы внутри кликабельной области, иначе нажатие ловит только текст. Около 40×40 dp:
+        // шапка «Дня» в две строки, а палец меньше не ловит.
         modifier = modifier.padding(horizontal = 18.dp, vertical = 10.dp),
     )
 }
@@ -375,8 +357,8 @@ internal data class Fit(val narrow: Boolean, val dense: Boolean, val scale: Floa
 internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
     Intent(context, MainActivity::class.java)
         .putExtra(MainActivity.EXTRA_DAY, day.toString())
-        // CLEAR_TOP: без него каждое нажатие клало в стек ещё одну копию
-        // экрана. SINGLE_TOP: без него CLEAR_TOP пересоздаёт живой экран.
+        // CLEAR_TOP: без него каждое нажатие клало бы в стек ещё копию экрана; SINGLE_TOP: без него
+        // CLEAR_TOP пересоздаёт живой экран.
         .addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP,
@@ -384,11 +366,9 @@ internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
 
 
 /**
- * Во сколько раз система увеличила шрифт. Бюджет строк считается в dp, а
- * текст задан в sp и растёт со шрифтом; без поправки нижние строки
- * обрезаются корпусом — прокрутки в виджете нет.
- *
- * Снизу единица: уменьшенный шрифт лишних строк не даёт, зато пустоты добавит.
+ * Во сколько раз система увеличила шрифт. Бюджет строк считается в dp, а текст в sp растёт со
+ * шрифтом: без поправки нижние строки обрезаются (прокрутки в виджете нет). Снизу единица:
+ * уменьшенный шрифт лишних строк не даёт, зато добавит пустоты.
  */
 @Composable
 internal fun fontScale(): Float =

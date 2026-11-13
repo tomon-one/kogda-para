@@ -159,8 +159,7 @@ function failText(result) {
   if (error instanceof HttpError) {
     if (error.status === 429) return 'Сервер занят, попробуйте через минуту';
     if (error.status === 404) {
-      // Первый час после пропажи: код ответа выглядел бы поломкой (как в
-      // приложении, refreshFailure).
+      // Первый час после пропажи код ответа выглядел бы поломкой (refreshFailure в приложении).
       return repo.isTeacher() ? 'Вас не нашлось в таблице. Не вернётся за час — выберите себя заново'
         : 'Группы не нашлось в таблице. Не вернётся за час — выберите её заново';
     }
@@ -219,14 +218,14 @@ function announce(text) {
   live.textContent = '';
   setTimeout(function () { live.textContent = text; }, 50);
 }
-/** Оборот ⟳ — как в app.css и в приложении. */
+/** Оборот ⟳; тот же, что в app.css. */
 var SPIN_MS = 450;
 
 /**
  * Обновить своё расписание. `manual` — нажали ⟳: тогда неудача — плашкой, и
  * заодно перечитывается открытое чужое расписание. ⟳ крутится и даёт галочку
- * только от нажатия и выбора группы (`spin`), как в приложении: заходы при
- * открытии, возврате и раз в час идут молча.
+ * только от нажатия и выбора группы (`spin`): заходы при открытии, возврате
+ * и раз в час идут молча.
  */
 export function refresh(force, manual, spin) {
   if (!repo.chosen()) return;
@@ -245,8 +244,8 @@ export function refresh(force, manual, spin) {
   if (manual && (emptyList(state.groups) || emptyList(state.teachers))) loadLists(true);
   render();
   repo.refresh(force).then(function (result) {
-    // Крестик — у любой неудачи, не только ручной, и снимается любой удачей:
-    // иначе автообновление без сети зажгло бы галочку.
+    // Крестик — у любой неудачи и снимается любой удачей: иначе автообновление
+    // без сети зажгло бы галочку.
     if (result.kind === 'failed') {
       state.refreshFailed = true;
       retrySoon();
@@ -266,8 +265,7 @@ export function refresh(force, manual, spin) {
       return;
     }
     state.spinning = false;
-    // Значок доводит оборот до конца — хотя бы один целый: замерший на
-    // полповороте выглядит зависшим. Потом галочка или крестик.
+    // Хотя бы один целый оборот: замерший на полповороте выглядит зависшим.
     state.spinningDown = true;
     render();
     var turns = Math.max(1, Math.ceil((Date.now() - state.spinStart) / SPIN_MS));

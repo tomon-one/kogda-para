@@ -31,8 +31,8 @@ import ru.whensclass.data.DayDto
 import ru.whensclass.data.LessonDto
 
 /**
- * Неделя одним списком. Список обычный, не ленивый (см. [Lessons]), поэтому
- * показываем столько, сколько помещается, а остаток считаем последней строкой.
+ * Неделя одним списком. Список обычный, не ленивый (см. [Lessons]): показываем сколько помещается,
+ * остаток — последней строкой.
  */
 @Composable
 internal fun Week(
@@ -45,16 +45,15 @@ internal fun Week(
     teacher: Boolean = false,
 ) {
     val today = now.toLocalDate()
-    // Ключ и по дате: через полночь тот же список дней делится на прожитые
-    // и предстоящие заново.
+    // Ключ и по дате: через полночь тот же список дней делится на прожитые и предстоящие заново.
     val all = remember(days, today) { weekDays(days, today) }
     val current = currentLessonNumber(
         all.firstOrNull { it.isToday }?.ownBells?.takeIf { it.isNotEmpty() } ?: bells, today, now,
     )
     val height = LocalSize.current.height
     val scale = fontScale()
-    // Даже строки-сводки помещаются не всегда (семь дней, крупный шрифт):
-    // тогда хвост недели — одной строкой «и ещё N дней».
+    // Даже строки-сводки помещаются не всегда (семь дней, крупный шрифт): тогда хвост недели —
+    // одной строкой «и ещё N дней».
     val fit = remember(all, height, scale) {
         fitWeek(
             all.map { dayHeight(it, scale).value },
@@ -81,9 +80,8 @@ internal fun Week(
                         } == true
                         EmptyLine(day.date, colors, day.absent, day.unread != null, teacher, nextFree)
                     } else {
-                        // Заголовок дня уже занял одного ребёнка. С другими
-                        // группами пар в дне бывает больше девяти — тогда
-                        // последняя строка говорит, сколько не поместилось.
+                        // Заголовок дня занял одного ребёнка. С другими группами пар бывает больше
+                        // девяти — последняя строка говорит, сколько не поместилось.
                         val room = MAX_CHILDREN - 1
                         val shown = if (day.lessons.size > room) room - 1 else day.lessons.size
                         day.lessons.take(shown).forEach {
@@ -125,15 +123,12 @@ private fun MoreDays(first: LocalDate, count: Int, colors: Palette) {
 /** Фон строки, которая не идёт сейчас: задаётся явно, см. [LessonLine]. */
 internal val NO_SURFACE = ColorProvider(Color.Transparent)
 
-/**
- * Сколько детей вмещает контейнер Glance. Разметка виджета собирается заранее,
- * и всё сверх десятого пропадает молча — ни ошибки, ни пустого места.
- */
+/** Сколько детей вмещает контейнер Glance. Разметка собирается заранее, и всё сверх десятого пропадает молча. */
 internal const val MAX_CHILDREN = 10
 
 /**
- * «И ещё N» — когда пары в день не поместились в контейнер. Нажатие — на
- * этот день: без своего нажатия оно уходит корню, к сегодняшнему.
+ * «И ещё N» — когда пары в день не поместились в контейнер. Нажатие — на этот день: без своего оно
+ * уходит корню, к сегодняшнему.
  */
 @Composable
 private fun MoreLine(date: LocalDate, rest: Int, colors: Palette) {
@@ -159,8 +154,7 @@ private fun DayTitle(day: WeekDay, colors: Palette) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DayName(day, colors)
-        // Пары прежние или неполные: сервер этот день не прочитал. Пустой
-        // такой день говорит это своей строкой.
+        // Пары прежние или неполные: сервер день не прочитал; пустой такой день говорит это строкой.
         if (day.unread != null && day.lessons.isNotEmpty()) {
             Text(
                 "  не прочитан",
@@ -172,9 +166,8 @@ private fun DayTitle(day: WeekDay, colors: Palette) {
 }
 
 /**
- * Название дня. Сегодняшний — на плашке, как выбранный день в полоске
- * приложения; поля только по бокам, высота строки та же (по ней считается,
- * сколько дней влезает).
+ * Название дня. Сегодняшний — на плашке, как выбранный день в полоске приложения; поля только по
+ * бокам, высота та же (по ней считается, сколько дней влезает).
  */
 @Composable
 private fun DayName(day: WeekDay, colors: Palette) {
@@ -269,12 +262,10 @@ private fun LessonLine(
     val dim = lesson.isCancelled
 
     Row(
-        // Подложка у идущей пары — как в дневном виджете; кладётся первой и
-        // накрывает строку вместе с отступом под ней.
-        //
-        // Фон задаётся всегда, у остальных строк — прозрачный: без модификатора
-        // в RemoteViews не уходит команды про фон, лаунчер накатывает их на
-        // прежние вьюхи, и подложка бывшей идущей пары остаётся.
+        // Подложка у идущей пары — как в дневном виджете; кладётся первой и накрывает строку вместе
+        // с отступом. Фон задаётся всегда (у остальных прозрачный): без модификатора в RemoteViews
+        // не уходит команда про фон, лаунчер накатывает их на прежние вьюхи, и подложка бывшей
+        // идущей пары остаётся.
         modifier = GlanceModifier
             .fillMaxWidth()
             .background(if (isNow) colors.nowSurface else NO_SURFACE)
@@ -306,8 +297,7 @@ private fun LessonLine(
             ),
             modifier = GlanceModifier.defaultWeight(),
         )
-        // У отменённой — «отменена», а не прежний кабинет: тонкое зачёркивание
-        // серого за секунду не видно.
+        // У отменённой — «отменена», а не прежний кабинет: тонкое зачёркивание серого за секунду не видно.
         Text(
             when {
                 lesson.isCancelled -> "отменена"

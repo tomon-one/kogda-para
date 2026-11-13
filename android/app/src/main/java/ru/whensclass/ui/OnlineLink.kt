@@ -24,20 +24,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
- * Ссылка на онлайн-занятие: хост с хвостом адреса и две кнопки. Полный адрес
- * не показывается — он не влезает и раздувает строку пары. «Открыть» первой:
- * нужна чаще; «Копировать» — чтобы переслать.
+ * Ссылка на онлайн-занятие: хост с хвостом адреса и две кнопки. Полный адрес не показывается — не
+ * влезает и раздувает строку. «Открыть» первой: нужна чаще; «Копировать» — чтобы переслать.
  */
 @Composable
 internal fun OnlineLink(url: String, muted: Boolean = false) {
     val context = LocalContext.current
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Куда ведёт кнопка: ссылку вписывает руками любой, кто правит таблицу.
-        // Хост не с площадки вебинаров колледжа — предупреждаем прямо.
+        // Куда ведёт кнопка: ссылку вписывает руками любой, кто правит таблицу. Хост не с площадки
+        // вебинаров колледжа — предупреждаем прямо.
         val known = remember(url) { ru.whensclass.data.isKnownWebinar(url) }
         val color = if (known) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
-        // Адрес — только чужой, как предупреждение; у площадки колледжа хватает
-        // кнопок. Хост ужимается, хвост — нет: ради последних цифр он и показан.
+        // Адрес — только чужой, как предупреждение. Хост ужимается, хвост — нет: ради последних цифр он и показан.
         if (!known) Row {
             Text(
                 if (known) host(url) else "чужой адрес: " + host(url),
@@ -67,10 +65,9 @@ internal fun OnlineLink(url: String, muted: Boolean = false) {
 }
 
 /**
- * «https://my.mts-link.ru/j/100000004/20000000626» -> «20000000626»: хвост
- * к хосту, строкой «my.mts-link.ru · …/20000000626». По хвосту отличают три
- * пары подряд в одной комнате от трёх разных, по хосту — фишинговую ссылку
- * от настоящей.
+ * «https://my.mts-link.ru/j/100000004/20000000626» -> «20000000626»: хвост к хосту, «my.mts-link.ru
+ * · …/20000000626». По хвосту отличают три пары подряд в одной комнате от трёх разных, по хосту —
+ * фишинговую ссылку от настоящей.
  */
 private fun linkEnd(url: String): String? =
     runCatching { url.toUri().pathSegments }
@@ -86,8 +83,8 @@ private fun host(url: String): String =
 private fun LinkButton(label: String, color: Color, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
-        // Поля и высота меньше обычных, чтобы пара с вебинаром не распухала;
-        // область нажатия Compose сам держит не меньше 48 dp.
+        // Поля и высота меньше обычных, чтобы пара с вебинаром не распухала; область нажатия
+        // Compose держит не меньше 48 dp.
         modifier = Modifier.height(28.dp),
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
         // Залитая плашка своего цвета: кнопку видно и без рамки.

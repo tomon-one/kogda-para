@@ -31,7 +31,7 @@ export function parseRoute() {
   var parts = hash.split('/');
   var head = parts[0];
   if (head === 'settings') return { screen: 'settings' };
-  // «pick/second» — адрес до веб-0.2.0, мог остаться в истории вкладки.
+  // «pick/second» — адрес до веб-0.2.0, мог остаться в истории.
   if (head === 'pick') {
     return { screen: 'pick', mode: parts[1] === 'self' ? 'self' : parts[1] === 'extra' || parts[1] === 'second' ? 'extra' : 'group' };
   }
@@ -67,8 +67,8 @@ export function back() {
 }
 
 /**
- * На главный экран, свернув пройденное: «назад» оттуда — вон с сайта, как в
- * приложении. Был присланный адрес — к нему.
+ * На главный экран, свернув пройденное: «назад» оттуда — вон с сайта. Был
+ * присланный адрес — к нему.
  */
 export function home() {
   // Присланный адрес лежит в записи истории экрана выбора — и после перезагрузки.

@@ -30,9 +30,8 @@ import ru.whensclass.data.GroupDto
 import ru.whensclass.widget.plural
 
 /**
- * Выбор из почти двух сотен — с поиском: без него список бесполезен. Студент
- * выбирает группу (свою или ещё одну), преподаватель — себя: дальше
- * приложение работает поверх выбранного расписания — экран, виджеты, напоминания.
+ * Выбор из почти двух сотен — с поиском: без него список бесполезен. Студент выбирает группу (свою
+ * или ещё одну), преподаватель — себя; дальше приложение работает поверх выбранного расписания.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,8 +78,7 @@ fun PickerScreen(
             )
         },
     ) { padding ->
-        // Список отступает от клавиатуры: при enableEdgeToEdge окно под неё
-        // не ужимается.
+        // Список отступает от клавиатуры: при enableEdgeToEdge окно под неё не ужимается.
         Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             SearchField(query, { query = it }, if (teachers) "Поиск по фамилии" else "Поиск по названию",
                 Modifier.padding(horizontal = 16.dp))
@@ -95,8 +93,7 @@ fun PickerScreen(
                 list.isEmpty() -> LoadFailed(if (teachers) "Список преподавателей" else "Список групп", loadDiagnostics, onRetry)
 
                 else -> {
-                    // Отбор — только при смене запроса или списка, не на каждую
-                    // перекомпоновку.
+                    // Отбор — только при смене запроса или списка, не на каждую перекомпоновку.
                     val filtered = remember(list, query) {
                         if (query.isBlank()) list
                         else list.filter { matchesQuery(it.name, query) }

@@ -14,7 +14,7 @@ import { SECTIONS, isSection, tabOrder } from '../state.js';
 
 var CHANNEL_URL = 'https://t.me/kogda_para_news';
 
-/** За сколько грузится таблица колледжа. Перемерено 8 сентября 2026 года. */
+/** Сколько секунд грузится таблица колледжа. */
 var SHEET_SECONDS = 8;
 
 export function mainScreen(app) {
@@ -38,7 +38,7 @@ export function mainScreen(app) {
   app.loadRetakes(false);
   var live = retakesActive(app.state.retakes, app.now().date);
   // Полоска дней — у своего расписания, когда оно есть.
-  // Дней нет (воскресенье до выкладки) — без полоски, как в приложении: нажимать некуда.
+  // Дней нет (воскресенье до выкладки) — без полоски: нажимать некуда.
   var ownDays = (app.shown() || app.saved() || {}).days || [];
   var strip = !route.kind && ownDays.length ? weekStrip(app.scrollTarget(), app.now().date) : null;
   var head = h('div', { class: 'head' }, topbar(app, own), channelPlate(app), tabs(app, tab, teacherMode),
@@ -57,11 +57,11 @@ export function mainScreen(app) {
   var rowStays = isSection(tab);
   if (row && (strip || rowStays)) row.classList.add('float');
   if (row && rowStays) row.classList.add('stays');
-  // Полоска — под вторым рядом вкладок, как в приложении, и прилипает под шапкой.
+  // Полоска — под вторым рядом вкладок, прилипает под шапкой.
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
     head, row, strip, content);
 
-  // Сбой и пропажа — на любой вкладке, как в приложении: иначе чужое
+  // Сбой и пропажа — на любой вкладке: иначе чужое
   // расписание во время сбоя выглядело бы свежим. На расписании — у сегодняшнего
   // дня, куда страница прокручивается.
   if (route.kind && !route.id) {
@@ -214,7 +214,7 @@ function secondTabs(app, current, live) {
 
 /**
  * Один раз, когда расписание уже выбрано: у сайта есть канал новостей. Стоит в
- * шапке и прилипает с ней, как в приложении, а не среди дней.
+ * шапке и прилипает с ней, а не среди дней.
  * И кнопка, и крестик убирают плашку насовсем.
  */
 function channelPlate(app) {

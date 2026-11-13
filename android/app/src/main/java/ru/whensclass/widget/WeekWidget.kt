@@ -43,9 +43,8 @@ import ru.whensclass.data.sheetLink
 import ru.whensclass.ui.daysWithGaps
 
 /**
- * Виджет на неделю целиком: отвечает на «когда у меня окно» и «что в
- * четверг» без листания. Поэтому строка пары короткая — начало, название и
- * кабинет.
+ * Виджет на неделю целиком: отвечает на «когда у меня окно» и «что в четверг» без листания, поэтому
+ * строка пары короткая — начало, название, кабинет.
  */
 class WeekWidget : GlanceAppWidget() {
 
@@ -61,10 +60,9 @@ class WeekWidget : GlanceAppWidget() {
             val state by store.widgetStates.collectAsState(initial = first)
             val schedule = ScheduleWidget.parse(state?.scheduleJson)
             val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
-            // Часы — только здесь, и дальше параметром: корень
-            // перекомпонуется на каждую перерисовку, а вложенные функции с
-            // теми же входами Compose пропускает, и подсветка застревала бы на
-            // кончившейся паре.
+            // Часы — только здесь и дальше параметром: корень перекомпонуется на каждую
+            // перерисовку, вложенные функции с теми же входами Compose пропускает, и подсветка
+            // застревала бы.
             val now = moment(currentState(ScheduleWidget.KEY_TICK))
             val today = now.toLocalDate()
             Column(
@@ -76,8 +74,8 @@ class WeekWidget : GlanceAppWidget() {
                     .cornerRadius(20.dp)
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
-                // С дырами, как на экране: воскресенье и будень без строки
-                // внутри покрытия — «выходной», а не пропуск без слова.
+                // С дырами, как на экране: воскресенье и будень без строки внутри покрытия —
+                // «выходной», а не пропуск без слова.
                 val days = schedule?.let { daysWithGaps(it) }.orEmpty()
                 Header(
                     days,
@@ -104,9 +102,9 @@ class WeekWidget : GlanceAppWidget() {
                     )
 
                     schedule == null -> MissingHint("Расписание ещё не загружено", colors)
-                    // Проверяем то, что рисуется, а не то, что пришло: прожитые
-                    // дни виджет выбрасывает. Пустая неделя объясняется как
-                    // пустой день у дневного виджета ([missingDay]).
+                    // Проверяем то, что рисуется, а не то, что пришло: прожитые дни виджет
+                    // выбрасывает. Пустая неделя объясняется как пустой день у дневного виджета
+                    // ([missingDay]).
                     weekDays(days, today).isEmpty() -> {
                         val missing = missingDay(
                             schedule, today, state?.serverBroken == true, week = true,
@@ -119,8 +117,8 @@ class WeekWidget : GlanceAppWidget() {
                             open = if (missing.toApp) actionStartActivity(openDay(context, today)) else null,
                         )
                     }
-                    // Долю высоты список получает здесь, из Column: без неё в
-                    // некоторых оболочках он схлопывается в ноль.
+                    // Долю высоты список получает здесь, из Column: без неё в некоторых оболочках
+                    // он схлопывается в ноль.
                     else -> Week(
                         days,
                         schedule.bells,
@@ -168,8 +166,7 @@ private fun Header(
         )
         Spacer(GlanceModifier.width(6.dp))
 
-        // Статус — второй строкой, рядом с группой, как в дневном виджете:
-        // в строке заголовка он обрезал бы даты.
+        // Статус — второй строкой, рядом с группой, как в дневном виджете: в строке заголовка он обрезал бы даты.
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
                 weekTitle(days, today),

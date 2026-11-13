@@ -42,8 +42,8 @@ import ru.whensclass.data.ScheduleDto
 import ru.whensclass.widget.plural
 
 /**
- * Расписание преподавателя. Сервер собирает его, переворачивая расписание
- * групп, поэтому у каждой пары написано, каким группам она читается.
+ * Расписание преподавателя. Сервер собирает его, переворачивая расписание групп, поэтому у каждой
+ * пары написано, каким группам она читается.
  */
 @Composable
 fun TeacherScreen(
@@ -72,23 +72,23 @@ fun TeacherScreen(
     /** Сервер больше не обслуживает эту сборку — «проверьте интернет» было бы неправдой. */
     unsupported: Boolean = false,
     /**
-     * Плашки сбоя, когда шапке тесно (альбомная): строкой списка дней над днём
-     * открытия, а без списка — над экраном. Над вкладками они отняли бы у списка всё место.
+     * Плашки сбоя, когда шапке тесно (альбомная): строкой списка дней над днём открытия, а без
+     * списка — над экраном. Над вкладками они отняли бы у списка всё место.
      */
     plates: (@Composable () -> Unit)? = null,
     othersTitle: String = "Другие преподаватели",
-    // Дно списка — без утверждений про колледж: листы преподавателей в книге
-    // есть, скрытые и с именами длиннее 31 символа, и сервер их не читает.
+    // Дно списка — без утверждений про колледж: листы преподавателей в книге есть, скрытые и с
+    // именами длиннее 31 символа, и сервер их не читает.
     endNote: (Int) -> String = { n ->
         "Всё. " +
             plural(n, "преподаватель", "преподавателя", "преподавателей") + "."
     },
 ) {
-    // В роли преподавателя своё расписание уже на телефоне — сразу, без сети;
-    // список остальных — по кнопке. Выбор и поиск переживают поворот экрана.
+    // В роли преподавателя своё расписание уже на телефоне — сразу, без сети; список остальных — по
+    // кнопке. Выбор и поиск переживают поворот.
     var browsing by rememberSaveable { mutableStateOf(false) }
-    // Нажали на свой день виджета или своё уведомление — к своему расписанию,
-    // а не к открытому коллеге. Только на новое нажатие, не на поворот.
+    // Нажали на свой день виджета или своё уведомление — к своему расписанию, а не к открытому
+    // коллеге. Только на новое нажатие.
     var handledKey by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(startKey) }
     LaunchedEffect(startKey) {
         if (startKey != handledKey) {
@@ -98,11 +98,11 @@ fun TeacherScreen(
     }
     var pickedId by rememberSaveable { mutableStateOf<String?>(null) }
     var pickedName by rememberSaveable { mutableStateOf("") }
-    // С нуля, а не с нынешнего [openKey]: вкладку открывает само нажатие на имя,
-    // и при первом входе на неё ключ уже новый — его надо исполнить.
+    // С нуля, а не с нынешнего [openKey]: вкладку открывает само нажатие на имя, и ключ при первом
+    // входе уже новый — его надо исполнить.
     var handledOpen by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
-    // Открытый из «Пересдач» — не память вкладки: нажатие на саму вкладку
-    // возвращает то, что было открыто на ней (как на сайте).
+    // Открытый из «Пересдач» — не память вкладки: нажатие на саму вкладку возвращает то, что было
+    // на ней (как на сайте).
     var viaOpen by rememberSaveable { mutableStateOf(false) }
     var beforeId by rememberSaveable { mutableStateOf<String?>(null) }
     var beforeName by rememberSaveable { mutableStateOf("") }
@@ -162,8 +162,7 @@ fun TeacherScreen(
         pickedId = teacher?.id
         pickedName = teacher?.name.orEmpty()
     }
-    // Прочитанное переживает поворот и смену вкладки: без сети иначе вместо
-    // него «Расписание не загрузилось».
+    // Прочитанное переживает поворот и смену вкладки: без сети иначе вместо него «Расписание не загрузилось».
     var schedule by rememberSaveable(stateSaver = ScheduleSaver) { mutableStateOf<ScheduleDto?>(null) }
     // Чьё расписание в [schedule]: у другого открытого — не показывать.
     var loadedFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -174,8 +173,7 @@ fun TeacherScreen(
     var reloadFailed by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
 
-    // Открытый из «Пересдач» закрывают — вкладка возвращает своё, а человек
-    // — в «Пересдачи», откуда пришёл.
+    // Открытый из «Пересдач» закрывают — вкладка возвращает своё, а человек — в «Пересдачи».
     fun close() {
         if (viaOpen) {
             viaOpen = false
@@ -194,8 +192,7 @@ fun TeacherScreen(
     BackHandler(enabled = picked != null) { close() }
     BackHandler(enabled = picked == null && ownSchedule != null && browsing) { browsing = false }
 
-    // reloadKey меняется по нажатию на обновление: перечитываем расписание
-    // того преподавателя, который сейчас открыт.
+    // reloadKey меняется по обновлению: перечитываем расписание открытого сейчас преподавателя.
     LaunchedEffect(pickedId, reloadKey) {
         val teacher = picked ?: return@LaunchedEffect
         loading = true
@@ -256,9 +253,8 @@ fun TeacherScreen(
                     if (query.isBlank()) list
                     else list.filter { matchesQuery(it.name, query) }
                 }
-                // Закреплённые — отдельной группой сверху: так видно, что они
-                // закреплённые, и при снятии они не перелетают через весь список.
-                // Сам человек — отдельной строкой над всеми.
+                // Закреплённые — отдельной группой сверху: видно, что закреплены, и при снятии не
+                // перелетают через весь список. Сам человек — отдельной строкой над всеми.
                 val self = remember(found, selfId) { found.firstOrNull { it.id == selfId } }
                 val favourites = remember(found, pinned, selfId) {
                     found.filter { it.id in pinned && it.id != selfId }
@@ -267,8 +263,7 @@ fun TeacherScreen(
                     found.filter { it.id !in pinned && it.id != selfId }
                 }
 
-                // Без общего зазора: строки одной буквы — одна карточка ([lettered]);
-                // отдельные карточки сверху отступают сами.
+                // Без общего зазора: строки одной буквы — одна карточка ([lettered]); отдельные сверху отступают сами.
                 LazyColumn(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
                 ) {
@@ -349,8 +344,8 @@ private fun ChosenTeacher(
     today: java.time.LocalDate,
     onBack: () -> Unit,
 ) {
-    // Палец на строке с именем листает список, как с полоски: в альбомной
-    // строка и полоска — почти весь экран над парами.
+    // Палец на строке с именем листает список, как с полоски: в альбомной строка и полоска — почти
+    // весь экран над парами.
     val dragSink = remember { mutableStateOf<((Float) -> Unit)?>(null) }
     Column(modifier = Modifier.fillMaxSize()) {
         if (schedule == null || schedule.days.isEmpty()) plates?.invoke()
@@ -363,8 +358,7 @@ private fun ChosenTeacher(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                // Открыт из «Пересдач», а списка преподавателей ещё нет — имя
-                // из ответа, как на сайте.
+                // Открыт из «Пересдач», а списка преподавателей ещё нет — имя из ответа, как на сайте.
                 teacher.name.ifEmpty { schedule?.groupName.orEmpty() },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
@@ -382,8 +376,7 @@ private fun ChosenTeacher(
             )
         }
         when {
-            // Обновление открытого — без крутилки на месте пар: прокрутка и
-            // прочитанное остаются, пока не пришло новое.
+            // Обновление открытого — без крутилки на месте пар: прокрутка и прочитанное остаются, пока не пришло новое.
             loading && schedule == null -> Centered { CircularProgressIndicator() }
             schedule == null -> Centered {
                 Text(
@@ -399,8 +392,7 @@ private fun ChosenTeacher(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            // Дней нет — не пустой экран, а объяснение с выходом к таблице,
-            // как у своего расписания.
+            // Дней нет — не пустой экран, а объяснение с выходом к таблице, как у своего расписания.
             else -> if (!explainMissing(schedule, today, null)) {
                 ScheduleDays(
                     schedule = schedule,
@@ -463,8 +455,7 @@ private fun TeacherRow(
                     )
                 }
             }
-            // Экранный чтец: что делает звёздочка и в каком она положении —
-            // символ «★» он не объясняет.
+            // Экранный чтец: что делает звёздочка и в каком она положении — символ «★» не объясняет.
             Text(
                 if (pinned) "★" else "☆",
                 style = MaterialTheme.typography.titleMedium,

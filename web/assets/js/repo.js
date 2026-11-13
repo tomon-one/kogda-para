@@ -1,7 +1,6 @@
-// Выбор и обновление расписания. Порядок и правила — как в приложении
-// (ScheduleRepository.kt, ScheduleStore.kt): сначала /v1/meta, расписание — если
-// сервер разобрал таблицу заново, началась новая неделя или сегодняшнего дня в
-// сохранённом нет.
+// Выбор и обновление расписания (как ScheduleRepository.kt, ScheduleStore.kt):
+// сначала /v1/meta, расписание — если сервер разобрал таблицу заново, началась
+// новая неделя или сегодняшнего дня в сохранённом нет.
 
 import * as api from './api.js';
 import * as store from './store.js';
@@ -10,11 +9,11 @@ import { STATUS_UNREACHABLE, gone, health, isNotFound, noteExtraNotFound, noteNo
 import { DAYS, MAX_GROUPS, bellsOn, cleanSchedule, combineGroups, coversDay, openingDay, ownOnly, windowMark } from './schedule.js';
 
 // Списки и закреплённые — в catalog.js, состояние сервера и пропажи — в
-// server.js; экраны и тесты берут их отсюда.
+// server.js; наружу всё отсюда.
 export { STATUS_EDITING, STATUS_UNREACHABLE, expectGone, gone, goneSuspected, health, serverBroken, serverState } from './server.js';
 export { cachedGroups, cachedTeachers, freshGroups, freshTeachers, followRenamedPins, pinned, togglePin } from './catalog.js';
 
-/** Сколько сервер может молчать при живой сети, прежде чем это сбой, а не чих. */
+/** Сколько сервер может молчать при живой сети, прежде чем это сбой. */
 var UNREACHABLE_BROKEN_AFTER_MS = 30 * 60 * 1000;
 
 // ——— выбор ———
@@ -83,7 +82,7 @@ export function selectGroup(group) {
   store.set('group', { id: group.id, name: group.name });
   clearGone();
   if (unchanged) return;
-  // Расписание прежней группы нельзя показывать ни секунды.
+  // Расписание прежней группы показывать нельзя.
   dropSchedule();
   // Остальные группы остаются: выбрать можно любые, к своей они не
   // привязаны. Кроме новой своей — дважды одну не показываем.
@@ -128,9 +127,8 @@ export function removeExtra(id) {
 }
 
 /**
- * Перевод со «соседней подгруппы» (до веб-0.2.0) на список групп. Прежний
- * снимок склеен с парами соседки — оставляем свои: остальные хранятся
- * отдельно. Повторный вызов ничего не делает.
+ * Перевод со «соседней подгруппы» (до веб-0.2.0) на список групп: прежний
+ * снимок склеен с парами соседки, оставляем свои. Повторный вызов ничего не делает.
  */
 export function migrateGroups() {
   var sub = store.get('second');
@@ -362,8 +360,7 @@ function refreshOnce(force) {
       // Занят — своё и другие группы упрутся в тот же лимит: не тратить его.
       if (busy || silent) return { kind: 'failed', error: busy || silent };
       if (!force && !outdated && meta && meta.gen === store.get('gen')) {
-        // Данные те же, но проверку показать надо: иначе кажется, что кнопка
-        // обновления не работает.
+        // Данные те же, но проверку показать надо: иначе кнопка выглядит нерабочей.
         store.set('fetchedAt', now);
         return { kind: 'fresh' };
       }

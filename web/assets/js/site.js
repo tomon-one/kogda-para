@@ -1,5 +1,4 @@
-// Вокруг расписания: тема, окно тестового режима, счёт открытий и
-// сервис-воркер.
+// Вокруг расписания: тема, окно тестового режима, счёт открытий, сервис-воркер.
 
 import * as store from './store.js';
 import { h, closeDialog, dialog, externalLink } from './ui/dom.js';
@@ -41,9 +40,8 @@ export function testNotice() {
 
 /**
  * Счёт — только настоящее открытие: переход на страницу, а не перезагрузка и
- * не возврат «назад» (как поворот экрана у приложения). По виду перехода, а
- * не раз за сеанс: вкладку держат открытой месяцами — возвращение к ней
- * считает countReturn.
+ * не возврат «назад». Считается по виду перехода, а не раз за сеанс: вкладку
+ * держат открытой месяцами — возвращение к ней считает countReturn.
  */
 export function countOpen() {
   var type = 'navigate';
@@ -75,8 +73,8 @@ export function checkWorkerUpdate() {
 
 export function registerWorker() {
   if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
-  // В разработке файлы меняются на каждом сохранении — кэш только мешал бы;
-  // воркер, оставшийся от проверки сборки на том же адресе, — снять.
+  // В разработке кэш мешает: воркер, оставшийся от проверки сборки на том же
+  // адресе, снять.
   if (build() === 'разработка') {
     navigator.serviceWorker.getRegistrations().then(function (all) {
       all.forEach(function (r) { r.unregister(); });
@@ -106,8 +104,7 @@ export function registerWorker() {
     }
     hadController = true;
   });
-  // После первого показа и обновления: файлы для воркера не спорят за сеть с
-  // расписанием.
+  // После первого показа: файлы воркера не спорят за сеть с расписанием.
   var start = function () {
     setTimeout(function () {
       navigator.serviceWorker.register('sw.js').then(null, function () { /* без него работает, только без сети — нет */ });

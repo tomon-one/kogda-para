@@ -9,13 +9,10 @@ import android.os.PowerManager
 import android.provider.Settings
 
 /**
- * Марки, которые сверх обычного Android не дают приложению просыпаться в фоне.
- *
- * Будильники звонка, напоминания и часовое обновление на них не срабатывают,
- * пока приложение не открыть, особенно после перезагрузки или очистки
- * недавних. Снимается это только руками, у каждой марки на своём экране.
- * Какие экраны и что на них — по dontkillmyapp.com и спискам из открытых
- * приложений.
+ * Марки, которые сверх обычного Android не дают приложению просыпаться в фоне: будильники звонка,
+ * напоминания и часовое обновление не срабатывают, пока приложение не открыть (особенно после
+ * перезагрузки или очистки недавних). Снимается только руками, у каждой марки на своём экране (по
+ * dontkillmyapp.com и спискам из открытых приложений).
  */
 enum class Vendor(
     private val defaultTitle: String,
@@ -49,8 +46,8 @@ enum class Vendor(
         fun current(): Vendor? = of(Build.MANUFACTURER, Build.BRAND)
 
         /**
-         * Redmi и POCO — прошивка Xiaomi. Ранние Honor выпускала Huawei, но
-         * их всё равно ведём в HONOR: там пробуются оба экрана.
+         * Redmi и POCO — прошивка Xiaomi. Ранние Honor выпускала Huawei, но ведём их в HONOR: там
+         * пробуются оба экрана.
          */
         internal fun of(manufacturer: String?, brand: String?): Vendor? {
             val names = listOf(manufacturer, brand).mapNotNull { it?.lowercase()?.trim() }
@@ -72,9 +69,8 @@ enum class Vendor(
 }
 
 /**
- * Экран настроек телефона, куда надо сходить: что на нём сделать и как до него
- * дойти. Путей несколько — прошивки переименовывают свои экраны от версии к
- * версии, — пробуются по порядку.
+ * Экран настроек телефона, куда надо сходить: что на нём сделать и как дойти. Прошивки
+ * переименовывают экраны от версии к версии — пути пробуются по порядку.
  */
 data class BackgroundStep(
     /** Строка в настройках приложения. */
@@ -83,8 +79,8 @@ data class BackgroundStep(
     val hint: String,
     val targets: List<SettingsTarget>,
     /**
-     * Шаг снимает стандартную экономию батареи, и приложение видит, снята ли
-     * она. У фирменных переключателей состояние приложению не видно.
+     * Шаг снимает стандартную экономию батареи, и приложение видит, снята ли она; у фирменных
+     * переключателей состояние не видно.
      */
     val battery: Boolean = false,
 )
@@ -114,9 +110,8 @@ object Background {
     private val APP_DETAILS = SettingsTarget.Action(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true)
 
     /**
-     * Системное окно «Разрешить работу в фоне?», за ним — общий список
-     * приложений с экономией. На HyperOS 3 то же окно открывает «Контроль
-     * активности» самой Xiaomi.
+     * Системное окно «Разрешить работу в фоне?», за ним общий список приложений с экономией. На
+     * HyperOS 3 то же окно открывает «Контроль активности» Xiaomi.
      */
     private val IGNORE_OPTIMIZATIONS = listOf(
         SettingsTarget.Action(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, withPackage = true),
@@ -145,8 +140,7 @@ object Background {
                 label = "Контроль активности",
                 hint = "Выберите «Нет ограничений».",
                 targets = listOf(
-                    // До HyperOS 2; в HyperOS 3 экрана нет, и его открывает
-                    // стандартное окно ниже.
+                    // До HyperOS 2; в HyperOS 3 экрана нет, его открывает окно ниже.
                     SettingsTarget.Screen(
                         "com.miui.powerkeeper",
                         "com.miui.powerkeeper.ui.HiddenAppsConfigActivity",
@@ -186,8 +180,8 @@ object Background {
                 battery = true,
             ),
             BackgroundStep(
-                // «Спящие» и «глубоко спящие» — отдельно от батареи: туда
-                // приложение попадает само, если его несколько дней не открывать.
+                // «Спящие» и «глубоко спящие» — отдельно от батареи: приложение попадает туда само,
+                // если его несколько дней не открывать.
                 label = "Никогда не усыплять",
                 hint = "Добавьте «Когда пара?» в список.",
                 targets = listOf(
@@ -285,10 +279,7 @@ object Background {
             ?.isIgnoringBatteryOptimizations(context.packageName) == true
     }.getOrDefault(false)
 
-    /**
-     * Открыть экран шага. Возвращает false, если открылись только свойства
-     * приложения — тогда человеку надо сказать, где искать дальше.
-     */
+    /** Открыть экран шага. false — открылись только свойства приложения: человеку надо сказать, где искать дальше. */
     fun open(context: Context, step: BackgroundStep): Boolean {
         for (target in step.targets) {
             if (start(context, intent(context, target))) return target != APP_DETAILS
@@ -311,9 +302,8 @@ object Background {
     }
 
     /**
-     * Не проверяем заранее через resolveActivity: без объявленных <queries> на
-     * Android 11+ он не видит чужие экраны. Пробуем открыть — прошивка без
-     * такого экрана бросает ActivityNotFoundException, закрытый экран —
+     * Не проверяем через resolveActivity: без объявленных <queries> на Android 11+ он не видит
+     * чужие экраны. Пробуем открыть: нет экрана — ActivityNotFoundException, закрытый —
      * SecurityException.
      */
     private fun start(context: Context, intent: Intent): Boolean = runCatching {

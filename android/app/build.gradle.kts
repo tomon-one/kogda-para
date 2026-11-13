@@ -19,22 +19,21 @@ android {
         applicationId = "ru.whensclass"
         minSdk = 26
         targetSdk = 37
-        // Правила имени — в docs/versions.md. versionCode просто растёт:
-        // по нему приложение узнаёт о новой сборке на сервере.
+        // Правила имени — в docs/versions.md. versionCode просто растёт: по нему приложение узнаёт
+        // о новой сборке на сервере.
         versionCode = 12
         versionName = "r-Витим.1.2.3"
     }
-    // Tested-сборка (docs/versions.md, «Tested»): отдельное приложение рядом с
-    // основным, на нём автор проверяет новое до выкладки всем. Её номер —
-    // versionCode × 100 + TESTED_TRY, имя — versionName-tTESTED_TRY: поднять
-    // versionCode и versionName до будущей основной, а TESTED_TRY — с каждой
-    // выложенной tested-сборкой.
+    // Tested-сборка (docs/versions.md, «Tested»): отдельное приложение рядом с основным, на нём
+    // автор проверяет новое до выкладки. Номер — versionCode × 100 + TESTED_TRY, имя —
+    // versionName-tTESTED_TRY: versionCode и versionName поднять до будущей основной, TESTED_TRY —
+    // с каждой выложенной tested-сборкой.
 
     signingConfigs {
         create("release") {
-            // Ключ и пароли лежат вне репозитория: ~/WhensClass-keys на
-            // линуксе, C:/WhensClass-keys на Windows. Потерять ключ нельзя: с
-            // другим обновление не встанет поверх установленного приложения.
+            // Ключ и пароли лежат вне репозитория (~/WhensClass-keys на линуксе, C:/WhensClass-keys
+            // на Windows). Потерять ключ нельзя: с другим обновление не встанет поверх
+            // установленного.
             val keysDir = listOf(
                 File(System.getProperty("user.home"), "WhensClass-keys"),
                 File("C:/WhensClass-keys"),
@@ -42,8 +41,8 @@ android {
             val props = gradleLocalProperties(keysDir, "keystore.properties")
             val store = props.getProperty("storeFile")
             if (store != null) {
-                // В keystore.properties путь к ключу записан с той машины, где
-                // файл заводили. Нет такого пути — ищем ключ по имени рядом.
+                // В keystore.properties путь записан с той машины, где файл заводили; нет такого
+                // пути — ищем ключ по имени рядом.
                 storeFile = File(store).takeIf { it.isFile } ?: File(keysDir, File(store).name)
                 storePassword = props.getProperty("storePassword")
                 keyAlias = props.getProperty("keyAlias")
@@ -54,14 +53,11 @@ android {
 
     buildTypes {
         debug {
-            // Отдельный идентификатор: отладочная ставится рядом с рабочей и
-            // не трогает её данные.
+            // Отдельный идентификатор: отладочная ставится рядом с рабочей и не трогает её данные.
             applicationIdSuffix = ".debug"
-            // По умолчанию отладочная сборка ходит туда же, куда и рабочая.
-            // Чтобы отлаживать против сервера на своём компьютере, пропишите
-            // WHENSCLASS_BASE_URL=http://localhost:8081 в local.properties и
-            // сделайте `adb reverse tcp:8081 tcp:8081`: http к localhost
-            // разрешает src/debug/res/xml/network_security_config.xml.
+            // По умолчанию отладочная ходит туда же, куда рабочая. Против локального сервера:
+            // WHENSCLASS_BASE_URL=http://localhost:8081 в local.properties и `adb reverse tcp:8081
+            // tcp:8081` (http к localhost разрешает src/debug/res/xml/network_security_config.xml).
             val local = gradleLocalProperties(rootDir)
             val url = local.getProperty("WHENSCLASS_BASE_URL")
                 ?: "https://kogda-para-nsk.ru"
@@ -85,9 +81,8 @@ android {
         }
         create("candidate") {
             initWith(getByName("release"))
-            // Свой идентификатор — ставится рядом с основным, данные у них
-            // раздельные; название и виджеты — из src/candidate/res. Имя типа — не
-            // «tested»: имена на «test» Gradle не разрешает.
+            // Свой идентификатор — ставится рядом с основным, данные раздельные; название и виджеты
+            // — из src/candidate/res. Имя типа не «tested»: имена на «test» Gradle не разрешает.
             applicationIdSuffix = ".tested"
             // Обновления — своим каналом сервера, без GitHub.
             buildConfigField("String", "CHANNEL", "\"tested\"")
@@ -105,8 +100,7 @@ android {
         buildConfig = true
     }
 
-    // Интерфейс только русский: строки библиотек на 80 языках — около
-    // 100 КБ в каждой загрузке.
+    // Интерфейс только русский: строки библиотек на 80 языках — около 100 КБ в каждой загрузке.
     androidResources {
         localeFilters += listOf("ru", "en")
     }
@@ -121,8 +115,7 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         // Их читает только kotlin-reflect, а его в сборке нет.
         resources.excludes += listOf("kotlin/**.kotlin_builtins", "DebugProbesKt.bin")
-        // Загрузчик этой библиотеки (многопроцессный DataStore) R8 вырезает,
-        // и .so лежали бы в APK впустую.
+        // Загрузчик этой библиотеки (многопроцессный DataStore) R8 вырезает, и .so лежали бы в APK впустую.
         jniLibs.excludes += "**/libdatastore_shared_counter.so"
     }
 }

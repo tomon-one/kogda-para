@@ -50,7 +50,7 @@ export function followRenamedPins(groups, teachers) {
         return ask(old).then(function (body) {
           if (body.g !== old && ids[body.g]) {
             // Новый id мог быть закреплён и сам — без повтора, иначе звезда
-            // гасла бы только со второго нажатия.
+            // гасла бы со второго нажатия.
             var now = (store.get(key) || []).map(function (id) { return id === old ? body.g : id; });
             store.set(key, now.filter(function (id, i) { return now.indexOf(id) === i; }));
           }

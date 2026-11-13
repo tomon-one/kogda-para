@@ -40,9 +40,8 @@ import ru.whensclass.data.isKnownWebinar
 import ru.whensclass.ui.MainActivity
 
 /**
- * Маленький виджет: одна пара — та, что идёт сейчас, или ближайшая следующая.
- * Для тех, у кого на домашнем экране мало места, а оболочка не меняет размер
- * виджетов.
+ * Маленький виджет: одна пара — идущая сейчас или ближайшая следующая. Для тех, у кого на домашнем
+ * экране мало места.
  */
 class NextLessonWidget : GlanceAppWidget() {
 
@@ -60,8 +59,7 @@ class NextLessonWidget : GlanceAppWidget() {
             val state by store.widgetStates.collectAsState(initial = first)
             val schedule = ScheduleWidget.parse(state?.scheduleJson)
             val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
-            // Часы — в корне и дальше параметром: корень перекомпонуется на
-            // каждую перерисовку, вложенное — нет.
+            // Часы — в корне и параметром дальше: корень перекомпонуется на каждую перерисовку, вложенное — нет.
             val now = moment(currentState(ScheduleWidget.KEY_TICK))
             val today = now.toLocalDate()
             val next = nextLesson(schedule, now)
@@ -126,8 +124,7 @@ class NextLessonWidget : GlanceAppWidget() {
                                 else -> colors.textDim
                             },
                         ),
-                        // Группы нет в таблице — обновление ничего не даст: в
-                        // приложение, к «выбрать заново».
+                        // Группы нет в таблице — обновление ничего не даст: в приложение, к «выбрать заново».
                         modifier = GlanceModifier.clickable(
                             if (gone || unsupported) {
                                 actionStartActivity(openDay(LocalContext.current, today))
@@ -142,32 +139,26 @@ class NextLessonWidget : GlanceAppWidget() {
                 val bells = schedule?.bellsOn(next.day).orEmpty()
                 val ongoing = next.day == today && currentLessonNumber(bells, today, now) == lesson.number
                 val time = lessonStart(bells, lesson.number) ?: "${lesson.number} пара"
-                // Про завтрашнюю пару тоже говорим: «пар больше нет» легко
-                // прочесть как «пар нет вообще».
+                // Про завтрашнюю пару тоже говорим: «пар больше нет» читается как «пар нет вообще».
                 val when_ = nextLessonWhen(next.day, now, ongoing, time)
-                // Сбой и пропажа — красным и первым словом: в хвосте
-                // однострочной шапки причина ушла бы в многоточие. Старые данные
-                // без сбоя (телефон долго без сети) не красные.
+                // Сбой и пропажа — красным и первым словом: в хвосте однострочной шапки причина
+                // ушла бы в многоточие. Старые данные без сбоя не красные.
                 val status = when {
                     gone -> "нет в таблице · "
                     unsupported -> "обновите приложение · "
                     broken -> if (editing) "правка таблицы · " else "сбой · "
                     else -> ""
                 }
-                // Непрочитанный день — после времени: в узкой клетке
-                // многоточие съест пометку, а не время пары (она есть и в
-                // «Неделе», «Дне» и приложении).
+                // Непрочитанный день — после времени: в узкой клетке многоточие съест пометку, а не время пары.
                 val unread = when {
                     next.unreadOn == null -> null
                     next.unreadOn == next.day -> "не прочитан"
                     else -> formatDayTitleShort(next.unreadOn).substringBefore(",") + " не прочитан"
                 }
-                // В низкой клетке при крупном шрифте три строки не влезают:
-                // тогда место пары переезжает в шапку.
+                // В низкой клетке при крупном шрифте три строки не влезают: место пары переезжает в шапку.
                 val scale = fontScale()
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
-                // Длинное название (а короткие у колледжа редки) — в две строки, если
-                // хватает высоты на четыре: место пары остаётся своей строкой.
+                // Длинное название — в две строки, если хватает высоты на четыре: место пары остаётся своей строкой.
                 val subject = joinSubjects(distinctSubjects(next.lessons))
                 val perLine = ((LocalSize.current.width.value - 20f) / (SUBJECT_SP * CHAR_EM * scale)).toInt()
                 val long = subject.length > perLine
@@ -184,8 +175,8 @@ class NextLessonWidget : GlanceAppWidget() {
                     ongoing -> colors.accent
                     else -> colors.textDim
                 }
-                // Время начала — крупнее и жирным, как в «Дне» и на экране; остальное
-                // шапки мелко следом. Шапка с другим первым словом — одной строкой.
+                // Время начала — крупнее и жирным, как в «Дне»; остальное шапки мелко следом. Шапка
+                // с другим первым словом — одной строкой.
                 if (head.startsWith(time)) {
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
@@ -214,11 +205,9 @@ class NextLessonWidget : GlanceAppWidget() {
                     ),
                     modifier = GlanceModifier.fillMaxWidth(),
                 )
-                // Ссылка на чужой адрес не копируется одним нажатием: нажатие
-                // ведёт на экран пары, где хост назван.
+                // Ссылка на чужой адрес не копируется одним нажатием: нажатие ведёт на экран пары, где хост назван.
                 val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
-                // Две пары одного номера — оба места, без копирования ссылки:
-                // нажатие открывает день, где у каждой пары своя.
+                // Две пары одного номера — оба места, без копирования: нажатие открывает день.
                 val pair = next.also.isNotEmpty() || next.off.isNotEmpty()
                 if (!tight) Text(
                     when {
@@ -264,8 +253,8 @@ class NextLessonWidget : GlanceAppWidget() {
 }
 
 /**
- * Пара и день, на который она приходится. [also] — другие пары того же номера:
- * блок пополам, две пары в разных кабинетах, и какая из них его, неизвестно.
+ * Пара и день, на который она приходится. [also] — другие пары того же номера (блок пополам: какая
+ * своя, неизвестно).
  */
 data class NextLesson(
     val day: LocalDate,
@@ -273,10 +262,7 @@ data class NextLesson(
     val also: List<LessonDto> = emptyList(),
     /** Отменённые пары того же номера — половинка блока, которую сняли. */
     val off: List<LessonDto> = emptyList(),
-    /**
-     * Ближайший день до этой пары включительно, который сервер не прочитал:
-     * у её дня пары прежние, у дня раньше — пар может не хватать.
-     */
+    /** Ближайший день до этой пары включительно, который сервер не прочитал: у дня раньше пар может не хватать. */
     val unreadOn: LocalDate? = null,
     /** Следующая своя пара того же дня. */
     val then: LessonDto? = null,
@@ -286,10 +272,7 @@ data class NextLesson(
     val lessons: List<LessonDto> get() = listOf(lesson) + also
 }
 
-/**
- * Идущая сейчас пара; если её нет — ближайшая из оставшихся сегодня; если и
- * таких нет — первая пара следующего учебного дня.
- */
+/** Идущая сейчас пара; нет — ближайшая из оставшихся сегодня; нет — первая пара следующего учебного дня. */
 fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
     val next = findNext(schedule ?: return null, now) ?: return null
     val today = now.toLocalDate()
@@ -303,8 +286,7 @@ fun nextLesson(schedule: ScheduleDto?, now: LocalDateTime): NextLesson? {
 private fun findNext(schedule: ScheduleDto, now: LocalDateTime): NextLesson? {
     val today = now.toLocalDate()
     val bells = schedule.bellsOn(today)
-    // Только свои и не отменённые: иначе ближайшей оказалась бы отменённая
-    // пара или пара соседней подгруппы. У преподавателя свои все.
+    // Только свои и не отменённые; у преподавателя свои все.
     fun mine(lesson: LessonDto) = !lesson.isCancelled && !schedule.isNeighbours(lesson)
     val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }
         ?.lessons.orEmpty().filter(::mine)
@@ -342,9 +324,8 @@ private fun findNext(schedule: ScheduleDto, now: LocalDateTime): NextLesson? {
 }
 
 /**
- * Что сказать, когда ближайшей пары нет. «Пар нет» — только если лист
- * покрывает неделю вперёд: иначе это «ещё не опубликовано» или «сбой», как у
- * дневного виджета.
+ * Что сказать, когда ближайшей пары нет. «Пар нет» — только если лист покрывает неделю вперёд:
+ * иначе «не опубликовано» или «сбой».
  */
 internal fun noNextLesson(
     groupName: String?,
@@ -372,8 +353,7 @@ internal fun noNextLesson(
     if (end == null || end.isBefore(today.plusDays(6))) {
         return if (checked) "Дальше расписание ещё не опубликовано" else "Дальше расписание не загружено"
     }
-    // Пары ищутся только в скачанной неделе, а лист может идти дальше: честно
-    // — до какого дня их нет.
+    // Пары ищутся только в скачанной неделе, а лист идёт дальше: честно — до какого дня их нет.
     val last = schedule.days.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }.maxOrNull()
     if (last == null || last.isBefore(today)) return "Расписание на эти дни не загружено"
     return "Пар нет по ${formatWeekDay(last)}"
@@ -383,10 +363,9 @@ internal fun noNextLesson(
 internal const val NIGHT_END_HOUR = 5
 
 /**
- * Когда следующая пара: «сегодня», «завтра», день недели. Ночью (до
- * [NIGHT_END_HOUR]) — без них: пара этого же дня — «утром», «днём» или
- * «вечером», остальные — днём недели. В 01:47 «завтра» читается как «в
- * пятницу», а пара — в субботу. `start` — «09:00»; не время — «сегодня».
+ * Когда следующая пара: «сегодня», «завтра», день недели. Ночью (до [NIGHT_END_HOUR]) без них: пара
+ * этого же дня — «утром», «днём» или «вечером», остальные — днём недели (в 01:47 «завтра» читается
+ * как «в пятницу»). `start` — «09:00».
  */
 internal fun nextLessonWhen(day: LocalDate, now: java.time.LocalDateTime, ongoing: Boolean, start: String = ""): String {
     val today = now.toLocalDate()
@@ -405,10 +384,7 @@ internal fun nextLessonWhen(day: LocalDate, now: java.time.LocalDateTime, ongoin
     }
 }
 
-/**
- * Шапка маленького виджета: время — первым, потому что строка одна и режется
- * справа. «Идёт сейчас» — всё же первым: это главное.
- */
+/** Шапка маленького виджета: время первым, потому что строка одна и режется справа; «Идёт сейчас» всё же первым. */
 internal fun nextLessonHead(
     time: String,
     whenWord: String,
@@ -417,9 +393,7 @@ internal fun nextLessonHead(
     place: String? = null,
     unread: String? = null,
 ): String {
-    // [place] — только в тесной клетке, где третьей строки нет: место сразу
-    // за временем, «сегодня» не пишется; у идущей пары — «идёт» и место:
-    // время начала опоздавшему ни к чему.
+    // [place] — только в тесной клетке без третьей строки: место сразу за временем; у идущей пары «идёт» и место.
     if (place != null) {
         val parts = if (ongoing) {
             listOf("идёт", place)
@@ -436,9 +410,8 @@ internal fun nextLessonHead(
 private const val TIGHT_HEIGHT_SP = 55
 
 /**
- * Четыре строки (название в две) — в sp, без отступов. По снимку экрана с TECNO
- * LF7n: в клетке высотой около 80 dp четыре строки помещаются. Время в шапке
- * крупнее остального — на 3 sp больше, чем было при снимке.
+ * Четыре строки (название в две) — в sp, без отступов. По снимку TECNO LF7n: в клетке около 80 dp
+ * помещаются четыре; время в шапке на 3 sp крупнее.
  */
 private const val ROOMY_HEIGHT_SP = 66
 
@@ -447,9 +420,8 @@ private const val SUBJECT_SP = 13
 private const val CHAR_EM = 0.6f
 
 /**
- * Места всех пар номера без вида: «каб. 55/1 / каб. 467». Отменённая
- * половинка с тем же названием, что у оставшейся, — с преподавателем: иначе
- * не понять, чью сняли.
+ * Места всех пар номера без вида: «каб. 55/1 / каб. 467». Отменённая половинка с тем же названием —
+ * с преподавателем: иначе не понять, чью сняли.
  */
 internal fun places(next: NextLesson): String =
     next.lessons.joinToString(" / ") { place(it, withKind = false).removeSuffix("  ⧉") } +

@@ -51,8 +51,8 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 /**
- * Последний ответ вкладки «Аудитории». Живёт выше вкладки: иначе каждое
- * переключение вкладок стирало бы его и кабинеты грузились бы заново.
+ * Последний ответ вкладки «Аудитории». Живёт выше вкладки: иначе каждое переключение стирало бы его
+ * и кабинеты грузились бы заново.
  */
 @Stable
 class RoomsMemory {
@@ -66,9 +66,9 @@ class RoomsMemory {
 }
 
 /**
- * Кабинеты: какие свободны по расписанию на паре дня, какие заняты и где
- * накладки (docs/api.md, /v1/rooms). То же, что вкладка на сайте. «По
- * расписанию» — всерьёз: ключей, переносов и мероприятий таблица не знает.
+ * Кабинеты: какие свободны по расписанию на паре дня, какие заняты и где накладки (docs/api.md,
+ * /v1/rooms), как вкладка на сайте. «По расписанию» всерьёз: ключей, переносов и мероприятий
+ * таблица не знает.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -79,8 +79,7 @@ internal fun RoomsScreen(
     memory: RoomsMemory = remember { RoomsMemory() },
     unsupported: Boolean = false,
 ) {
-    // Выбранные день и пара — на тот день, когда их выбрали: назавтра вкладка
-    // снова открывается на сегодняшнем, а не на прошедшем.
+    // Выбранные день и пара — на тот день, когда их выбрали: назавтра вкладка открывается на сегодняшнем.
     var date by rememberSaveable { mutableStateOf<String?>(null) }
     var pair by rememberSaveable { mutableIntStateOf(0) }
     var chosenOn by rememberSaveable { mutableStateOf<String?>(null) }
@@ -127,8 +126,8 @@ internal fun RoomsScreen(
 
     val numbers = shown.bells.keys.mapNotNull { it.toIntOrNull() }.sorted()
     val days = shown.days.ifEmpty { listOf(shown.date) }.take(DAYS_SHOWN)
-    // Время пар — теми же функциями, что у расписания и виджетов: пара идёт до
-    // последней минуты включительно, иначе вкладки расходились бы на звонке.
+    // Время пар — теми же функциями, что у расписания и виджетов: пара идёт до последней минуты
+    // включительно, иначе вкладки расходились бы на звонке.
     val moment = LocalDateTime.of(today, now)
     // Поздно вечером сегодняшние пары кончились — сразу к следующему дню, с первой пары.
     if (ready && active == null && shown.date == today.toString() && days.size > 1 && openingDay(shown.bells, moment) != today) {
@@ -220,8 +219,7 @@ internal fun RoomsScreen(
         shown.buildings.forEach { building ->
             item(key = "корпус:" + building.name) {
                 val free = building.rooms.filter { it.room !in busy }
-                // Сменили день или пару — кабинеты въезжают: видно, что список другой.
-                // Прежний гаснет за 90 мс — показывать в нём прежние кабинеты незачем.
+                // Сменили день или пару — кабинеты въезжают: видно, что список другой; прежний гаснет за 90 мс.
                 @Suppress("UnusedContentLambdaTargetStateParameter")
                 AnimatedContent(
                     targetState = shown.date to chosen,
@@ -274,8 +272,8 @@ internal fun RoomsScreen(
         }
         if (clashes.isNotEmpty()) {
             item(key = "накладки") {
-                // В таблице на одно время в кабинет поставлены разные пары —
-                // ошибка колледжа или перенос: кто-то из них будет в другом месте.
+                // В таблице на одно время в кабинет поставлены разные пары — ошибка колледжа или
+                // перенос: кто-то будет в другом месте.
                 Section("Две пары в одном кабинете")
                 Note("По таблице здесь в одно время разные пары — уточните, где ваша.")
                 Card { clashes.forEachIndexed { i, c -> if (i > 0) CardDivider(); Uses(place(c.room), c.lessons) } }

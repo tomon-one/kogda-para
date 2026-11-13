@@ -76,7 +76,7 @@ def stamp(path: pathlib.Path) -> tuple[dt.date, str]:
 
 
 # Каталог состояния стенда — на диске и с уборкой: /tmp — это tmpfs, то есть
-# память, и тысяча запусков стенда забьёт её гигабайтами снимков.
+# память, и снимки займут её гигабайтами.
 SCRATCH = pathlib.Path.home() / ".cache" / "whensclass-replay"
 
 

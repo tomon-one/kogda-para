@@ -25,9 +25,8 @@ enum class ThemeChoice {
 }
 
 /**
- * Палитра виджета: красный с белым — цвета колледжа. Заданы явно, а не взяты
- * из системной темы: оболочки слишком по-разному понимают «динамические»
- * цвета.
+ * Палитра виджета: красный с белым — цвета колледжа. Заданы явно, а не из системной темы: оболочки
+ * слишком по-разному понимают «динамические» цвета.
  */
 data class Palette(
     val background: ColorProvider,
@@ -53,8 +52,7 @@ object WidgetColors {
     val dark = Palette(
         background = ColorProvider(Color(0xFF000000)),
         surface = ColorProvider(Color(0xFF141414)),
-        // Идущая сейчас пара — приглушённый красный, чтобы бросалась в глаза,
-        // но не выжигала экран.
+        // Идущая сейчас пара — приглушённый красный: бросается в глаза, но не выжигает экран.
         nowSurface = ColorProvider(Color(0xFF3A1113)),
         text = ColorProvider(Color(0xFFF5F5F5)),
         textDim = ColorProvider(Color(0xFF9AA0A6)),

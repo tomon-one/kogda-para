@@ -19,8 +19,8 @@ suspend fun ScheduleStore.adoptExtra(oldId: String, id: String, name: String) {
 }
 
 /**
- * Группа ответила 404 при здоровом сервере. Подтверждается тем же часом,
- * что и пропажа своей группы ([gone]). true — подтверждено.
+ * Группа ответила 404 при здоровом сервере. Подтверждается тем же часом, что и пропажа своей
+ * ([gone]). true — подтверждено.
  */
 suspend fun ScheduleStore.noteExtraNotFound(id: String, nowMillis: Long): Boolean {
     var confirmed = false
@@ -44,8 +44,8 @@ suspend fun ScheduleStore.clearExtrasNotFound(ids: Set<String>) {
 }
 
 /**
- * Группы нет в таблице — подтверждено. Выбор не стирается: после починки
- * таблицы её пары вернутся сами. true — отметка новая, о ней пора сказать.
+ * Группы нет в таблице — подтверждено. Выбор не стирается: после починки её пары вернутся. true —
+ * отметка новая, о ней пора сказать.
  */
 /** Пропавшие группы, о которых уведомление сказало. */
 suspend fun ScheduleStore.markExtrasTold(ids: Set<String>) {
@@ -81,9 +81,9 @@ internal fun ScheduleStore.writeExtras(prefs: MutablePreferences, groups: List<E
 }
 
 /**
- * Правка списка остальных групп одной записью: прочитанное и записанное — из
- * одного состояния. Расписания убранных — прочь сразу ([writeExtras]): иначе
- * при повторном выборе группы на экран вернулся бы прошлый снимок.
+ * Правка списка остальных групп одной записью: прочитанное и записанное — из одного состояния.
+ * Расписания убранных — прочь сразу ([writeExtras]): иначе при повторном выборе вернулся бы прошлый
+ * снимок.
  */
 internal suspend fun ScheduleStore.editExtras(change: (List<ExtraGroup>) -> List<ExtraGroup>) {
     context.dataStore.edit { writeExtras(it, change(readExtras(it))) }

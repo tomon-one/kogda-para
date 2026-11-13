@@ -89,7 +89,7 @@ export function roomsView(app) {
   var now = app.now();
   var st = app.state.roomsUi || (app.state.roomsUi = { date: null, pair: null, changedAt: 0 });
   // Выбор дня и пары — на тот день, когда сделан: назавтра вкладка снова на
-  // сегодня и идущей паре (как в приложении, chosenOn), а не на прошедшем дне.
+  // сегодня и идущей паре (chosenOn в приложении), а не на прошедшем дне.
   if (st.on && st.on !== now.date) {
     st.date = null;
     st.pair = null;

@@ -7,10 +7,8 @@ import ru.whensclass.data.ScheduleRepository
 import ru.whensclass.data.ScheduleStore
 
 /**
- * Сборка зависимостей руками.
- *
- * В приложении из трёх экранов и одного виджета библиотека внедрения даёт
- * больше возни со сборкой, чем пользы.
+ * Сборка зависимостей руками: в приложении из трёх экранов и одного виджета библиотека внедрения
+ * даёт больше возни, чем пользы.
  */
 class AppContainer(context: Context) {
     private val app = context.applicationContext

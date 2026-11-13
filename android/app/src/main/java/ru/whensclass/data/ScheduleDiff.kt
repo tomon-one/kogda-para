@@ -1,22 +1,17 @@
 package ru.whensclass.data
 
 /**
- * Сравнение двух расписаний — чтобы рассказать, что поменялось.
- *
- * Пары сопоставляются внутри номера по названию, а не по одному лишь номеру:
- * с подгруппами на один номер приходится две пары, и по номеру они затирали
- * бы друг друга.
+ * Сравнение двух расписаний — чтобы рассказать, что поменялось. Пары сопоставляются внутри номера
+ * по названию: с подгруппами на номер две пары, и по номеру они затирали бы друг друга.
  */
 object ScheduleDiff {
 
     data class Change(val day: String, val text: String)
 
     /**
-     * Что изменилось в новых данных по сравнению со старыми.
-     *
-     * `sameSubject` — старое и новое про одного и того же. По умолчанию — по
-     * совпадению id; при смене id сервером (переименование) сравнивать нужно,
-     * при смене выбора человеком — бессмысленно.
+     * Что изменилось в новых данных по сравнению со старыми. `sameSubject` — старое и новое про
+     * одного и того же: по умолчанию по id; при смене id сервером (переименование) сравнивать
+     * нужно, при смене выбора человеком — нет.
      */
     fun compare(old: ScheduleDto?, fresh: ScheduleDto, sameSubject: Boolean? = null): List<Change> {
         if (old == null) return emptyList()
@@ -27,10 +22,8 @@ object ScheduleDiff {
 
         for (day in fresh.days) {
             val before = oldDays[day.date] ?: continue
-            // Непрочитанный день без пар — не «убрали», а «не знаем»;
-            // прочитанный следом — не «добавилась». У преподавателя пометка —
-            // о группах из `ug`: пары остальных его групп в этот день
-            // сравниваются как обычно.
+            // Непрочитанный день без пар — не «убрали», а «не знаем»; прочитанный следом — не
+            // «добавилась». У преподавателя пометка о группах из `ug`.
             val unknown = unknownGroups(listOf(before, day), fresh.isTeacher) ?: continue
             val numbers = sortedSetOf<Int>().apply {
                 before.lessons.forEach { add(it.number) }
@@ -43,10 +36,9 @@ object ScheduleDiff {
                     compareNumber(day.date, number, was, now, fresh, changes)
                     continue
                 }
-                // У преподавателя запись склеена из групп, и меняется обычно
-                // одна: её убрали, отменили, перевели в онлайн. Сравниваем по
-                // группам, а одинаковые строки потом склеиваем обратно
-                // (_per_group и _merge_groups в push/changes.py).
+                // У преподавателя запись склеена из групп, и меняется обычно одна: сравниваем по
+                // группам, одинаковые строки склеиваем обратно (_per_group и _merge_groups в
+                // push/changes.py).
                 val lines = mutableListOf<Change>()
                 val wasOf = perGroup(was).filter { it.groups !in unknown }
                 val nowOf = perGroup(now).filter { it.groups !in unknown }
@@ -77,9 +69,8 @@ object ScheduleDiff {
     private const val SLOT = "\u0000"
 
     /**
-     * «отменили 5 пару (А)» и «отменили 5 пару (Б)» → «… (А, Б)». Группу
-     * строки ищем среди групп номера, а не по скобкам: в имени группы бывают
-     * свои — «ФД(1)-926», «СИС(а)-926/1».
+     * «отменили 5 пару (А)» и «… (Б)» → «… (А, Б)». Группу ищем среди групп номера, а не по
+     * скобкам: в имени группы бывают свои — «ФД(1)-926».
      */
     private fun mergeGroups(lines: List<Change>, groups: Set<String>): List<Change> {
         val merged = LinkedHashMap<Pair<String, String>, MutableList<String>>()
@@ -99,8 +90,8 @@ object ScheduleDiff {
     }
 
     /**
-     * «ИСП-924/1, ИСП-924/2» -> множество групп. Своя пара студента — своя и
-     * без подписи, и с подписью: склейка подписывает её на общем номере.
+     * «ИСП-924/1, ИСП-924/2» -> множество групп. Своя пара студента своя и без подписи, и с ней:
+     * склейка подписывает её на общем номере.
      */
     private fun groupsOf(lesson: LessonDto, fresh: ScheduleDto): Set<String> =
         (lesson.groups ?: fresh.groupName.takeIf { !fresh.isTeacher })
@@ -125,10 +116,9 @@ object ScheduleDiff {
     }
 
     /**
-     * Та же пара под чуть другим названием: исправили опечатку, регистр или
-     * точку («Обествознание» → «Обществознание»), или у одной записи полное
-     * «А / Б», у другой — только «А», или колледж дописал к паре «ЗАЧЕТ».
-     * Правила те же, что у same_subject в server/src/whensclass/push/labels.py.
+     * Та же пара под чуть другим названием: опечатка, регистр, точка, у одной записи полное «А /
+     * Б», у другой «А», или дописано «ЗАЧЕТ». Правила те же, что у same_subject в
+     * server/src/whensclass/push/labels.py.
      */
     internal fun sameSubject(a: String, b: String): Boolean {
         if (a == b) return true
@@ -138,8 +128,7 @@ object ScheduleDiff {
         if (withoutMark(na) == withoutMark(nb)) return true
         val headA = norm(a.substringBefore('/'))
         if (headA.isNotEmpty() && headA == norm(b.substringBefore('/'))) return true
-        // Расстояние правки — квадрат длины: на названии в десятки тысяч знаков
-        // это минуты. Опечатки правят в обычных названиях.
+        // Расстояние правки — квадрат длины: на названии в десятки тысяч знаков это минуты.
         if (maxOf(na.length, nb.length) > MAX_FUZZY || kotlin.math.abs(na.length - nb.length) > 2) return false
         return minOf(na.length, nb.length) >= 8 && distance(na, nb) <= 2
     }
@@ -152,10 +141,7 @@ object ScheduleDiff {
 
     private fun withoutMark(subject: String): String = subject.replace(MARK, "")
 
-    /**
-     * Хост, куда поведёт ссылка, — для «чужой адрес: …». «\» браузер читает
-     * как «/» и ведёт на хост до неё; кривой адрес — сам адрес.
-     */
+    /** Хост, куда поведёт ссылка, — для «чужой адрес: …». «\» браузер читает как «/»; кривой адрес — сам адрес. */
     internal fun urlHost(url: String): String =
         runCatching { java.net.URI(url.trim().replace('\\', '/')).host }.getOrNull() ?: url
 
@@ -167,8 +153,7 @@ object ScheduleDiff {
         fresh: ScheduleDto,
         changes: MutableList<Change>,
     ) {
-        // Чья пара: чужая — «(ИСП-924/2)», своя — без подписи. У
-        // преподавателя тоже в скобках: «у 3 пары у ИСП-924/2» читается плохо.
+        // Чья пара: чужая — «(ИСП-924/2)», своя — без подписи; у преподавателя тоже в скобках.
         fun whose(lesson: LessonDto): String = when {
             lesson.groups == null || lesson.groups == fresh.groupName && !fresh.isTeacher -> ""
             else -> " (${lesson.groups})"
@@ -176,9 +161,8 @@ object ScheduleDiff {
         fun say(text: String) = changes.add(Change(day, text))
         fun own(lesson: LessonDto) =
             !fresh.isTeacher && (lesson.groups == null || lesson.groups == fresh.groupName)
-        // Две свои пары на номере (блок пополам) — какая из них, говорит
-        // предмет, а при одинаковом — ещё и преподаватель: иначе подгруппа, у
-        // которой ничего не менялось, пойдёт в чужой кабинет.
+        // Две свои пары на номере (блок пополам): какая из них, говорит предмет, а при одинаковом —
+        // преподаватель: иначе подгруппа пойдёт в чужой кабинет.
         val several = was.count(::own) > 1 || now.count(::own) > 1
         // Название пары в строке; у половинки с тем же названием — и преподаватель.
         fun named(lesson: LessonDto): String {
@@ -197,9 +181,8 @@ object ScheduleDiff {
         // Только эти группы записи — в её порядке.
         fun listed(lesson: LessonDto, keep: Set<String>) =
             lesson.groups.orEmpty().split(",").map { it.trim() }.filter { it in keep }.joinToString(", ")
-        // Группы на этом номере до и после: у преподавателя записи склеены из
-        // групп, и к паре присоединяется или уходит группа — «добавилась» и
-        // «убрали» только о ней, а не о всей записи.
+        // Группы на этом номере до и после: у преподавателя записи склеены из групп, «добавилась» и
+        // «убрали» — только о присоединившейся или ушедшей группе.
         val beforeGroups = was.flatMap { groups(it) }.toSet()
         val afterGroups = now.flatMap { groups(it) }.toSet()
 
@@ -210,15 +193,13 @@ object ScheduleDiff {
             it.replaces == null && it.subject == old.subject && it.teachers == old.teachers && it.room == old.room
         }
 
-        // Замена — одной строкой: «добавилась» первой строкой свёрнутого
-        // уведомления читалась бы как лишняя пара. Сервер помечает замену
-        // примечанием «вместо: X».
+        // Замена — одной строкой: «добавилась» первой строкой свёрнутого уведомления читалась бы
+        // как лишняя пара. Сервер помечает её примечанием «вместо: X».
         val replaced = mutableSetOf<LessonDto>()
         for (lesson in now) {
             val instead = lesson.replaces ?: continue
             if (lesson.isCancelled || was.any { it.subject == lesson.subject }) continue
-            // Из двух пар с этим названием заменили ту, у которой в новом
-            // листе нет точной копии: другая половинка блока осталась как была.
+            // Из двух пар с этим названием заменили ту, у которой в новом листе нет точной копии.
             var index = unmatched.indexOfFirst { it.subject == instead && !keptAsIs(it) }
             if (index < 0) index = unmatched.indexOfFirst { it.subject == instead }
             if (index < 0) index = unmatched.indexOfFirst { sameSubject(it.subject, instead) }
@@ -231,13 +212,10 @@ object ScheduleDiff {
 
         for (lesson in now) {
             if (lesson in replaced) continue
-            // Сначала — тот же предмет у тех же групп, потом у пересекающихся
-            // (у преподавателя «ИСП-924/1, ИСП-924/2» распалась на две записи),
-            // потом просто тот же предмет: иначе слияние записей объявлялось
-            // бы «убрали» при паре на месте. У тех же групп две пары одного
-            // названия (подгруппы одного языка) — сначала та, что с тем же
-            // преподавателем и кабинетом: по порядку вышли бы «другой
-            // преподаватель» и «переехала» вместо «убрали».
+            // Сначала тот же предмет у тех же групп, потом у пересекающихся (у преподавателя
+            // «ИСП-924/1, ИСП-924/2» распалась на две записи), потом просто тот же предмет: иначе
+            // слияние записей объявлялось бы «убрали». У тех же групп две пары одного названия —
+            // сначала с тем же преподавателем и кабинетом.
             var index = unmatched.withIndex()
                 .filter { (_, it) -> it.subject == lesson.subject && groups(it) == groups(lesson) }
                 .minWithOrNull(
@@ -254,9 +232,7 @@ object ScheduleDiff {
                 sameSubject(it.subject, lesson.subject) && overlap(it, lesson) && it.teachers == lesson.teachers
             }
             if (index < 0) {
-                // Та же пара раздвоилась на записи: новость, только если часть
-                // отменили или вернули — у преподавателя «ИСП-924/1,
-                // ИСП-924/2» распалась, и одну из групп сняли.
+                // Та же пара раздвоилась на записи: новость, только если часть отменили или вернули.
                 val source = was.firstOrNull { it.subject == lesson.subject && overlap(it, lesson) }
                     ?: was.firstOrNull { it.subject == lesson.subject }?.takeIf { !fresh.isTeacher }
                 when {
@@ -265,8 +241,7 @@ object ScheduleDiff {
                     source != null && source.isCancelled && !lesson.isCancelled ->
                         say("вернули $number пару${whose(lesson)}: ${lesson.subject}")
                     source != null -> Unit
-                    // Пришла сразу отменённой под другим названием — это
-                    // отмена, а не «добавилась».
+                    // Пришла сразу отменённой под другим названием — отмена, а не «добавилась».
                     lesson.isCancelled ->
                         say("отменили $number пару${whose(lesson)}: ${lesson.subject}")
                     else -> say("добавилась $number пара${whose(lesson)}: ${lesson.subject}")
@@ -274,8 +249,7 @@ object ScheduleDiff {
                 continue
             }
             val previous = unmatched.removeAt(index)
-            // Половинку называет прежняя запись: нового преподавателя
-            // подгруппа ещё не знает.
+            // Половинку называет прежняя запись: нового преподавателя подгруппа ещё не знает.
             val tag = label(previous)
             if (fresh.isTeacher) {
                 val added = groups(lesson).filterNot { covered(it, beforeGroups) }.toSet()
@@ -290,26 +264,23 @@ object ScheduleDiff {
                 previous.isCancelled && !lesson.isCancelled ->
                     say("вернули $number пару${whose(lesson)}: ${named(previous)}")
 
-                // Онлайн — состояние пары, а не наличие ссылки: ссылку к
-                // онлайновой паре часто дописывают позже.
+                // Онлайн — состояние пары, а не наличие ссылки: её часто дописывают позже.
                 !previous.isOnline && lesson.isOnline -> say("$number пара$tag стала онлайн")
 
                 previous.isOnline && !lesson.isOnline -> say("$number пара$tag снова очная")
 
-                // Замена преподавателя при том же предмете. Пустой новый
-                // список — не замена: преподавателей часто вписывают позже.
+                // Замена преподавателя при том же предмете; пустой новый список — не замена:
+                // преподавателей вписывают позже.
                 lesson.teachers.isNotEmpty() && previous.teachers != lesson.teachers ->
                     say("у $number пары$tag другой преподаватель: ${lesson.teachers.joinToString(", ")}")
             }
-            // Кабинет — своей проверкой, а не веткой when: смена преподавателя
-            // в том же обновлении закрыла бы собой переезд. Онлайн-комната — не
-            // аудитория. Отменённой — не до кабинета.
+            // Кабинет — своей проверкой: смена преподавателя в том же обновлении закрыла бы
+            // переезд. Онлайн-комната не аудитория; отменённой не до кабинета.
             if (!lesson.isCancelled && lesson.room != null && previous.room != lesson.room) {
                 when {
                     lesson.isOnline -> say("у $number пары$tag онлайн-комната ${lesson.room}")
                     else -> {
-                        // «в каб. 355», а не «в 355»: голое число читается как
-                        // номер пары; словесное место — через двоеточие.
+                        // «в каб. 355», а не «в 355»: голое число читается как номер пары.
                         val place = ru.whensclass.widget.roomLabel(lesson.room) ?: lesson.room
                         say(if (place.startsWith("каб.")) "$number пара$tag переехала в $place"
                             else "$number пара$tag переехала: $place")
@@ -330,16 +301,14 @@ object ScheduleDiff {
 
         unmatched.forEach { gone ->
             if (fresh.isTeacher && gone.groups != null) {
-                // Все её группы на номере остались при той же паре — запись
-                // просто склеилась с другой. При другом предмете у тех же групп
-                // это замена, и «убрали» прежний нужен.
+                // Все её группы на номере остались при той же паре — запись склеилась с другой; при
+                // другом предмете у тех же групп — замена, «убрали» нужен.
                 val kept = now.filter { sameSubject(it.subject, gone.subject) }.flatMap { groups(it) }.toSet()
                 val left = groups(gone).filterNot { covered(it, kept) }.toSet()
                 if (left.isNotEmpty()) say("убрали $number пару (${listed(gone, left)}): ${gone.subject}")
                 return@forEach
             }
-            // Та же пара слилась с записью других групп — не новость. С
-            // записью тех же групп (половинка блока одного языка) — убрали.
+            // Слилась с записью других групп — не новость; с записью тех же групп (половинка блока) — убрали.
             if (now.any { it.subject == gone.subject && groups(it) != groups(gone) }) return@forEach
             say("убрали $number пару${whose(gone)}: ${named(gone)}")
         }

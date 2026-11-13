@@ -23,9 +23,8 @@ import ru.whensclass.widget.kindName
 import ru.whensclass.widget.roomLabel
 
 /**
- * Напоминания «скоро пара». Будильники переставляются после каждого
- * обновления расписания и каждого срабатывания, поэтому держать их больше
- * чем на ближайшие пары незачем.
+ * Напоминания «скоро пара». Будильники переставляются после каждого обновления и срабатывания,
+ * поэтому держим их только на ближайшие пары.
  */
 object LessonAlarms {
 
@@ -38,8 +37,8 @@ object LessonAlarms {
     }
 
     /**
-     * То же, но с ожиданием конца — для приёмника будильника: без `goAsync`
-     * процесс могли убить раньше, чем будильники переставлены.
+     * То же, но с ожиданием конца — для приёмника будильника: без `goAsync` процесс могли убить
+     * раньше, чем будильники переставлены.
      */
     suspend fun rescheduleNow(context: Context) {
         val app = context.applicationContext
@@ -49,12 +48,11 @@ object LessonAlarms {
         if (minutes <= 0) return
 
         val state = store.widgetState()
-        // Группы больше нет в таблице — по прежнему снимку напоминать нельзя:
-        // пар, может, уже нет.
+        // Группы больше нет в таблице — по прежнему снимку напоминать нельзя: пар, может, уже нет.
         if (state.gone) return
         val schedule = ScheduleWidget.parse(state.scheduleJson) ?: return
-        // Висит напоминание о паре, которую с тех пор отменили или убрали, —
-        // снять: рядом с «отменили N пару» оно звало бы на неё.
+        // Висит напоминание о паре, которую отменили или убрали, — снять: рядом с «отменили N пару»
+        // оно звало бы на неё.
         Notifications.shownLessonKey(app)?.let { key ->
             if (!stillOn(schedule, key)) {
                 Notifications.lessonGone(app)
@@ -77,8 +75,8 @@ object LessonAlarms {
     }
 
     /**
-     * Есть ли ещё пара из ключа напоминания («2026-09-29T21:47|Физика»), не
-     * отменённая. У двух пар одного номера предметы в ключе — через [KEY_SEPARATOR].
+     * Есть ли ещё не отменённая пара из ключа напоминания («2026-09-29T21:47|Физика»). У двух пар
+     * одного номера предметы в ключе — через [KEY_SEPARATOR].
      */
     internal fun stillOn(schedule: ScheduleDto, key: String): Boolean = lessonsOf(schedule, key).isNotEmpty()
 
@@ -98,35 +96,32 @@ object LessonAlarms {
         val day = schedule.days.firstOrNull { it.date == date } ?: return emptyList()
         val bells = schedule.bellsOf(day)
         return day.lessons.filter { lesson ->
-            // Исправили написание («Обествознание» → «Обществознание») — та же
-            // пара: напоминание о ней не снимается.
+            // Исправили написание («Обествознание» → «Обществознание») — та же пара, напоминание не снимается.
             !lesson.isCancelled && subjects.any { ru.whensclass.data.ScheduleDiff.sameSubject(it, lesson.subject) } &&
                 bells[lesson.number.toString()]?.getOrNull(0) == time
         }
     }
 
     /**
-     * Ссылка для кнопки «Войти»: первая из пар, и только известного сервиса
-     * вебинаров. Чужая ссылка в таблице бывает ошибкой или подменой — на экране
-     * она помечена, а кнопка в шторке открыла бы её одним касанием.
+     * Ссылка для кнопки «Войти»: первая из пар и только известного сервиса вебинаров: чужая ссылка
+     * в таблице бывает ошибкой или подменой, а кнопка в шторке открыла бы её одним касанием.
      */
     internal fun joinUrl(lessons: List<LessonDto>): String? =
         lessons.firstNotNullOfOrNull { lesson -> lesson.url?.trim()?.takeIf { isKnownWebinar(it) } }
 
-    /** Что и когда напомнить. Вынесено отдельно, чтобы можно было проверить. */
+    /** Что и когда напомнить; отдельно, чтобы проверять. */
     fun plan(schedule: ScheduleDto, minutes: Int, now: LocalDateTime = ru.whensclass.widget.collegeNow()):
         List<Alarm> {
         val out = mutableListOf<Alarm>()
         for (day in schedule.days) {
             val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
-            // Конец предыдущей пары этого дня. Отменённые не в счёт: пара после
-            // отменённой — это уже возвращение с улицы.
+            // Конец предыдущей пары этого дня; отменённые не в счёт: после отменённой человек возвращается с улицы.
             var busyUntil: LocalDateTime? = null
-            // Пары соседней подгруппы — не свои: о них не напоминаем, и их
-            // конец не глушит напоминание о своей. У преподавателя свои все.
+            // Пары соседней подгруппы не свои: о них не напоминаем, и их конец не глушит
+            // напоминание о своей. У преподавателя свои все.
             val own = day.lessons.filter { !it.isCancelled && !schedule.isNeighbours(it) }
-            // Блок пополам — две пары одного номера в разных кабинетах: какая
-            // из них его, приложение не знает, и напоминание называет обе.
+            // Блок пополам — две пары одного номера в разных кабинетах: какая его, неизвестно, и
+            // напоминание называет обе.
             for ((_, same) in own.groupBy { it.number }.toSortedMap()) {
                 val lesson = same.first()
                 val bells = schedule.bellsOf(day)[lesson.number.toString()]
@@ -134,9 +129,9 @@ object LessonAlarms {
                     ?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: continue
                 val fireAt = LocalDateTime.of(date, start).minusMinutes(minutes.toLong())
 
-                // Напоминают о том, к чему надо прийти: о первой паре дня и о
-                // паре после окна. Посреди предыдущей пары — и ровно в её звонок
-                // (перемены по 10 и 20 минут) — человек ещё в аудитории.
+                // Напоминают о том, к чему надо прийти: о первой паре дня и о паре после окна.
+                // Посреди предыдущей пары и ровно в её звонок (перемены 10 и 20 минут) человек ещё
+                // в аудитории.
                 val duringPrevious = busyUntil?.let { !fireAt.isAfter(it) } == true
                 busyUntil = bells.getOrNull(1)
                     ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
@@ -149,8 +144,7 @@ object LessonAlarms {
                         fireAt, lesson, minutes, date.toString(), busyUntil,
                         ownGroup = schedule.groupName.takeUnless { schedule.isTeacher },
                         also = same.drop(1),
-                        // Отменённая половинка — строкой «Отменена»: её подгруппа
-                        // иначе пошла бы на чужую пару, приняв её за свою.
+                        // Отменённая половинка — строкой «Отменена»: иначе её подгруппа пошла бы на чужую пару.
                         off = day.lessons.filter {
                             it.number == lesson.number && it.isCancelled && !schedule.isNeighbours(it)
                         },
@@ -170,10 +164,7 @@ object LessonAlarms {
         val end: LocalDateTime? = null,
         /** Своя группа студента: её имя в напоминании не пишется. */
         val ownGroup: String? = null,
-        /**
-         * Другие пары того же номера: подгруппы в разных кабинетах или у
-         * преподавателя одна пара в двух залах.
-         */
+        /** Другие пары того же номера: подгруппы в разных кабинетах или у преподавателя одна пара в двух залах. */
         val also: List<LessonDto> = emptyList(),
         /** Отменённые пары того же номера — половинка блока, которую сняли. */
         val off: List<LessonDto> = emptyList(),
@@ -209,16 +200,14 @@ object LessonAlarms {
         if (exactAllowed(context)) {
             manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
         } else {
-            // Запасной путь: разрешение на точное время не выдали. Напоминание
-            // придёт, но система вправе его отложить.
+            // Запасной путь: разрешение на точное время не выдали — напоминание придёт, но система вправе его отложить.
             manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
         }
     }
 
     /**
-     * Разрешено ли будить телефон в точное время. До Android 12 отдельного
-     * разрешения нет, на 12-м его выдаёт человек, с 13-го — USE_EXACT_ALARM
-     * при установке.
+     * Разрешено ли будить телефон в точное время. До Android 12 разрешения нет, на 12-м его выдаёт
+     * человек, с 13-го — USE_EXACT_ALARM при установке.
      */
     fun exactAllowed(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
@@ -240,9 +229,9 @@ object LessonAlarms {
     }
 
     /**
-     * Заголовок напоминания: время начала, а не «через 20 минут» — уведомление
-     * висит, и относительное время быстро врёт. Что пара уже идёт — считается
-     * при показе: будильник может сработать позже назначенного.
+     * Заголовок напоминания: время начала, а не «через 20 минут» — уведомление висит, и
+     * относительное время врёт. Что пара уже идёт, считается при показе: будильник мог сработать
+     * позже.
      */
     fun title(
         subject: String,
@@ -254,14 +243,11 @@ object LessonAlarms {
         start.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) + " — $subject"
     }
 
-    /**
-     * Текст напоминания. Место — первым: напоминание читают по пути, и
-     * главное в нём — куда идти.
-     */
+    /** Текст напоминания. Место — первым: читают по пути, главное — куда идти. */
     fun text(alarm: Alarm): String {
         if (alarm.also.isNotEmpty() || alarm.off.isNotEmpty()) {
-            // Номер — первой строкой, дальше строка на пару, место — первым;
-            // предмет — только если они разные: время и предмет — в заголовке.
+            // Номер — первой строкой, дальше строка на пару, место — первым; предмет — только если
+            // они разные (время и предмет в заголовке).
             val lessons = alarm.lessons
             val kinds = lessons.map { kindName(it.kind) }.distinct()
             val number = "${alarm.lesson.number} пара" +
@@ -303,8 +289,8 @@ object LessonAlarms {
         roomLabel(lesson.room)?.replaceFirstChar { it.uppercase() }
     }
 
-    // Чья пара: у преподавателя — каким группам он идёт читать. Свою группу
-    // студенту не подписываем (склейка ставит её имя на общий номер).
+    // Чья пара: у преподавателя — каким группам он идёт читать; свою группу студенту не подписываем
+    // (склейка ставит её имя на общий номер).
     private fun groupsOf(lesson: LessonDto, ownGroup: String?): String? =
         lesson.groups?.trim()?.takeIf { it.isNotEmpty() && it != ownGroup }
 
@@ -333,9 +319,8 @@ class LessonAlarmReceiver : BroadcastReceiver() {
         val text = intent.getStringExtra(LessonAlarms.EXTRA_TEXT).orEmpty()
         val end = intent.getStringExtra(LessonAlarms.EXTRA_END)
             ?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
-        // Будильник опоздал дальше конца пары (неточный, телефон спал): «Пара
-        // уже идёт» про прошедшую пару — ложь. Напоминание не показывать, а
-        // следующие переставить всё равно.
+        // Будильник опоздал дальше конца пары (неточный, телефон спал): «Пара уже идёт» была бы
+        // ложью — не показывать, следующие переставить.
         val over = end != null && !LocalDateTime.now(ru.whensclass.widget.COLLEGE_ZONE).isBefore(end)
         if (!over) Notifications.lessonSoon(
             context,

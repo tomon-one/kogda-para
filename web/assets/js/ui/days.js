@@ -34,7 +34,7 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
   return list;
 }
 
-/** Строка карточки «Сегодня» 2 апреля (как в приложении, `DayList.kt`). */
+/** Строка карточки «Сегодня» 2 апреля (как в `DayList.kt`). */
 var BIRTHDAY = '🎂 Сегодня у автора день рождения. Он не вправе отменить пары, но очень хотел бы';
 
 var HOLIDAYS = {
@@ -47,7 +47,7 @@ var HOLIDAYS = {
   '11-04': '🤝 С Днём народного единства!',
 };
 
-/** Поздравление карточки «Сегодня» в праздник (как в приложении, `DayList.kt`). */
+/** Поздравление карточки «Сегодня» в праздник (как в `DayList.kt`). */
 export function holidayNote(date) {
   var day = date.slice(5);
   if (HOLIDAYS[day]) return HOLIDAYS[day];
@@ -177,10 +177,9 @@ export function groupMark(label, own, name) {
   return h('span', { class: 'mark' + (own ? ' own' : ''), 'aria-hidden': 'true', title: name || null }, String(label));
 }
 
-// Точка у «идёт сейчас» дышит по часам страницы, а не с момента, когда строка
-// нарисована: экран перестраивается (пришло расписание, звонок, звезда), и
-// новая точка продолжает с той же фазы, а не вспыхивает заново. Период — как
-// у анимации pulse в motion.css.
+// Точка у «идёт сейчас» дышит по часам страницы, а не от отрисовки строки:
+// после перестройки экрана новая точка продолжает с той же фазы. Период — как
+// у pulse в motion.css.
 var PULSE_MS = 2400;
 
 function nowLabel() {
@@ -216,7 +215,7 @@ function onlineLink(url, key) {
       snackbar(ok ? 'Ссылка скопирована' : 'Скопировать не вышло');
     });
   });
-  // Адрес — только чужой, как предупреждение; у площадки колледжа хватает кнопок.
+  // Адрес — только чужой, как предупреждение.
   return h('div', { class: 'online-link' },
     known ? null : h('div', { class: 'link-where foreign' },
       'чужой адрес: ',

@@ -1,5 +1,5 @@
-// Подписи пары: тип занятия, место, преподаватели, ссылка. Те же правила, что
-// у приложения (DayFormat.kt, Dto.kt, WebinarLink.kt, SheetLink.kt).
+// Подписи пары: тип занятия, место, преподаватели, ссылка. Правила те же, что
+// в приложении (DayFormat.kt, Dto.kt, WebinarLink.kt, SheetLink.kt).
 
 /** Пара идёт не в аудитории. Ссылка при аудитории — очная пара. */
 export function isOnline(lesson) {
@@ -78,8 +78,8 @@ function parseUrl(url) {
 }
 
 export function isKnownWebinar(url) {
-  // Обратную косую браузер читает как «/», а java.net.URI в приложении не
-  // разбирает вовсе: и там и тут такой адрес — чужой.
+  // Обратную косую браузер читает как «/», java.net.URI в приложении не
+  // разбирает: и там и тут такой адрес — чужой.
   if ((url || '').indexOf('\\') >= 0) return false;
   var u = parseUrl(url);
   if (!u || u.scheme !== 'https') return false;
@@ -176,7 +176,7 @@ export function ordinalGroup(number) {
   return (ORDINALS[number - 1] || number + '-я') + ' группа';
 }
 
-/** «20 мин», «1 ч», «1 ч 30 мин» — formatDurationShort в приложении. */
+/** «20 мин», «1 ч», «1 ч 30 мин» (formatDurationShort в приложении). */
 export function durationShort(minutes) {
   if (minutes < 60) return minutes + ' мин';
   if (minutes % 60 === 0) return (minutes / 60) + ' ч';

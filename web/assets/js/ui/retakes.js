@@ -160,7 +160,7 @@ export function retakesView(app) {
   return wrap;
 }
 
-/** Почему раздел не загрузился (data.js, failedBy) — те же слова, что в приложении. */
+/** Почему раздел не загрузился (data.js, failedBy); слова те же, что в приложении. */
 export function failureText(why) {
   return why === 'server' ? 'Сервер не смог их отдать. Повторите позже.' : 'Нет связи с сервером. Проверьте интернет.';
 }

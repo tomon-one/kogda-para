@@ -1,10 +1,9 @@
 // Уведомления сайта (Web Push): подписка этого браузера у службы. Что и когда
-// прислать, считает служба (server/src/whensclass/push) — по тем же правилам,
-// что приложение считает у себя: отмены и замены своей группы на сегодня и
-// завтра, напоминание о паре за столько-то минут.
+// прислать, считает служба (server/src/whensclass/push): отмены и замены своей
+// группы на сегодня и завтра, напоминание о паре.
 //
-// Здесь — только подписаться, поменять и отписаться. Выбор хранится в
-// браузере (ключ push) и уходит службе вместе с адресом подписки.
+// Здесь — только подписаться, поменять и отписаться. Выбор хранится в браузере
+// (ключ push) и уходит службе вместе с адресом подписки.
 
 import * as store from './store.js';
 import { isIos, standalone } from './ui/dom.js';
@@ -14,8 +13,7 @@ var TIMEOUT_MS = 30000;
 // Раз в сутки подписка пересылается службе, даже если ничего не менялось:
 // браузер мог сменить её сам, служба — потерять.
 var RESYNC_MS = 24 * 60 * 60 * 1000;
-// Ключ службы сверяется не чаще раза в час: сменить его может только автор, а
-// лишний запрос при каждом открытии ни к чему.
+// Ключ службы сверяется не чаще раза в час: меняет его только автор.
 var KEY_CHECK_MS = 60 * 60 * 1000;
 // Куда вести нажатие на уведомление: корень или /tested/.
 var SITE = store.CHANNEL === 'tested' ? 'tested' : 'main';
@@ -48,8 +46,7 @@ function webView() {
  */
 export function blocker() {
   if (isIos() && !standalone()) return 'home';
-  // Сайт раздаётся ссылкой из Telegram: встроенному просмотрщику — свой
-  // ответ, а не «браузер не умеет».
+  // Сайт раздают ссылкой из Telegram: встроенному просмотрщику — свой ответ.
   if (!supported() && webView()) return 'webview';
   if (!supported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
@@ -301,7 +298,7 @@ export function sync(who) {
   if (!saved || !enabled() || !who) return Promise.resolve(false);
   if (blocker()) return Promise.resolve(false);
   if (Notification.permission !== 'granted') return Promise.resolve(false);
-  // Прежние подписки не знали сайта — переслать сразу, а не через сутки.
+  // Прежние подписки не знали сайта — переслать сразу.
   var moved = saved.kind !== who.kind || saved.id !== who.id || saved.site !== SITE;
   var due = moved || Date.now() - (saved.sent || 0) >= RESYNC_MS;
   // Браузер сменил подписку сам, а перенос у службы не вышел (прежней записи

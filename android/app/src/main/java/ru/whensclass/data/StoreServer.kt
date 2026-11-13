@@ -20,8 +20,8 @@ suspend fun ScheduleStore.putServerState(status: String, sourceUrl: String?, sin
 }
 
 /**
- * Сервер ответил расписанием, хотя /v1/meta в этом заходе сорвался: «не
- * отвечает» — уже неправда. true — отметка стояла и снята.
+ * Сервер ответил расписанием, хотя /v1/meta в этом заходе сорвался: «не отвечает» — уже неправда.
+ * true — отметка стояла и снята.
  */
 suspend fun ScheduleStore.forgetUnreachable(): Boolean {
     var was = false
@@ -36,10 +36,9 @@ suspend fun ScheduleStore.forgetUnreachable(): Boolean {
 
 /**
  * Неудача связи с сервером при живой сети: с какого момента он молчит
- * ([ScheduleStore.Unreachable.since] — для текста «Сбой с …», держится до первого
- * удачного ответа) и с какого — подряд, без перерывов дольше
- * [UNREACHABLE_STREAK_GAP] ([ScheduleStore.Unreachable.run] — для решения «не отвечает»).
- * Второй счёт нужен, чтобы вечерняя и утренняя неудачи через ночь без
+ * ([ScheduleStore.Unreachable.since] — для текста «Сбой с …», держится до первого удачного ответа)
+ * и с какого — подряд, без перерывов дольше [UNREACHABLE_STREAK_GAP] ([Unreachable.run] — для
+ * решения «не отвечает»). Второй счёт нужен, чтобы вечерняя и утренняя неудачи через ночь без
  * проверок не сложились в сбой.
  */
 suspend fun ScheduleStore.noteUnreachable(now: java.time.Instant): ScheduleStore.Unreachable {
@@ -68,9 +67,8 @@ suspend fun ScheduleStore.clearUnreachable() {
 }
 
 /**
- * Строки непрочитанного «Расписание изменилось»: день и текст. Копятся,
- * потому что новое уведомление с тем же id заменяет прежнее, и неосмотренная
- * отмена пропала бы бесследно.
+ * Строки непрочитанного «Расписание изменилось»: день и текст. Копятся, потому что новое
+ * уведомление с тем же id заменяет прежнее, и неосмотренная отмена пропала бы.
  */
 suspend fun ScheduleStore.pendingChanges(): List<Pair<String, String>> =
     context.dataStore.data.first()[KEY_PENDING_CHANGES].orEmpty().split("\n")

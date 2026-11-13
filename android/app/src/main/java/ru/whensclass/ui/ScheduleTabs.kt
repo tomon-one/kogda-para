@@ -59,8 +59,8 @@ enum class Tab(val title: String) {
 internal const val SHORT_SCREEN_DP = 480
 
 /**
- * Низ рядов вкладок на экране. «Стекло»: своё расписание уходит под шапку и
- * вкладки, и по этой границе список размывает себя под ними (DayList.kt).
+ * Низ рядов вкладок на экране. «Стекло»: список уходит под шапку и вкладки и по этой границе
+ * размывает себя под ними (DayList.kt).
  */
 internal val LocalTabsBottom = androidx.compose.runtime.compositionLocalOf<androidx.compose.runtime.State<Float>?> { null }
 
@@ -69,10 +69,9 @@ private fun topTabs(teacherMode: Boolean): List<Tab> =
     if (teacherMode) listOf(Tab.TEACHERS, Tab.STUDENTS) else listOf(Tab.STUDENTS, Tab.TEACHERS)
 
 /**
- * Вкладки над разделом и сам раздел ([content]). Нижний ряд — пересдачи,
- * аудитории, экзамены — уезжает вместе со списком и возвращается, когда список
- * докручен до верха, как на сайте. Выбран раздел из нижнего ряда, идут пересдачи
- * ([live]) или человек так настроил ([rowStays]) — ряд стоит.
+ * Вкладки над разделом и сам раздел ([content]). Нижний ряд (пересдачи, аудитории, экзамены)
+ * уезжает вместе со списком и возвращается, когда список докручен до верха, как на сайте. Раздел из
+ * нижнего ряда, идущие пересдачи ([live]) или настройка ([rowStays]) — ряд стоит.
  */
 @Composable
 internal fun ScheduleTabs(
@@ -113,8 +112,7 @@ internal fun ScheduleTabs(
         }
     }
     val upper: @Composable () -> Unit = {
-        // Полоска рисуется только в том ряду, где выбранная вкладка: иначе
-        // подчёркнутыми оказываются сразу две.
+        // Полоска рисуется только в том ряду, где выбранная вкладка: иначе подчёркнутыми оказались бы две.
         SecondaryTabRow(
             selectedTabIndex = top.indexOf(current).coerceAtLeast(0),
             containerColor = MaterialTheme.colorScheme.background,
@@ -157,8 +155,8 @@ internal fun ScheduleTabs(
                     containerColor = MaterialTheme.colorScheme.background,
                     divider = {},
                     indicator = {
-                        // Полоску под нижним рядом рисуем, только когда там и правда
-                        // выбран раздел: иначе она подчёркивает пустое место.
+                        // Полоску под нижним рядом — только когда там и правда выбран раздел: иначе
+                        // она подчёркивает пустое место.
                         if (current.ordinal >= 2) {
                             TabRowDefaults.SecondaryIndicator(
                                 Modifier.tabIndicatorOffset(current.ordinal - 2, matchContentSize = false),
@@ -179,10 +177,9 @@ internal fun ScheduleTabs(
             shown.animateTo(1f, androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
         }
         Column(
-            // Слой прозрачности — только пока идёт проявление: оставленный на списке,
-            // он утяжелял листание и сворачивание ряда вкладок.
-            // Под рядами: у «Стекла» список заходит под них. Прозрачность — без
-            // отдельного слоя, иначе слой обрезал бы заходящее.
+            // Слой прозрачности — только пока идёт проявление: на списке он утяжелял листание и
+            // сворачивание рядов. Под рядами (у «Стекла» список заходит под них); без отдельного
+            // слоя, иначе слой обрезал бы заходящее.
             Modifier.weight(1f).zIndex(-1f).nestedScroll(collapse)
                 .then(
                     if (shown.value < 1f) {
@@ -237,8 +234,7 @@ internal fun Explanation(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp),
         )
-        // Колледж не выложил или сервер не нашёл лист — отсюда не видно; зато
-        // видно, где лежит ответ.
+        // Колледж не выложил или сервер не нашёл лист — отсюда не видно; зато видно, где лежит ответ.
         sourceUrl?.let { url ->
             ActionButton(
                 label = "Открыть таблицу колледжа",
@@ -257,8 +253,8 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boole
         selected = tab == current,
         onClick = { onPick(tab) },
         text = {
-            // Пересдачи идут — вкладка подсвечена, как сегодняшний день: о них
-            // должны узнать и те, кто её не открывал (как на сайте).
+            // Пересдачи идут — вкладка подсвечена, как сегодняшний день: о них должны узнать и те,
+            // кто её не открывал (как на сайте).
             if (live) {
                 Text(
                     tab.title,
@@ -279,8 +275,8 @@ private fun TabButton(tab: Tab, current: Tab, onPick: (Tab) -> Unit, live: Boole
                 tab.title,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
-                // Тесно (крупный шрифт, разделённый экран) — «Преподавателям»
-                // сначала мельчает, а многоточие — только если и так не влезло.
+                // Тесно (крупный шрифт, разделённый экран) — «Преподавателям» мельчает, многоточие
+                // — только если и так не влезло.
                 overflow = TextOverflow.Ellipsis,
                 autoSize = FIT,
                 color = MaterialTheme.colorScheme.onSurface,

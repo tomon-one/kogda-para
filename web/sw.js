@@ -108,10 +108,9 @@ var oldPages = null;
 self.addEventListener('activate', function (event) {
   event.waitUntil(caches.keys().then(function (keys) {
     var others = keys.filter(function (k) { return k.indexOf(PREFIX) === 0 && k !== CACHE; });
-    // Кэши перечисляются в порядке создания: последний собранный целиком чужой
-    // — прежней, работавшей сборки. Огрызок сорвавшейся установки — не он:
-    // иначе кэш работающей удалился бы. Кэши сборок до отметки её не знают —
-    // тогда последний, как раньше.
+    // Кэши — в порядке создания: последний собранный целиком чужой — прежней,
+    // работавшей сборки. Огрызок сорвавшейся установки — не он: иначе кэш
+    // работающей удалился бы. Кэши без отметки — берётся последний.
     return Promise.all(others.map(function (k) {
       return caches.open(k).then(function (c) { return c.match(COMPLETE); }).then(function (r) { return !!r; });
     })).then(function (complete) {
@@ -184,7 +183,7 @@ self.addEventListener('fetch', function (event) {
 // Firefox, где декларативного показа нет.
 
 var ZONE = 'Asia/Novosibirsk';
-// Больше строк шторка не покажет развёрнутой (как в приложении).
+// Больше строк шторка не покажет развёрнутой.
 var MAX_LINES = 8;
 
 function collegeToday() {
@@ -276,13 +275,13 @@ function showLesson(data) {
   var title = data.start && Date.now() > data.start ? 'Пара уже идёт — ' + data.subject : data.title;
   // Прежние напоминания — прочь: на айфоне tag не заменяет, и они копились бы
   // день за днём, а в Chrome второе с тем же tag приходит беззвучно, заменяя
-  // висящее. Как и в приложении, напоминание одно.
+  // висящее. Напоминание одно.
   return self.registration.getNotifications({ tag: 'lesson' }).then(function (open) {
     open.forEach(function (n) { n.close(); });
   }, function () { /* нечего закрывать */ }).then(function () {
     // «Войти» — ссылка на вебинар, если она есть у пары (служба кладёт только
-    // известные площадки). Кнопки у уведомлений есть не везде — на айфоне,
-    // похоже, нет; тогда нажатие ведёт на сайт, как раньше.
+    // известные площадки). Кнопки у уведомлений есть не везде (на айфоне,
+    // похоже, нет) — тогда нажатие ведёт на сайт.
     return show(title || 'Скоро пара', data.body, 'lesson', { end: data.end, join: data.join || null, n: data.n || null },
       data.join ? [{ action: 'join', title: 'Войти' }] : null);
   });

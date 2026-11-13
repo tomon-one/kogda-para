@@ -43,7 +43,7 @@ function mapChars(text, map) {
   return out;
 }
 
-/** Как в приложении (ListParts.kt): ещё не та раскладка («bcg» — «исп») и латиница («alag» — «Алагян»). */
+/** Неверная раскладка («bcg» — «исп») и латиница («alag» — «Алагян»); как в ListParts.kt. */
 export function matchesQuery(name, query) {
   var wanted = searchKey(query);
   if (!wanted) return true;

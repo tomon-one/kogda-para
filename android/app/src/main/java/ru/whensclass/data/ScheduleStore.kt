@@ -12,8 +12,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ru.whensclass.BuildConfig
 
-// Испорченный файл настроек — начать с пустого: без обработчика каждый старт
-// падал на CorruptionException, и помогала только «Очистить данные».
+// Испорченный файл настроек — начать с пустого: иначе каждый старт падает на CorruptionException.
 internal val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     "whensclass",
     corruptionHandler = androidx.datastore.core.handlers.ReplaceFileCorruptionHandler {
@@ -24,30 +23,18 @@ internal val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
 /** За сколько минут напоминать о паре, пока человек не выбрал своё время. */
 const val DEFAULT_NOTIFY_BEFORE = 20
 
-/**
- * Выключатель, отделённый от «изменений»: пока человек его не трогал, он
- * повторяет «изменения» — прежние сборки держали сбой сервера и пропажу
- * подгруппы под ними, и кто гасил изменения, гасил и их.
- */
+/** Выключатель, отделённый от «изменений»; пока его не трогали, повторяет «изменения». */
 internal fun notifyFlag(own: String?, changes: String?): Boolean =
     own?.let { it != "0" } ?: (changes != "0")
 
 /**
- * Всё, что приложение помнит между запусками: выбранная группа и последний
- * ответ сервера.
- *
- * Виджет рисуется только отсюда и никогда из сети, поэтому одинаково работает
- * в метро и при выключенном сервере.
+ * Всё, что приложение помнит между запусками: выбранная группа и последний ответ сервера.
+ * Виджет рисуется только отсюда, не из сети.
  */
 class ScheduleStore(internal val context: Context) {
     internal val json = Json { ignoreUnknownKeys = true }
 
-    /**
-     * Прочитаны ли настройки с диска.
-     *
-     * Пока не прочитаны, показывать нечего: иначе приложение на первых кадрах
-     * рисует экран выбора группы поверх уже выбранной, и окна «скачут».
-     */
+    /** Прочитаны ли настройки с диска. Пока нет — показывать нечего: иначе мелькает экран выбора группы. */
     val loaded: Flow<Boolean> = context.dataStore.data.map { true }
 
     val groupId: Flow<String?> = context.dataStore.data.map { it[KEY_GROUP_ID] }
@@ -59,8 +46,7 @@ class ScheduleStore(internal val context: Context) {
 
     /**
      * Что сервер сказал о себе в последний раз: `ok`, `stale` или `empty`.
-     * Хранится, потому что без сети спросить некого; может устареть — сервер
-     * мог починиться, пока телефон был вне сети.
+     * Может устареть: сервер мог починиться, пока телефон был вне сети.
      */
     val serverStatus: Flow<String> = context.dataStore.data.map { it[KEY_SERVER_STATUS] ?: "ok" }
 
@@ -70,11 +56,7 @@ class ScheduleStore(internal val context: Context) {
     /** С какого момента сервер лежит (ISO, UTC); null, когда всё в порядке. */
     val serverSince: Flow<String?> = context.dataStore.data.map { it[KEY_SERVER_SINCE] }
 
-    /**
-     * Сервер отказал прежней сборке (426), а приложение с тех пор обновили:
-     * отказ к нынешней не относится, и до первого ответа сервера на экране и в
-     * виджетах не должно висеть «обновите приложение».
-     */
+    /** Сервер отказал прежней сборке (426), а приложение обновили: отказ к нынешней не относится. */
     suspend fun forgetUnsupportedAfterUpdate() {
         context.dataStore.edit {
             if (it[KEY_SERVER_STATUS] != STATUS_UNSUPPORTED) return@edit
@@ -88,11 +70,9 @@ class ScheduleStore(internal val context: Context) {
     data class Unreachable(val since: java.time.Instant, val run: java.time.Instant)
 
     /**
-     * Группы (или преподавателя) в таблице больше нет: сервер ответил 404 при
-     * здоровом состоянии.
-     *
-     * Верим не первому ответу: опечатку в заголовке колледж чинит минут за
-     * двадцать. 404 должен повториться не раньше чем через час после первого.
+     * Группы (или преподавателя) в таблице больше нет: сервер ответил 404 при здоровом состоянии.
+     * Верим не первому ответу: опечатку в заголовке колледж чинит минут за двадцать,
+     * 404 должен повториться не раньше чем через час.
      */
     val gone: Flow<Boolean> = context.dataStore.data.map { it[KEY_GONE] == "1" }
 
@@ -100,9 +80,8 @@ class ScheduleStore(internal val context: Context) {
     val notFoundPending: Flow<Boolean> = context.dataStore.data.map { it[KEY_GONE_SINCE] != null }
 
     /**
-     * За сколько минут напоминать о паре; общее для студента и преподавателя.
-     * Выключатель — отдельное поле, чтобы выбранное время переживало
-     * выключение.
+     * За сколько минут напоминать о паре; общее для студента и преподавателя. Выключатель
+     * отдельный: время переживает выключение.
      */
     val notifyBefore: Flow<Int> = context.dataStore.data.map(::rememberedMinutes)
 
@@ -127,16 +106,12 @@ class ScheduleStore(internal val context: Context) {
     private fun rememberedMinutes(prefs: Preferences): Int =
         prefs[KEY_NOTIFY_BEFORE]?.toIntOrNull()?.takeIf { it > 0 } ?: DEFAULT_NOTIFY_BEFORE
 
-    // У тех, кто обновился с прежней сборки, выключателя в хранилище нет:
-    // тогда о нём судим по старому полю, где ноль означал «выключено».
+    // Без выключателя в хранилище (обновились с прежней сборки) судим по старому полю: ноль — «выключено».
     private fun notifyOn(prefs: Preferences): Boolean =
         prefs[KEY_NOTIFY_ON]?.let { it == "1" }
             ?: ((prefs[KEY_NOTIFY_BEFORE]?.toIntOrNull() ?: 0) > 0)
 
-    /**
-     * Сообщать ли о новой версии приложения. Магазина нет: если не сказать,
-     * человек так и останется со старой сборкой.
-     */
+    /** Сообщать ли о новой версии приложения: магазина нет, иначе человек останется со старой сборкой. */
     val notifyUpdates: Flow<Boolean> = context.dataStore.data.map {
         it[KEY_NOTIFY_UPDATES] != "0"
     }
@@ -156,10 +131,7 @@ class ScheduleStore(internal val context: Context) {
         notifyFlag(it[KEY_NOTIFY_SUBGROUP], it[KEY_NOTIFY_CHANGES])
     }
 
-    /**
-     * Закреплённые преподаватели — вверху списка: в полутора сотнях фамилий
-     * обычно смотрят одних и тех же.
-     */
+    /** Закреплённые преподаватели — вверху списка. */
     val pinnedTeachers: Flow<List<String>> = context.dataStore.data.map {
         it[KEY_PINNED_TEACHERS]?.split("\n")?.filter(String::isNotBlank).orEmpty()
     }
@@ -170,9 +142,8 @@ class ScheduleStore(internal val context: Context) {
     }
 
     /**
-     * Кто пользуется приложением: студент или преподаватель. От этого зависит,
-     * чьё расписание качается и показывается на экране, в виджетах и в
-     * напоминаниях.
+     * Кто пользуется приложением: студент или преподаватель. От этого зависит, чьё расписание
+     * качается и показывается.
      */
     val isTeacher: Flow<Boolean> = context.dataStore.data.map { it[KEY_ROLE] == "teacher" }
 
@@ -192,8 +163,7 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit {
             it[KEY_TEACHER_ID] = id
             it[KEY_TEACHER_NAME] = name
-            // Повторный выбор себя же — не повод стирать расписание без связи
-            // и не повод снимать пропажу: снимок прежний.
+            // Повторный выбор себя же не стирает расписание и не снимает пропажу.
             if (unchanged) return@edit
             it.remove(KEY_GONE_SINCE)
             it.remove(KEY_GONE)
@@ -235,18 +205,12 @@ class ScheduleStore(internal val context: Context) {
 
     suspend fun currentGroupId(): String? = groupId.first()
 
-    /**
-     * Всё, что нужно виджету, за одно чтение: по чтению на поле переключение
-     * дня заметно тормозило.
-     */
+    /** Всё, что нужно виджету, за одно чтение: по чтению на поле переключение дня тормозило. */
     suspend fun widgetState(): WidgetState = widgetStates.first()
 
     /**
-     * То же самое потоком — за ним следит сама разметка виджета.
-     *
-     * Разовое чтение годится только на создание сессии: код до
-     * `provideContent` больше не выполняется, сколько ни зови `updateAll`, и
-     * после смены роли виджет рисовал бы прежнюю.
+     * То же потоком — за ним следит разметка виджета. Разовое чтение годится только на создание
+     * сессии: код до `provideContent` больше не выполняется, и после смены роли виджет рисовал бы прежнюю.
      */
     val widgetStates: Flow<WidgetState> = context.dataStore.data.map(::toWidgetState)
 
@@ -268,41 +232,31 @@ class ScheduleStore(internal val context: Context) {
 
     /**
      * Запомнить выбранную группу.
-     *
-     * [unchanged] — человек выбрал ту же группу при той же роли. Тогда трогать
-     * нечего: список уже выбранную не выделяет, промахнуться легко, а стирание
-     * унесло бы и выставленную подгруппу.
+     * [unchanged] — выбрана та же группа при той же роли: стирание унесло бы выставленную подгруппу.
      */
     suspend fun selectGroup(id: String, name: String, unchanged: Boolean = false) {
         context.dataStore.edit {
             it[KEY_GROUP_ID] = id
             it[KEY_GROUP_NAME] = name
-            // Та же группа выбрана заново — пропажа не снята: снимок прежний,
-            // плашку и снятые напоминания решит обновление.
+            // Та же группа — пропажа не снята, снимок прежний.
             if (unchanged) return@edit
             it.remove(KEY_GONE_SINCE)
             it.remove(KEY_GONE)
-            // Расписание прошлой группы и время его загрузки — прочь сразу:
-            // иначе рядом с «ещё не загружено» стояло бы «обновлено в …»
-            // прежнего выбора.
+            // Прошлое расписание и время его загрузки — прочь сразу, иначе «обновлено в …»
+            // относилось бы к прежнему выбору.
             it.remove(KEY_SCHEDULE)
             it.remove(KEY_GENERATED_AT)
             it.remove(KEY_FETCHED_AT)
-            // Непрочитанные изменения — про прежнюю группу: к новым не копить.
+            // Непрочитанные изменения — про прежнюю группу.
             it.remove(KEY_PENDING_CHANGES)
             it.remove(KEY_CHANGES_HELD)
-            // Остальные выбранные группы к своей не привязаны и остаются —
-            // кроме новой своей: дважды одну группу не показываем.
+            // Остальные выбранные группы остаются, кроме новой своей: дважды одну не показываем.
             val extras = readExtras(it)
             if (extras.any { extra -> extra.id == id }) writeExtras(it, extras.filter { extra -> extra.id != id })
         }
     }
 
-    /**
-     * Группу переименовали в таблице — сервер ответил за неё под новым id.
-     * Записываем новый id и имя, ничего не стирая: память сервера о старом
-     * имени не вечна.
-     */
+    /** Группу переименовали в таблице: пишем новый id и имя, ничего не стирая (сервер помнит старое имя недолго). */
     suspend fun adoptGroup(id: String, name: String) {
         context.dataStore.edit {
             it[KEY_GROUP_ID] = id
@@ -331,35 +285,25 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit { it[KEY_CHANNEL_SEEN] = "1" }
     }
 
-    /**
-     * Остальные выбранные группы по порядку выбора — их пары видны на экране
-     * рядом со своими ([combineGroups]). Своя группа сюда не входит.
-     */
+    /** Остальные выбранные группы по порядку выбора ([combineGroups]); своя сюда не входит. */
     val extraGroups: Flow<List<ExtraGroup>> = context.dataStore.data.map { readExtras(it) }
 
     suspend fun currentExtraGroups(): List<ExtraGroup> = extraGroups.first()
 
-    /**
-     * Их расписания: объект «id → расписание», как его записал репозиторий.
-     * Разбирает репозиторий; хранилищу нужно только выбросить лишние.
-     */
+    /** Их расписания: объект «id → расписание». Разбирает репозиторий; хранилищу нужно только выбросить лишние. */
     val extraSchedulesJson: Flow<String?> = context.dataStore.data.map { it[KEY_EXTRA_SCHEDULES] }
 
     /**
-     * Перевод со «соседней подгруппы» сборок до 0.1.4 на список групп.
-     *
-     * Снимок там лежал склеенным с парами соседки, а по нему работают
-     * виджеты, напоминания и уведомления — только о своей группе. Оставляем
-     * свои пары; пары соседки придут следующим обновлением своим снимком.
-     * Повторный вызов ничего не делает.
+     * Перевод со «соседней подгруппы» сборок до 0.1.4 на список групп. Снимок лежал склеенным с парами
+     * соседки, а виджеты, напоминания и уведомления нужны только о своей группе: оставляем свои пары,
+     * пары соседки придут своим снимком. Повторный вызов ничего не делает.
      */
     suspend fun migrateGroups() {
         context.dataStore.edit { prefs ->
             val id = prefs[KEY_GROUP2_ID]
             val name = prefs[KEY_GROUP2_NAME]
             if (id == null && prefs[KEY_PARTIAL] == null) return@edit
-            // Старая версия давала выбрать соседкой свою же группу — такую не
-            // переносим.
+            // Свою же группу соседкой не переносим.
             if (id != null && name != null && prefs[KEY_EXTRA_GROUPS] == null && id != prefs[KEY_GROUP_ID]) {
                 val gone = prefs[KEY_GROUP2_GONE] == "1"
                 val since = prefs[KEY_GROUP2_GONE_SINCE]?.toLongOrNull()
@@ -379,9 +323,8 @@ class ScheduleStore(internal val context: Context) {
     }
 
     /**
-     * Расписание, сохранённое прежней версией без нынешних полей (пометки
-     * непрочитанного дня), перезапрашивается один раз: иначе до правки
-     * таблицы gen тот же, и пометок не было бы.
+     * Расписание, сохранённое без нынешних полей (пометки непрочитанного дня), перезапрашивается
+     * один раз: gen тот же, пометок не было бы.
      */
     suspend fun migrateFormat() {
         context.dataStore.edit { prefs ->
@@ -423,10 +366,7 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit { it[KEY_GROUPS] = body }
     }
 
-    /**
-     * Когда списки групп и преподавателей пришли свежими целиком: качать их на
-     * каждый экран и каждое ⟳ незачем.
-     */
+    /** Когда списки групп и преподавателей пришли свежими целиком: качать их на каждый экран незачем. */
     suspend fun listsFetchedAt(): Long =
         context.dataStore.data.first()[KEY_LISTS_AT]?.toLongOrNull() ?: 0L
 
@@ -442,18 +382,14 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit { it[KEY_GITHUB_AT] = millis.toString() }
     }
 
-    /** Список преподавателей: полторы сотни имён, качать их каждый раз незачем. */
+    /** Список преподавателей: полторы сотни имён, качать каждый раз незачем. */
     val teachersJson: Flow<String?> = context.dataStore.data.map { it[KEY_TEACHERS] }
 
     suspend fun putTeachers(body: String) {
         context.dataStore.edit { it[KEY_TEACHERS] = body }
     }
 
-    /**
-     * Сколько раз приложение ответило вместо таблицы колледжа: открытия и
-     * возвращения к нему. Перерисовки виджетов не в счёт — смотрел ли на них
-     * кто-то, не узнать.
-     */
+    /** Сколько раз приложение ответило вместо таблицы колледжа: открытия и возвращения. Виджеты не в счёт. */
     suspend fun countOpen() = bump(KEY_TALLY_OPENS)
 
     suspend fun tally(): Tally = context.dataStore.data.first().let {

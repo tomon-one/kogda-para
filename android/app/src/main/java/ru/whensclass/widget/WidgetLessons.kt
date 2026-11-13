@@ -47,24 +47,21 @@ internal fun Lessons(
         return
     }
     val current = currentLessonNumber(bells, day, now)
-    // Обычный список, не ленивый: ленивый живёт, пока жив процесс приложения,
-    // и после его выгрузки виджет чернеет насовсем.
-    // Высоты сняты со снимка экрана (TECNO LF7n, плотность 480): шаг между
-    // плашками пар — 44,3 dp, от верха карточки до первой — 47,7 dp. Округлено
-    // вверх: ошибка в меньшую сторону обрежет последнюю пару корпусом.
-    // Растёт со шрифтом только текст, поля — нет (как в WeekFit.kt): на шрифте 2,0
-    // шаг пары ~76 dp, шапка ~85, а не вдвое больше.
+    // Обычный список, не ленивый: ленивый живёт, пока жив процесс приложения, и после его выгрузки
+    // виджет чернеет насовсем. Высоты сняты со снимка экрана (TECNO LF7n, плотность 480): шаг между
+    // плашками пар 44,3 dp, от верха карточки до первой 47,7 dp. Округлено вверх: ошибка в меньшую
+    // сторону обрежет последнюю пару корпусом. Со шрифтом растёт только текст, поля нет (как в
+    // WeekFit.kt): на шрифте 2,0 шаг пары ~76 dp, шапка ~85.
     val scale = fontScale()
     val rowHeight = rowHeight(fit, scale)
     // Место под шапкой; строки «прошло/ещё N» вычитаются ниже, отдельно.
     val free = freeHeight(LocalSize.current.height, reserved, fit, scale)
-    // Строки «прошло N пар» и «ещё N пар» занимают место, а нужны ли они —
-    // видно только после выбора окна. Поэтому прикидка, потом уточнение:
-    // одного круга хватает.
+    // Строки «прошло N пар» и «ещё N пар» занимают место, а нужны ли они — видно только после
+    // выбора окна: прикидка, потом уточнение; одного круга хватает.
     val lineHeight = 17.dp * fontScale()
 
-    // Сколько целых пар помещается — и не больше, иначе последнюю обрежет
-    // корпус. Одна пара — минимум: пустой виджет хуже одной строки.
+    // Сколько целых пар помещается, не больше (иначе последнюю обрежет корпус). Одна — минимум:
+    // пустой виджет хуже одной строки.
     fun room(reserved: Dp): Int {
         val left = free - reserved
         return (left / rowHeight).toInt().coerceAtLeast(1).coerceAtMost(lessons.size)
@@ -83,8 +80,7 @@ internal fun Lessons(
     val window = windowRange(lessons, start, fits)
     val shown = lessons.subList(window.first, window.last + 1)
     val (passedAll, aheadAll) = hiddenNumbers(lessons, window)
-    // Одна пара — минимум, а подписи на неё места не хватило: без них, иначе
-    // корпус режет подпись посередине букв.
+    // Одна пара — минимум, а подписи на неё места не хватило: без них, иначе корпус режет подпись посередине букв.
     val crowded = free - rowHeight * shown.size - lineHeight * labels < 0.dp
     val passed = if (crowded) 0 else passedAll
     val ahead = if (crowded) 0 else aheadAll
@@ -93,8 +89,7 @@ internal fun Lessons(
         // Прожитое называем сверху — там, где оно исчезло.
         if (passed > 0) HiddenLine(passedPairs(passed), day, colors)
         shown.forEach { lesson ->
-            // Пара и отступ под ней — одним контейнером: в контейнере виджета
-            // не больше десяти детей.
+            // Пара и отступ под ней — одним контейнером: в контейнере не больше десяти детей.
             Column(modifier = GlanceModifier.fillMaxWidth()) {
                 // Отменённая пара в своё время — не «идёт сейчас».
                 LessonRow(lesson, day, bells, isNow = lesson.number == current && !lesson.isCancelled, fit, colors)
@@ -138,11 +133,9 @@ private fun LessonRow(
             .padding(horizontal = 8.dp, vertical = if (fit.dense) 3.dp else 4.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // Ширина — на «09:00–10:30» одной строкой; на узком виджете — только
-        // начало пары.
+        // Ширина — на «09:00–10:30» одной строкой; на узком виджете только начало.
         Column(modifier = GlanceModifier.width((if (fit.narrow) 48.dp else 72.dp) * fit.scale)) {
-            // У текущей пары номер уступает место «идёт сейчас» — в той же
-            // строке, высота пары не меняется.
+            // У текущей пары номер уступает место «идёт сейчас» в той же строке: высота не меняется.
             Text(
                 when {
                     isNow && fit.narrow -> "сейчас"
@@ -161,8 +154,7 @@ private fun LessonRow(
             } else {
                 lessonTime(bells, lesson.number)
             }
-            // Начало — жирнее и крупнее, конец мельче, как на экране. Одной строкой:
-            // высота пары не меняется (её шаг снят со снимка, см. выше).
+            // Начало — жирнее и крупнее, конец мельче, как на экране; одной строкой: высота пары не меняется.
             time?.let { time ->
                 val start = time.substringBefore('–')
                 val end = time.substringAfter('–', "")
@@ -201,12 +193,10 @@ private fun LessonRow(
 
 @Composable
 private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
-    // Тип, место и преподаватель — одной строкой, чтобы в виджет помещались
-    // хотя бы две пары.
+    // Тип, место и преподаватель — одной строкой, чтобы в виджет помещались хотя бы две пары.
     val parts = buildList {
         if (lesson.isCancelled) add(lesson.note?.let { "отменена — $it" } ?: "отменена")
-        // Замена — первым словом, как «Вместо: …» на экране; место — раньше
-        // типа: строка обрезается справа.
+        // Замена — первым словом, как «Вместо: …» на экране; место раньше типа: строка обрезается справа.
         if (lesson.replaces != null && !lesson.isCancelled) add("замена")
         add(if (lesson.isOnline) onlineLabel(lesson) else roomLabel(lesson.room) ?: "место не указано")
         kindName(lesson.kind)?.let { add(it) }
@@ -217,8 +207,7 @@ private fun Details(lesson: LessonDto, day: LocalDate, colors: Palette) {
 
     val line = GlanceModifier.fillMaxWidth()
     val context = LocalContext.current
-    // Ссылка на чужой адрес одним нажатием не копируется: нажатие ведёт на
-    // экран пары, где хост назван.
+    // Ссылка на чужой адрес одним нажатием не копируется: нажатие ведёт на экран пары, где хост назван.
     val foreign = lesson.url?.let { !isKnownWebinar(it) } == true
     Text(
         // Значок впереди строки: в хвосте его утащила бы за край длинная фамилия.
@@ -256,8 +245,8 @@ internal fun pairsRoom(height: Dp, reserved: Dp, fit: Fit): Int =
     (freeHeight(height, reserved, fit, fit.scale) / rowHeight(fit, fit.scale)).toInt()
 
 /**
- * Сколько из [count] пар будет видно: не вошедшие сами занимают строку «ещё N»,
- * а скрытых двух и больше посреди дня — ещё и «прошло N» ([Lessons]). Одна пара — минимум.
+ * Сколько из [count] пар будет видно: не вошедшие занимают строку «ещё N», а скрытых двух и больше
+ * посреди дня — ещё и «прошло N» ([Lessons]). Одна пара — минимум.
  */
 internal fun pairsShown(height: Dp, reserved: Dp, fit: Fit, count: Int): Int {
     val room = pairsRoom(height, reserved, fit)

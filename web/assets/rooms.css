@@ -65,7 +65,7 @@
 .room-busy:last-child { border-bottom: 0; }
 .room-name { font-weight: 600; color: var(--primary); }
 .room-taken summary { cursor: pointer; list-style: none; }
-/* Свой значок, как в приложении: у браузеров треугольник свой и разный. */
+/* Свой значок: у браузеров треугольник свой и разный. */
 .room-taken summary::-webkit-details-marker { display: none; }
 .room-taken summary::before { content: '▸ '; }
 .room-taken[open] summary::before { content: '▾ '; }

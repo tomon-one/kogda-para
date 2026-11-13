@@ -26,17 +26,13 @@ import ru.whensclass.BuildConfig
 import ru.whensclass.notify.Notifications
 
 /**
- * Проверка и установка обновлений.
- *
- * Проверка и загрузка — автоматические, установка — по кнопке, сессией
- * установщика Android: она возвращает итог, и неудача видна в настройках. На
- * Android 12+ своё обновление ставится без окна (USER_ACTION_NOT_REQUIRED);
- * попросит телефон подтверждения — открывается его окно.
+ * Проверка и установка обновлений. Проверка и загрузка автоматические, установка по кнопке сессией
+ * установщика Android: она возвращает итог, неудача видна в настройках. На Android 12+ своё
+ * обновление ставится без окна (USER_ACTION_NOT_REQUIRED).
  */
 class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
     // Одна загрузка за раз: две в тот же файл стирают друг другу байты.
-    // AppUpdate один на приложение (AppContainer).
     private val downloading = Mutex()
 
     private companion object {
@@ -54,9 +50,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     }
 
     /**
-     * Что известно о новой сборке. «Не дозвонился» отдельно от «обновлений
-     * нет»: приложение не должно писать «Установлена последняя версия», когда
-     * не знает этого.
+     * Что известно о новой сборке. «Не дозвонился» отдельно от «обновлений нет»: не писать
+     * «Установлена последняя версия», не зная этого.
      */
     sealed interface Check {
         data class Available(val release: ReleaseDto) : Check
@@ -71,16 +66,14 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     @Volatile private var screenGithubAt = 0L
 
     /**
-     * Проверка для экрана: при открытии и по возвращении в приложение — не
-     * чаще [CHECK_EVERY_MILLIS], по уведомлению о версии — всегда (иначе живой
-     * экран показал бы прежние сведения). Не пора — прежний ответ.
+     * Проверка для экрана: при открытии и возвращении — не чаще [CHECK_EVERY_MILLIS], по
+     * уведомлению о версии — всегда. Не пора — прежний ответ.
      */
     suspend fun checkForScreen(force: Boolean): Check {
         val now = System.currentTimeMillis()
         val cached = lastCheck
-        // Ответ помнится и от кнопки «Проверить», и от фона: иначе возврат в
-        // приложение затёр бы найденную ими сборку. Неудача помнится десять
-        // минут: у GitHub 60 запросов в час на адрес, общий у всего оператора.
+        // Ответ помнится и от кнопки, и от фона: иначе возврат затёр бы найденную ими сборку.
+        // Неудача — десять минут: у GitHub 60 запросов в час на адрес оператора.
         if (!force && cached != null) {
             val fresh = if (cached.second == Check.Failed) FAILED_EVERY_MILLIS else CHECK_EVERY_MILLIS
             if (now - cached.first in 0 until fresh) return cached.second
@@ -90,8 +83,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     }
 
     suspend fun check(github: Boolean = true, askedGithub: () -> Unit = {}): Check = withContext(Dispatchers.IO) {
-        // Сервер не ответил — спросить выпуски на GitHub: сборка с починкой
-        // или новым адресом сервера должна дойти и тогда, когда сервер лежит.
+        // Сервер не ответил — спросить выпуски на GitHub: починка или новый адрес сервера должны
+        // дойти и когда он лежит.
         val release = runCatching { api.release() }.getOrNull()
             ?: (if (github) { askedGithub(); runCatching { api.githubRelease() }.getOrNull() } else null)
         when {
@@ -101,14 +94,10 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         }.also { lastCheck = System.currentTimeMillis() to it }
     }
 
-    /**
-     * Сказать о новой сборке, если она вышла; про одну и ту же — один раз.
-     * Зовётся из фонового обновления расписания.
-     */
+    /** Сказать о новой сборке, если она вышла (про одну — раз). Зовётся из фонового обновления. */
     suspend fun announceIfNew(store: ScheduleStore) {
         if (!store.notifyUpdatesEnabled()) return
-        // На GitHub из фона — не чаще раза в шесть часов: те же 60 запросов в
-        // час на адрес оператора. Экран и кнопка «Проверить» — по своим правилам.
+        // С GitHub из фона — не чаще раза в шесть часов (лимит 60 запросов в час); экран и кнопка — по своим правилам.
         val now = System.currentTimeMillis()
         val github = now - store.githubCheckedAt() !in 0 until GITHUB_EVERY_MILLIS
         var asked = false
@@ -122,8 +111,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             "Вышла версия ${release.versionName}",
             release.notes.ifBlank { "Откройте настройки, чтобы установить." },
         )
-        // Засчитываем, только если система уведомление приняла: иначе после
-        // выдачи разрешения о сборке больше не сказали бы.
+        // Засчитываем, только если система уведомление приняла: иначе после выдачи разрешения о сборке не сказали бы.
         if (shown) store.setAnnouncedVersion(release.versionCode)
     }
 
@@ -145,15 +133,14 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         data class Done(val result: Result) : Download
     }
 
-    // Загрузка живёт здесь, а не в экране: поворот пересоздаёт экран, и
-    // загрузка в нём началась бы второй раз.
+    // Загрузка живёт здесь, а не в экране: поворот пересоздаёт экран, и она началась бы второй раз.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _download = MutableStateFlow<Download?>(null)
     val download: StateFlow<Download?> = _download.asStateFlow()
 
     /**
-     * Скачивает обновление и готовит установщик — одним нажатием. Итог — в
-     * [download]; экран забирает его через [taken].
+     * Скачивает обновление и готовит установщик одним нажатием. Итог — в [download]; экран забирает
+     * его через [taken].
      */
     fun start(release: ReleaseDto) {
         if (_download.value == Download.Running) return
@@ -166,8 +153,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     }
 
     /**
-     * Не вышло с сервера — та же сборка с GitHub. Только та же: другой номер
-     * человек не выбирал. Не вышло и там — показываем первую причину.
+     * Не вышло с сервера — та же сборка с GitHub (другой номер человек не выбирал). Не вышло и там
+     * — первая причина.
      */
     private suspend fun fetchWithFallback(release: ReleaseDto): Result {
         val first = runCatching { fetchAndInstall(release) }.getOrElse { Result.Failed(updateFailure(it)) }
@@ -193,9 +180,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         }
         val file = File(dir(), name(release))
         if (!ready(file, release)) {
-            // Качаем во временное имя и переименовываем после сверки размера:
-            // обрезанный APK установщик встречает невнятным «Не удалось
-            // выполнить синтаксический анализ пакета».
+            // Качаем во временное имя и переименовываем после сверки размера: обрезанный APK
+            // установщик встречает невнятной ошибкой разбора пакета.
             file.delete()
             val partial = File(dir(), name(release) + ".part")
             partial.delete()
@@ -209,8 +195,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
                 return Result.Failed("файл дошёл не целиком: $written из ${release.size} байт")
             }
         }
-        // Размер — не подлинность: APK другого пакета Android поставил бы
-        // рядом как новое приложение, без всякой сверки подписи.
+        // Размер — не подлинность: APK другого пакета Android поставил бы рядом как новое приложение.
         genuine(file, release)?.let { why ->
             file.delete()
             return Result.Failed(why)
@@ -220,11 +205,9 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     }
 
     /**
-     * Отдаёт проверенный файл установщику Android. Итог придёт в
-     * [InstallResultReceiver]; до него (или до окна подтверждения) кнопка
-     * показывает, что обновление идёт.
-     * Сессия не открылась — итог [Result.Manual]. Здесь, а не в экране: смена
-     * [download] перезапускает экран, и установка из него отменила бы сама себя.
+     * Отдаёт проверенный файл установщику Android; итог придёт в [InstallResultReceiver]. Сессия не
+     * открылась — [Result.Manual]. Здесь, а не в экране: смена [download] перезапускает экран, и
+     * установка отменила бы сама себя.
      */
     fun install(ready: Result.Ready) {
         // Сразу: экран, забирая итог ([taken]), не должен стереть неудачу ниже.
@@ -295,9 +278,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         val mine = certificates(runCatching { installedInfo(pm) }.getOrNull(), currentOnly = true)
         val theirs = certificates(archive, currentOnly = false)
         if (!signedAlike(mine, theirs)) {
-            // Что делать — прямо здесь: совет «удалить и поставить заново»
-            // рядом с текстом обновления с сервера позволил бы тому, кто
-            // завладел сервером, увести людей на свою сборку.
+            // Совет «удалить и поставить заново» рядом с текстом обновления с сервера позволил бы
+            // завладевшему сервером увести людей на свою сборку.
             return "подпись файла не та. Не удаляйте приложение ради этого " +
                 "обновления и не ставьте файл по ссылкам из его текста — напишите автору в " +
                 "Telegram: @toomonn"
@@ -352,8 +334,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
 
     /**
-     * Готов ли файл к установке: размер совпал с объявленным сервером. Иначе
-     * оборванная загрузка навсегда сошла бы за «уже скачанное обновление».
+     * Готов ли файл к установке: размер совпал с объявленным сервером. Иначе оборванная загрузка
+     * сошла бы за готовую.
      */
     private fun ready(file: File, release: ReleaseDto): Boolean =
         file.exists() && release.size > 0 && file.length() == release.size
@@ -371,10 +353,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
     }
 
     /**
-     * Намерение для системного установщика — явное: неявное ACTION_VIEW с
-     * правом чтения получило бы любое приложение с фильтром на APK (однажды
-     * выбранное «Всегда»), и оно могло бы изобразить установку. Системного не
-     * нашлось — остаётся неявное: без установщика не обновиться вовсе.
+     * Намерение для установщика — явное: неявное ACTION_VIEW с правом чтения получило бы любое
+     * приложение с фильтром на APK. Системного нет — неявное: иначе не обновиться.
      */
     private fun installIntent(file: File): Intent {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
@@ -393,8 +373,8 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 internal const val EXTRA_VERSION = "ru.whensclass.update.VERSION"
 
 /**
- * Итог сессии установщика. Попросил подтверждения — открыть его окно: человек
- * только что нажал «Обновить», приложение на экране. Остальное — в [AppUpdate].
+ * Итог сессии установщика. Попросил подтверждения — открыть окно: человек только что нажал
+ * «Обновить». Остальное — в [AppUpdate].
  */
 class InstallResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -406,9 +386,7 @@ class InstallResultReceiver : BroadcastReceiver() {
             val opened = confirm != null && runCatching {
                 context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }.isSuccess
-            // Окно у человека: брошенное или не пущенное из фона оно итога не
-            // пришлёт, и «Обновляется…» висело бы до смерти процесса. Кнопка
-            // снова живая — нажатие откроет новую сессию.
+            // Окно у человека: брошенное оно итога не пришлёт, и «Обновляется…» висело бы до смерти процесса.
             if (opened) updates.awaitingUser() else updates.installed(PackageInstaller.STATUS_FAILURE)
             return
         }

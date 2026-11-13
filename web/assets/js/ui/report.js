@@ -1,5 +1,5 @@
-// Сведения для отчёта (Diagnostics.kt, Report.kt). Никуда сами не уходят:
-// человек смотрит, копирует и отправляет сам.
+// Сведения для отчёта (Diagnostics.kt, Report.kt). Сами никуда не уходят:
+// человек копирует и отправляет сам.
 
 import { h, dialog, closeDialog, copyText, snackbar, standalone, externalLink } from './dom.js';
 import { VERSION, build } from '../version.js';

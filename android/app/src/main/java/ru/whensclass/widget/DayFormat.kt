@@ -15,10 +15,9 @@ private val DAY_FORMAT = DateTimeFormatter.ofPattern("d MMMM, EEEE", RU)
 private val SHORT_DAY = DateTimeFormatter.ofPattern("d MMMM", RU)
 
 /**
- * Пояс колледжа. Сетка звонков и дни листа — по Новосибирску, и сравнивать их
- * надо с тамошним «сейчас», а не с часами телефона: у студента в другом поясе
- * (онлайн-пары) подсветка и напоминания иначе приходят не в те часы. Моменты
- * вроде «проверено в 17:00» показываются по часам телефона.
+ * Пояс колледжа. Сетка звонков и дни листа — по Новосибирску, сравнивать их надо с тамошним
+ * «сейчас», а не с часами телефона (у студента онлайн-пары в другом поясе). Моменты вроде
+ * «проверено в 17:00» — по часам телефона.
  */
 val COLLEGE_ZONE: ZoneId = ZoneId.of("Asia/Novosibirsk")
 
@@ -27,11 +26,8 @@ fun collegeNow(): LocalDateTime = LocalDateTime.now(COLLEGE_ZONE)
 fun collegeToday(): LocalDate = LocalDate.now(COLLEGE_ZONE)
 
 /**
- * Ближайший момент, когда содержимое меняется само: звонок (начало или конец
- * пары) сегодня позже `now` или полночь с минутой.
- *
- * Полночь — ближайшие 00:01, а не завтрашние: иначе будильник, заведённый в
- * первую минуту суток, перешагнул бы их до первого звонка.
+ * Ближайший момент, когда содержимое меняется само: звонок сегодня позже `now` или полночь с минутой.
+ * Полночь — ближайшие 00:01, а не завтрашние: иначе будильник из первой минуты суток перешагнул бы их.
  */
 fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime): LocalDateTime {
     val midnight = now.toLocalDate().atTime(LocalTime.of(0, 1))
@@ -60,15 +56,10 @@ fun formatDayTitleShort(day: LocalDate): String {
 fun formatWeekDay(day: LocalDate): String =
     day.format(DateTimeFormatter.ofPattern("EEE, d MMM", RU))
 
-/**
- * Заголовок недельного виджета: «Неделя 7–12 сент.». Одного слова «Неделя»
- * мало: видны не все её дни. Месяц пишем один раз, если неделя его не
- * пересекает.
- */
+/** Заголовок недельного виджета: «Неделя 7–12 сент.». Месяц пишем один раз, если неделя его не пересекает. */
 fun formatWeekRange(from: LocalDate, to: LocalDate): String {
     val month = DateTimeFormatter.ofPattern("MMM", RU)
-    // В субботу и в последний день листа виден один день, и «12–12 сент.»
-    // читается как опечатка.
+    // В субботу и в последний день листа виден один день: «12–12 сент.» читается как опечатка.
     if (from == to) return "Неделя, ${from.dayOfMonth} ${from.format(month)}"
     return if (from.month == to.month) {
         "Неделя ${from.dayOfMonth}–${to.dayOfMonth} ${to.format(month)}"
@@ -86,8 +77,7 @@ fun formatDayRange(from: LocalDate, to: LocalDate): String = when {
 
 fun formatDayTitle(day: LocalDate): String {
     val today = collegeToday()
-    // «Послезавтра» человек и так посчитает по дате, а вот «вчера» помогает:
-    // прошедшие дни остаются в списке, и их надо отличать с одного взгляда.
+    // «Вчера» помогает: прошедшие дни остаются в списке, и их надо отличать с одного взгляда.
     val prefix = when (day) {
         today -> "сегодня"
         today.plusDays(1) -> "завтра"
@@ -99,8 +89,8 @@ fun formatDayTitle(day: LocalDate): String {
 }
 
 fun formatFetchedAt(millis: Long): String {
-    // «Проверено», а не «обновлено»: время ставится при каждой удачной
-    // проверке, и «обновлено» над плашкой сбоя обманывало бы.
+    // «Проверено», а не «обновлено»: время ставится при каждой удачной проверке, а «обновлено» над
+    // плашкой сбоя обманывало бы.
     if (millis <= 0) return "ещё не проверялось"
     val moment = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
     val time = moment.format(DateTimeFormatter.ofPattern("HH:mm", RU))
@@ -111,17 +101,12 @@ fun formatFetchedAt(millis: Long): String {
     }
 }
 
-/**
- * «вс, 27 сентября» — день без «сегодня» и «завтра». Для уведомлений: они
- * висят и после полуночи, и утром «завтра, 28» — это уже сегодня.
- */
+/** «вс, 27 сентября» — день без «сегодня» и «завтра»: уведомления висят и после полуночи. */
 fun formatDayDate(day: LocalDate): String = day.format(DateTimeFormatter.ofPattern("EEE, d MMMM", RU))
 
 /**
  * То же время, но коротко — для шапки виджета: «19:12», «вчера 21:40», «5 сен».
- *
- * [nowMillis] виджеты передают из корня: вложенную шапку, читающую часы сама,
- * Compose пропускает, и время в ней замирает.
+ * [nowMillis] виджеты передают из корня: вложенную шапку, читающую часы сама, Compose пропускает, и время замирает.
  */
 fun formatFetchedShort(millis: Long, nowMillis: Long = System.currentTimeMillis()): String {
     if (millis <= 0) return "—"
@@ -143,12 +128,8 @@ fun parseTime(value: String?): LocalTime? =
     value?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
 
 /**
- * Номер пары, которая идёт в момент `now`, — по сетке звонков с сервера.
- * Пока сетка неизвестна, подсвечивать нечего.
- *
- * Момент передаётся снаружи: в виджетах это зовётся из функций, которые
- * Compose пропускает, пока не изменились параметры, и часы внутри такой
- * функции стоят — подсветка застревала на кончившейся паре.
+ * Номер пары, которая идёт в момент `now`, — по сетке звонков с сервера; пока сетка неизвестна, подсвечивать нечего.
+ * Момент передаётся снаружи: Compose пропускает функции без изменившихся параметров, и внутренние часы стояли бы.
  */
 fun currentLessonNumber(
     bells: Map<String, List<String>>,
@@ -179,18 +160,13 @@ fun lessonTime(bells: Map<String, List<String>>, number: Int): String? {
     return "$start–$end"
 }
 
-/**
- * Названия пар одного номера без повторов: у преподавателя одна пара в двух
- * залах — две записи, «Физическая культура» и «Физическая культура.» — одно.
- */
+/** Названия пар одного номера без повторов: у преподавателя одна пара в двух залах — две записи. */
 fun distinctSubjects(lessons: List<LessonDto>): List<String> =
     lessons.map { it.subject.trim(' ', '.') }.distinctBy { it.lowercase() }
 
 /**
- * Названия пар одного номера в одну строку: «Иностранный язык, немецкий /
- * Иностранный язык, английский» в однострочном заголовке теряет второе —
- * общая часть один раз: «Иностранный язык: немецкий / английский»
- * (_join_subjects в push/changes.py).
+ * Названия пар одного номера в одну строку: общая часть один раз —
+ * «Иностранный язык: немецкий / английский» (_join_subjects в push/changes.py).
  */
 fun joinSubjects(names: List<String>): String {
     val head = names.firstOrNull()?.substringBefore(", ", "").orEmpty()
@@ -199,11 +175,7 @@ fun joinSubjects(names: List<String>): String {
     else names.joinToString(" / ")
 }
 
-/**
- * Расшифровка сокращений типа занятия из таблицы колледжа. Незнакомое
- * оставляем как есть: колледж может завести новое, и непонятное лучше, чем
- * ничего.
- */
+/** Расшифровка сокращений типа занятия из таблицы. Незнакомое оставляем как есть: колледж может завести новое. */
 fun kindName(kind: String?): String? = when (kind?.trim()?.lowercase()) {
     null, "" -> null
     "лек" -> "Лекция"
@@ -218,18 +190,11 @@ fun kindName(kind: String?): String? = when (kind?.trim()?.lowercase()) {
     else -> kind
 }
 
-/**
- * «онлайн» или «онлайн · 12»: колледж раздаёт нумерованные онлайн-комнаты,
- * как кабинеты. Сервер кладёт номер в `r` при `o: 1`; это не кабинет, и
- * «каб.» не приписывается.
- */
+/** «онлайн» или «онлайн · 12»: колледж раздаёт нумерованные онлайн-комнаты. Это не кабинет, «каб.» не приписывается. */
 fun onlineLabel(lesson: LessonDto): String =
     lesson.room?.trim()?.takeIf { it.isNotEmpty() }?.let { "онлайн · $it" } ?: "онлайн"
 
-/**
- * Подпись аудитории. Голая «272» читается как что угодно, поэтому к номеру
- * дописываем «каб.»; названия вроде «Спортзал Б.Хмельницкого 2» — как есть.
- */
+/** Подпись аудитории: к голому номеру дописываем «каб.»; названия вроде «Спортзал Б.Хмельницкого 2» — как есть. */
 fun roomLabel(room: String?): String? {
     val text = room?.trim().orEmpty()
     if (text.isEmpty()) return null
@@ -237,10 +202,7 @@ fun roomLabel(room: String?): String? {
     return if (looksLikeNumber) "каб. $text" else text
 }
 
-/**
- * «Нечаев Сергей Алексеевич» -> «Нечаев»: для строки, где место на исходе.
- * Однофамильцев в колледже нет, а целая фамилия лучше обрезанной с инициалами.
- */
+/** «Нечаев Сергей Алексеевич» -> «Нечаев»: для строки, где место на исходе. Однофамильцев в колледже нет. */
 fun surnameOnly(fullName: String): String =
     fullName.trim().split(" ").firstOrNull()?.takeIf { it.isNotEmpty() } ?: fullName
 
@@ -259,16 +221,12 @@ fun formatDurationShort(minutes: Int): String = when {
     else -> "${minutes / 60} ч ${minutes % 60} мин"
 }
 
-/**
- * «20 минут», «час», «3 часа 5 минут» — там, где место есть: уведомления.
- * Часы выделены, чтобы не делить в уме «185 мин».
- */
+/** «20 минут», «час», «3 часа 5 минут» — там, где место есть: уведомления. */
 fun formatDurationLong(minutes: Int): String {
     val hours = minutes / 60
     val rest = minutes % 60
     val h = if (hours == 1) "час" else plural(hours, "час", "часа", "часов")
-    // «минуту» без числа звучит естественно только само по себе: «через минуту».
-    // Рядом с часами число нужно — «час 1 минуту».
+    // «Минуту» без числа звучит только само по себе («через минуту»); рядом с часами число нужно.
     val m = if (hours == 0 && rest == 1) "минуту" else plural(rest, "минуту", "минуты", "минут")
     return when {
         hours == 0 -> m
@@ -288,11 +246,7 @@ fun plural(n: Int, one: String, few: String, many: String): String {
     return "$n $word"
 }
 
-/**
- * «11 сентября, 11:00 — уже 2 дня»: с какого момента сервер лежит, чтобы
- * долгий сбой не выглядел минутным. Время сервера приходит в UTC,
- * показываем по телефону.
- */
+/** «11 сентября, 11:00 — уже 2 дня»: с какого момента сервер лежит. Время приходит в UTC, показываем по телефону. */
 fun formatSince(iso: String, now: Instant = Instant.now()): String {
     val since = runCatching { Instant.parse(iso) }.getOrNull() ?: return iso
     val local = LocalDateTime.ofInstant(since, ZoneId.systemDefault())
@@ -306,20 +260,14 @@ fun formatSince(iso: String, now: Instant = Instant.now()): String {
     return "$when_ — уже $ago"
 }
 
-/**
- * Начало сбоя без «уже N часов» — для уведомления: оно висит сутками, и
- * «уже 2 часа» быстро стало бы неправдой.
- */
+/** Начало сбоя без «уже N часов» — для уведомления: оно висит сутками. */
 fun formatSinceMoment(iso: String): String {
     val since = runCatching { Instant.parse(iso) }.getOrNull() ?: return iso
     return LocalDateTime.ofInstant(since, ZoneId.systemDefault())
         .format(DateTimeFormatter.ofPattern("d MMMM, HH:mm", Locale.forLanguageTag("ru")))
 }
 
-/**
- * Сколько пар — по номерам, не по записям: блок пополам даёт две записи одного
- * номера, а идти на одну.
- */
+/** Сколько пар — по номерам, не по записям: блок пополам даёт две записи одного номера. */
 fun numbers(lessons: List<LessonDto>): Int = lessons.map { it.number }.distinct().size
 
 /** «6 пар», «2 пары», «1 пара» — счёт занятий по-русски. */
@@ -329,9 +277,8 @@ fun pairsCount(count: Int): String = plural(count, "пара", "пары", "па
 fun morePairs(count: Int): String = "ещё " + plural(count, "пара", "пары", "пар")
 
 /**
- * «Прошла 1 пара», «прошли 2 пары», «прошло 5 пар» — о том, что не
- * поместилось выше списка. Отдельно от предстоящих: «ещё» над списком
- * обещало бы пары впереди. Глагол согласуется с числом.
+ * «Прошла 1 пара», «прошли 2 пары» — о том, что не поместилось выше списка; не «ещё», иначе обещало
+ * бы пары впереди.
  */
 fun passedPairs(count: Int): String {
     val verb = when {

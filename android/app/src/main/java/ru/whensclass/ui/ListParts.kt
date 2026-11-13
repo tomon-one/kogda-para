@@ -24,17 +24,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * Подходит ли имя под запрос поиска. Без регистра, «ё» как «е», без пробелов,
- * дефисов и косых: дефис на русской клавиатуре спрятан, и «исп924» должно
- * находить «ИСП-924/1», а «Еринобу» — «Ёринобу».
+ * Подходит ли имя под запрос. Без регистра, «ё» как «е», без пробелов, дефисов и косых: дефис на
+ * русской клавиатуре спрятан, «исп924» должно находить «ИСП-924/1», а «Еринобу» — «Ёринобу».
  */
 internal fun matchesQuery(name: String, query: String): Boolean {
     val wanted = searchKey(query)
     if (wanted.isEmpty()) return true
     val key = searchKey(name)
     if (key.contains(wanted)) return true
-    // Набрано в английской раскладке: «bcg» — это «исп». До searchKey: «;», «,»
-    // и «[» в раскладке — буквы.
+    // Набрано в английской раскладке: «bcg» — «исп». До searchKey: «;», «,» и «[» в раскладке — буквы.
     val swapped = searchKey(query.lowercase().map { LAYOUT_TO.getOrElse(LAYOUT_FROM.indexOf(it)) { _ -> it } }.joinToString(""))
     if (swapped.isNotEmpty() && key.contains(swapped)) return true
     // Латиницей: «alag» — «Алагян»; kh или h, ts или c — как кто привык.
@@ -60,10 +58,7 @@ private fun looseLatin(text: String): String = text
 private fun searchKey(text: String): String =
     text.lowercase().replace('ё', 'е').filter { it.isLetterOrDigit() }
 
-/**
- * Раздел длинного списка — по первой букве: «Б», «Г», «И»; имена с цифры —
- * в «0–9», чтобы глазу было за что зацепиться.
- */
+/** Раздел длинного списка — по первой букве; имена с цифры — в «0–9», чтобы глазу было за что зацепиться. */
 internal fun letterOf(name: String): String {
     val first = name.trimStart().firstOrNull() ?: return "#"
     return when {
@@ -74,8 +69,8 @@ internal fun letterOf(name: String): String {
 }
 
 /**
- * Список с разделами по букве: у каждого раздела заголовок и одна карточка,
- * строки в ней — через тонкую черту. Порядок — как в списке с сервера.
+ * Список с разделами по букве: у каждого заголовок и одна карточка, строки в ней через тонкую
+ * черту. Порядок — как в списке с сервера.
  */
 internal fun <T> LazyListScope.lettered(
     list: List<T>,
@@ -130,8 +125,8 @@ internal fun <T> LazyListScope.lettered(
 }
 
 /**
- * Смена роли — первой строкой списка, такой же заметной, как остальные:
- * мелкую красную надпись над поиском легко пропустить.
+ * Смена роли — первой строкой списка, такой же заметной, как остальные: мелкую красную надпись над
+ * поиском легко пропустить.
  */
 @Composable
 internal fun RoleSwitchRow(text: String, onClick: () -> Unit) {
@@ -158,9 +153,8 @@ internal fun RoleSwitchRow(text: String, onClick: () -> Unit) {
 }
 
 /**
- * Список не загрузился — со ссылкой, куда написать, и сведениями для отчёта:
- * отсюда до настроек не дойти, а спотыкается здесь тот, кто поставил
- * приложение впервые.
+ * Список не загрузился — со ссылкой, куда написать, и сведениями для отчёта: отсюда до настроек не
+ * дойти, а спотыкается здесь тот, кто поставил приложение впервые.
  */
 @Composable
 internal fun LoadFailed(what: String, loadDiagnostics: (suspend () -> String)?, onRetry: (() -> Unit)? = null) {

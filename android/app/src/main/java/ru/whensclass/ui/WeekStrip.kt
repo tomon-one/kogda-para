@@ -52,8 +52,8 @@ internal val STRIP_TOP = 6.dp
 private val WEEK_NAMES = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
 /**
- * Полоска дней недели (week.js сайта): неделя дня, который наверху списка, он же
- * выделен, точка — сегодня. Выделение — одна плашка, она переезжает от дня к дню.
+ * Полоска дней недели (week.js сайта): неделя дня, который наверху списка, он же выделен, точка —
+ * сегодня. Выделение — одна плашка, переезжающая от дня к дню.
  */
 @Composable
 internal fun WeekStrip(
@@ -69,8 +69,8 @@ internal fun WeekStrip(
     val shown = shownDay()
     val monday = shown.minusDays((shown.dayOfWeek.value - 1).toLong())
     val index = shown.dayOfWeek.value - 1
-    // Плашка едет только в отрисовке: при листании полоска не пересчитывается на
-    // каждом кадре. Цвет подписей переходит за то же время (ниже).
+    // Плашка едет только в отрисовке: при листании полоска не пересчитывается на каждом кадре. Цвет
+    // подписей переходит за то же время.
     val pill = remember { androidx.compose.animation.core.Animatable(index.toFloat()) }
     // Неделя сменилась — плашка уезжает вместе с днями, а не пробегает всю полоску.
     var pillWeek by remember { mutableStateOf(monday) }
@@ -89,8 +89,7 @@ internal fun WeekStrip(
     val weekSwipe = with(androidx.compose.ui.platform.LocalDensity.current) { 48.dp.toPx() }
     val pillColor = MaterialTheme.colorScheme.primary
     val dark = MaterialTheme.colorScheme.isDark
-    // У «Стекла» полоска висит над списком: размыто только под ней самой,
-    // вокруг список виден как есть — без отдельной полосы во всю ширину.
+    // У «Стекла» полоска висит над списком: размыто только под ней, вокруг список виден как есть.
     Box(modifier = modifier.fillMaxWidth().holdTouches().padding(start = 12.dp, end = 12.dp, top = STRIP_TOP, bottom = 8.dp)) {
     if (glass != null) {
         Box(
@@ -106,14 +105,14 @@ internal fun WeekStrip(
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
             .then(if (glass != null) Modifier.border(1.dp, if (dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f), RoundedCornerShape(14.dp)) else Modifier)
             .padding(4.dp)
-            // Одно касание на всю полоску вместо семи кнопок: при листании
-            // полоска перестраивается дешевле. Чтецу экрана — каждый день отдельно (ниже).
+            // Одно касание на всю полоску вместо семи кнопок: при листании она перестраивается
+            // дешевле. Чтецу — каждый день отдельно (ниже).
             .draggable(
                 rememberDraggableState { onDrag(it) },
                 androidx.compose.foundation.gestures.Orientation.Vertical,
             )
-            // Вбок — соседняя неделя: палец влево — следующая. Ось выбирает первое
-            // заметное движение, так что листание вверх-вниз с полоски не мешает.
+            // Вбок — соседняя неделя (влево — следующая). Ось выбирает первое заметное движение,
+            // так что листание вверх-вниз с полоски не мешает.
             .draggable(
                 rememberDraggableState { sideways += it },
                 androidx.compose.foundation.gestures.Orientation.Horizontal,
@@ -147,8 +146,7 @@ internal fun WeekStrip(
         label = "неделя",
         modifier = Modifier.weight(1f),
     ) { week ->
-    // Уезжающая неделя увозит свою плашку на том дне, где она стояла: иначе, пока
-    // новая не въехала, выделения нет вовсе.
+    // Уезжающая неделя увозит плашку на том дне, где она стояла: иначе, пока новая не въехала, выделения нет вовсе.
     val current = week == monday
     val kept = remember { androidx.compose.runtime.mutableIntStateOf(index) }
     if (current) androidx.compose.runtime.SideEffect { kept.intValue = index }

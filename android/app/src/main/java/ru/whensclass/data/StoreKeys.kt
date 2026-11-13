@@ -27,9 +27,8 @@ internal val KEY_GROUP2_GONE = stringPreferencesKey("group2_gone")
 internal val KEY_UNREACHABLE_LAST = stringPreferencesKey("unreachable_last")
 internal val KEY_UNREACHABLE_RUN = stringPreferencesKey("unreachable_run")
 /**
- * Неудачи, разделённые таким перерывом, — не одна беда. Три часа, а не
- * час: фоновый заход бывает раз в час с хвостиком, и при часе цепочка
- * рвалась бы каждый раз.
+ * Неудачи, разделённые таким перерывом, — не одна беда. Три часа, а не час: фоновый заход бывает
+ * раз в час с хвостиком, и при часе цепочка рвалась бы каждый раз.
  */
 internal val UNREACHABLE_STREAK_GAP: java.time.Duration = java.time.Duration.ofHours(3)
 internal val KEY_GROUP_NAME = stringPreferencesKey("group_name")

@@ -22,11 +22,9 @@ import ru.whensclass.AppContainer
 import ru.whensclass.data.ScheduleDto
 
 /**
- * Дневной виджет.
- *
- * Рисуется только из локального хранилища и никогда не ходит в сеть: за
- * обновление отвечает [ru.whensclass.work.SyncWorker]. Без сети показывает
- * последнее, что знает, и говорит, когда это было.
+ * Дневной виджет. Рисуется только из локального хранилища, в сеть не ходит (обновляет
+ * [ru.whensclass.work.SyncWorker]). Без сети показывает последнее известное и говорит, когда это
+ * было.
  */
 class ScheduleWidget : GlanceAppWidget() {
 
@@ -35,23 +33,21 @@ class ScheduleWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val store = AppContainer.get(context).store
-        // Если хранилище не открылось (бывает при обновлении приложения),
-        // виджет должен сказать об этом, а не остаться пустым.
+        // Хранилище не открылось (бывает при обновлении приложения) — виджет должен сказать об
+        // этом, а не остаться пустым.
         val first = runCatching { store.widgetState() }.getOrNull()
 
         provideContent {
-            // Следим за хранилищем из самой разметки: provideGlance на
-            // перерисовку заново не зовётся ([ScheduleStore.widgetStates]).
-            // Первым значением — то, что успели прочитать: иначе первый кадр
-            // моргнул бы «расписание ещё не загружено».
+            // Следим за хранилищем из самой разметки: provideGlance на перерисовку заново не
+            // зовётся ([ScheduleStore.widgetStates]). Первое значение — прочитанное: иначе первый
+            // кадр моргнул бы «ещё не загружено».
             val state by store.widgetStates.collectAsState(initial = first)
             val schedule = parse(state?.scheduleJson)
-            // Палитра своя (см. WidgetColors), а не системная: оболочки на
-            // телефонах слишком по-разному понимают динамические цвета.
+            // Палитра своя (WidgetColors): оболочки слишком по-разному понимают динамические цвета.
             val colors = WidgetColors.resolve(context, ThemeChoice.from(state?.theme))
-            // Часы — только здесь, и дальше параметром: корень перекомпонуется
-            // на каждую перерисовку, а Content с теми же входами Compose
-            // пропускает, и «сегодня» с идущей парой внутри него замирали бы.
+            // Часы — только здесь и дальше параметром: корень перекомпонуется на каждую
+            // перерисовку, а Content с теми же входами Compose пропускает, и «сегодня» внутри
+            // замирало бы.
             val now = moment(currentState(KEY_TICK))
             Content(
                 schedule,
@@ -109,8 +105,7 @@ class ScheduleWidget : GlanceAppWidget() {
             colors = colors,
             now = now,
             // После последнего звонка — с завтрашнего дня, как список в приложении.
-            // Листнули — от дня, с которого листали ([KEY_DAY_BASE]), а не от
-            // нового дня открытия: последний звонок не уводит выбранный день.
+            // Листнули — от дня, с которого листали ([KEY_DAY_BASE]), а не от нового дня открытия.
             day = dayBase(base, schedule, now).plusDays(offset.toLong()),
             offset = offset,
             modifier = GlanceModifier,
@@ -118,9 +113,9 @@ class ScheduleWidget : GlanceAppWidget() {
     }
 
     /**
-     * Сменились ли сутки с прошлой проверки — чтобы утром виджет показывал
-     * сегодня, а не вчерашнее «завтра». По дате в хранилище, а не по часу
-     * будильника: он неточный и не переживает перезагрузку.
+     * Сменились ли сутки с прошлой проверки — чтобы утром виджет показывал сегодня, а не вчерашнее
+     * «завтра». По дате в хранилище, а не по часу будильника: он неточный и не переживает
+     * перезагрузку.
      */
     suspend fun newDay(context: Context): Boolean {
         val store = AppContainer.get(context).store
@@ -162,8 +157,7 @@ class ScheduleWidget : GlanceAppWidget() {
 
         private val json = Json { ignoreUnknownKeys = true }
 
-        // Разбор — самая дорогая часть перерисовки: пока текст не менялся,
-        // отдаём разобранное.
+        // Разбор — самая дорогая часть перерисовки: пока текст не менялся, отдаём разобранное.
         private var cachedJson: String? = null
         private var cachedSchedule: ScheduleDto? = null
 
@@ -182,9 +176,8 @@ class ScheduleWidget : GlanceAppWidget() {
 
 /** От какого дня листает дневной виджет: сохранённый (не вчерашний) или день открытия сейчас. */
 /**
- * Сдвиг листания: листали в прошлые сутки — не в счёт. Сброс на смене суток делает
- * будильник, но где фон ограничен, он не приходит, и вчерашний сдвиг лёг бы на
- * новый день открытия.
+ * Сдвиг листания: листали в прошлые сутки — не в счёт. Сброс на смене суток делает будильник, но
+ * где фон ограничен, он не приходит, и вчерашний сдвиг лёг бы на новый день.
  */
 internal fun dayOffset(stored: LocalDate?, offset: Int, now: LocalDateTime): Int =
     if (stored != null && stored.isBefore(now.toLocalDate())) 0 else offset

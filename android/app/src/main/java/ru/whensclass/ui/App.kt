@@ -78,9 +78,8 @@ internal fun App(
     val container = remember { AppContainer.get(context) }
     val scope = rememberCoroutineScope()
 
-    // Разрешение на уведомления спрашиваем сами: с Android 13 оно не выдаётся
-    // по умолчанию, а при новом targetSdk система сама не спросит. Отказ ничего
-    // не ломает — в настройках останется подсказка, как выдать его позже.
+    // Разрешение на уведомления спрашиваем сами: с Android 13 оно не выдаётся по умолчанию. Отказ
+    // ничего не ломает — в настройках останется подсказка.
     val askNotifications = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { }
@@ -101,8 +100,7 @@ internal fun App(
     // Пока не прочитано — считаем увиденной: плашка не мигает при каждом запуске.
     val channelSeen by container.store.channelSeen.collectAsState(initial = true)
     val schedule by container.repository.schedule.collectAsState(initial = null)
-    // Для экрана — вместе с парами остальных выбранных групп; виджеты и
-    // напоминания — по своему расписанию.
+    // Для экрана — вместе с парами остальных групп; виджеты и напоминания — по своему расписанию.
     val shownSchedule by container.repository.shownSchedule.collectAsState(initial = null)
     val fetchedAt by container.repository.fetchedAt.collectAsState(initial = 0L)
     val storedTheme by container.store.theme.collectAsState(initial = "system")
@@ -130,8 +128,7 @@ internal fun App(
     val teacherId by container.store.teacherId.collectAsState(initial = null)
     val pinnedGroups by container.store.pinnedGroups.collectAsState(initial = emptyList())
     var groups by remember { mutableStateOf<List<GroupDto>?>(null) }
-    // Выбранная тема применяется сразу, не дожидаясь круга через хранилище:
-    // его задерживает перерисовка виджетов, и смена выглядела бы рваной.
+    // Тема применяется сразу, не ожидая круга через хранилище: его задерживает перерисовка виджетов.
     var chosenTheme by remember { mutableStateOf<ThemeChoice?>(null) }
     val theme = chosenTheme ?: ThemeChoice.from(storedTheme)
 
@@ -141,8 +138,7 @@ internal fun App(
     // Откуда пришли к выбору группы: туда и «назад» — и стрелкой, и жестом.
     var groupsFrom by rememberSaveable { mutableStateOf(Screen.SETTINGS) }
     var update by remember { mutableStateOf<ReleaseDto?>(null) }
-    // Отдельно от update: «сервер сказал, что новее ничего нет» и «до сервера
-    // не достучались» — разные вещи, и человеку об этом надо говорить разное.
+    // Отдельно от update: «новее нет» и «до сервера не достучались» — разные вещи.
     var updateFailed by remember { mutableStateOf(false) }
     // Почему не удалось скачать: без этого провал молчалив.
     var updateError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -151,11 +147,9 @@ internal fun App(
     var refreshing by remember { mutableStateOf(false) }
     // Почему ручное обновление не вышло — текстом для плашки.
     var refreshError by remember { mutableStateOf<String?>(null) }
-    // Последнее ручное обновление не удалось: кнопка покажет крестик, а не
-    // галочку «Расписание обновлено».
+    // Последнее ручное обновление не удалось: кнопка покажет крестик, а не галочку.
     var refreshFailed by remember { mutableStateOf(false) }
-    // Добавить другие группы — и сказать, если их пары не пришли: значок без
-    // пар иначе читается как «у группы пар нет».
+    // Добавить другие группы — и сказать, если их пары не пришли: значок без пар читается как «пар нет».
     suspend fun addGroups(groups: List<GroupDto>) {
         val result = container.repository.addExtraGroups(groups)
         if (result is RefreshResult.Partial) refreshError = partialText(result.missed, result.fresh)
@@ -163,12 +157,10 @@ internal fun App(
     val download by container.updates.download.collectAsState()
     val installing = download == AppUpdate.Download.Running
     var focusUpdate by rememberSaveable { mutableStateOf(openUpdate) }
-    // Списки держим здесь, а не во вкладке, чтобы не перезагружать их на
-    // каждое переключение; пока пусто — повтор при каждом заходе (метро,
-    // спящий вайфай).
+    // Списки держим здесь, чтобы не перезагружать на каждое переключение вкладки; пока пусто —
+    // повтор при каждом заходе.
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
-    // Лист пересдач: при открытии расписания и не чаще раза в полчаса — служба
-    // и сама смотрит его раз в час.
+    // Лист пересдач: при открытии расписания, не чаще раза в полчаса (служба сама смотрит его раз в час).
     var retakes by remember { mutableStateOf<RetakesDto?>(null) }
     var retakesFailed by remember { mutableStateOf(false) }
     // Не пришёл, хотя сервер ответил (ошибкой), — а не «нет связи».
@@ -186,8 +178,7 @@ internal fun App(
     // Тот же экран, но выбирают не свою группу, а ещё одну к ней.
     var pickExtra by rememberSaveable { mutableStateOf(false) }
 
-    // Итог загрузки обновления. Установщик открывается, когда человек в
-    // приложении: из фона Android 10+ его молча не пускает.
+    // Итог загрузки обновления. Установщик открывается, когда человек в приложении: из фона Android 10+ его не пускает.
     LaunchedEffect(download) {
         val done = download as? AppUpdate.Download.Done ?: return@LaunchedEffect
         when (val result = done.result) {
@@ -202,8 +193,7 @@ internal fun App(
         container.updates.taken()
     }
 
-    // Новое нажатие по живому экрану: к дню из виджета или к обновлению.
-    // Уведомление без дня («Расписание изменилось») — тоже к расписанию.
+    // Новое нажатие по живому экрану: к дню из виджета или к обновлению; уведомление без дня — к расписанию.
     LaunchedEffect(openSeq) {
         if (openSeq == 0) return@LaunchedEffect
         if (openUpdate) {
@@ -231,20 +221,19 @@ internal fun App(
         }
     }
 
-    // И на каждое возвращение в приложение, пока свежих списков нет: иначе
-    // после первого запуска без связи список не перечитался бы до перезапуска.
+    // И на каждое возвращение, пока свежих списков нет: иначе после первого запуска без связи они не перечитались бы.
     LaunchedEffect(screen, reloadKey, ScreenClock.resumes) {
         val repository = container.repository
         // Сохранённые — сразу, без сети: экран открывается и в метро.
         // Свежие — следом и оба разом, а не по очереди.
         if (groups.isNullOrEmpty()) repository.cachedGroups().takeIf { it.isNotEmpty() }?.let { groups = it }
         if (teachers.isNullOrEmpty()) repository.cachedTeachers().takeIf { it.isNotEmpty() }?.let { teachers = it }
-        // Экран выбора — всегда со свежими, как на сайте: группу могли
-        // разделить днём, и «/1» в списке полусуточной давности не нашлась бы.
+        // Экран выбора — всегда со свежими, как на сайте: группу могли разделить днём, и «/1» в
+        // старом списке не нашлась бы.
         val picking = screen == Screen.GROUPS
         if (listsFresh && !picking) return@LaunchedEffect
-        // Свежие списки — не чаще раза в LISTS_FRESH_MILLIS, если сохранённые
-        // есть: как на сайте. «Повторить» и пустой список — сразу.
+        // Свежие — не чаще LISTS_FRESH_MILLIS, если сохранённые есть, как на сайте; «Повторить» и
+        // пустой список — сразу.
         val age = System.currentTimeMillis() - container.store.listsFetchedAt()
         if (!picking && !listsRetry && !groups.isNullOrEmpty() && !teachers.isNullOrEmpty() && age in 0 until LISTS_FRESH_MILLIS) {
             listsFresh = true
@@ -268,8 +257,7 @@ internal fun App(
         }
     }
 
-    // Навигация своя, поэтому системному «назад» о ней надо сказать: иначе
-    // оно закрывает приложение с любого экрана.
+    // Навигация своя: системному «назад» о ней надо сказать, иначе оно закрывает приложение с любого экрана.
     BackHandler(enabled = screen != Screen.TODAY) {
         // Сменили роль кнопкой на экране выбора — назад к прежнему выбору, как стрелка.
         if (screen == Screen.GROUPS && !pickExtra && pickTeacher != null && pickTeacher != teacherMode) {
@@ -289,8 +277,7 @@ internal fun App(
         reloadKey++
     }
 
-    // Сервер эту сборку не обслуживает (426): списки не придут — к обновлению
-    // в настройках, а не «проверьте интернет».
+    // Сервер эту сборку не обслуживает (426): списки не придут — к обновлению, а не «проверьте интернет».
     val toUpdate: (() -> Unit)? = if (serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED) {
         {
             focusUpdate = true
@@ -300,18 +287,15 @@ internal fun App(
         null
     }
 
-    // Выбрали группу или себя: сразу на экран расписания, и ⟳ крутится, пока
-    // идёт сеть.
+    // Выбрали группу или себя: сразу на экран расписания, ⟳ крутится, пока идёт сеть.
     val afterPick: (suspend () -> RefreshResult) -> Unit = { select ->
         scope.launch {
             refreshing = true
             screen = Screen.TODAY
-            // Значок ⟳ — по этой загрузке: без сети не «обновлено», а после
-            // прежней неудачи удачный выбор — не крестик.
+            // Значок ⟳ — по этой загрузке: без сети не «обновлено», а после прежней неудачи удачный выбор — не крестик.
             val result = select()
             refreshFailed = result is RefreshResult.Failed || result is RefreshResult.Partial
-            // После записи выбора: на первом запуске до неё виден экран выбора,
-            // и сброс роли мелькнул бы списком групп.
+            // После записи выбора: на первом запуске до неё сброс роли мелькнул бы списком групп.
             pickTeacher = null
             refreshing = false
         }
@@ -325,17 +309,14 @@ internal fun App(
             // Пересдачи и кабинеты, что не загрузились, — заново вместе с расписанием.
             if (retakes == null) retakesRetry++
             roomsMemory.nudge++
-            // Напрямую, без WorkManager: он вправе отложить задачу на минуты,
-            // а человек только что нажал кнопку и ждёт ответа сейчас.
+            // Напрямую, без WorkManager: он может отложить задачу на минуты, а человек ждёт ответа.
             val result = container.repository.refresh(force = true)
             refreshFailed = result is RefreshResult.Failed || result is RefreshResult.Partial
             when (result) {
                 is RefreshResult.Failed -> refreshError = refreshFailure(result.error, teacherMode)
-                // Своё обновилось, другие группы — не все: без галочки и с
-                // именами тех, чьи прежние пары на экране.
+                // Своё обновилось, другие группы не все: без галочки, с именами тех, чьи прежние пары на экране.
                 is RefreshResult.Partial -> refreshError = partialText(result.missed, result.fresh)
-                // Сервер здоров, группы нет: сказать об этом, а не молча
-                // погасить ⟳ крестиком «сервер не смог».
+                // Сервер здоров, группы нет: сказать об этом, а не гасить ⟳ крестиком.
                 RefreshResult.Gone -> refreshError =
                     if (teacherMode) "Вас больше нет в таблице — выберите себя заново"
                     else "Группы больше нет в таблице — выберите заново"
@@ -345,9 +326,7 @@ internal fun App(
         }
     }
 
-    // Проверка обновления — по правилам [AppUpdate.checkForScreen].
-    // Принудительно по уведомлению — один раз на открытие, не на каждое
-    // возвращение.
+    // Проверка обновления — по правилам [AppUpdate.checkForScreen]; по уведомлению — раз на открытие.
     var forcedOpen by rememberSaveable { mutableIntStateOf(-1) }
     LaunchedEffect(openSeq, ScreenClock.resumes) {
         val force = openUpdate && forcedOpen != openSeq
@@ -360,8 +339,7 @@ internal fun App(
         }
     }
 
-    // И сразу забираем свежее расписание: после установки новой версии старые
-    // данные на экране выглядят как поломка.
+    // И сразу забираем свежее расписание: после установки старые данные выглядят как поломка.
     var opening by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         try { container.repository.refresh() } finally { opening = false }
@@ -370,8 +348,7 @@ internal fun App(
     val chosenName = if (teacherMode) teacherName else groupName
     val current = when {
         !welcomeSeen -> Screen.WELCOME
-        // К обновлению — и без выбора: сборку, которую сервер не обслуживает,
-        // список групп не получит, и выбрать будет нечего.
+        // К обновлению и без выбора: сборка, которую сервер не обслуживает, списка групп не получит.
         chosenName == null && screen != Screen.SETTINGS -> Screen.GROUPS
         else -> screen
     }
@@ -382,9 +359,8 @@ internal fun App(
         ThemeChoice.SYSTEM -> isSystemInDarkTheme()
     }
 
-    // Тема выбирается внутри приложения, а значки системной полосы — снаружи:
-    // без этой связки светлая тема при тёмной системе даёт белые значки на
-    // белом фоне.
+    // Тема внутри приложения, а значки системной полосы снаружи: без связки светлая тема при тёмной
+    // системе даёт белые значки на белом.
     val view = LocalView.current
     SideEffect {
         val window = (view.context as android.app.Activity).window
@@ -411,13 +387,12 @@ internal fun App(
             modifier = if (glow) Modifier.fillMaxSize().drawBehind { glowBackdrop(dark) } else Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
         ) {
-            // Пустой фон, пока настройки читаются с диска: это доли секунды,
-            // но без него успевает мелькнуть чужой экран.
+            // Пустой фон, пока настройки читаются с диска: иначе мелькнёт чужой экран.
             if (!loaded || glowStored == null) return@Surface
             val screenStates = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
 
-            // Экраны сменяются со сдвигом: вглубь — справа налево, назад —
-            // наоборот; резкая подмена читается как подвисание.
+            // Экраны сменяются со сдвигом (вглубь — справа налево, назад — наоборот): резкая
+            // подмена читается как подвисание.
             AnimatedContent(
                 targetState = current,
                 transitionSpec = {
@@ -431,8 +406,7 @@ internal fun App(
                 },
                 label = "screen",
             ) { target ->
-                // Экран помнит своё, пока открыт другой: из настроек «назад» — на ту
-                // же вкладку расписания, с её поиском и выбором.
+                // Экран помнит своё, пока открыт другой: из настроек «назад» — на ту же вкладку, с поиском и выбором.
                 screenStates.SaveableStateProvider(target.name) {
                 when (target) {
                     Screen.WELCOME -> WelcomeScreen(
@@ -448,8 +422,7 @@ internal fun App(
                                 group.id != groupId && extraGroups.none { it.id == group.id }
                             },
                             onRetry = retryLists,
-                            // «Вторая группа», «Третья группа»: какой по счёту она
-                            // встанет в значках у пар.
+                            // «Вторая группа», «Третья группа» — какой по счёту встанет в значках у пар.
                             title = ordinalGroup(extraGroups.size + 2),
                             canGoBack = true,
                             onBack = {
@@ -463,9 +436,8 @@ internal fun App(
                             },
                         )
                     } else if (pickTeacher ?: teacherMode) {
-                        // Список преподавателей: человек выбирает себя. Роль
-                        // меняется вместе с выбором, а не до него — иначе на
-                        // мгновение показывается чужое расписание.
+                        // Список преподавателей: человек выбирает себя. Роль меняется вместе с
+                        // выбором, иначе на миг покажется чужое расписание.
                         PickerScreen(
                             items = teachers,
                             teachers = true,
@@ -576,8 +548,8 @@ internal fun App(
                         onUpdate = {
                             scope.launch {
                                 updateError = null
-                                // Запомненная сборка могла уже уйти с сервера (держатся
-                                // две последние): качать ту, что выложена сейчас.
+                                // Запомненная сборка могла уйти с сервера (держатся две последние):
+                                // качать выложенную сейчас.
                                 when (val result = container.updates.check(github = false)) {
                                     is AppUpdate.Check.Available -> update = result.release
                                     AppUpdate.Check.UpToDate -> update = null
@@ -602,8 +574,7 @@ internal fun App(
                         extraGroups = extraGroups,
                         groupsByName = groupsByName,
                         onGroupsByName = { byName -> scope.launch { container.store.setGroupsByName(byName) } },
-                        // Подгруппы своей группы, которых ещё нет среди выбранных, —
-                        // строками с «Добавить», сколько влезет.
+                        // Подгруппы своей группы, ещё не выбранные, — строками с «Добавить», сколько влезет.
                         subgroups = groupName?.let { name -> subgroupsOf(name, groups.orEmpty()) }.orEmpty()
                             .filter { group -> extraGroups.none { it.id == group.id } }
                             .take(MAX_GROUPS - 1 - extraGroups.size),
@@ -664,8 +635,7 @@ internal fun App(
                         unsupported = serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED,
                         sourceUrl = tableUrl,
                         serverSince = serverSince,
-                        // Показать нечего, а сервер уже говорит «нет такой группы» —
-                        // сразу «выбрать заново», как на сайте, а не час «проверьте интернет».
+                        // Показать нечего, сервер говорит «нет такой группы» — сразу «выбрать заново», как на сайте.
                         gone = gone || (notFoundPending && shownSchedule == null),
                         onRepick = {
                             pickTeacher = teacherMode
@@ -681,8 +651,8 @@ internal fun App(
                         onUpdateBadge = {
                             focusUpdate = true
                             screen = Screen.SETTINGS
-                            // «Нужно обновить» пришло раньше, чем полчаса прошлой проверки
-                            // истекли: спросить заново, иначе «Версия» откроется без новой сборки.
+                            // «Нужно обновить» пришло раньше, чем истекли полчаса прошлой проверки:
+                            // спросить заново, иначе «Версия» откроется без сборки.
                             if (update == null) scope.launch {
                                 (container.updates.checkForScreen(force = true) as? AppUpdate.Check.Available)
                                     ?.let { update = it.release }
@@ -701,8 +671,8 @@ internal fun App(
 internal const val LISTS_FRESH_MILLIS = 12L * 60 * 60 * 1000
 
 /**
- * Своё пришло, другие группы — не все. Про прежние пары — только если они
- * есть: у только что добавленной группы их нет.
+ * Своё пришло, другие группы не все. Про прежние пары — только если они есть: у только что
+ * добавленной группы их нет.
  */
 internal fun partialText(missed: List<String>, fresh: Set<String>): String {
     val one = missed.size == 1
@@ -719,16 +689,14 @@ internal fun partialText(missed: List<String>, fresh: Set<String>): String {
 }
 
 /**
- * Почему ручное обновление не удалось — словами для плашки. 503 здесь — не
- * «занят», а «расписания на сервере нет» (docs/api.md); занятость nginx —
- * это 429.
+ * Почему ручное обновление не удалось — словами для плашки. 503 — «расписания на сервере нет»
+ * (docs/api.md); занятость nginx — 429.
  */
 internal fun refreshFailure(error: Throwable, teacher: Boolean = false): String = when (error) {
     is ru.whensclass.data.HttpFailure -> when (error.code) {
         429 -> "Сервер занят, попробуйте через минуту"
         426 -> "Эта версия приложения больше не поддерживается — обновите его"
-        // Первый час после пропажи ([ScheduleStore.gone]): код ответа выглядел
-        // бы поломкой приложения.
+        // Первый час после пропажи ([ScheduleStore.gone]) код ответа выглядел бы поломкой приложения.
         404 -> if (teacher) "Вас не нашлось в таблице. Не вернётся за час — выберите себя заново"
         else "Группы не нашлось в таблице. Не вернётся за час — выберите её заново"
         // 503 — когда снимка нет вовсе (новый сервер, потерянные данные).

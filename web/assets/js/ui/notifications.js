@@ -6,7 +6,7 @@ import { durationShort, tileLabel } from '../format.js';
 import { REMIND_CHOICES, lastRemind, revoked, service } from '../push.js';
 import { CHANNEL } from '../store.js';
 
-/** Выключатель строкой: подпись слева, бегунок справа — SwitchRow приложения. */
+/** Выключатель строкой: подпись слева, бегунок справа (SwitchRow в приложении). */
 function switchRow(label, on, onChange, key) {
   var input = h('input', { type: 'checkbox', role: 'switch', class: 'switch', 'data-key': key });
   input.checked = on;
@@ -91,9 +91,9 @@ export function notifications(app, teacherMode) {
     // Смена группы не дошла до службы — сказать, а не молчать.
     !lost && app.pushBehind() ? h('p', { class: 'warning small' },
       'Сервер ещё не знает о новом выборе: уведомления пока о прежнем расписании.') : null,
-    // Как в приложении: о других группах уведомлений нет.
+    // О других группах уведомлений нет.
     teacherMode ? null : h('p', { class: 'muted small' }, 'Только о вашей группе, не о других.'),
-    // Порядок — как в приложении: напоминание, подсказка, минуты, изменения.
+    // Порядок: напоминание, подсказка, минуты, изменения.
     switchRow('Напоминать о паре', now.remind > 0, function (on) {
       var cur = lost ? now : app.pushIntended();
       change({ changes: cur.changes, remind: on ? (cur.remind || lastRemind()) : 0 });

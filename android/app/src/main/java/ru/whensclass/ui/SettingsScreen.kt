@@ -50,9 +50,9 @@ import ru.whensclass.data.ReleaseDto
 import ru.whensclass.widget.ThemeChoice
 
 /**
- * Настройки и короткий рассказ о данных. Разделы — от частого к разовому:
- * группа, виджеты, уведомления и всё, что им мешает в телефоне; дальше
- * таблица, оформление, версия, данные и «О приложении».
+ * Настройки и короткий рассказ о данных. Разделы — от частого к разовому: группа, виджеты,
+ * уведомления и всё, что им мешает в телефоне; дальше таблица, оформление, версия, данные, «О
+ * приложении».
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,9 +124,8 @@ fun SettingsScreen(
     val scroll = rememberScrollState()
     var updateOffset by remember { mutableIntStateOf(0) }
 
-    // Пришли по значку обновления — сразу прокручиваем к разделу «Версия»
-    // внизу. Один раз за приход: иначе любая правка выше снова уносила бы
-    // экран вниз.
+    // Пришли по значку обновления — сразу к разделу «Версия» внизу. Один раз за приход: иначе любая
+    // правка выше снова уносила бы экран вниз.
     LaunchedEffect(focusUpdate, updateOffset) {
         if (focusUpdate && updateOffset > 0) {
             scroll.animateScrollTo(updateOffset)
@@ -196,15 +195,14 @@ fun SettingsScreen(
             onNotifyUpdates = onNotifyUpdates,
         )
 
-        // Всё, что упирается в настройки телефона, — одним разделом сразу под
-        // уведомлениями: ограничения режут и их, и виджеты.
+        // Всё, что упирается в настройки телефона, — одним разделом сразу под уведомлениями:
+        // ограничения режут и их, и виджеты.
         BackgroundWork(phone, exactAlarms, notifyEnabled)
 
         Section("Расписание") {
             Text(
-                // «Чаще и перед каждой парой» — про сервер; телефон ходит за
-                // расписанием раз в час и при открытии. Куда ведёт ссылка — см.
-                // sheetLink.
+                // «Чаще и перед каждой парой» — про сервер; телефон ходит за расписанием раз в час
+                // и при открытии. Куда ведёт ссылка — см. sheetLink.
                 "Телефон забирает его раз в час и при каждом открытии, сервер " +
                     "читает таблицу колледжа чаще и перед каждой парой. Кнопка ниже " +
                     (if (teacherMode) "откроет таблицу на сегодняшнем дне, а если его в таблице " +
@@ -214,8 +212,7 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            // Постоянное место для ссылки: её хотят и в обычный день —
-            // сверить, показать, посмотреть соседей.
+            // Постоянное место для ссылки: её хотят и в обычный день — сверить, посмотреть соседей.
             val context = LocalContext.current
             ActionButton(
                 label = "Открыть таблицу колледжа",
@@ -274,8 +271,8 @@ fun SettingsScreen(
 private const val GLASS_PREVIEW_MIN_DP = 250
 
 /**
- * Плашка «Стекла»: слева — как оно выглядит (лист со светом, матовая полоска,
- * карточки), справа — название с меткой beta, пояснение и тумблер. Нажимается целиком.
+ * Плашка «Стекла»: слева — как оно выглядит (лист со светом, матовая полоска, карточки), справа —
+ * название с меткой beta, пояснение и тумблер. Нажимается целиком.
  */
 @Composable
 private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
@@ -292,8 +289,7 @@ private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Тесно (крупный шрифт на узком экране) — без картинки: иначе тексту
-        // остаётся столбик в несколько букв, и слова рвутся посреди.
+        // Тесно (крупный шрифт на узком экране) — без картинки: иначе тексту остаётся столбик в несколько букв.
         if (!tight) {
             val glass = if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.75f)
             Box(
@@ -317,8 +313,7 @@ private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
             Spacer(Modifier.width(12.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            // Тесно (крупный шрифт, узкий экран) — метка уходит строкой ниже целиком,
-            // а не буквами столбиком.
+            // Тесно — метка уходит строкой ниже целиком, а не буквами столбиком.
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,

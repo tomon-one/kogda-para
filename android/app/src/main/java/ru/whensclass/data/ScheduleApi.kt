@@ -9,14 +9,14 @@ import okhttp3.Request
 import ru.whensclass.BuildConfig
 
 /**
- * Сервер ответил кодом, а не расписанием. Отдельный класс: 404 на группу —
- * это «группы в таблице больше нет», а не отвалившаяся сеть.
+ * Сервер ответил кодом, а не расписанием. Отдельный класс: 404 на группу — «группы в таблице больше
+ * нет», а не отвалившаяся сеть.
  */
 class HttpFailure(val code: Int, path: String) : IOException("сервер ответил $code на $path")
 
 /**
- * Номер сборки в основном счёте: у tested — номер основной, к которой она идёт
- * (versionCode × 100 + попытка, build.gradle.kts).
+ * Номер сборки в основном счёте: у tested — номер основной, к которой она идёт (versionCode × 100 +
+ * попытка, build.gradle.kts).
  */
 internal fun appBuild(versionCode: Int, channel: String): Int =
     if (channel == "main") versionCode else versionCode / 100
@@ -25,9 +25,8 @@ internal fun appBuild(versionCode: Int, channel: String): Int =
 class TooLarge(limit: Long) : IOException("файл больше объявленных $limit байт")
 
 /**
- * Обращения к серверу. Условные запросы делает кэш OkHttp сам (ETag,
- * If-None-Match, 304 из кэша), поэтому неизменное расписание почти ничего не
- * стоит.
+ * Обращения к серверу. Условные запросы делает кэш OkHttp сам (ETag, If-None-Match, 304), поэтому
+ * неизменное расписание почти ничего не стоит.
  */
 class ScheduleApi(
     cacheDir: java.io.File,
@@ -53,9 +52,8 @@ class ScheduleApi(
         get(if (channel == MAIN) "/v1/app" else "/v1/app?channel=$channel").let(json::decodeFromString)
 
     /**
-     * Самая новая сборка среди выпусков на GitHub; null — ни в одном нет файла.
-     * У tested-сборки выпусков нет: на GitHub только основные, а их файл —
-     * другое приложение.
+     * Самая новая сборка среди выпусков на GitHub; null — ни в одном нет файла. У tested выпусков
+     * нет: на GitHub только основные, их файл — другое приложение.
      */
     fun githubRelease(): ReleaseDto? {
         if (channel != MAIN) return null
@@ -90,27 +88,21 @@ class ScheduleApi(
     ).let(json::decodeFromString)
 
     /**
-     * Скачивает файл обновления в [target] и возвращает число записанных байт.
-     *
-     * Сами, а не системным загрузчиком: тот пишет в общую внешнюю память
-     * (на Android 8–10 туда может залезть любое приложение с правом на неё), не
-     * умеет сказать «файл не дошёл целиком» и сообщает серверу модель телефона.
-     *
-     * Больше [limit] байт не пишем: бесконечный поток иначе тянул бы трафик и
-     * забивал память.
+     * Скачивает файл обновления в [target] и возвращает число записанных байт. Сами, а не системным
+     * загрузчиком: тот пишет в общую внешнюю память (на Android 8–10 туда может залезть любое
+     * приложение), не умеет сказать «файл не дошёл целиком» и сообщает серверу модель телефона.
+     * Больше [limit] байт не пишем: бесконечный поток тянул бы трафик и забивал память.
      */
     fun downloadTo(url: String, target: java.io.File, limit: Long): Long {
         val request = Request.Builder().url(url).build()
-        // Свой клиент без кэша и с долгими сроками: сборка на слабой связи
-        // идёт дольше, чем позволено обычному запросу.
+        // Свой клиент без кэша и с долгими сроками: сборка на слабой связи идёт дольше, чем позволено обычному запросу.
         val downloader = client.newBuilder()
             .cache(null)
             .callTimeout(java.time.Duration.ofMinutes(10))
             .readTimeout(java.time.Duration.ofMinutes(2))
             .build()
         downloader.newCall(request).execute().use { response ->
-            // HttpFailure, а не голый IOException: по коду 429 [updateFailure]
-            // скажет «сервер занят».
+            // HttpFailure, а не голый IOException: по коду 429 [updateFailure] скажет «сервер занят».
             if (!response.isSuccessful) throw HttpFailure(response.code, "загрузку")
             val body = response.body
             if (body.contentLength() > limit) throw TooLarge(limit)
@@ -131,16 +123,15 @@ class ScheduleApi(
     }
 
     /**
-     * Свой ли это адрес: тот же протокол, хост и порт, что у сервера
-     * расписания, или выпуски этого репозитория на GitHub. Файл обновления
-     * качаем только оттуда, а не с любого хоста из ответа /v1/app.
+     * Свой ли адрес: тот же протокол, хост и порт, что у сервера расписания, или выпуски этого
+     * репозитория на GitHub. Файл обновления качаем только оттуда, не с любого хоста из ответа
+     * /v1/app.
      */
     fun isOurs(url: String): Boolean {
         val target = url.toHttpUrlOrNull() ?: return false
         val base = baseUrl.toHttpUrlOrNull()
-        // Только файл сборки, а не любой путь: иначе захваченная служба
-        // отдала бы APK по адресу вроде /v1/что-угодно, а файлы в /download/
-        // раздаёт nginx из каталога root.
+        // Только файл сборки, а не любой путь: иначе захваченная служба отдала бы APK по адресу
+        // вроде /v1/что-угодно, а /download/ раздаёт nginx из каталога root.
         if (base != null && target.scheme == base.scheme && target.host == base.host && target.port == base.port) {
             return OUR_APK.matches(target.encodedPath)
         }
@@ -149,8 +140,8 @@ class ScheduleApi(
     }
 
     private fun get(path: String): String {
-        // Номер сборки — чтобы сервер мог сказать «обновите», когда эта
-        // перестанет его понимать (docs/api.md, README «Что уходит на сервер»).
+        // Номер сборки — чтобы сервер мог сказать «обновите», когда эта перестанет его понимать
+        // (docs/api.md, README «Что уходит на сервер»).
         val request = Request.Builder().url(baseUrl.trimEnd('/') + path)
             .header("X-App-Build", appBuild(BuildConfig.VERSION_CODE, channel).toString())
             .build()

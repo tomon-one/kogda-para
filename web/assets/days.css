@@ -19,7 +19,7 @@
 /* Плашка-новость, не беда: заголовок обычным цветом и крестик справа. */
 .plate-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -6px -10px 0 0; }
 .plate-head .plate-title { color: var(--fg); }
-/* Ожидание, не сбой: как в приложении, без красного. */
+/* Ожидание, не сбой: без красного. */
 .plate-title.plate-quiet { color: var(--fg); }
 .plate-quiet ~ .plate-since { color: var(--muted); }
 
@@ -35,7 +35,7 @@
   margin-bottom: 12px;
 }
 
-/* Рамка сегодняшнего дня — 35 % основного цвета в обеих темах, как в приложении. */
+/* Рамка сегодняшнего дня — 35 % основного цвета в обеих темах. */
 .day.today { border-color: var(--today-border, var(--button-border)); }
 
 .day-title {
@@ -81,10 +81,10 @@
   background: var(--tile);
 }
 
-/* Под последней плиткой — 3, как в приложении (между плитками 4). */
+/* Под последней плиткой — 3 (между плитками 4). */
 .lesson:last-child { margin-bottom: 3px; }
 
-/* «Идёт сейчас» — фоном, цветом и жирностью времени, без рамки, как в приложении. */
+/* «Идёт сейчас» — фоном, цветом и жирностью времени, без рамки. */
 .lesson.now { background: var(--now-bg); }
 
 /* В em, а не px: с крупным шрифтом «09:00–10:30» должно помещаться, как в
@@ -211,7 +211,7 @@
   -webkit-box-orient: vertical;
 }
 
-/* Место у пары не своей группы — серым, как в приложении. */
+/* Место у пары не своей группы — серым. */
 .place.muted, .past .place, .foreign .place { color: var(--muted); }
 /* Строки по 16, как bodySmall в приложении. */
 .sub { font-size: 12px; line-height: 16px; color: var(--muted); }

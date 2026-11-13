@@ -72,7 +72,7 @@ export function weekStrip(day, today) {
   return strip;
 }
 
-/** Палец вбок по полоске — соседняя неделя (влево — следующая), как в приложении. */
+/** Палец вбок по полоске — соседняя неделя (влево — следующая). */
 function swipeWeeks(strip) {
   var x = null;
   var y = 0;
@@ -156,8 +156,8 @@ export function mark(strip, day) {
 var picked = null;
 var touched = false;
 
-// День встаёт на 8 под полоской, как в приложении (headBottom — на 14 под ней):
-// край прошлого дня в промежутке не торчит.
+// День встаёт на 8 под полоской (headBottom в приложении — на 14): край
+// прошлого дня в промежутке не торчит.
 var LANDING = 6;
 
 /** К дню — плавной прокруткой (без неё, если в системе «уменьшить движение»). */
@@ -170,7 +170,7 @@ function go(strip, date) {
   var y = card.getBoundingClientRect().top + window.pageYOffset - headBottom() + LANDING;
   var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Выделен день, к которому пришли: нажатого (воскресенье, невыложенный
-  // будень) в списке может не быть — как в приложении.
+  // будень) в списке может не быть.
   picked = card.getAttribute('data-day');
   touched = false;
   mark(strip, picked);

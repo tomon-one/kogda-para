@@ -161,7 +161,7 @@ export function othersList(app, kind, selfId) {
     if (others.length && (self || favourites.length)) {
       results.appendChild(h('h3', { class: 'section-title' }, teachers ? 'Другие преподаватели' : 'Другие группы'));
     }
-    // По буквам, как в «Найдите себя»: одна карточка на букву.
+    // Одна карточка на букву, как в «Найдите себя».
     lettered(others, function (r) { return r.name; }).forEach(function (section) {
       results.appendChild(h('div', { class: 'letter-section' },
         h('h3', { class: 'letter' }, section.letter),

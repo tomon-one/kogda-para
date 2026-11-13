@@ -14,9 +14,8 @@ import ru.whensclass.work.SyncWorker
 
 class MainActivity : ComponentActivity() {
 
-    // Разрешения и состояние телефона меняются в его настройках, за пределами
-    // приложения, — поэтому перечитываются при каждом возвращении (onResume).
-    // Точное время напоминаний.
+    // Разрешения и состояние телефона меняются в его настройках, за пределами приложения, — поэтому
+    // перечитываются при каждом возвращении (onResume). Точное время напоминаний.
     private val exactAlarms = mutableStateOf(false)
 
     // Уведомления.
@@ -25,17 +24,15 @@ class MainActivity : ComponentActivity() {
     // Каналы, фон, пояс, разрешение на установку.
     private val phone = mutableStateOf(ru.whensclass.notify.PhoneState())
 
-    // Первый onResume идёт сразу за onCreate, где расписание уже запрошено:
-    // второй запрос подряд там ни к чему.
+    // Первый onResume идёт сразу за onCreate, где расписание уже запрошено: второй запрос подряд ни к чему.
     private var started = false
     /** Экран пересоздан поворотом: ближайший onStart — не открытие. */
     private var rotated = false
 
     /**
-     * С чем открыли: день из виджета, настройки из уведомления о версии.
-     * [seq] растёт на каждое нажатие по живому экрану: виджет и уведомления
-     * зовут с SINGLE_TOP, и экран не пересоздаётся, а получает onNewIntent —
-     * без пустого кадра и со своими вкладкой, поиском и прокруткой.
+     * С чем открыли: день из виджета, настройки из уведомления о версии. [seq] растёт на каждое
+     * нажатие по живому экрану: SINGLE_TOP — экран не пересоздаётся, а получает onNewIntent (со
+     * своими вкладкой, поиском и прокруткой).
      */
     private data class Opened(val day: String?, val update: Boolean, val seq: Int)
 
@@ -49,15 +46,13 @@ class MainActivity : ComponentActivity() {
             intent.getBooleanExtra(EXTRA_UPDATE, false),
             opened.value.seq + 1,
         )
-        // Нажатие поверх открытого экрана: onStart не будет, считаем здесь.
-        // Из фона — посчитает onStart.
+        // Нажатие поверх открытого экрана: onStart не будет, считаем здесь; из фона посчитает onStart.
         if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) countOpen()
     }
 
     override fun onStart() {
         super.onStart()
-        // Каждое появление на экране — открытие, возвращение из фона тоже;
-        // поворот — нет.
+        // Каждое появление на экране — открытие, возвращение из фона тоже; поворот — нет.
         if (rotated) rotated = false else countOpen()
     }
 
@@ -69,8 +64,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Часы экрана пересчитываются при каждом возвращении: см. rememberNow.
         ScreenClock.resumes++
-        // Расписание — при каждом открытии, и при возврате из фона тоже:
-        // Activity жива, onCreate не зовётся.
+        // Расписание — при каждом открытии и при возврате из фона: Activity жива, onCreate не зовётся.
         if (started) SyncWorker.now(this)
         started = true
         notifications.value = Notifications.allowed(this)
@@ -78,8 +72,7 @@ class MainActivity : ComponentActivity() {
         val allowed = LessonAlarms.exactAllowed(this)
         if (allowed != exactAlarms.value) {
             exactAlarms.value = allowed
-            // Разрешение сменилось — переставить и напоминания, и звонок для
-            // подсветки на виджетах.
+            // Разрешение сменилось — переставить и напоминания, и звонок для подсветки на виджетах.
             LessonAlarms.reschedule(this)
             lifecycleScope.launch { ru.whensclass.work.MidnightUpdater.schedule(applicationContext) }
         }
@@ -88,17 +81,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // За свежим расписанием сходит сам экран (App): он же и покажет
-        // результат, второй заход отсюда был бы лишним.
+        // За свежим расписанием сходит сам экран (App): он же покажет результат.
         rotated = savedInstanceState != null
 
-        // Виджет мог попросить открыть конкретный день, а уведомление о
-        // новой версии — сразу настройки с кнопкой установки.
+        // Виджет мог попросить конкретный день, а уведомление о версии — настройки с кнопкой установки.
         opened.value = Opened(
             intent?.getStringExtra(EXTRA_DAY),
             intent?.getBooleanExtra(EXTRA_UPDATE, false) == true,
-            // После поворота — прежний счёт: экран помнит, какие нажатия уже
-            // исполнил, и с нуля счёл бы старое нажатие новым.
+            // После поворота — прежний счёт: экран помнит исполненные нажатия, и с нуля счёл бы старое новым.
             savedInstanceState?.getInt(KEY_SEQ) ?: 0,
         )
         setContent {

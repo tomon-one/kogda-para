@@ -3,7 +3,7 @@
 
 /* ——— списки ——— */
 
-/* Поле — 56, от заголовка 16 и до следующего 12: как в приложении. */
+/* Поле — 56, от заголовка 16 и до следующего 12. */
 .search-wrap { padding: 16px 16px 0; }
 
 .search {
@@ -25,7 +25,7 @@
 .search:focus { border-color: var(--primary); outline: none; }
 
 .results { padding: 12px 12px 24px; }
-/* Поиск и список — по краям памятки над ними, как в приложении. */
+/* Поиск и список — по краям памятки над ними. */
 .others .results, .retakes .results { padding: 8px 0 24px; }
 .others .search-wrap, .retakes .search-wrap { padding: 16px 4px 0; }
 
@@ -232,7 +232,7 @@
   appearance: none;
   flex: none;
   position: relative;
-  /* Как в приложении: прямоугольный трек 42×24, квадратный бегунок. */
+  /* Прямоугольный трек 42×24, квадратный бегунок. */
   width: 42px;
   height: 24px;
   margin: 0;
@@ -251,7 +251,7 @@
   background: var(--muted);
 }
 .switch:checked { background: var(--primary); }
-/* Белый в обеих темах, как в приложении. */
+/* Белый в обеих темах. */
 .switch:checked::after { background: #fff; }
 .switch:checked::after { transform: translateX(18px); }
 .switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

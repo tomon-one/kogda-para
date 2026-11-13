@@ -197,7 +197,7 @@ function showNewPlate(had, anchor) {
   window.scrollTo(0, Math.max(0, top + window.pageYOffset - headHeight() - 8));
 }
 
-/** Только ⟳ в шапке — без перестройки экрана (today.js, refreshButton). */
+/** Только ⟳ в шапке, без перестройки экрана (today.js, refreshButton). */
 export function redrawRefresh() {
   var old = root.querySelector('[data-key="refresh"]');
   if (!old) return;
@@ -268,7 +268,7 @@ function scrollToWanted() {
   // Плашки сбоя стоят перед сегодняшним днём — показать и их.
   var prev = card.previousElementSibling;
   var target = prev && prev.className === 'plates' ? prev : card;
-  // На 8 под полоской, как в приложении (headHeight — как раз на 8 под ней).
+  // На 8 под полоской (как headHeight в приложении).
   var y = target.getBoundingClientRect().top + window.pageYOffset - headHeight();
   // Первый день — с самого верха, вместе со вкладками.
   window.scrollTo(0, index === 0 && target === card ? 0 : Math.max(0, y));

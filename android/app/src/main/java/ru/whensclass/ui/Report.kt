@@ -30,9 +30,8 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 
 /**
- * Как приложение рассказывает о себе, когда что-то сломалось. Нужно и в «О
- * приложении», и на обоих экранах выбора, где человек застревает до настроек.
- * Строка нарочно неприметная: нужна раз в жизни.
+ * Как приложение рассказывает о себе, когда что-то сломалось: в «О приложении» и на обоих экранах
+ * выбора, где человек застревает до настроек. Строка нарочно неприметная: нужна раз в жизни.
  */
 @Composable
 fun ReportLink(
@@ -56,8 +55,8 @@ fun ReportLink(
 }
 
 /**
- * Отчёт об ошибке готовым текстом ([collectDiagnostics]): то, чего не видно
- * на скриншоте, — сборка и что она в последний раз получила от сервера.
+ * Отчёт об ошибке готовым текстом ([collectDiagnostics]): то, чего не видно на скриншоте, — сборка
+ * и что она получила от сервера.
  */
 @Composable
 private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
@@ -66,8 +65,7 @@ private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
     // Сведения нужны, когда что-то не так: сбор не должен ронять приложение.
     LaunchedEffect(Unit) {
         report = runCatching { load() }
-            // Не имя класса: в release-сборке R8 его переименует. Текст ошибки
-            // переживает обфускацию.
+            // Не имя класса: в release-сборке R8 его переименует; текст ошибки переживает обфускацию.
             .getOrElse { "Собрать не вышло: " + (it.message ?: "без объяснения") }
     }
     val text = report
@@ -80,9 +78,9 @@ private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 val link = MaterialTheme.colorScheme.primary
                 Text(
-                    // Что уходит — видно ниже целиком, без обещаний «личного нет»:
-                    // в отчёте модель телефона, пояс и у преподавателя — ФИО.
-                    // Имя автора — ссылкой: отсюда как раз и идут писать.
+                    // Что уходит — видно ниже целиком, без обещаний «личного нет»: в отчёте модель
+                    // телефона, пояс и у преподавателя — ФИО. Имя автора — ссылкой: отсюда и идут
+                    // писать.
                     buildAnnotatedString {
                         append("Пришлите это автору в Telegram: ")
                         withLink(
@@ -104,8 +102,7 @@ private fun ReportDialog(load: suspend () -> String, onDismiss: () -> Unit) {
                     Text(
                         text ?: "Сбор сведений…",
                         style = MaterialTheme.typography.bodySmall,
-                        // Ровными столбцами: видно, что это выписка, и её надо
-                        // переслать целиком.
+                        // Ровными столбцами: видно, что это выписка, и её надо переслать целиком.
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier.padding(10.dp),
                     )

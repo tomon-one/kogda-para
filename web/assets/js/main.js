@@ -19,8 +19,8 @@ import { applyTheme, closeReminders, closeStaleChanges, checkWorkerUpdate, count
 
 var installEvent = null;
 
-// Объект app — из state.js: его берут и модули, которые main.js сам
-// импортирует, поэтому здесь он только получает методы.
+// Объект app — из state.js: его берут и модули, которые main.js импортирует,
+// поэтому здесь он только получает методы.
 Object.assign(app, {
   state: state,
   route: parseRoute(),
@@ -51,7 +51,7 @@ Object.assign(app, {
   },
   setTheme: function (theme) {
     store.set('theme', theme);
-    // Без перестройки экрана; цвета меняются сразу, как в приложении.
+    // Без перестройки экрана: цвета меняются сразу.
     applyTheme();
   },
   /** «Стекло» (beta): свет за страницей и матовые полосы (glass.css). */
@@ -174,7 +174,7 @@ function pick(mode, row) {
     var before = repo.chosen();
     if (mode === 'self') repo.selectSelf(row);
     else repo.selectGroup(row);
-    // Напоминание о паре прежней группы — прочь, как в приложении.
+    // Напоминание о паре прежней группы — прочь.
     if (before && before.id !== row.id) closeReminders();
     state.wanted = OPENING;
     // Уведомления — о новой своей группе, а не о прежней.
@@ -304,7 +304,7 @@ if (mixed) {
     }
   } catch (e) { /* без хранилища — не рисковать петлёй */ }
 }
-// Открыли по уведомлению «выберите заново» (sw.js, notificationclick).
+// Открыли по уведомлению «выберите заново» (sw.js).
 if (/[?&]gone=1(&|$)/.test(location.search)) {
   repo.expectGone();
   history.replaceState(history.state, '', location.pathname + location.hash);
@@ -327,7 +327,7 @@ closeStaleChanges(collegeNow().date);
 // Служба должна знать нынешнюю подписку: браузер мог сменить её сам.
 syncPush();
 // Нажатие на уведомление по открытой странице — к своему расписанию, а не к
-// открытому чужому (сервис-воркер, notificationclick).
+// открытому чужому (sw.js).
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', function (event) {
     if (event.data && event.data.t === 'own' && repo.chosen()) {

@@ -11,10 +11,8 @@ import ru.whensclass.AppContainer
 import ru.whensclass.data.RefreshResult
 
 /**
- * Переключение дня в виджете.
- *
- * День хранится в состоянии конкретного виджета, а не в общих настройках:
- * два виджета на экране могут показывать разные дни, и это разумно.
+ * Переключение дня в виджете. День хранится в состоянии конкретного виджета, а не в общих
+ * настройках: два виджета могут показывать разные дни.
  */
 class ShiftDayAction : ActionCallback {
     override suspend fun onAction(
@@ -23,8 +21,8 @@ class ShiftDayAction : ActionCallback {
         parameters: ActionParameters,
     ) {
         val step = parameters[KEY_STEP] ?: return
-        // Границы — те же, что гасят стрелки: дни, что лежат на телефоне. Иначе
-        // быстрое второе нажатие до перерисовки уведёт за край окна.
+        // Границы те же, что гасят стрелки (дни на телефоне): иначе быстрое второе нажатие до
+        // перерисовки уведёт за край окна.
         val schedule = ScheduleWidget.parse(
             runCatching { AppContainer.get(context).store.widgetState() }.getOrNull()?.scheduleJson
         )
@@ -45,9 +43,8 @@ class ShiftDayAction : ActionCallback {
             val next = (current + step).coerceIn(low, high)
             prefs.toMutablePreferences().apply {
                 this[ScheduleWidget.KEY_DAY_OFFSET] = next
-                // Вернулись на день открытия: дальше он снова считается по звонкам.
-                // Только если по звонкам он тот же: листали днём, а вернулись
-                // после последнего звонка — иначе «‹» показал бы тот же завтрашний день.
+                // Вернулись на день открытия: дальше он снова считается по звонкам — только если по
+                // звонкам он тот же, иначе «‹» показал бы тот же завтрашний день.
                 if (next == 0 && base == dayBase(null, schedule, now)) remove(ScheduleWidget.KEY_DAY_BASE)
                 else this[ScheduleWidget.KEY_DAY_BASE] = base.toEpochDay()
             }
@@ -61,8 +58,8 @@ class ShiftDayAction : ActionCallback {
 }
 
 /**
- * Идёт ли нажатое обновление. Отметка старше [BUSY_LIMIT_MS] — след нажатия,
- * процесс которого умер: её не показываем.
+ * Идёт ли нажатое обновление. Отметка старше [BUSY_LIMIT_MS] — след нажатия, процесс которого умер:
+ * её не показываем.
  */
 @androidx.compose.runtime.Composable
 internal fun refreshing(): Boolean {
@@ -74,10 +71,8 @@ internal fun refreshing(): Boolean {
 private const val BUSY_LIMIT_MS = 90_000L
 
 /**
- * Обновление по нажатию на виджете.
- *
- * Идём за расписанием сами, а не через WorkManager: тот вправе отложить
- * задачу на минуты, и нажатие выглядит как не сработавшее.
+ * Обновление по нажатию на виджете. Идём за расписанием сами, не через WorkManager: он вправе
+ * отложить задачу на минуты, и нажатие выглядит несработавшим.
  */
 class RefreshAction : ActionCallback {
     override suspend fun onAction(
@@ -86,13 +81,13 @@ class RefreshAction : ActionCallback {
         parameters: ActionParameters,
     ) {
         val repository = AppContainer.get(context).repository
-        // Обновление уже идёт (другое нажатие, часовой заход, открытие): второе
-        // не запускаем и чужие отметки не трогаем.
+        // Обновление уже идёт (другое нажатие, часовой заход, открытие): второе не запускаем и
+        // чужие отметки не трогаем.
         if (repository.refreshing) return
         mark(context, glanceId, busy = true, done = false, failed = false)
         val result = repository.refresh(force = true)
-        // «Обновлено» на пару секунд: нажавшему нужен ответ и тогда, когда
-        // расписание не изменилось. После неудачи — «не обновилось».
+        // «Обновлено» на пару секунд: нажавшему нужен ответ и когда расписание не изменилось. После
+        // неудачи — «не обновилось».
         val failed = result is RefreshResult.Failed
         mark(context, glanceId, busy = false, done = !failed, failed = failed)
         delay(DONE_MS)
@@ -110,15 +105,14 @@ class RefreshAction : ActionCallback {
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
             prefs.toMutablePreferences().apply {
                 this[ScheduleWidget.KEY_BUSY] = busy
-                // Момент начала: процесс может умереть посреди нажатия, и
-                // «обновляю…» висело бы навсегда ([refreshing]).
+                // Момент начала: процесс может умереть посреди нажатия, и «обновляю…» висело бы
+                // навсегда ([refreshing]).
                 if (busy) this[ScheduleWidget.KEY_BUSY_AT] = System.currentTimeMillis()
                 this[ScheduleWidget.KEY_DONE] = done
                 this[ScheduleWidget.KEY_FAILED] = failed
             }
         }
-        // Кнопка есть на обоих виджетах, а перерисовать нужно тот, на котором
-        // нажали: чужая разметка сюда не встанет.
+        // Кнопка есть на обоих виджетах, перерисовать нужно тот, где нажали: чужая разметка сюда не встанет.
         when (glanceId) {
             in widgetIds(context, ScheduleWidgetReceiver::class.java) ->
                 ScheduleWidget().update(context, glanceId)
