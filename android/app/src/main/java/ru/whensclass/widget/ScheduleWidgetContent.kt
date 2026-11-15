@@ -103,10 +103,10 @@ fun ScheduleWidgetContent(
         when {
             // Обновлять нечего: нажатие ведёт в приложение.
             groupName == null -> MissingHint(
-                "Откройте приложение и выберите группу или себя", colors,
+                NO_GROUP_HINT, colors,
                 open = actionStartActivity(openDay(context, day)),
             )
-            schedule == null -> MissingHint("Расписание ещё не загружено", colors)
+            schedule == null -> MissingHint(NOT_LOADED_HINT, colors)
             today == null -> {
                 val missing = missingDay(
                     schedule, day, serverBroken, checked = checkedToday(fetchedAt, now.toLocalDate()),
@@ -246,67 +246,20 @@ private fun Header(
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    // ФИО целиком не влезает рядом со временем проверки.
-                    if (groupName.count { it == ' ' } >= 2) shortenName(groupName) else groupName,
-                    maxLines = 1,
-                    style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                    // Имя уступает место: статус и ⟳ меряются первыми, иначе на узком виджете режутся.
-                    modifier = GlanceModifier.defaultWeight().clickable(openApp),
-                )
-                // Пометка дня — здесь, а не у даты: рядом со стрелками ей не хватало места.
-                if (unread) {
-                    Text(
-                        " · не прочитан",
-                        maxLines = 1,
-                        style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                        modifier = GlanceModifier.clickable(openApp),
-                    )
-                }
-                // Время последней проверки — служебная мелочь: приглушённым цветом, краснеет только
-                // когда данные протухли.
-                Text(
-                    when {
-                        busy -> " · обновление…"
-                        failed -> " · не обновилось"
-                        // Пропажа и сбой — не «обновлено»: ответ пришёл, но расписание в нём
-                        // прежнее. Группы нет в таблице — нажатие ведёт к «выбрать заново».
-                        gone -> " · нет в таблице"
-                        unsupported -> " · обновите приложение"
-                        // Сбой показываем и когда пары на экране есть (снимок прежний); коротко —
-                        // подробности на плашке в приложении.
-                        serverBroken -> if (editing) " · правка таблицы" else " · сбой"
-                        done -> " · обновлено"
-                        else -> " · " + formatFetchedShort(fetchedAt, nowMillis)
-                    },
-                    maxLines = 1,
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        color = when {
-                            failed || (serverBroken && !editing) || gone || unsupported -> colors.error
-                            busy || done -> colors.accent
-                            else -> colors.textDim
-                        },
-                    ),
-                    modifier = GlanceModifier.clickable(
-                        if (gone || unsupported) openApp else actionRunCallback<RefreshAction>(),
-                    ),
-                )
-                // Отдельным текстом, а не хвостом времени: внутри одного текста значок встаёт по
-                // базовой линии и висит выше цифр. Показывается всегда: иначе высота строки
-                // меняется.
-                Text(
-                    " ⟳",
-                    maxLines = 1,
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        color = when {
-                            failed -> colors.error
-                            busy || done -> colors.accent
-                            else -> colors.textDim
-                        },
-                    ),
-                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+                StatusLine(
+                    groupName = groupName,
+                    fetchedAt = fetchedAt,
+                    nowMillis = nowMillis,
+                    busy = busy,
+                    done = done,
+                    failed = failed,
+                    serverBroken = serverBroken,
+                    editing = editing,
+                    gone = gone,
+                    unsupported = unsupported,
+                    unread = unread,
+                    colors = colors,
+                    openApp = openApp,
                 )
             }
         }

@@ -97,11 +97,11 @@ class WeekWidget : GlanceAppWidget() {
                 when {
                     // Обновлять нечего — нажатие ведёт в приложение.
                     state?.groupName == null -> MissingHint(
-                        "Откройте приложение и выберите группу или себя", colors,
+                        NO_GROUP_HINT, colors,
                         open = actionStartActivity(openDay(context, today)),
                     )
 
-                    schedule == null -> MissingHint("Расписание ещё не загружено", colors)
+                    schedule == null -> MissingHint(NOT_LOADED_HINT, colors)
                     // Проверяем то, что рисуется, а не то, что пришло: прожитые дни виджет
                     // выбрасывает. Пустая неделя объясняется как пустой день у дневного виджета
                     // ([missingDay]).
@@ -179,47 +179,20 @@ private fun Header(
                 modifier = GlanceModifier.fillMaxWidth().clickable(openApp),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    groupName?.let { if (it.count { c -> c == ' ' } >= 2) shortenName(it) else it }
-                        .orEmpty(),
-                    maxLines = 1,
-                    style = TextStyle(fontSize = 11.sp, color = colors.textDim),
-                    modifier = GlanceModifier.defaultWeight().clickable(openApp),
-                )
-                Text(
-                    when {
-                        busy -> " · обновление…"
-                        failed -> " · не обновилось"
-                        // Пропажа и сбой — как в дневном виджете.
-                        gone -> " · нет в таблице"
-                        unsupported -> " · обновите приложение"
-                        serverBroken -> if (editing) " · правка таблицы" else " · сбой"
-                        done -> " · обновлено"
-                        else -> " · " + formatFetchedShort(fetchedAt, nowMillis)
-                    },
-                    maxLines = 1,
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        color = when {
-                            failed || (serverBroken && !editing) || gone || unsupported -> colors.error
-                            busy || done -> colors.accent
-                            else -> colors.textDim
-                        },
-                    ),
-                    // Группы нет в таблице — в приложение, к «выбрать заново».
-                    modifier = GlanceModifier.clickable(
-                        if (gone || unsupported) openApp else actionRunCallback<RefreshAction>(),
-                    ),
-                )
-                // Всегда: пропадая, значок менял бы ширину строки.
-                Text(
-                    " ⟳",
-                    maxLines = 1,
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        color = if (busy || done) colors.accent else colors.textDim,
-                    ),
-                    modifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()),
+                StatusLine(
+                    groupName = groupName,
+                    fetchedAt = fetchedAt,
+                    nowMillis = nowMillis,
+                    busy = busy,
+                    done = done,
+                    failed = failed,
+                    serverBroken = serverBroken,
+                    editing = editing,
+                    gone = gone,
+                    unsupported = unsupported,
+                    unread = false,
+                    colors = colors,
+                    openApp = openApp,
                 )
             }
         }

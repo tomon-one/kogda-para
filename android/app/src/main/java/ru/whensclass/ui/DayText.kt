@@ -183,9 +183,16 @@ internal fun daySummary(lessons: List<LessonDto>, groups: List<String>, bells: M
 /** День будний, пришёл с сервера и без своих пар — для «повезло дважды». */
 internal fun freeOwnDay(day: DayDto, groups: List<String>): Boolean {
     val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: return false
-    if (day.absent || day.unread == UnreadDay.MISSING || date.dayOfWeek == DayOfWeek.SUNDAY) return false
-    return if (groups.isEmpty()) day.lessons.isEmpty() else day.lessons.none { 0 in it.slots }
+    val own = if (groups.isEmpty()) day.lessons.isEmpty() else day.lessons.none { 0 in it.slots }
+    return freeOwnDay(date, day.absent, day.unread, own)
 }
+
+/** То же для виджета: снимок там — только своя группа, чужих пар в дне нет. */
+internal fun freeOwnDay(date: LocalDate, absent: Boolean, unread: UnreadDay?, lessons: List<LessonDto>): Boolean =
+    freeOwnDay(date, absent, unread, lessons.isEmpty())
+
+private fun freeOwnDay(date: LocalDate, absent: Boolean, unread: UnreadDay?, own: Boolean): Boolean =
+    own && !absent && unread != UnreadDay.MISSING && date.dayOfWeek != DayOfWeek.SUNDAY
 
 /**
  * День, которого в ответе нет, а по листу он есть (воскресенье, праздник). Не фраза свободного дня

@@ -340,8 +340,8 @@ internal fun noNextLesson(
     editing: Boolean = false,
 ): String {
     // «…группу или себя»: виджет ставит и преподаватель.
-    if (groupName == null) return "Откройте приложение и выберите группу или себя"
-    if (schedule == null) return "Расписание не загружено"
+    if (groupName == null) return NO_GROUP_HINT
+    if (schedule == null) return NOT_LOADED_HINT
     if (unsupported) return "Нужно обновить приложение"
     if (broken) return if (editing) "Колледж правит таблицу" else "Сбой: расписание не обновляется"
     // Пар впереди нет, но день сервер не прочитал — это не «пар нет».

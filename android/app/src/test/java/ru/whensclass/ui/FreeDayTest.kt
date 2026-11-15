@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.LessonDto
+import ru.whensclass.data.UnreadDay
 
 /** Что пишет день без пар: преподавателю — только прежние фразы. */
 class FreeDayTest {
@@ -43,6 +44,18 @@ class FreeDayTest {
         assertTrue(freeOwnDay(foreign, listOf("ИСП-924/1", "ИСП-924/2")))
         assertFalse(freeOwnDay(foreign.copy(lessons = foreign.lessons.map { it.copy(slots = listOf(0)) }), listOf("ИСП-924/1", "ИСП-924/2")))
         assertEquals(LocalDate.parse("2026-09-30").dayOfWeek.value, 3)
+    }
+
+    @Test
+    fun `непрочитанный день свободен только когда пары прежние`() {
+        val kept = DayDto(date = "2026-09-30", unreadMark = "kept")
+        val missing = DayDto(date = "2026-09-30", unreadMark = "missing")
+        val date = LocalDate.parse("2026-09-30")
+        assertTrue(freeOwnDay(kept, emptyList()))
+        assertFalse(freeOwnDay(missing, emptyList()))
+        // Виджет считает те же поля той же функцией — разойтись с экраном не может.
+        assertTrue(freeOwnDay(date, absent = false, unread = kept.unread, lessons = kept.lessons))
+        assertFalse(freeOwnDay(date, absent = false, unread = missing.unread, lessons = missing.lessons))
     }
 
     @Test

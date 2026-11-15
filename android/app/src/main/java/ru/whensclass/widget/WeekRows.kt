@@ -74,9 +74,10 @@ internal fun Week(
                     DayTitle(day, colors)
                     if (day.lessons.isEmpty()) {
                         // Следующий — будний, пришёл с сервера и тоже пустой: «повезло дважды».
+                        // Правило одно с экраном ([ru.whensclass.ui.freeOwnDay]).
                         val nextFree = all.getOrNull(all.indexOf(day) + 1)?.let {
-                            it.lessons.isEmpty() && !it.absent && it.unread == null &&
-                                it.date.dayOfWeek != java.time.DayOfWeek.SUNDAY && it.date == day.date.plusDays(1)
+                            it.date == day.date.plusDays(1) &&
+                                ru.whensclass.ui.freeOwnDay(it.date, it.absent, it.unread, it.lessons)
                         } == true
                         EmptyLine(day.date, colors, day.absent, day.unread != null, teacher, nextFree)
                     } else {
