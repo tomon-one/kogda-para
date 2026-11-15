@@ -133,12 +133,12 @@ class ScheduleStore(internal val context: Context) {
 
     /** Закреплённые преподаватели — вверху списка. */
     val pinnedTeachers: Flow<List<String>> = context.dataStore.data.map {
-        it[KEY_PINNED_TEACHERS]?.split("\n")?.filter(String::isNotBlank).orEmpty()
+        it[KEY_PINNED_TEACHERS].asLines()
     }
 
     /** Закреплённые группы — для тех, кто смотрит чужие расписания. */
     val pinnedGroups: Flow<List<String>> = context.dataStore.data.map {
-        it[KEY_PINNED_GROUPS]?.split("\n")?.filter(String::isNotBlank).orEmpty()
+        it[KEY_PINNED_GROUPS].asLines()
     }
 
     /**
@@ -165,14 +165,22 @@ class ScheduleStore(internal val context: Context) {
             it[KEY_TEACHER_NAME] = name
             // Повторный выбор себя же не стирает расписание и не снимает пропажу.
             if (unchanged) return@edit
-            it.remove(KEY_GONE_SINCE)
-            it.remove(KEY_GONE)
-            it.remove(KEY_SCHEDULE)
-            it.remove(KEY_GENERATED_AT)
-            it.remove(KEY_FETCHED_AT)
-            it.remove(KEY_PENDING_CHANGES)
-            it.remove(KEY_CHANGES_HELD)
+            clearChoice(it)
         }
+    }
+
+    /**
+     * Прежний выбор больше не в силе: пропажа, снимок, время загрузки и непрочитанные изменения —
+     * прочь. Иначе «обновлено в …» и «добавилась пара» относились бы к прежней группе или себе.
+     */
+    private fun clearChoice(prefs: androidx.datastore.preferences.core.MutablePreferences) {
+        prefs.remove(KEY_GONE_SINCE)
+        prefs.remove(KEY_GONE)
+        prefs.remove(KEY_SCHEDULE)
+        prefs.remove(KEY_GENERATED_AT)
+        prefs.remove(KEY_FETCHED_AT)
+        prefs.remove(KEY_PENDING_CHANGES)
+        prefs.remove(KEY_CHANGES_HELD)
     }
 
     /** Прочитано ли приветствие при первом запуске. */
@@ -240,16 +248,7 @@ class ScheduleStore(internal val context: Context) {
             it[KEY_GROUP_NAME] = name
             // Та же группа — пропажа не снята, снимок прежний.
             if (unchanged) return@edit
-            it.remove(KEY_GONE_SINCE)
-            it.remove(KEY_GONE)
-            // Прошлое расписание и время его загрузки — прочь сразу, иначе «обновлено в …»
-            // относилось бы к прежнему выбору.
-            it.remove(KEY_SCHEDULE)
-            it.remove(KEY_GENERATED_AT)
-            it.remove(KEY_FETCHED_AT)
-            // Непрочитанные изменения — про прежнюю группу.
-            it.remove(KEY_PENDING_CHANGES)
-            it.remove(KEY_CHANGES_HELD)
+            clearChoice(it)
             // Остальные выбранные группы остаются, кроме новой своей: дважды одну не показываем.
             val extras = readExtras(it)
             if (extras.any { extra -> extra.id == id }) writeExtras(it, extras.filter { extra -> extra.id != id })

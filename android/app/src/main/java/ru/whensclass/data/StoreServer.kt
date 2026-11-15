@@ -71,7 +71,7 @@ suspend fun ScheduleStore.clearUnreachable() {
  * уведомление с тем же id заменяет прежнее, и неосмотренная отмена пропала бы.
  */
 suspend fun ScheduleStore.pendingChanges(): List<Pair<String, String>> =
-    context.dataStore.data.first()[KEY_PENDING_CHANGES].orEmpty().split("\n")
+    context.dataStore.data.first()[KEY_PENDING_CHANGES].asLines()
         .mapNotNull { line -> line.split("\t", limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
 
 suspend fun ScheduleStore.putPendingChanges(lines: List<Pair<String, String>>) {
