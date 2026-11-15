@@ -156,8 +156,8 @@ export function mark(strip, day) {
 var picked = null;
 var touched = false;
 
-// День встаёт на 8 под полоской (headBottom в приложении — на 14): край
-// прошлого дня в промежутке не торчит.
+// День встаёт на 8 под полоской (headHeight отдаёт 14): край прошлого дня
+// в промежутке не торчит.
 var LANDING = 6;
 
 /** К дню — плавной прокруткой (без неё, если в системе «уменьшить движение»). */
@@ -167,7 +167,7 @@ function go(strip, date) {
   for (var i = 0; i < cards.length && !card; i++) if (cards[i].getAttribute('data-day') >= date) card = cards[i];
   card = card || cards[cards.length - 1];
   if (!card) return;
-  var y = card.getBoundingClientRect().top + window.pageYOffset - headBottom() + LANDING;
+  var y = card.getBoundingClientRect().top + window.pageYOffset - headHeight() + LANDING;
   var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Выделен день, к которому пришли: нажатого (воскресенье, невыложенный
   // будень) в списке может не быть.
@@ -216,8 +216,13 @@ window.addEventListener('scroll', function () {
  * Низ того, что прилипает сверху: шапка и под ней полоска с полями. Считается
  * как у прилипшей, даже пока страница в самом верху и полоска ниже.
  */
-function headBottom() {
-  var head = document.querySelector('.head');
+/**
+ * Сколько сверху закрыто: шапка (прилипает — с её высотой), ряд разделов, полоска дней
+ * и её прилипающий отступ. Одно правило на прокрутку к дню (здесь) и на перестройку
+ * экрана (render.js): расходились на зазор полоски, и карточка уезжала под неё.
+ */
+export function headHeight() {
+  var head = document.querySelector('.head') || document.querySelector('.topbar');
   var strip = document.querySelector('.week-strip');
   // Шапка не прилипает (альбомная) — после прокрутки её над полоской не будет.
   var sticky = head && window.getComputedStyle(head).position === 'sticky';
@@ -233,7 +238,7 @@ function headBottom() {
  * прошлого дня, торчащий из-под полоски, не перехватывает выделение.
  */
 export function topDay() {
-  var top = headBottom();
+  var top = headHeight();
   var cards = document.querySelectorAll('[data-day]');
   for (var i = 0; i < cards.length; i++) {
     var rect = cards[i].getBoundingClientRect();

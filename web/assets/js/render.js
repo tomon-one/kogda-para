@@ -7,7 +7,7 @@ import * as store from './store.js';
 import { h, clear, fitLabels } from './ui/dom.js';
 import { dayIndex } from './schedule.js';
 import { mainScreen, refreshButton } from './ui/today.js';
-import { forgetPick, rowShift, syncRow } from './ui/week.js';
+import { forgetPick, headHeight, syncRow } from './ui/week.js';
 import { pickerScreen } from './ui/lists.js';
 import { settingsScreen } from './ui/settings.js';
 import { welcomeScreen } from './ui/welcome.js';
@@ -205,14 +205,6 @@ export function redrawRefresh() {
   var focused = document.activeElement === old;
   old.parentNode.replaceChild(fresh, old);
   if (focused) fresh.focus();
-}
-
-/** Сколько сверху закрыто: шапка с именем открытого преподавателя или группы и полоска. */
-function headHeight() {
-  var head = root.querySelector('.head') || root.querySelector('.topbar');
-  // Полоска дней прилипает под шапкой — вместе с полями.
-  var strip = root.querySelector('.week-strip');
-  return stuck(head) + rowShift() + (strip ? strip.offsetHeight + 14 : 0);
 }
 
 /** Под шапкой прилипает полоска дней: высота шапки меняется и при смене ширины окна. */
