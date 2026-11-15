@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     # base64url. Пусто — уведомлений сайта нет, остальное работает.
     vapid_key: str | None = None
 
+    # Токен сообщества ВКонтакте для бота. Пусто — бота нет, остальное
+    # работает. Служба читает его из WHENSCLASS_VK_TOKEN и никуда не пишет.
+    vk_token: str | None = None
+
+    # Id сообщества «Когда пара? НГОК — расписание», которому принадлежит
+    # токен. Переопределяется WHENSCLASS_VK_GROUP_ID.
+    vk_group_id: int = 243323133
+
     state_dir: str = "var"
     # Свой домен — канарейке, чтобы сверять срок отдаваемого сертификата.
     domain: str = "kogda-para-nsk.ru"

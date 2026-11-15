@@ -28,6 +28,7 @@ from .service.crosscheck import CrossCheck
 from .service.refresher import Refresher, state_dir
 from .service.retakes import RetakesSource
 from .storage.snapshot_store import SnapshotStore
+from .vk.bot import VkBot
 
 log = logging.getLogger(__name__)
 
@@ -183,9 +184,19 @@ async def lifespan(app: FastAPI):
         coalesce=True,
     )
 
+    # Бот ВКонтакте: отдельный поток, живёт, пока есть токен. Без него —
+    # обычный сервис, без лишнего потока и без обращений к VK.
+    vk_bot = None
+    if settings.vk_token:
+        vk_bot = VkBot(store)
+        vk_bot.start()
+        log.info("бот ВК запущен")
+
     try:
         yield
     finally:
+        if vk_bot is not None:
+            vk_bot.shutdown()
         scheduler.shutdown(wait=False)
         refresher.stopping()
 
