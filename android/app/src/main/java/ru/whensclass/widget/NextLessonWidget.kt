@@ -1,7 +1,6 @@
 package ru.whensclass.widget
 
 import android.content.Context
-import android.content.Intent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.collectAsState
@@ -37,7 +36,6 @@ import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.UnreadDay
 import ru.whensclass.data.isKnownWebinar
-import ru.whensclass.ui.MainActivity
 
 /**
  * Маленький виджет: одна пара — идущая сейчас или ближайшая следующая. Для тех, у кого на домашнем
@@ -77,15 +75,7 @@ class NextLessonWidget : GlanceAppWidget() {
                     .padding(horizontal = 10.dp, vertical = 7.dp)
                     .clickable(
                         // Приложение — сразу на том дне, о котором говорит виджет.
-                        actionStartActivity(
-                            Intent(LocalContext.current, MainActivity::class.java)
-                                .addFlags(
-                                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
-                                )
-                                .putExtra(MainActivity.EXTRA_DAY, next?.day?.toString()),
-                        ),
+                        actionStartActivity(openDay(LocalContext.current, next?.day)),
                     ),
             ) {
                 if (lesson == null) {

@@ -306,16 +306,18 @@ private fun TapButton(
 /** Насколько тесно виджету — от этого зависит, что показывать. */
 internal data class Fit(val narrow: Boolean, val dense: Boolean, val scale: Float = 1f)
 
-/** Приложение открывается на том же дне, что показывает виджет. */
-internal fun openDay(context: android.content.Context, day: LocalDate): Intent =
-    Intent(context, MainActivity::class.java)
-        .putExtra(MainActivity.EXTRA_DAY, day.toString())
+/** Приложение открывается на том же дне, что показывает виджет; null — на том, что откроется само. */
+internal fun openDay(context: android.content.Context, day: LocalDate?): Intent {
+    val intent = Intent(context, MainActivity::class.java)
         // CLEAR_TOP: без него каждое нажатие клало бы в стек ещё копию экрана; SINGLE_TOP: без него
         // CLEAR_TOP пересоздаёт живой экран.
         .addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP,
         )
+    if (day != null) intent.putExtra(MainActivity.EXTRA_DAY, day.toString())
+    return intent
+}
 
 
 /**

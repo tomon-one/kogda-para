@@ -141,12 +141,6 @@ fun ScheduleDays(
             wanted = startDay ?: openingDay(schedule.bellsOn(today), now).toString()
         }
     }
-    // Человек сам повёл список — ждать обещанного дня не надо, иначе обновление утащит его обратно.
-    LaunchedEffect(listState) {
-        listState.interactionSource.interactions.collect {
-            if (it is androidx.compose.foundation.interaction.DragInteraction.Start) wanted = null
-        }
-    }
     LaunchedEffect(wanted, days) {
         val want = wanted ?: return@LaunchedEffect
         if (days.isEmpty()) return@LaunchedEffect
@@ -187,9 +181,12 @@ fun ScheduleDays(
     // пока он стоит внизу: последние дни не докрутить до верха.
     var picked by remember { mutableStateOf<String?>(null) }
     var touched by remember { mutableStateOf(false) }
+    // Человек сам повёл список: ждать обещанного дня не надо (обновление утащило бы обратно), и
+    // нажатый в полоске день больше не держит выделение.
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect {
             if (it is androidx.compose.foundation.interaction.DragInteraction.Start) {
+                wanted = null
                 touched = true
                 if (listState.canScrollForward) picked = null
             }
