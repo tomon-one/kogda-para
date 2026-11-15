@@ -44,6 +44,7 @@ import ru.whensclass.data.RoomsDto
 import ru.whensclass.widget.currentLessonNumber
 import ru.whensclass.widget.formatDayRange
 import ru.whensclass.widget.lessonTime
+import ru.whensclass.widget.dayPrefix
 import ru.whensclass.widget.parseTime
 import ru.whensclass.widget.plural
 import java.time.LocalDate
@@ -161,12 +162,8 @@ internal fun RoomsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 days.forEach { d ->
                     val day = runCatching { LocalDate.parse(d) }.getOrNull()
-                    val label = when (day) {
-                        today -> "Сегодня"
-                        today.plusDays(1) -> "Завтра"
-                        null -> d
-                        else -> formatDayRange(day, day).substringBefore(',')
-                    }
+                    val label = day?.let { dayPrefix(it, today)?.replaceFirstChar(Char::uppercase) }
+                        ?: if (day == null) d else formatDayRange(day, day).substringBefore(',')
                     FilterChip(
                         // Тот же день ещё раз — повтор, если он не загрузился.
                         selected = d == selected, onClick = { if (d == active) retry++ else choose(d, 0) },

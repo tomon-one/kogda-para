@@ -395,7 +395,7 @@ private fun DayCard(
                 date?.takeIf { isToday }?.let { holidayNote(it.monthValue, it.dayOfMonth) },
             )
             DayHeader(
-                date?.let(::formatDayTitle) ?: day.date, isToday, past, daySummary(day.lessons, groups, bells),
+                date?.let { formatDayTitle(it, today) } ?: day.date, isToday, past, daySummary(day.lessons, groups, bells),
                 bottom = if (notes.isEmpty()) 8.dp else 4.dp,
             )
 

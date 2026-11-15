@@ -40,16 +40,22 @@ fun nextTick(bells: Map<String, List<String>>, now: LocalDateTime): LocalDateTim
     return listOfNotNull(bell, midnight).min()
 }
 
+/**
+ * «сегодня», «завтра» или «вчера»; иначе null. Одно правило на заголовок дня, виджет и чипы
+ * кабинетов: считавшие сами расходились с подсветкой в первые минуты после полуночи.
+ */
+fun dayPrefix(day: LocalDate, today: LocalDate = collegeToday()): String? = when (day) {
+    today -> "сегодня"
+    today.plusDays(1) -> "завтра"
+    today.minusDays(1) -> "вчера"
+    else -> null
+}
+
 /** Короткая подпись дня для виджета: «сегодня, 7 сентября», «пт, 11 сентября». */
-fun formatDayTitleShort(day: LocalDate): String {
-    val today = collegeToday()
-    return when (day) {
-        today -> "сегодня, " + day.format(SHORT_DAY)
-        today.plusDays(1) -> "завтра, " + day.format(SHORT_DAY)
-        // Виджет листается и назад, к прожитым дням недели.
-        today.minusDays(1) -> "вчера, " + day.format(SHORT_DAY)
-        else -> day.format(DateTimeFormatter.ofPattern("EEE, d MMMM", RU))
-    }
+fun formatDayTitleShort(day: LocalDate, today: LocalDate = collegeToday()): String {
+    val prefix = dayPrefix(day, today)
+    if (prefix != null) return "$prefix, " + day.format(SHORT_DAY)
+    return day.format(DateTimeFormatter.ofPattern("EEE, d MMMM", RU))
 }
 
 /** Подпись дня в недельном виджете: «пн, 8 сент.». */
@@ -75,15 +81,9 @@ fun formatDayRange(from: LocalDate, to: LocalDate): String = when {
     else -> from.format(SHORT_DAY) + " – " + to.format(SHORT_DAY)
 }
 
-fun formatDayTitle(day: LocalDate): String {
-    val today = collegeToday()
+fun formatDayTitle(day: LocalDate, today: LocalDate = collegeToday()): String {
     // «Вчера» помогает: прошедшие дни остаются в списке, и их надо отличать с одного взгляда.
-    val prefix = when (day) {
-        today -> "сегодня"
-        today.plusDays(1) -> "завтра"
-        today.minusDays(1) -> "вчера"
-        else -> null
-    }
+    val prefix = dayPrefix(day, today)
     val date = day.format(DAY_FORMAT)
     return if (prefix != null) "$prefix, $date" else date
 }
