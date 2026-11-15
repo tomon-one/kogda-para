@@ -1,9 +1,5 @@
 package ru.whensclass.ui
 
-import android.os.Build
-import android.Manifest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -27,13 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -91,20 +83,7 @@ internal fun App(
     val container = remember { AppContainer.get(context) }
     val scope = rememberCoroutineScope()
 
-    // Разрешение на уведомления спрашиваем сами: с Android 13 оно не выдаётся по умолчанию. Отказ
-    // ничего не ломает — в настройках останется подсказка.
-    val askNotifications = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { }
-    // Один раз, а не на каждое пересоздание экрана (поворот).
-    var askedNotifications by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (askedNotifications) return@LaunchedEffect
-        askedNotifications = true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notifications) {
-            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
+    AskNotificationPermission(notifications)
 
     val groupName by container.store.groupName.collectAsState(initial = null)
     val groupId by container.store.groupId.collectAsState(initial = null)
@@ -372,22 +351,7 @@ internal fun App(
         ThemeChoice.SYSTEM -> isSystemInDarkTheme()
     }
 
-    // Тема внутри приложения, а значки системной полосы снаружи: без связки светлая тема при тёмной
-    // системе даёт белые значки на белом.
-    val view = LocalView.current
-    SideEffect {
-        val window = (view.context as android.app.Activity).window
-        WindowCompat.getInsetsController(window, view).apply {
-            isAppearanceLightStatusBars = !dark
-            isAppearanceLightNavigationBars = !dark
-        }
-        // До Android 10 полосу навигации красит enableEdgeToEdge — по теме
-        // системы, а не приложения.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            @Suppress("DEPRECATION")
-            window.navigationBarColor = (if (dark) DarkScheme else LightScheme).background.toArgb()
-        }
-    }
+    ApplyDarkTheme(dark)
 
     val scheme = when {
         glow && dark -> GlassDarkScheme
