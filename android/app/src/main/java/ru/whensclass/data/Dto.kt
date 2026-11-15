@@ -48,6 +48,16 @@ data class ScheduleDto(
     fun isNeighbours(lesson: LessonDto): Boolean =
         !isTeacher && lesson.groups != null && lesson.groups != groupName
 
+    /** Своя пара: не отменена и не у соседней подгруппы — о такой напоминаем и её зовём ближайшей. */
+    fun isMine(lesson: LessonDto): Boolean = !lesson.isCancelled && !isNeighbours(lesson)
+
+    /**
+     * Отменённые половинки пары того же номера: её подгруппе пора идти на чужую, и напоминание
+     * говорит об этом строкой «Отменена» ([LessonDto.isCancelled]).
+     */
+    fun cancelledHalf(day: DayDto, number: Int): List<LessonDto> =
+        day.lessons.filter { it.number == number && it.isCancelled && !isNeighbours(it) }
+
     /**
      * Свои пары: без пришедших из соседней подгруппы и без своей подписи. Для перевода снимка
      * сборок до 0.1.4 ([ScheduleStore.migrateGroups]).

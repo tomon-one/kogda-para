@@ -287,14 +287,14 @@ private fun findNext(schedule: ScheduleDto, now: LocalDateTime): NextLesson? {
     val today = now.toLocalDate()
     val bells = schedule.bellsOn(today)
     // Только свои и не отменённые; у преподавателя свои все.
-    fun mine(lesson: LessonDto) = !lesson.isCancelled && !schedule.isNeighbours(lesson)
+    fun mine(lesson: LessonDto) = schedule.isMine(lesson)
     val todayLessons = schedule.days.firstOrNull { it.date == today.toString() }
         ?.lessons.orEmpty().filter(::mine)
 
     fun found(date: LocalDate, lesson: LessonDto, day: List<LessonDto>): NextLesson {
         // Отменённая половинка того же номера — её подгруппе эта пара не своя.
-        val off = schedule.days.firstOrNull { it.date == date.toString() }?.lessons.orEmpty()
-            .filter { it.number == lesson.number && it.isCancelled && !schedule.isNeighbours(it) }
+        val off = schedule.days.firstOrNull { it.date == date.toString() }
+            ?.let { schedule.cancelledHalf(it, lesson.number) }.orEmpty()
         val then = day.filter { it.number > lesson.number }.minByOrNull { it.number }
         return NextLesson(
             date, lesson, day.filter { it !== lesson && it.number == lesson.number }, off = off,

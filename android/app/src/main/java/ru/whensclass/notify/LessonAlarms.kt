@@ -119,7 +119,7 @@ object LessonAlarms {
             var busyUntil: LocalDateTime? = null
             // Пары соседней подгруппы не свои: о них не напоминаем, и их конец не глушит
             // напоминание о своей. У преподавателя свои все.
-            val own = day.lessons.filter { !it.isCancelled && !schedule.isNeighbours(it) }
+            val own = day.lessons.filter(schedule::isMine)
             // Блок пополам — две пары одного номера в разных кабинетах: какая его, неизвестно, и
             // напоминание называет обе.
             for ((_, same) in own.groupBy { it.number }.toSortedMap()) {
@@ -145,9 +145,7 @@ object LessonAlarms {
                         ownGroup = schedule.groupName.takeUnless { schedule.isTeacher },
                         also = same.drop(1),
                         // Отменённая половинка — строкой «Отменена»: иначе её подгруппа пошла бы на чужую пару.
-                        off = day.lessons.filter {
-                            it.number == lesson.number && it.isCancelled && !schedule.isNeighbours(it)
-                        },
+                        off = schedule.cancelledHalf(day, lesson.number),
                     ),
                 )
             }
