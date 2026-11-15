@@ -28,11 +28,11 @@ import ru.whensclass.notify.Notifications
 import ru.whensclass.work.MidnightUpdater
 
 class ScheduleRepository(
-    private val context: Context,
-    private val api: ScheduleApi,
-    private val store: ScheduleStore,
+    internal val context: Context,
+    internal val api: ScheduleApi,
+    internal val store: ScheduleStore,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    internal val json = Json { ignoreUnknownKeys = true }
 
     /** Живёт с процессом, как и сам репозиторий (AppContainer). */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -200,7 +200,7 @@ class ScheduleRepository(
     /** Перерисовать виджеты по тому, что уже лежит на телефоне. */
     suspend fun redrawWidgets() = updateWidgets()
 
-    private suspend fun updateWidgets() {
+    internal suspend fun updateWidgets() {
         ru.whensclass.widget.redrawWidgets(context)
     }
 
@@ -306,157 +306,18 @@ class ScheduleRepository(
         val fresh = mutableSetOf<String>()
     }
 
-    /** Списки групп и преподавателей: сохранённый — сразу и без сети, свежий — следом, чтобы не крутить спиннер. */
-    suspend fun cachedGroups(): List<GroupDto> = withContext(Dispatchers.IO) {
-        store.groupsJson.first()
-            ?.let { runCatching { json.decodeFromString<GroupsDto>(it).groups }.getOrNull() }
-            .orEmpty()
-    }
-
     /**
      * Расписание сервер этой сборке не отдаст: «обновите» на экране, в виджетах и одним
      * уведомлением, а не сбой сервера.
      */
-    private suspend fun markUnsupported(sourceUrl: String? = null) {
-        val first = store.serverStatus.first() != STATUS_UNSUPPORTED
-        store.clearUnreachable()
-        store.putServerState(STATUS_UNSUPPORTED, sourceUrl, null)
-        updateWidgets()
-        if (first) {
-            ru.whensclass.notify.Notifications.newVersion(
-                context,
-                "Нужно обновить приложение",
-                "Сервер больше не поддерживает эту версию, расписание не обновляется. " +
-                    "Нажмите, чтобы установить новую.",
-            )
-        }
-    }
-
-    private suspend fun <T> loadList(load: () -> T): T? {
-        val answer = runCatching(load)
-        if ((answer.exceptionOrNull() as? HttpFailure)?.code == 426) markUnsupported()
-        return answer.getOrNull()
-    }
-
-    /** Кабинеты дня: ответ, или «дня в таблице нет» (404), или сбой — оба пусты. */
-    suspend fun rooms(date: String?): RoomsAnswer = withContext(Dispatchers.IO) {
-        val answer = runCatching { api.rooms(date) }
-        val code = (answer.exceptionOrNull() as? HttpFailure)?.code
-        if (code == 426) markUnsupported()
-        RoomsAnswer(answer.getOrNull(), missing = code == 404, answered = code != null)
-    }
-
-    /** Лист пересдач; body null — не пришёл: `answered` — сервер ответил ошибкой, иначе нет связи. */
-    suspend fun retakes(): RetakesAnswer = withContext(Dispatchers.IO) {
-        val answer = runCatching { api.retakes() }
-        val code = (answer.exceptionOrNull() as? HttpFailure)?.code
-        if (code == 426) markUnsupported()
-        RetakesAnswer(answer.getOrNull(), answered = code != null)
-    }
-
-    /** Свежий список групп; null — сервер не ответил. */
-    suspend fun freshGroups(): List<GroupDto>? = withContext(Dispatchers.IO) {
-        val fresh = loadList { api.groups() } ?: return@withContext null
-        store.putGroups(json.encodeToString(fresh))
-        fresh.groups
-    }
-
-    suspend fun cachedTeachers(): List<GroupDto> = withContext(Dispatchers.IO) {
-        store.teachersJson.first()
-            ?.let { runCatching { json.decodeFromString<TeachersDto>(it).teachers }.getOrNull() }
-            .orEmpty()
-    }
-
-    /** Свежий список преподавателей; null — сервер не ответил. */
-    suspend fun freshTeachers(): List<GroupDto>? = withContext(Dispatchers.IO) {
-        val fresh = loadList { api.teachers() } ?: return@withContext null
-        store.putTeachers(json.encodeToString(fresh))
-        fresh.teachers
-    }
-
     /**
      * Закреплённые преподаватели — за исправленным именем. Id, которого нет в свежем списке,
      * спрашиваем у сервера: он отвечает расписанием исправленного (docs/api.md).
      */
-    suspend fun followRenamedPins(groups: List<GroupDto>, teachers: List<GroupDto>) =
-        withContext(Dispatchers.IO) {
-            // Группы по старому имени сервер не сводит (404): закреплённая остаётся и видна, если группа вернётся.
-            val teacherIds = teachers.map { it.id }.toSet()
-            for (old in store.pinnedTeachers.first().filter { it !in teacherIds }) {
-                val now = runCatching { api.teacher(old, days = 1).groupId }.getOrNull() ?: continue
-                if (now != old && now in teacherIds) store.replacePinnedTeacher(old, now)
-            }
-        }
-
-    /** Расписание преподавателя — берём по запросу, на телефоне не храним. */
-    suspend fun teacherSchedule(teacherId: String): ScheduleAnswer = withContext(Dispatchers.IO) {
-        loadOpened { api.teacher(teacherId, from = weekStart(), days = DAYS) }
-    }
-
-    /** Открытое расписание и код ошибки, если сервер ответил ею: «проверьте интернет» — только без ответа. */
-    private suspend fun loadOpened(load: () -> ScheduleDto): ScheduleAnswer {
-        val answer = runCatching(load)
-        val code = (answer.exceptionOrNull() as? HttpFailure)?.code
-        if (code == 426) markUnsupported()
-        return ScheduleAnswer(answer.getOrNull(), code)
-    }
-
-    /** Студент выбрал группу — заодно это и означает, что он студент. */
-    suspend fun selectGroup(group: GroupDto): RefreshResult {
-        // Смотрим до смены роли: после неё «та же группа» уже не значит «ничего не изменилось».
-        val unchanged = !store.teacherMode() && store.currentGroupId() == group.id
-        withContext(NonCancellable) {
-            choiceLock.withLock {
-                store.setTeacherMode(false)
-                store.selectGroup(group.id, group.name, unchanged)
-            }
-            followChoice()
-        }
-        return afterSelection()
-    }
-
-    /** Преподаватель выбрал себя — дальше всё работает как у студента. */
-    suspend fun selectSelfAsTeacher(teacher: GroupDto): RefreshResult {
-        val unchanged = store.teacherMode() && store.teacherId.first() == teacher.id
-        withContext(NonCancellable) {
-            choiceLock.withLock {
-                store.setTeacherMode(true)
-                store.selectTeacher(teacher.id, teacher.name, unchanged)
-            }
-            followChoice()
-        }
-        return afterSelection()
-    }
-
     /**
      * Добавить группы к остальным — в конец, без своей и без повторов, пока влезает [MAX_GROUPS].
      * Виджеты и напоминания они не трогают.
      */
-    suspend fun addExtraGroups(groups: List<GroupDto>): RefreshResult? {
-        val own = store.currentGroupId()
-        var added = emptyList<ExtraGroup>()
-        // Чтение и запись одной правкой: фон мог отметить пропажу между ними.
-        store.editExtras { current ->
-            added = groups
-                .filter { group -> group.id != own && current.none { it.id == group.id } }
-                .distinctBy { it.id }
-                .map { ExtraGroup(it.id, it.name) }
-            (current + added).take(MAX_GROUPS - 1)
-        }
-        if (added.isEmpty()) return null
-        // Добавленная группа не пришла — повторить при связи: значок без пар читается как «пар нет».
-        val result = refresh(force = true)
-        if (result is RefreshResult.Failed || result is RefreshResult.Partial) {
-            ru.whensclass.work.SyncWorker.now(context)
-        }
-        return result
-    }
-
-    /** Убрать группу из остальных — вместе с её парами на экране, сразу и без сети. */
-    suspend fun removeExtraGroup(id: String) {
-        store.editExtras { list -> list.filter { it.id != id } }
-    }
-
     /**
      * После смены выбора: перерисовать, переставить напоминания по лежащему на телефоне и сходить
      * за новым; не вышло — повторит фон.
@@ -466,35 +327,11 @@ class ScheduleRepository(
      * Виджеты и будильники — за записанным выбором, неотменяемым куском: иначе остались бы
      * напоминания прежней группы.
      */
-    private suspend fun followChoice() {
-        updateWidgets()
-        LessonAlarms.reschedule(context)
-    }
-
-    private suspend fun afterSelection(): RefreshResult {
-        val result = try {
-            refresh(force = true)
-        } catch (error: CancellationException) {
-            // Загрузку оборвали («назад», поворот): без повтора снимка не будет до следующего захода.
-            ru.whensclass.work.SyncWorker.now(context)
-            throw error
-        }
-        if (result is RefreshResult.Failed) {
-            ru.whensclass.work.SyncWorker.now(context)
-        }
-        return result
-    }
-
-    /** Расписание группы — для просмотра чужого, без смены роли. */
-    suspend fun groupSchedule(groupId: String): ScheduleAnswer = withContext(Dispatchers.IO) {
-        loadOpened { api.schedule(groupId, from = weekStart(), days = DAYS) }
-    }
-
     /** Обновления — по одному: параллельные затирали бы флаги друг друга, а старый ответ мог лечь поверх нового. */
     private val refreshLock = Mutex()
     // Сверка выбора и запись ответа — одним куском: иначе выбор, записанный между ними, получил бы
     // снимок прежней группы. Короткий: сеть под ним не ждут.
-    private val choiceLock = Mutex()
+    internal val choiceLock = Mutex()
 
     /** Идёт ли сейчас обновление. */
     val refreshing: Boolean get() = refreshLock.isLocked
