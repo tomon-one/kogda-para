@@ -177,6 +177,7 @@ internal fun ChannelNotice(onDone: () -> Unit) {
 }
 
 internal const val CHANNEL_URL = "https://t.me/kogda_para_news"
+internal const val VK_URL = "https://vk.com/kogda_para_nsk"
 
 /**
  * Плашка «группы в таблице больше нет»: сервер отвечает 404 при здоровом состоянии — группу

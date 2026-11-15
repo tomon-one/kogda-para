@@ -337,6 +337,7 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
         // Ссылки — в том же порядке, что в «О сайте».
         Link("Сайт", "https://kogda-para-nsk.ru")
         Link("Новости в Telegram", CHANNEL_URL)
+        Link("Новости во ВКонтакте", VK_URL)
         Link("Нашли ошибку? Напишите автору в Telegram", "https://t.me/toomonn")
         ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth(), asLink = true)
         Link("Исходный код", "https://github.com/tomon-one/kogda-para")
