@@ -90,6 +90,14 @@ def test_find_group_garbage():
     assert find_group(snap, "бла-бла").kind == "help"
 
 
+def test_find_group_как_пишут_люди():
+    # Подсказка обещает: регистр, пробелы и дефисы не важны.
+    snap = make_snapshot([group("ИСП-924/1", "isp-924-1")], {}, [MONDAY])
+    assert find_group(snap, "исп 924 1").kind == "group"
+    assert find_group(snap, "ИСП 924-1").kind == "group"
+    assert find_group(snap, "исп-924/1").kind == "group"
+
+
 def test_find_group_greeting():
     snap = make_snapshot([group("ИСП-924/2", "isp-924-2")], {}, [MONDAY])
     assert find_group(snap, "/start").kind == "help"
