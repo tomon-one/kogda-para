@@ -112,6 +112,7 @@ internal fun App(
     val serverStatus by container.store.serverStatus.collectAsState(initial = "ok")
     val tableUrl by container.store.sourceUrl.collectAsState(initial = null)
     val serverSince by container.store.serverSince.collectAsState(initial = null)
+    val serverChecked by container.store.serverChecked.collectAsState(initial = null)
     val gone by container.store.gone.collectAsState(initial = false)
     val notFoundPending by container.store.notFoundPending.collectAsState(initial = false)
     val teacherName by container.store.teacherName.collectAsState(initial = null)
@@ -493,6 +494,7 @@ internal fun App(
                         unsupported = serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED,
                         sourceUrl = tableUrl,
                         serverSince = serverSince,
+                        serverChecked = serverChecked,
                         // Показать нечего, сервер говорит «нет такой группы» — сразу «выбрать заново», как на сайте.
                         gone = gone || (notFoundPending && shownSchedule == null),
                         onRepick = {

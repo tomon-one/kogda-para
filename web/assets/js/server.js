@@ -44,12 +44,14 @@ export function health(meta) {
   return meta.refresh || meta.status;
 }
 
-export function putServerState(status, srcUrl, since) {
+export function putServerState(status, srcUrl, since, checked) {
   var old = serverState();
   var next = { status: status || 'ok' };
   // Адрес таблицы — только если пришёл: без него плашке сбоя некуда вести.
   if (srcUrl || old.src_url) next.src_url = srcUrl || old.src_url;
   if (since) next.since = since;
+  // Когда служба последний раз читала таблицу: о телефоне говорит fetchedAt, и путать их нельзя.
+  if (checked) next.checked = checked;
   store.set('server', next);
 }
 

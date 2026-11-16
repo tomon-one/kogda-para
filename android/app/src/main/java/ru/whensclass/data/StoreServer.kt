@@ -8,12 +8,19 @@ import ru.whensclass.BuildConfig
 // ScheduleStore: что приложение помнит о сервере — состояние, недозвоны,
 // придержанные изменения, пропажа своей группы.
 
-suspend fun ScheduleStore.putServerState(status: String, sourceUrl: String?, since: String? = null) {
+suspend fun ScheduleStore.putServerState(
+    status: String,
+    sourceUrl: String?,
+    since: String? = null,
+    checked: String? = null,
+) {
     context.dataStore.edit {
         it[KEY_SERVER_STATUS] = status
         sourceUrl?.let { url -> it[KEY_SOURCE_URL] = url }
         if (status == "ok" || since == null) it.remove(KEY_SERVER_SINCE)
         else it[KEY_SERVER_SINCE] = since
+        // Время службы, не телефона: fetchedAt обновляется при каждой проверке с телефона.
+        if (checked == null) it.remove(KEY_SERVER_CHECKED) else it[KEY_SERVER_CHECKED] = checked
         // Отказ относится к этой сборке: после обновления его надо забыть.
         if (status == STATUS_UNSUPPORTED) it[KEY_UNSUPPORTED_BUILD] = BuildConfig.VERSION_CODE.toString()
     }

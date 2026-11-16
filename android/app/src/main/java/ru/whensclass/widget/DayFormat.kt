@@ -1,6 +1,7 @@
 package ru.whensclass.widget
 
 import ru.whensclass.data.LessonDto
+import ru.whensclass.data.STATUS_EDITING
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -98,6 +99,37 @@ fun formatFetchedAt(millis: Long): String {
         LocalDate.now() -> "проверено в $time"
         LocalDate.now().minusDays(1) -> "проверено вчера в $time"
         else -> "проверено " + moment.format(DateTimeFormatter.ofPattern("d MMMM в HH:mm", RU))
+    }
+}
+
+/**
+ * Строка о службе под названием группы: читает ли она таблицу и когда читала. null — сказать
+ * нечего (сервер не отвечает телефону или сборка не та), и тогда остаётся время проверки телефона.
+ * Путать их нельзя: `checked` — часы службы, `fetchedAt` — телефона.
+ */
+fun serviceLine(
+    status: String,
+    checkedIso: String?,
+    sinceIso: String?,
+    today: LocalDate = LocalDate.now(),
+): String? = when (status) {
+    "ok" -> checkedIso
+        ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+        ?.takeIf { it > 0 }
+        ?.let { "Служба читает таблицу, " + formatFetchedAt(it) }
+    STATUS_EDITING -> sinceIso?.let { "Колледж правит таблицу " + sinceShort(it, today) }
+    "stale" -> sinceIso?.let { "Служба не читает таблицу " + sinceShort(it, today) }
+    else -> null
+}
+
+/** «с 13:00», «со вчерашнего дня», «с 5 сентября» — начало сбоя коротко, для шапки. */
+fun sinceShort(iso: String, today: LocalDate = LocalDate.now()): String? {
+    val since = runCatching { Instant.parse(iso) }.getOrNull() ?: return null
+    val local = LocalDateTime.ofInstant(since, ZoneId.systemDefault())
+    return when (local.toLocalDate()) {
+        today -> "с " + local.format(DateTimeFormatter.ofPattern("HH:mm", RU))
+        today.minusDays(1) -> "со вчерашнего дня"
+        else -> "с " + local.format(SHORT_DAY)
     }
 }
 

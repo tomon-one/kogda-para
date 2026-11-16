@@ -181,6 +181,37 @@ class DayFormatTest {
     }
 
     @Test
+    fun `строка о службе — читает таблицу или молчит`() {
+        val now = java.time.Instant.now()
+        val checked = now.toString()
+        // Часы службы — отдельно от «проверено» телефона.
+        assertTrue(serviceLine("ok", checked, null)!!.startsWith("Служба читает таблицу, проверено в"))
+        // Сбоя нет, времени чтения нет — сказать нечего.
+        assertNull(serviceLine("ok", null, null))
+        assertNull(serviceLine("ok", "не дата", null))
+        // Сервер не отвечает телефону или сборка не та — тоже нечего: останется время телефона.
+        assertNull(serviceLine("unreachable", checked, "2026-09-11T04:00:00Z"))
+        assertNull(serviceLine("unsupported", checked, "2026-09-11T04:00:00Z"))
+        assertEquals(
+            "Служба не читает таблицу с 04:00",
+            serviceLine("stale", checked, "2026-09-11T04:00:00Z", today = LocalDate.of(2026, 9, 11)),
+        )
+        assertEquals(
+            "Колледж правит таблицу со вчерашнего дня",
+            serviceLine("editing", checked, "2026-09-11T04:00:00Z", today = LocalDate.of(2026, 9, 12)),
+        )
+    }
+
+    @Test
+    fun `начало сбоя коротко — сегодня время, вчера словами, раньше дата`() {
+        // Тесты идут в UTC: 04:00 — это 04:00 и на «местных» часах.
+        assertEquals("с 04:00", sinceShort("2026-09-11T04:00:00Z", LocalDate.of(2026, 9, 11)))
+        assertEquals("со вчерашнего дня", sinceShort("2026-09-11T04:00:00Z", LocalDate.of(2026, 9, 12)))
+        assertEquals("с 11 сентября", sinceShort("2026-09-11T04:00:00Z", LocalDate.of(2026, 9, 15)))
+        assertNull(sinceShort("не дата"))
+    }
+
+    @Test
     fun `пары считаются по номерам — блок пополам не вторая пара`() {
         val lessons = listOf(
             LessonDto(number = 1, subject = "Право"),

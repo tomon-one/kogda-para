@@ -342,7 +342,7 @@ function refreshOnce(force) {
         store.remove('unreachable');
         store.set('lastOk', now);
         var state = health(meta);
-        putServerState(state, meta.src_url, state === 'ok' ? null : meta.since);
+        putServerState(state, meta.src_url, state === 'ok' ? null : meta.since, meta.checked);
       } else if (online() && !busy) {
         // Мерило — последний ответ сервера, а не цепочка неудач: сайт
         // открывают редко, и цепочки при редких заходах не видно. Молчит

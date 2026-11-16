@@ -7,7 +7,7 @@ import { othersList } from './lists.js';
 import { retakesActive, retakesView } from './retakes.js';
 import { roomsView } from './rooms.js';
 import { weekStrip } from './week.js';
-import { formatDurationLong, formatFetchedAt, formatSince, plural, tallySince } from '../time.js';
+import { formatDurationLong, formatFetchedAt, formatSince, plural, sinceShort, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE, STATUS_EDITING, openingDate } from '../repo.js';
 import { SECTIONS, isSection, tabOrder } from '../state.js';
@@ -119,6 +119,28 @@ export function refreshLabel(app) {
   return null;
 }
 
+/**
+ * Тихая строка под названием группы. Говорит о службе, а не о телефоне: время
+ * проверки телефона — `fetchedAt`, и смешивать их нельзя. Нечего сказать о
+ * службе (сервер не отвечает телефону, сборка не та) — остаётся время телефона.
+ */
+function serviceLine(app) {
+  var server = app.server();
+  if (server.status === 'ok' && server.checked) {
+    var ms = Date.parse(server.checked);
+    if (!isNaN(ms)) return 'Служба читает таблицу, ' + formatFetchedAt(ms);
+  }
+  if (server.status === STATUS_EDITING) {
+    var edited = sinceShort(server.since);
+    if (edited) return 'Колледж правит таблицу ' + edited;
+  }
+  if (server.status === 'stale') {
+    var broken = sinceShort(server.since);
+    if (broken) return 'Служба не читает таблицу ' + broken;
+  }
+  return formatFetchedAt(app.fetchedAt());
+}
+
 function topbar(app, own) {
   var title = h('h1', { class: 'topbar-title name' }, own ? own.name : '');
   onLongPress(title, function () { showTally(app); });
@@ -128,7 +150,7 @@ function topbar(app, own) {
   return h('header', { class: 'topbar' },
     h('div', { class: 'title-block' },
       title,
-      h('div', { class: 'fetched' }, formatFetchedAt(app.fetchedAt()))),
+      h('div', { class: 'fetched' }, serviceLine(app))),
     refresh,
     h('button', {
       type: 'button', class: 'icon-button', 'aria-label': 'Настройки', title: 'Настройки',

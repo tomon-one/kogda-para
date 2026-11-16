@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  addDays, collegeNow, dayOfYear, dayRange, dayTitle, formatDurationLong, formatSince, hourOf, plural, weekStart,
+  addDays, collegeNow, dayOfYear, dayRange, dayTitle, formatDurationLong, formatSince, hourOf, plural, sinceShort, weekStart,
   weekday,
 } from '../assets/js/time.js';
 import {
@@ -68,6 +68,15 @@ test('давность сбоя округляется вниз', () => {
   assert.match(formatSince(since, at(60)), /— уже 1 час$/);
   assert.match(formatSince(since, at(47 * 60 + 59)), /— уже 47 часов$/);
   assert.match(formatSince(since, at(48 * 60)), /— уже 2 дня$/);
+});
+
+test('начало сбоя коротко: сегодня — время, вчера — словами, раньше — дата', () => {
+  const since = '2026-09-11T04:00:00Z';
+  const base = Date.parse(since);
+  assert.match(sinceShort(since, base), /^с \d\d:\d\d$/);
+  assert.equal(sinceShort(since, base + 26 * 3600000), 'со вчерашнего дня');
+  assert.match(sinceShort(since, base + 4 * 86400000), /^с \d{1,2} [а-я]+$/);
+  assert.equal(sinceShort('не дата', base), null);
 });
 
 test('подписи пары', () => {

@@ -65,6 +65,9 @@ class ScheduleStore(internal val context: Context) {
     /** С какого момента сервер лежит (ISO, UTC); null, когда всё в порядке. */
     val serverSince: Flow<String?> = context.dataStore.data.map { it[KEY_SERVER_SINCE] }
 
+    /** Когда служба последний раз читала таблицу (ISO, UTC); null — ещё ни разу. */
+    val serverChecked: Flow<String?> = context.dataStore.data.map { it[KEY_SERVER_CHECKED] }
+
     /** Сервер отказал прежней сборке (426), а приложение обновили: отказ к нынешней не относится. */
     suspend fun forgetUnsupportedAfterUpdate() {
         context.dataStore.edit {

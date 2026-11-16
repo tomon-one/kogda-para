@@ -395,7 +395,7 @@ class ScheduleRepository(
             }
             if (meta != null) {
                 store.clearUnreachable()
-                store.putServerState(meta.health, meta.sourceUrl, meta.since)
+                store.putServerState(meta.health, meta.sourceUrl, meta.since, meta.checked)
                 announceStale(meta.health, meta.since)
             } else if (!busy && networkUp()) {
                 val now = java.time.Instant.now()

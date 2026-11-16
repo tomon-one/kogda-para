@@ -212,6 +212,20 @@ export function formatSince(iso, nowMs) {
 }
 
 /**
+ * «с 13:00», «со вчерашнего дня», «с 5 сентября» — коротко о начале сбоя для
+ * тихой строки в шапке; подробно и с давностью — formatSince на плашке.
+ */
+export function sinceShort(iso, nowMs) {
+  var since = parseIso(iso);
+  if (isNaN(since)) return null;
+  if (nowMs === undefined) nowMs = Date.now();
+  var day = localDate(since);
+  if (day === localDate(nowMs)) return 'с ' + localTime(since);
+  if (day === addDays(localDate(nowMs), -1)) return 'со вчерашнего дня';
+  return 'с ' + localDayMonth(since);
+}
+
+/**
  * «с сегодняшнего дня», «со вчерашнего дня», «с 23 сентября». День начала
  * счёта — по часам человека, «сегодня» — колледжа.
  */

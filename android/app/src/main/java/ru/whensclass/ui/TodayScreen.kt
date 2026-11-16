@@ -65,6 +65,7 @@ import ru.whensclass.data.ScheduleStore
 import ru.whensclass.data.sheetLink
 import ru.whensclass.widget.collegeToday
 import ru.whensclass.widget.formatFetchedAt
+import ru.whensclass.widget.serviceLine
 import ru.whensclass.widget.plural
 
 
@@ -113,6 +114,8 @@ fun TodayScreen(
     sourceUrl: String? = null,
     /** С какого момента сервер лежит (ISO, UTC) — для давности на плашке. */
     serverSince: String? = null,
+    /** Когда служба читала таблицу (ISO, UTC) — строка под названием группы. */
+    serverChecked: String? = null,
     /** Группы (преподавателя) в таблице больше нет — сервер отвечает 404. */
     gone: Boolean = false,
     onRepick: () -> Unit = {},
@@ -214,7 +217,18 @@ fun TodayScreen(
                             },
                         )
                         Text(
-                            formatFetchedAt(fetchedAt),
+                            // О службе, а не о телефоне; телефона время — только когда служба молчит.
+                            serviceLine(
+                                status = when {
+                                    unreachable -> ru.whensclass.data.STATUS_UNREACHABLE
+                                    editing -> ru.whensclass.data.STATUS_EDITING
+                                    unsupported -> ru.whensclass.data.STATUS_UNSUPPORTED
+                                    serverBroken -> "stale"
+                                    else -> "ok"
+                                },
+                                checkedIso = serverChecked,
+                                sinceIso = serverSince,
+                            ) ?: formatFetchedAt(fetchedAt),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

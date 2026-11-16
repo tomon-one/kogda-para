@@ -291,6 +291,8 @@ data class MetaDto(
     @SerialName("src_url") val sourceUrl: String? = null,
     /** С какого момента сервер не обновляется — только при `status` не `ok`. */
     @SerialName("since") val since: String? = null,
+    /** Когда служба последний раз читала таблицу (UTC); null — ещё ни разу. */
+    @SerialName("checked") val checked: String? = null,
     /**
      * Состояние обновления без непрочитанных дней одной-двух групп. Прежним версиям сервер отдаёт
      * такие дни общим `stale`.
