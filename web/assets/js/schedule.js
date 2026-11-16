@@ -3,7 +3,7 @@
 // DayList.kt, DayFormat.kt).
 
 import { addDays, dayOfYear, isDate, plural, weekday } from './time.js';
-import { isCancelled, isOnline } from './format.js';
+import { isCancelled, isOnline, onlineLabel, pairLabel, roomLabel } from './format.js';
 
 /** Дней в окне: эта неделя и следующая, с понедельника. */
 export var DAYS = 14;
@@ -237,6 +237,74 @@ export function currentLessonNumber(bells, day, now) {
     }
   }
   return null;
+}
+
+/**
+ * «Где преподаватель сейчас» — только по расписанию: идущая пара (номер, место,
+ * группы, до скольки), окно между парами или «пар больше нет». Перемен и уходов
+ * не знаем, об этом говорит подпись рядом. null — сказать нечего: день служба не
+ * прочитала. `now` — {date, sec} (collegeNow).
+ */
+export function teacherNow(schedule, now) {
+  var day = null;
+  (schedule.days || []).forEach(function (d) { if (d.d === now.date) day = d; });
+  if (!day) return 'Сегодня пар нет';
+  // Что в этот день, служба не знает: «свободен» было бы выдумкой.
+  if (day.un) return null;
+  if (day.absent) return 'Сегодня выходной';
+  var bells = dayBells(schedule, day);
+  var lessons = (day.l || []).filter(function (l) { return !isCancelled(l); });
+  if (!lessons.length) return 'Сегодня пар нет';
+
+  var current = currentLessonNumber(bells, now.date, now);
+  if (current != null) {
+    var at = lessons.filter(function (l) { return l.n === current; });
+    if (at.length) {
+      var parts = ['Сейчас ' + pairLabel(current)];
+      var place = placeOf(at);
+      if (place) parts.push(place);
+      var groups = groupsOf(at);
+      if (groups) parts.push(groups);
+      var range = bells[String(current)] || [];
+      if (range[1]) parts.push('до ' + range[1]);
+      return parts.join(', ');
+    }
+  }
+
+  var windows = [];
+  lessons.forEach(function (l) {
+    var range = bells[String(l.n)] || [];
+    var start = parseTime(range[0]);
+    if (start != null) windows.push({ start: start, end: parseTime(range[1]), from: range[0], to: range[1] });
+  });
+  var next = windows.filter(function (w) { return w.start > now.sec; })
+    .sort(function (a, b) { return a.start - b.start; })[0];
+  if (!next) return 'На сегодня пар больше нет';
+  var previous = windows.filter(function (w) { return w.end != null && w.end <= now.sec; })
+    .sort(function (a, b) { return b.end - a.end; })[0];
+  return previous ? 'Свободен с ' + previous.to + ' до ' + next.from : 'Свободен до ' + next.from;
+}
+
+/** Место пары: «онлайн», «каб. 214»; у блока в двух кабинетах — через запятую. */
+function placeOf(lessons) {
+  var online = lessons.filter(isOnline)[0];
+  if (online) return onlineLabel(online);
+  var rooms = [];
+  lessons.forEach(function (l) {
+    var room = roomLabel(l.r);
+    if (room && rooms.indexOf(room) < 0) rooms.push(room);
+  });
+  return rooms.join(', ') || null;
+}
+
+/** Группы пары: у преподавателя подпись стоит у каждой. */
+function groupsOf(lessons) {
+  var names = [];
+  lessons.forEach(function (l) {
+    var name = (l.gr || '').trim();
+    if (name && names.indexOf(name) < 0) names.push(name);
+  });
+  return names.join(', ') || null;
 }
 
 /**

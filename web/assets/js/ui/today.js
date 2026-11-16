@@ -10,6 +10,7 @@ import { weekStrip } from './week.js';
 import { formatDurationLong, formatFetchedAt, formatSince, plural, sinceShort, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE, STATUS_EDITING, openingDate } from '../repo.js';
+import { teacherNow } from '../schedule.js';
 import { SECTIONS, isSection, tabOrder } from '../state.js';
 
 var CHANNEL_URL = 'https://t.me/kogda_para_news';
@@ -389,6 +390,15 @@ function chosenView(app, kind, id) {
   } else {
     var missing = explainMissing(app, other.schedule, false, null);
     if (other.failed && other.schedule) box.appendChild(h('p', { class: 'nothing' }, 'Не обновилось — на экране прежнее.'));
+    // «Сейчас» — над днями: искать сегодняшний день не надо.
+    if (!missing && kind === 'teachers') {
+      var line = teacherNow(other.schedule, app.now());
+      if (line) {
+        box.appendChild(h('div', { class: 'card teacher-now' },
+          h('div', { class: 'teacher-now-line' }, line),
+          h('div', { class: 'teacher-now-note' }, 'По расписанию — перемен и уходов не знаем.')));
+      }
+    }
     // Плашки — перед днём, на котором список откроется: вечером это завтра.
     box.appendChild(missing || dayCards(other.schedule, app.now(), platesEl, openingDate(other.schedule)));
   }

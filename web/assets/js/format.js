@@ -169,6 +169,11 @@ export function sheetLink(schedule, day, fallback) {
   return base;
 }
 
+/** «3-я пара» — о том, что идёт сейчас (pairLabel в приложении). */
+export function pairLabel(number) {
+  return number + '-я пара';
+}
+
 var ORDINALS = ['Первая', 'Вторая', 'Третья', 'Четвёртая', 'Пятая', 'Шестая'];
 
 /** «Вторая группа», «Третья группа» — заголовок выбора следующей (ordinalGroup в GroupMarks.kt). */

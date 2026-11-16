@@ -224,6 +224,7 @@ fun TeacherScreen(
             teacherList = listName == "Список преподавателей",
             plates = plates,
             today = now.toLocalDate(),
+            now = now,
             subjects = subjects,
             onBack = { close() },
         )
@@ -346,6 +347,7 @@ private fun ChosenTeacher(
     teacherList: Boolean,
     plates: (@Composable () -> Unit)?,
     today: java.time.LocalDate,
+    now: java.time.LocalDateTime,
     subjects: ru.whensclass.data.SubjectNames,
     onBack: () -> Unit,
 ) {
@@ -399,15 +401,40 @@ private fun ChosenTeacher(
             }
             // Дней нет — не пустой экран, а объяснение с выходом к таблице, как у своего расписания.
             else -> if (!explainMissing(schedule, today, null)) {
-                ScheduleDays(
-                    schedule = schedule,
-                    today = today,
-                    weekStrip = true,
-                    header = plates,
-                    dragSink = dragSink,
-                    subjects = subjects,
-                )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // «Сейчас» — над днями: искать сегодняшний день не надо. Только у преподавателя
+                    // из списка: открытый из «Пересдач» — не тот, о ком спрашивают.
+                    if (teacherList) teacherNow(schedule, now)?.let { TeacherNowCard(it) }
+                    ScheduleDays(
+                        modifier = Modifier.weight(1f),
+                        schedule = schedule,
+                        today = today,
+                        weekStrip = true,
+                        header = plates,
+                        dragSink = dragSink,
+                        subjects = subjects,
+                    )
+                }
             }
+        }
+    }
+}
+
+/** Что у преподавателя сейчас — строкой по расписанию и честной подписью под ней. */
+@Composable
+private fun TeacherNowCard(line: String) {
+    CardFrame(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(line, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "По расписанию — перемен и уходов не знаем.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

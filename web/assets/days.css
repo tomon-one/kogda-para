@@ -20,6 +20,14 @@
 .plate-title.plate-quiet { color: var(--fg); }
 .plate-quiet ~ .plate-since { color: var(--muted); }
 
+/* «Где преподаватель сейчас»: что идёт или окно между парами. */
+.teacher-now {
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.teacher-now-line { font-size: 14px; line-height: 22px; font-weight: 600; }
+.teacher-now-note { font-size: 12px; line-height: 16px; color: var(--muted); }
+
 /* ——— дни ——— */
 
 /* День — карточка, пары в ней — плитки: видно, где кончается одна пара и

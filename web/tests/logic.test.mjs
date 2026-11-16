@@ -13,7 +13,7 @@ import {
 import {
   coversDay,
   bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daySummary, openingDay, daysWithGaps, freeDay, freeOwnDay,
-  stateDayText, stateWord,
+  stateDayText, stateWord, teacherNow,
   lessonTime, ownOnly,
   onlyAt, shortLabels, subgroupsOf, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
@@ -77,6 +77,36 @@ test('начало сбоя коротко: сегодня — время, вч�
   assert.equal(sinceShort(since, base + 26 * 3600000), 'со вчерашнего дня');
   assert.match(sinceShort(since, base + 4 * 86400000), /^с \d{1,2} [а-я]+$/);
   assert.equal(sinceShort('не дата', base), null);
+});
+
+test('где преподаватель сейчас — по расписанию', () => {
+  const bells = { 1: ['09:00', '10:30'], 2: ['10:45', '12:15'], 3: ['12:45', '14:15'] };
+  const lesson = (n, extra) => Object.assign({ n: n, s: 'Алгоритмы', r: '214', gr: 'ИСП-924/1' }, extra || {});
+  const day = { d: '2026-11-16', l: [lesson(1), lesson(2), lesson(3)] };
+  const schedule = { bells: bells, days: [day] };
+  const at = (hhmm) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return { date: '2026-11-16', sec: h * 3600 + m * 60 };
+  };
+  assert.equal(teacherNow(schedule, at('09:30')), 'Сейчас 1-я пара, каб. 214, ИСП-924/1, до 10:30');
+  // Онлайн: признак отдельно от номера комнаты — номер без «каб.».
+  assert.equal(
+    teacherNow({ bells: bells, days: [{ d: '2026-11-16', l: [lesson(1, { o: 1, r: '269' })] }] }, at('09:30')),
+    'Сейчас 1-я пара, онлайн · 269, ИСП-924/1, до 10:30');
+  // Кабинет не указан — о месте не говорим.
+  assert.equal(
+    teacherNow({ bells: bells, days: [{ d: '2026-11-16', l: [lesson(1, { r: null })] }] }, at('09:30')),
+    'Сейчас 1-я пара, ИСП-924/1, до 10:30');
+  assert.equal(teacherNow(schedule, at('10:35')), 'Свободен с 10:30 до 10:45');
+  assert.equal(teacherNow(schedule, at('08:00')), 'Свободен до 09:00');
+  assert.equal(teacherNow(schedule, at('15:00')), 'На сегодня пар больше нет');
+  // Отменённая пара не занимает время: окно тянется до следующей.
+  const cancelled = { bells: bells, days: [{ d: '2026-11-16', l: [lesson(1), lesson(2, { x: 1 })] }] };
+  assert.equal(teacherNow(cancelled, at('10:35')), 'На сегодня пар больше нет');
+  // День не прочитан или пуст — не выдумываем.
+  assert.equal(teacherNow({ bells: bells, days: [{ d: '2026-11-16', l: [], un: 'missing' }] }, at('09:30')), null);
+  assert.equal(teacherNow({ bells: bells, days: [{ d: '2026-11-16', l: [] }] }, at('09:30')), 'Сегодня пар нет');
+  assert.equal(teacherNow(schedule, { date: '2026-11-17', sec: 0 }), 'Сегодня пар нет');
 });
 
 test('подписи пары', () => {
