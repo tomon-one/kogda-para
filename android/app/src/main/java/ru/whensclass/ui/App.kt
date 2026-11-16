@@ -26,8 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -49,7 +47,6 @@ import ru.whensclass.data.selectSelfAsTeacher
 import ru.whensclass.data.removeExtraGroup
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
-import ru.whensclass.data.RetakesDto
 import ru.whensclass.data.MAX_GROUPS
 import ru.whensclass.data.subgroupsOf
 import ru.whensclass.data.RefreshResult
@@ -64,7 +61,7 @@ import ru.whensclass.widget.ThemeChoice
 
 /** Экраны приложения. Их четыре, поэтому обходимся без библиотеки навигации. */
 // Порядок важен: по нему считается, куда «едет» экран при переходе.
-private enum class Screen { WELCOME, GROUPS, TODAY, SETTINGS }
+internal enum class Screen { WELCOME, GROUPS, TODAY, SETTINGS }
 
 
 @Composable
@@ -117,7 +114,6 @@ internal fun App(
     val teacherName by container.store.teacherName.collectAsState(initial = null)
     val teacherId by container.store.teacherId.collectAsState(initial = null)
     val pinnedGroups by container.store.pinnedGroups.collectAsState(initial = emptyList())
-    var groups by remember { mutableStateOf<List<GroupDto>?>(null) }
     // Тема применяется сразу, не ожидая круга через хранилище: его задерживает перерисовка виджетов.
     var chosenTheme by remember { mutableStateOf<ThemeChoice?>(null) }
     val theme = chosenTheme ?: ThemeChoice.from(storedTheme)
@@ -138,22 +134,10 @@ internal fun App(
         val result = container.repository.addExtraGroups(groups)
         if (result is RefreshResult.Partial) refreshError = partialText(result.missed, result.fresh)
     }
-    // Списки держим здесь, чтобы не перезагружать на каждое переключение вкладки; пока пусто —
-    // повтор при каждом заходе.
-    var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
-    // Лист пересдач: при открытии расписания, не чаще раза в полчаса (служба сама смотрит его раз в час).
-    var retakes by remember { mutableStateOf<RetakesDto?>(null) }
-    var retakesFailed by remember { mutableStateOf(false) }
-    // Не пришёл, хотя сервер ответил (ошибкой), — а не «нет связи».
-    var retakesAnswered by remember { mutableStateOf(false) }
-    var retakesAt by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
-    var retakesRetry by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // Списки и пересдачи держим здесь, чтобы не перезагружать на каждое переключение вкладки.
+    val lists = rememberListsUi(container, screen)
+    val rt = rememberRetakesUi(container, screen)
     val roomsMemory = remember { RoomsMemory() }
-    // Свежие списки за этот заход уже пришли — дальше хватит их.
-    var listsFresh by remember { mutableStateOf(false) }
-    // «Повторить» — в сеть, даже если сохранённые моложе 12 часов.
-    var listsRetry by remember { mutableStateOf(false) }
-    var reloadKey by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     // Какой список показывать на экране выбора: null — по текущей роли.
     var pickTeacher by rememberSaveable { mutableStateOf<Boolean?>(null) }
     // Тот же экран, но выбирают не свою группу, а ещё одну к ней.
@@ -172,57 +156,6 @@ internal fun App(
         }
     }
 
-    LaunchedEffect(screen, retakesRetry, ScreenClock.resumes) {
-        if (screen != Screen.TODAY) return@LaunchedEffect
-        if (retakes != null && System.currentTimeMillis() - retakesAt < RETAKES_FRESH_MILLIS) return@LaunchedEffect
-        retakesFailed = false
-        val answer = container.repository.retakes()
-        val fresh = answer.body
-        retakesAnswered = answer.answered
-        if (fresh != null) {
-            retakes = fresh
-            retakesAt = System.currentTimeMillis()
-        } else if (retakes == null) {
-            retakesFailed = true
-        }
-    }
-
-    // И на каждое возвращение, пока свежих списков нет: иначе после первого запуска без связи они не перечитались бы.
-    LaunchedEffect(screen, reloadKey, ScreenClock.resumes) {
-        val repository = container.repository
-        // Сохранённые — сразу, без сети: экран открывается и в метро.
-        // Свежие — следом и оба разом, а не по очереди.
-        if (groups.isNullOrEmpty()) repository.cachedGroups().takeIf { it.isNotEmpty() }?.let { groups = it }
-        if (teachers.isNullOrEmpty()) repository.cachedTeachers().takeIf { it.isNotEmpty() }?.let { teachers = it }
-        // Экран выбора — всегда со свежими, как на сайте: группу могли разделить днём, и «/1» в
-        // старом списке не нашлась бы.
-        val picking = screen == Screen.GROUPS
-        if (listsFresh && !picking) return@LaunchedEffect
-        // Свежие — не чаще LISTS_FRESH_MILLIS, если сохранённые есть, как на сайте; «Повторить» и
-        // пустой список — сразу.
-        val age = System.currentTimeMillis() - container.store.listsFetchedAt()
-        if (!picking && !listsRetry && !groups.isNullOrEmpty() && !teachers.isNullOrEmpty() && age in 0 until LISTS_FRESH_MILLIS) {
-            listsFresh = true
-            return@LaunchedEffect
-        }
-        listsRetry = false
-        val (freshGroups, freshTeachers) = coroutineScope {
-            val g = async { repository.freshGroups() }
-            val t = async { repository.freshTeachers() }
-            g.await() to t.await()
-        }
-        freshGroups?.let { groups = it }
-        freshTeachers?.let { teachers = it }
-        // Ни свежего, ни сохранённого — «не загрузился», а не вечный спиннер.
-        if (groups == null) groups = emptyList()
-        if (teachers == null) teachers = emptyList()
-        if (freshGroups != null && freshTeachers != null) {
-            listsFresh = true
-            container.store.setListsFetchedAt(System.currentTimeMillis())
-            repository.followRenamedPins(freshGroups, freshTeachers)
-        }
-    }
-
     // Навигация своя: системному «назад» о ней надо сказать, иначе оно закрывает приложение с любого экрана.
     BackHandler(enabled = screen != Screen.TODAY) {
         // Сменили роль кнопкой на экране выбора — назад к прежнему выбору, как стрелка.
@@ -237,11 +170,7 @@ internal fun App(
     }
 
     // «Повторить» у списков — заново и сеть, даже если свежие уже приходили.
-    val retryLists: () -> Unit = {
-        listsFresh = false
-        listsRetry = true
-        reloadKey++
-    }
+    val retryLists: () -> Unit = lists::retryNow
 
     // Сервер эту сборку не обслуживает (426): списки не придут — к обновлению, а не «проверьте интернет».
     val toUpdate: (() -> Unit)? = if (serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED) {
@@ -271,9 +200,9 @@ internal fun App(
         scope.launch {
             refreshing = true
             // Списки на ⟳ не перезапрашиваются: они — раз в 12 часов.
-            reloadKey++
+            lists.reload()
             // Пересдачи и кабинеты, что не загрузились, — заново вместе с расписанием.
-            if (retakes == null) retakesRetry++
+            if (rt.body == null) rt.retry()
             roomsMemory.nudge++
             // Напрямую, без WorkManager: он может отложить задачу на минуты, а человек ждёт ответа.
             val result = container.repository.refresh(force = true)
@@ -356,7 +285,7 @@ internal fun App(
                     Screen.GROUPS -> if (pickExtra) {
                         PickerScreen(
                             // Своя и уже выбранные — не в списке: дважды одну не показываем.
-                            items = groups?.filter { group ->
+                            items = lists.groups?.filter { group ->
                                 group.id != groupId && extraGroups.none { it.id == group.id }
                             },
                             onRetry = retryLists,
@@ -377,7 +306,7 @@ internal fun App(
                         // Список преподавателей: человек выбирает себя. Роль меняется вместе с
                         // выбором, иначе на миг покажется чужое расписание.
                         PickerScreen(
-                            items = teachers,
+                            items = lists.teachers,
                             teachers = true,
                             onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
@@ -396,7 +325,7 @@ internal fun App(
                         )
                     } else {
                         PickerScreen(
-                            items = groups,
+                            items = lists.groups,
                             onRetry = retryLists,
                             loadDiagnostics = { container.repository.diagnostics() },
                             onUpdate = toUpdate,
@@ -483,7 +412,7 @@ internal fun App(
                         groupsByName = groupsByName,
                         onGroupsByName = { byName -> scope.launch { container.store.setGroupsByName(byName) } },
                         // Подгруппы своей группы, ещё не выбранные, — строками с «Добавить», сколько влезет.
-                        subgroups = groupName?.let { name -> subgroupsOf(name, groups.orEmpty()) }.orEmpty()
+                        subgroups = groupName?.let { name -> subgroupsOf(name, lists.groups.orEmpty()) }.orEmpty()
                             .filter { group -> extraGroups.none { it.id == group.id } }
                             .take(MAX_GROUPS - 1 - extraGroups.size),
                         onAddGroup = {
@@ -502,20 +431,20 @@ internal fun App(
 
                     Screen.TODAY -> TodayScreen(
                         rowStays = rowStays,
-                        retakes = retakes,
-                        retakesFailed = retakesFailed,
-                        retakesAnswered = retakesAnswered,
-                        onRetryRetakes = { retakesRetry++ },
+                        retakes = rt.body,
+                        retakesFailed = rt.failed,
+                        retakesAnswered = rt.answered,
+                        onRetryRetakes = rt::retry,
                         loadRooms = { container.repository.rooms(it) },
                         roomsMemory = roomsMemory,
                         startDay = startDay,
                         startKey = openSeq,
                         groupName = chosenName.orEmpty(),
                         teacherMode = teacherMode,
-                        teachers = teachers,
+                        teachers = lists.teachers,
                         loadTeacherSchedule = { container.repository.teacherSchedule(it) },
                         loadGroupSchedule = { container.repository.groupSchedule(it) },
-                        groups = groups,
+                        groups = lists.groups,
                         pinnedGroups = pinnedGroups,
                         onTogglePinnedGroup = { id ->
                             scope.launch { container.store.togglePinnedGroup(id) }
@@ -551,7 +480,7 @@ internal fun App(
                             groupsFrom = Screen.TODAY
                             screen = Screen.GROUPS
                         },
-                        reloadKey = reloadKey,
+                        reloadKey = lists.reloadKey,
                         onSettings = {
                             upd.focus = false
                             screen = Screen.SETTINGS
