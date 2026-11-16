@@ -24,8 +24,5 @@ class DayStateTest {
         assertEquals("Сессия", stateDayText(DayState.SESSION))
         assertEquals("Каникулы", stateDayText(DayState.HOLIDAYS))
         assertEquals("Практика", stateDayText(DayState.PRACTICE))
-        // У дня с парами — тихая строка, пары не прячем.
-        assertEquals("по графику сессия", stateNote(DayState.SESSION))
-        assertEquals("по графику практика", stateNote(DayState.PRACTICE))
     }
 }

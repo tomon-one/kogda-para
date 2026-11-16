@@ -13,7 +13,7 @@ import {
 import {
   coversDay,
   bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daySummary, openingDay, daysWithGaps, freeDay, freeOwnDay,
-  stateDayText, stateNote, stateWord,
+  stateDayText, stateWord,
   lessonTime, ownOnly,
   onlyAt, shortLabels, subgroupsOf, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
@@ -241,10 +241,9 @@ test('календарный график: слова состояния', () =>
   // Пусто и незнакомое — обычный учебный день.
   assert.equal(stateWord(undefined), null);
   assert.equal(stateWord('что-то'), null);
-  // Пустой день — словом с большой буквы; у дня с парами — тихая пометка.
+  // Пустой день — словом с большой буквы; у дня с парами метка та же.
   assert.equal(stateDayText('session'), 'Сессия');
-  assert.equal(stateNote('session'), 'по графику сессия');
-  assert.equal(stateNote(undefined), null);
+  assert.equal(stateDayText(undefined), null);
 });
 
 test('идущая пара — конец включительно до секунды', () => {

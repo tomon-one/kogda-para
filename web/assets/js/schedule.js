@@ -285,17 +285,11 @@ var FREE_STUDENT = ['Пар нет. Можно одичать'];
 var STATE_WORDS = { session: 'сессия', holidays: 'каникулы', practice: 'практика' };
 
 /**
- * Календарный график колледжа (stateWord и stateNote в DayText.kt): день
+ * Календарный график колледжа (stateWord в DayText.kt): день
  * сессии, каникул или практики. Незнакомое состояние — null, обычный день.
  */
 export function stateWord(state) {
   return STATE_WORDS[state] || null;
-}
-
-/** Тихая пометка у дня с парами: пары не прячем, но человек видит график. */
-export function stateNote(state) {
-  var word = stateWord(state);
-  return word ? 'по графику ' + word : null;
 }
 
 /** Пустой день по графику: вместо шутки «пар нет» — что на самом деле. */

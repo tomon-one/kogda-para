@@ -3,7 +3,7 @@
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
 import { dayTitle, capitalize } from '../time.js';
-import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, stateDayText, stateNote, unreadNotes } from '../schedule.js';
+import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, stateDayText, unreadNotes } from '../schedule.js';
 import {
   isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
@@ -59,10 +59,17 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   var past = day.d < now.date;
   var current = isToday ? currentLessonNumber(bells, day.d, now) : null;
   var lessons = day.l || [];
+  // Метки дня — в шапке, справа от даты (вариант А): график колледжа и
+  // непрочитанность видно сразу, а не строкой между датой и парами.
+  var chips = [];
+  if (stateDayText(day.st)) chips.push(stateDayText(day.st));
+  if (day.un) chips.push('Не прочитан');
   var card = h('section', {
     class: 'day' + (isToday ? ' today' : '') + (past ? ' past' : ''),
     'data-day': day.d,
-  }, h('h2', { class: 'day-title' }, dayTitle(day.d, now.date),
+  }, h('h2', { class: 'day-title' },
+    h('span', { class: 'day-name' }, dayTitle(day.d, now.date)),
+    chips.map(function (chip) { return h('span', { class: 'day-state' }, chip); }),
     summaryLine(daySummary(lessons, groups, bells))));
 
   var notes = unreadNotes(day);
@@ -79,8 +86,7 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
       stateDayText(day.st) || freeDay(day, teacher, nextFree, now)));
     return card;
   }
-  // День с парами, но по графику сессия или практика: пары остаются, пометка тихая.
-  if (stateNote(day.st)) card.appendChild(h('p', { class: 'day-note' }, stateNote(day.st)));
+
   // Своих пар нет, а у выбранных групп есть: это уже сказала сводка под датой
   // («Пары только у …»), у самих пар подпись не повторяем. Отменённые сводка
   // не считает — у них подпись остаётся.

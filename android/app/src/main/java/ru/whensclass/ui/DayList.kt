@@ -1,5 +1,6 @@
 package ru.whensclass.ui
 
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.BorderStroke
@@ -7,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -391,21 +393,26 @@ private fun DayCard(
                 BIRTHDAY.takeIf { isToday && !teacher && date.monthValue == 4 && date.dayOfMonth == 2 },
                 date?.takeIf { isToday }?.let { holidayNote(it.monthValue, it.dayOfMonth) },
             )
+            // Метки — в шапке дня (вариант А): и график, и непрочитанность видны сразу.
+            val ownUnreadShort = day.unread != null && day.unreadGroups.isEmpty()
             DayHeader(
                 date?.let { formatDayTitle(it, today) } ?: day.date, isToday, past, daySummary(day.lessons, groups, bells),
                 bottom = if (notes.isEmpty()) 8.dp else 4.dp,
+                chips = listOfNotNull(day.state?.let(::stateDayText), "Не прочитан".takeIf { day.unread != null }),
             )
 
             // Свой день не прочитан — «пар нет» тут было бы неправдой.
             val unknown = day.unread == UnreadDay.MISSING
-            notes.forEachIndexed { index, note ->
+            // Свой непрочитанный день без подробностей сказан меткой в шапке — строку не повторяем.
+            val shownNotes = if (day.unread != null && ownUnreadShort) notes.drop(1) else notes
+            shownNotes.forEachIndexed { index, note ->
                 Text(
                     note,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = if (index == 0) 0.dp else 4.dp,
                         bottom = when {
-                            index != notes.lastIndex -> 4.dp
+                            index != shownNotes.lastIndex -> 4.dp
                             day.lessons.isNotEmpty() -> 8.dp
                             unknown -> 16.dp
                             else -> 4.dp
@@ -424,16 +431,6 @@ private fun DayCard(
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                 )
             } else {
-                // День с парами, но по графику сессия или практика: пары остаются, пометка — тихой
-                // строкой под заголовком (вариант В).
-                day.state?.let {
-                    Text(
-                        stateNote(it),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-                    )
-                }
                 // Своих пар нет, а у выбранных групп есть: это сказала сводка под датой, подпись не
                 // повторяем; отменённые сводка не считает — у них подпись остаётся.
                 val allForeign = groups.isNotEmpty() && day.lessons.none { 0 in it.slots }
@@ -465,24 +462,50 @@ private fun DayCard(
     }
 }
 
+/** Метка дня: график колледжа или непрочитанный день — одной строкой у даты. */
+@Composable
+private fun DayChip(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        modifier = Modifier
+            .padding(start = 8.dp)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(999.dp))
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
 /** Сколько экран стоит нетронутым, пока строка свободного дня не сменится. */
 internal const val IDLE_MILLIS = (5 * 60 + 8) * 1000L
 
 @Composable
-private fun DayHeader(title: String, isToday: Boolean, past: Boolean = false, summary: String? = null, bottom: Dp = 8.dp) {
+private fun DayHeader(
+    title: String,
+    isToday: Boolean,
+    past: Boolean = false,
+    summary: String? = null,
+    bottom: Dp = 8.dp,
+    /** Короткие метки дня: график колледжа, непрочитанный день. */
+    chips: List<String> = emptyList(),
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = bottom)) {
-        Text(
-            title.replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = when {
-                isToday -> MaterialTheme.colorScheme.primary
-                past -> MaterialTheme.colorScheme.onSurfaceVariant
-                else -> MaterialTheme.colorScheme.onSurface
-            },
-            // Чтецу — заголовок: по дням переходят жестом, как по заголовкам на сайте.
-            modifier = Modifier.semantics { heading() },
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title.replaceFirstChar { it.uppercase() },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = when {
+                    isToday -> MaterialTheme.colorScheme.primary
+                    past -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+                // Чтецу — заголовок: по дням переходят жестом, как по заголовкам на сайте.
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            chips.forEach { DayChip(it) }
+        }
         if (summary != null) {
             Text(
                 summary,

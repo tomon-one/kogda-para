@@ -202,12 +202,6 @@ internal fun stateWord(state: DayState): String = when (state) {
     DayState.PRACTICE -> "практика"
 }
 
-/**
- * Тихая пометка у дня с парами (вариант В): пары не прячем, но человек видит,
- * что по графику колледжа это сессия, каникулы или практика.
- */
-internal fun stateNote(state: DayState): String = "по графику " + stateWord(state)
-
 /** Пустой день по графику: вместо шутки «пар нет» — что на самом деле. */
 internal fun stateDayText(state: DayState): String =
     stateWord(state).replaceFirstChar { it.titlecase() }

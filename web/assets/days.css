@@ -38,6 +38,25 @@
   font-size: 16px;
   line-height: 24px;
   font-weight: 700;
+  /* Дата и метки — одной строкой, сводка — под ними. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.day-name { flex: 1 1 auto; min-width: 0; }
+
+/* Метка дня: график колледжа или непрочитанный день. */
+.day-state {
+  margin-left: 8px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .day.today .day-title { color: var(--primary); }
@@ -45,7 +64,7 @@
 .day.past .day-title { color: var(--muted); }
 
 .day-summary {
-  display: block;
+  flex-basis: 100%;
   margin-top: 2px;
   font-size: 12px;
   line-height: 16px;
