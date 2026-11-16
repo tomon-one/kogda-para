@@ -43,7 +43,7 @@ def test_empty_fields_are_absent(snapshot):
     for day in body["days"]:
         for lesson in day["l"]:
             assert None not in lesson.values()
-            assert set(lesson) <= {"n", "s", "k", "t", "r", "u", "x", "c", "o"}
+            assert set(lesson) <= {"n", "s", "sn", "k", "t", "r", "u", "x", "c", "o"}
 
 
 def test_day_out_of_coverage_is_omitted(snapshot):

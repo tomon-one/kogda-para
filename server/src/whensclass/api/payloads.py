@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from ..config import settings
 from ..domain.models import Lesson, SheetPlace, Snapshot, a1_column
+from ..domain.subjects import short_name
 from ..domain.teachers import TeacherIndex, same_person, spelling_twin
 from ..service.bells import own_bells
 from .published import group_published, published, teacher_published
@@ -110,6 +111,10 @@ def _place_days(
 
 def _lesson(lesson: Lesson) -> dict:
     out: dict = {"n": lesson.number, "s": lesson.subject}
+    # Короткое имя — рядом с полным: что показывать, решает человек в настройках.
+    short = short_name(lesson.subject)
+    if short and short != lesson.subject:
+        out["sn"] = short
     if lesson.kind:
         out["k"] = lesson.kind
     if lesson.teachers:
