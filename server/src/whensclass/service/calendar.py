@@ -34,7 +34,7 @@ class CalendarSource:
         groups: Callable[[], dict[str, str]] | None = None,
     ) -> None:
         """[groups] — имя группы в листе → id в расписании, на момент чтения."""
-        self.groups = groups or (lambda: {})
+        self.groups = groups or dict
         self.now = lambda: dt.datetime.now(zoneinfo.ZoneInfo(settings.timezone))
         self.path = directory / "calendar.json"
         # {"sheet": ..., "updated": ..., "groups": {id: {дата: состояние}}}

@@ -115,7 +115,7 @@ def week_columns(rows: list[list[str]], today: dt.date | None = None) -> list[tu
     # Месяц столбца — ближайший заголовок месяца слева от него.
     month_at: dict[int, int] = {}
     current: int | None = None
-    for column in range(0, max(column for column, _ in dates) + 1):
+    for column in range(max(column for column, _ in dates) + 1):
         for at, month in months:
             if at == column:
                 current = month

@@ -24,9 +24,9 @@ from .api.routes import router
 from .config import settings
 from .push.service import Push, load_vapid
 from .service.bells import BELLS
+from .service.calendar import CalendarSource
 from .service.crosscheck import CrossCheck
 from .service.refresher import Refresher, state_dir
-from .service.calendar import CalendarSource
 from .service.retakes import RetakesSource
 from .storage.snapshot_store import SnapshotStore
 from .vk.bot import VkBot
