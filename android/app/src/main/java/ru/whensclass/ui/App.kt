@@ -47,14 +47,12 @@ import ru.whensclass.data.groupSchedule
 import ru.whensclass.data.selectGroup
 import ru.whensclass.data.selectSelfAsTeacher
 import ru.whensclass.data.removeExtraGroup
-import ru.whensclass.data.AppUpdate
 import ru.whensclass.data.DEFAULT_NOTIFY_BEFORE
 import ru.whensclass.data.GroupDto
 import ru.whensclass.data.RetakesDto
 import ru.whensclass.data.MAX_GROUPS
 import ru.whensclass.data.subgroupsOf
 import ru.whensclass.data.RefreshResult
-import ru.whensclass.data.ReleaseDto
 import ru.whensclass.data.setNotifyChanges
 import ru.whensclass.data.setNotifyGroupsGone
 import ru.whensclass.data.setNotifyServer
@@ -129,13 +127,7 @@ internal fun App(
     var screen by rememberSaveable { mutableStateOf(if (openUpdate) Screen.SETTINGS else Screen.TODAY) }
     // Откуда пришли к выбору группы: туда и «назад» — и стрелкой, и жестом.
     var groupsFrom by rememberSaveable { mutableStateOf(Screen.SETTINGS) }
-    var update by remember { mutableStateOf<ReleaseDto?>(null) }
-    // Отдельно от update: «новее нет» и «до сервера не достучались» — разные вещи.
-    var updateFailed by remember { mutableStateOf(false) }
-    // Почему не удалось скачать: без этого провал молчалив.
-    var updateError by rememberSaveable { mutableStateOf<String?>(null) }
-    var checkingUpdate by remember { mutableStateOf(false) }
-    var updateChecked by remember { mutableStateOf(false) }
+    val upd = rememberUpdateUi(container, scope, context, lifecycle, openUpdate, openSeq)
     var refreshing by remember { mutableStateOf(false) }
     // Почему ручное обновление не вышло — текстом для плашки.
     var refreshError by remember { mutableStateOf<String?>(null) }
@@ -146,9 +138,6 @@ internal fun App(
         val result = container.repository.addExtraGroups(groups)
         if (result is RefreshResult.Partial) refreshError = partialText(result.missed, result.fresh)
     }
-    val download by container.updates.download.collectAsState()
-    val installing = download == AppUpdate.Download.Running
-    var focusUpdate by rememberSaveable { mutableStateOf(openUpdate) }
     // Списки держим здесь, чтобы не перезагружать на каждое переключение вкладки; пока пусто —
     // повтор при каждом заходе.
     var teachers by remember { mutableStateOf<List<GroupDto>?>(null) }
@@ -170,26 +159,11 @@ internal fun App(
     // Тот же экран, но выбирают не свою группу, а ещё одну к ней.
     var pickExtra by rememberSaveable { mutableStateOf(false) }
 
-    // Итог загрузки обновления. Установщик открывается, когда человек в приложении: из фона Android 10+ его не пускает.
-    LaunchedEffect(download) {
-        val done = download as? AppUpdate.Download.Done ?: return@LaunchedEffect
-        when (val result = done.result) {
-            is AppUpdate.Result.Failed -> updateError = result.why
-            is AppUpdate.Result.Ready -> container.updates.install(result)
-            // Сессия не открылась — прежний путь: окно системного установщика.
-            is AppUpdate.Result.Manual -> lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) {
-                runCatching { context.startActivity(result.intent) }
-                    .onFailure { updateError = "установщик Android не найден" }
-            }
-        }
-        container.updates.taken()
-    }
-
     // Новое нажатие по живому экрану: к дню из виджета или к обновлению; уведомление без дня — к расписанию.
     LaunchedEffect(openSeq) {
         if (openSeq == 0) return@LaunchedEffect
         if (openUpdate) {
-            focusUpdate = true
+            upd.focus = true
             screen = Screen.SETTINGS
         } else {
             pickExtra = false
@@ -272,7 +246,7 @@ internal fun App(
     // Сервер эту сборку не обслуживает (426): списки не придут — к обновлению, а не «проверьте интернет».
     val toUpdate: (() -> Unit)? = if (serverStatus == ru.whensclass.data.STATUS_UNSUPPORTED) {
         {
-            focusUpdate = true
+            upd.focus = true
             screen = Screen.SETTINGS
         }
     } else {
@@ -315,19 +289,6 @@ internal fun App(
                 else -> Unit
             }
             refreshing = false
-        }
-    }
-
-    // Проверка обновления — по правилам [AppUpdate.checkForScreen]; по уведомлению — раз на открытие.
-    var forcedOpen by rememberSaveable { mutableIntStateOf(-1) }
-    LaunchedEffect(openSeq, ScreenClock.resumes) {
-        val force = openUpdate && forcedOpen != openSeq
-        if (openUpdate) forcedOpen = openSeq
-        when (val result = container.updates.checkForScreen(force = force)) {
-            is AppUpdate.Check.Available -> update = result.release
-            AppUpdate.Check.UpToDate -> update = null
-            // Не дозвонились — известное прежде не забываем.
-            AppUpdate.Check.Failed -> Unit
         }
     }
 
@@ -460,8 +421,8 @@ internal fun App(
                         onGlow = { on -> scope.launch { container.store.setGlow(on) } },
                         rowStays = rowStays,
                         onRowStays = { on -> scope.launch { container.store.setRowStays(on) } },
-                        update = update,
-                        installing = installing,
+                        update = upd.update,
+                        installing = upd.installing,
                         notifyBefore = notifyBefore,
                         notifyEnabled = notifyEnabled,
                         notifyChanges = notifyChanges,
@@ -495,46 +456,16 @@ internal fun App(
                         onNotifyGroupsGone = { on ->
                             scope.launch { container.store.setNotifyGroupsGone(on) }
                         },
-                        focusUpdate = focusUpdate,
-                        onUpdateFocused = { focusUpdate = false },
-                        checkingUpdate = checkingUpdate,
-                        updateChecked = updateChecked,
-                        updateFailed = updateFailed,
-                        updateError = updateError,
+                        focusUpdate = upd.focus,
+                        onUpdateFocused = { upd.focus = false },
+                        checkingUpdate = upd.checking,
+                        updateChecked = upd.checked,
+                        updateFailed = upd.failed,
+                        updateError = upd.error,
                         loadDiagnostics = { container.repository.diagnostics() },
                         sheetUrl = { sheetLink(schedule, ru.whensclass.widget.collegeToday(), tableUrl) },
-                        onCheckUpdate = {
-                            scope.launch {
-                                checkingUpdate = true
-                                updateError = null
-                                when (val result = container.updates.check()) {
-                                    is AppUpdate.Check.Available -> {
-                                        update = result.release
-                                        updateFailed = false
-                                    }
-                                    AppUpdate.Check.UpToDate -> {
-                                        update = null
-                                        updateFailed = false
-                                    }
-                                    AppUpdate.Check.Failed -> updateFailed = true
-                                }
-                                checkingUpdate = false
-                                updateChecked = true
-                            }
-                        },
-                        onUpdate = {
-                            scope.launch {
-                                updateError = null
-                                // Запомненная сборка могла уйти с сервера (держатся две последние):
-                                // качать выложенную сейчас.
-                                when (val result = container.updates.check(github = false)) {
-                                    is AppUpdate.Check.Available -> update = result.release
-                                    AppUpdate.Check.UpToDate -> update = null
-                                    AppUpdate.Check.Failed -> Unit
-                                }
-                                update?.let { container.updates.start(it) }
-                            }
-                        },
+                        onCheckUpdate = upd::check,
+                        onUpdate = upd::start,
                         onTheme = { choice ->
                             chosenTheme = choice
                             scope.launch {
@@ -599,7 +530,7 @@ internal fun App(
                         channelNotice = !channelSeen,
                         onChannelSeen = { scope.launch { container.store.setChannelSeen() } },
                         fetchedAt = fetchedAt,
-                        hasUpdate = update != null,
+                        hasUpdate = upd.update != null,
                         refreshing = refreshing,
                         loading = opening,
                         refreshFailed = refreshFailed,
@@ -622,18 +553,13 @@ internal fun App(
                         },
                         reloadKey = reloadKey,
                         onSettings = {
-                            focusUpdate = false
+                            upd.focus = false
                             screen = Screen.SETTINGS
                         },
                         onUpdateBadge = {
-                            focusUpdate = true
+                            upd.focus = true
                             screen = Screen.SETTINGS
-                            // «Нужно обновить» пришло раньше, чем истекли полчаса прошлой проверки:
-                            // спросить заново, иначе «Версия» откроется без сборки.
-                            if (update == null) scope.launch {
-                                (container.updates.checkForScreen(force = true) as? AppUpdate.Check.Available)
-                                    ?.let { update = it.release }
-                            }
+                            upd.refreshIfMissing()
                         },
                         onRefresh = refreshNow,
                     )
