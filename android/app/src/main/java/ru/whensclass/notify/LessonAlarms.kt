@@ -67,7 +67,7 @@ object LessonAlarms {
                 }
             }
         }
-        plan(schedule, minutes)
+        plan(schedule, minutes, names = state.subjects)
             // Две пары в одно время — одно напоминание.
             .distinctBy { it.at }
             .take(MAX_ALARMS)
@@ -110,8 +110,12 @@ object LessonAlarms {
         lessons.firstNotNullOfOrNull { lesson -> lesson.url?.trim()?.takeIf { isKnownWebinar(it) } }
 
     /** Что и когда напомнить; отдельно, чтобы проверять. */
-    fun plan(schedule: ScheduleDto, minutes: Int, now: LocalDateTime = ru.whensclass.widget.collegeNow()):
-        List<Alarm> {
+    fun plan(
+        schedule: ScheduleDto,
+        minutes: Int,
+        now: LocalDateTime = ru.whensclass.widget.collegeNow(),
+        names: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
+    ): List<Alarm> {
         val out = mutableListOf<Alarm>()
         for (day in schedule.days) {
             val date = runCatching { LocalDate.parse(day.date) }.getOrNull() ?: continue
@@ -146,6 +150,7 @@ object LessonAlarms {
                         also = same.drop(1),
                         // Отменённая половинка — строкой «Отменена»: иначе её подгруппа пошла бы на чужую пару.
                         off = schedule.cancelledHalf(day, lesson.number),
+                        names = names,
                     ),
                 )
             }
@@ -166,6 +171,8 @@ object LessonAlarms {
         val also: List<LessonDto> = emptyList(),
         /** Отменённые пары того же номера — половинка блока, которую сняли. */
         val off: List<LessonDto> = emptyList(),
+        /** Как показывать названия предметов: короткие или свои. */
+        val names: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
     ) {
         /** Когда пара начнётся: будильник стоит настолько же раньше. */
         val start: LocalDateTime get() = at.plusMinutes(minutes.toLong())
@@ -173,7 +180,7 @@ object LessonAlarms {
         val lessons: List<LessonDto> get() = listOf(lesson) + also
 
         /** Для заголовка: «Немецкий / Английский»; одинаковые — один раз. */
-        val subject: String get() = joinSubjects(distinctSubjects(lessons))
+        val subject: String get() = joinSubjects(distinctSubjects(lessons, names))
     }
 
     private fun schedule(context: Context, index: Int, alarm: Alarm) {
@@ -250,11 +257,11 @@ object LessonAlarms {
             val kinds = lessons.map { kindName(it.kind) }.distinct()
             val number = "${alarm.lesson.number} пара" +
                 (kinds.singleOrNull()?.let { ", ${it.lowercase()}" } ?: "")
-            val withSubject = distinctSubjects(lessons + alarm.off).size > 1
+            val withSubject = distinctSubjects(lessons + alarm.off, alarm.names).size > 1
             return (listOf(number) + lessons.map { lesson ->
                 sentences(
                     listOfNotNull(
-                        listOfNotNull(place(lesson), lesson.subject.takeIf { withSubject })
+                        listOfNotNull(place(lesson), alarm.names.text(lesson).takeIf { withSubject })
                             .joinToString(" — ").takeIf { it.isNotEmpty() },
                         lesson.teachers.firstOrNull(),
                         groupsOf(lesson, alarm.ownGroup),
@@ -263,7 +270,7 @@ object LessonAlarms {
             } + alarm.off.map { lesson ->
                 sentences(
                     listOfNotNull(
-                        "Отменена" + (if (withSubject) " — ${lesson.subject}" else ""),
+                        "Отменена" + (if (withSubject) " — ${alarm.names.text(lesson)}" else ""),
                         lesson.teachers.firstOrNull(),
                         groupsOf(lesson, alarm.ownGroup),
                     ),

@@ -75,6 +75,8 @@ fun ScheduleDays(
     header: (@Composable () -> Unit)? = null,
     /** Подписи выбранных групп у пар: названиями или номерами. */
     groupsByName: Boolean = true,
+    /** Как показывать названия предметов: короткие от службы или свои. */
+    subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
     /** Полоска дней недели над списком ([WeekStrip]) — у своего расписания. */
     weekStrip: Boolean = false,
     /** «Стекло»: список заходит под шапку и вкладки, они его размывают. Над списком ничего своего. */
@@ -292,7 +294,7 @@ fun ScheduleDays(
             Box(modifier = Modifier.appear(appearing.value, rows.of(index) - firstAtStart)) {
             DayCard(
                 day, schedule.bellsOf(day), now, teacher = schedule.isTeacher,
-                groups = schedule.groupNames, groupsByName = groupsByName,
+                groups = schedule.groupNames, groupsByName = groupsByName, subjects = subjects,
                 nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
                 idle = idle,
             )
@@ -365,6 +367,8 @@ private fun DayCard(
     /** Выбранные группы по порядку, первая — своя; пусто — группа одна. */
     groups: List<String> = emptyList(),
     groupsByName: Boolean = true,
+    /** Как показывать названия предметов. */
+    subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
     /** Следующий день — будний и тоже без своих пар ([freeOwnDay]). */
     nextFree: Boolean = false,
     /** Экран давно не трогали ([IDLE_MILLIS]). */
@@ -443,6 +447,7 @@ private fun DayCard(
                         past = past,
                         groups = groups,
                         groupsByName = groupsByName,
+                        subject = subjects.text(lesson),
                         saidAbove = allForeign && !lesson.isCancelled,
                     )
                 }

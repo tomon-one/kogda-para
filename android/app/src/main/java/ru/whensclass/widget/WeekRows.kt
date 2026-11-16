@@ -43,6 +43,8 @@ internal fun Week(
     modifier: GlanceModifier,
     /** Расписание преподавателя: фразы пустого дня — только его прежние. */
     teacher: Boolean = false,
+    /** Как показывать названия предметов. */
+    subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
 ) {
     val today = now.toLocalDate()
     // Ключ и по дате: через полночь тот же список дней делится на прожитые и предстоящие заново.
@@ -89,6 +91,7 @@ internal fun Week(
                             LessonLine(
                                 day.date,
                                 it,
+                                subjects.text(it),
                                 day.ownBells.ifEmpty { bells },
                                 colors,
                                 // Отменённая — не идущая.
@@ -258,6 +261,8 @@ private fun EmptyLine(
 private fun LessonLine(
     date: LocalDate,
     lesson: LessonDto,
+    /** Название предмета как показывать. */
+    subject: String,
     bells: Map<String, List<String>>,
     colors: Palette,
     isNow: Boolean = false,
@@ -292,7 +297,7 @@ private fun LessonLine(
             modifier = GlanceModifier.width(42.dp * fontScale()),
         )
         Text(
-            lesson.subject,
+            subject,
             maxLines = 1,
             style = TextStyle(
                 fontSize = 11.sp,

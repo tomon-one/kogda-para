@@ -149,7 +149,7 @@ class NextLessonWidget : GlanceAppWidget() {
                 val scale = fontScale()
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
                 // Длинное название — в две строки, если хватает высоты на четыре: место пары остаётся своей строкой.
-                val subject = joinSubjects(distinctSubjects(next.lessons))
+                val subject = joinSubjects(distinctSubjects(next.lessons, state?.subjects ?: ru.whensclass.data.SubjectNames()))
                 val perLine = ((LocalSize.current.width.value - 20f) / (SUBJECT_SP * CHAR_EM * scale)).toInt()
                 val long = subject.length > perLine
                 val roomy = LocalSize.current.height >= (ROOMY_HEIGHT_SP * scale + 14).dp

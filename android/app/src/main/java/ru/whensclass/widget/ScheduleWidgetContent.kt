@@ -56,6 +56,8 @@ fun ScheduleWidgetContent(
     unsupported: Boolean = false,
     sourceUrl: String? = null,
     modifier: GlanceModifier = GlanceModifier,
+    /** Как показывать названия предметов: короткие или свои. */
+    subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
 ) {
     val context = LocalContext.current
     val size = LocalSize.current
@@ -163,6 +165,7 @@ fun ScheduleWidgetContent(
                     colors,
                     modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
                     reserved = if (summary != null) summaryHeight else 0.dp,
+                    subjects = subjects,
                 )
             }
         }

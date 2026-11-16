@@ -71,6 +71,8 @@ internal fun LessonRow(
     groupsByName: Boolean = true,
     /** «Пары только у …» уже сказано под датой — у пары не повторять. */
     saidAbove: Boolean = false,
+    /** Название предмета как его показывать: короткое от службы или своё. */
+    subject: String = lesson.subject,
 ) {
     // Пара только у других выбранных групп: видна сразу — приглушённая строка на сером фоне и подпись.
     val foreign = groups.isNotEmpty() && 0 !in lesson.slots
@@ -111,7 +113,7 @@ internal fun LessonRow(
                 )
             }
             Text(
-                lesson.subject,
+                subject,
                 // Перенос — по слогам с дефисом и по дефису в слове, а не посреди слова без знака.
                 style = MaterialTheme.typography.bodyLarge.copy(
                     hyphens = Hyphens.Auto,

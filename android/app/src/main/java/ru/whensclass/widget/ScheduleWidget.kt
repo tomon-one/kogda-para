@@ -65,6 +65,7 @@ class ScheduleWidget : GlanceAppWidget() {
                 gone = state?.gone == true,
                 unsupported = state?.unsupported == true,
                 sourceUrl = state?.sourceUrl,
+                subjects = state?.subjects ?: ru.whensclass.data.SubjectNames(),
             )
         }
     }
@@ -89,9 +90,11 @@ class ScheduleWidget : GlanceAppWidget() {
         gone: Boolean,
         unsupported: Boolean,
         sourceUrl: String?,
+        subjects: ru.whensclass.data.SubjectNames,
     ) {
         ScheduleWidgetContent(
             schedule = schedule,
+            subjects = subjects,
             groupName = groupName,
             fetchedAt = fetchedAt,
             busy = busy,

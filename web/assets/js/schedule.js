@@ -461,6 +461,9 @@ export function cleanSchedule(body) {
         var value = text(l[key]);
         if (value) lesson[key] = value;
       });
+      // Короткое имя предмета от службы: без него настройка «короткие» молчала бы.
+      var short = text(l.sn);
+      if (short) lesson.sn = short;
       if (Array.isArray(l.t)) {
         var teachers = l.t.filter(function (t) { return typeof t === 'string'; });
         if (teachers.length) lesson.t = teachers;

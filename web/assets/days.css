@@ -72,6 +72,38 @@
   color: var(--muted);
 }
 
+/* Пояснение под выключателем в настройках. */
+.switch-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Таблица сокращений: полное название сверху, своё — полем под ним. */
+.subject-table { margin-top: 6px; }
+.subject-row { display: block; margin-top: 10px; }
+.subject-full {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+.subject-input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius);
+}
+.subject-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
 .day-empty {
   padding: 0 16px 14px;
   font-size: 14px;

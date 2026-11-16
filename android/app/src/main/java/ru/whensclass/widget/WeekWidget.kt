@@ -126,6 +126,7 @@ class WeekWidget : GlanceAppWidget() {
                         colors,
                         GlanceModifier.fillMaxWidth().defaultWeight(),
                         teacher = schedule.isTeacher,
+                        subjects = state?.subjects ?: ru.whensclass.data.SubjectNames(),
                     )
                 }
             }

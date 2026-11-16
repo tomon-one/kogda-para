@@ -49,6 +49,19 @@ Object.assign(app, {
     store.set('groupLabels', byName ? 'names' : 'numbers');
     render();
   },
+  /** Короткие названия предметов; по умолчанию полные. */
+  shortSubjects: function () { return store.get('shortSubjects') === true; },
+  setShortSubjects: function (on) {
+    store.set('shortSubjects', on);
+    render();
+  },
+  /** Свои короткие названия: полное → как человек хочет видеть. */
+  subjectShorts: function () { return store.get('subjectShorts') || {}; },
+  setSubjectShort: function (full, short) {
+    var map = Object.assign({}, store.get('subjectShorts') || {});
+    if (short && short.trim()) map[full] = short.trim(); else delete map[full];
+    store.set('subjectShorts', map);
+  },
   setTheme: function (theme) {
     store.set('theme', theme);
     // Без перестройки экрана: цвета меняются сразу.

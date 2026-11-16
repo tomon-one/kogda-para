@@ -69,6 +69,8 @@ fun TeacherScreen(
     enterKey: Int = 0,
     /** Открытого из «Пересдач» закрыли («К списку», «назад») — туда и вернуться, как на сайте. */
     onLeaveOpened: () -> Unit = {},
+    /** Как показывать названия предметов: короткие от службы или свои. */
+    subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
     /** Сервер больше не обслуживает эту сборку — «проверьте интернет» было бы неправдой. */
     unsupported: Boolean = false,
     /**
@@ -145,6 +147,7 @@ fun TeacherScreen(
                 weekStrip = true,
                 underHead = true,
                 header = plates,
+                subjects = subjects,
             )
             TextButton(
                 onClick = { browsing = true },
@@ -221,6 +224,7 @@ fun TeacherScreen(
             teacherList = listName == "Список преподавателей",
             plates = plates,
             today = now.toLocalDate(),
+            subjects = subjects,
             onBack = { close() },
         )
         return
@@ -342,6 +346,7 @@ private fun ChosenTeacher(
     teacherList: Boolean,
     plates: (@Composable () -> Unit)?,
     today: java.time.LocalDate,
+    subjects: ru.whensclass.data.SubjectNames,
     onBack: () -> Unit,
 ) {
     // Палец на строке с именем листает список, как с полоски: в альбомной строка и полоска — почти
@@ -400,6 +405,7 @@ private fun ChosenTeacher(
                     weekStrip = true,
                     header = plates,
                     dragSink = dragSink,
+                    subjects = subjects,
                 )
             }
         }

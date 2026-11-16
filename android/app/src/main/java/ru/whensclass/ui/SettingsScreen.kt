@@ -65,6 +65,10 @@ fun SettingsScreen(
     /** Подписи групп у пар: названиями или номерами. */
     groupsByName: Boolean = true,
     onGroupsByName: (Boolean) -> Unit = {},
+    /** Короткие названия предметов и своя таблица сокращений. */
+    shortSubjects: Boolean = false,
+    onShortSubjects: (Boolean) -> Unit = {},
+    onSubjects: () -> Unit = {},
     teacherMode: Boolean,
     theme: ThemeChoice,
     update: ReleaseDto?,
@@ -173,6 +177,17 @@ fun SettingsScreen(
             onAddSubgroup = onAddSubgroup,
             onRemoveGroup = onRemoveGroup,
         )
+
+        Section("Предметы") {
+            SwitchRow(
+                "Короткие названия",
+                shortSubjects,
+                onShortSubjects,
+                hint = "«Алгоритмы» вместо «Основы алгоритмизации и программирования». " +
+                    "Не нравится — напишите своё в таблице сокращений.",
+            )
+            ActionButton("Таблица сокращений", onSubjects)
+        }
 
         PinWidgets()
 

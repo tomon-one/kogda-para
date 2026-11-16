@@ -118,6 +118,8 @@ fun TodayScreen(
     onRepick: () -> Unit = {},
     /** Подписи выбранных групп у пар: названиями или номерами (настройки). */
     groupsByName: Boolean = true,
+    /** Как показывать названия предметов: короткие от службы или свои (настройки). */
+    subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
     /** Показать один раз плашку о канале новостей. */
     channelNotice: Boolean = false,
     onChannelSeen: () -> Unit = {},
@@ -313,6 +315,7 @@ fun TodayScreen(
                                 searchLabel = "Поиск по названию группы",
                                 listName = "Список групп",
                                 othersTitle = "Другие группы",
+                                subjects = subjects,
                                 endNote = { n ->
                                     "Всё. " +
                                         plural(n, "группа", "группы", "групп") +
@@ -366,6 +369,7 @@ fun TodayScreen(
                                 openKey = openTeacherKey,
                                 enterKey = teachersEnterKey,
                                 onLeaveOpened = { tab = Tab.RETAKES },
+                                subjects = subjects,
                             )
                           }
                         }
@@ -415,6 +419,7 @@ fun TodayScreen(
                     startKey = startKey,
                     header = listPlates,
                     groupsByName = groupsByName,
+                    subjects = subjects,
                     weekStrip = true,
                     underHead = true,
                     clock = now,

@@ -61,7 +61,7 @@ import ru.whensclass.widget.ThemeChoice
 
 /** Экраны приложения. Их четыре, поэтому обходимся без библиотеки навигации. */
 // Порядок важен: по нему считается, куда «едет» экран при переходе.
-internal enum class Screen { WELCOME, GROUPS, TODAY, SETTINGS }
+internal enum class Screen { WELCOME, GROUPS, TODAY, SETTINGS, SUBJECTS }
 
 
 @Composable
@@ -84,6 +84,9 @@ internal fun App(
     val groupId by container.store.groupId.collectAsState(initial = null)
     val extraGroups by container.repository.extraGroups.collectAsState(initial = emptyList())
     val groupsByName by container.store.groupsByName.collectAsState(initial = true)
+    val shortSubjects by container.store.shortSubjects.collectAsState(initial = false)
+    val subjectShorts by container.store.subjectShorts.collectAsState(initial = emptyMap())
+    val subjects = ru.whensclass.data.SubjectNames(shortSubjects, subjectShorts)
     // Пока не прочитано — считаем увиденной: плашка не мигает при каждом запуске.
     val channelSeen by container.store.channelSeen.collectAsState(initial = true)
     val schedule by container.repository.schedule.collectAsState(initial = null)
@@ -163,7 +166,12 @@ internal fun App(
             pickTeacher = null
             return@BackHandler
         }
-        val back = if (screen == Screen.GROUPS) groupsFrom else Screen.TODAY
+        val back = when (screen) {
+            Screen.GROUPS -> groupsFrom
+            // Из таблицы сокращений — назад в настройки, откуда пришли.
+            Screen.SUBJECTS -> Screen.SETTINGS
+            else -> Screen.TODAY
+        }
         pickExtra = false
         pickTeacher = null
         screen = back
@@ -411,6 +419,9 @@ internal fun App(
                         extraGroups = extraGroups,
                         groupsByName = groupsByName,
                         onGroupsByName = { byName -> scope.launch { container.store.setGroupsByName(byName) } },
+                        shortSubjects = shortSubjects,
+                        onShortSubjects = { on -> scope.launch { container.store.setShortSubjects(on) } },
+                        onSubjects = { screen = Screen.SUBJECTS },
                         // Подгруппы своей группы, ещё не выбранные, — строками с «Добавить», сколько влезет.
                         subgroups = groupName?.let { name -> subgroupsOf(name, lists.groups.orEmpty()) }.orEmpty()
                             .filter { group -> extraGroups.none { it.id == group.id } }
@@ -427,6 +438,15 @@ internal fun App(
                             scope.launch { container.repository.removeExtraGroup(id) }
                         },
                         onBack = { screen = Screen.TODAY },
+                    )
+
+                    Screen.SUBJECTS -> SubjectsScreen(
+                        schedule = schedule,
+                        names = subjects,
+                        onSave = { full, short ->
+                            scope.launch { container.store.setSubjectShort(full, short) }
+                        },
+                        onBack = { screen = Screen.SETTINGS },
                     )
 
                     Screen.TODAY -> TodayScreen(
@@ -456,6 +476,7 @@ internal fun App(
                         },
                         schedule = shownSchedule,
                         groupsByName = groupsByName,
+                        subjects = subjects,
                         channelNotice = !channelSeen,
                         onChannelSeen = { scope.launch { container.store.setChannelSeen() } },
                         fetchedAt = fetchedAt,

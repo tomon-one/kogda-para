@@ -136,6 +136,8 @@ data class UnreadOther(val name: String, val kind: UnreadDay)
 data class LessonDto(
     @SerialName("n") val number: Int,
     @SerialName("s") val subject: String,
+    /** Короткое имя предмета из словаря службы; есть, только когда отличается. */
+    @SerialName("sn") val shortSubject: String? = null,
     @SerialName("k") val kind: String? = null,
     @SerialName("t") val teachers: List<String> = emptyList(),
     @SerialName("r") val room: String? = null,

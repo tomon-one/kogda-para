@@ -91,6 +91,48 @@ function share() {
   ], buttons);
 }
 
+/** Выключатель строкой: тот же вид, что у «Стекла», но без картинки. */
+function switchLine(label, on, onchange, hint) {
+  var input = h('input', { type: 'checkbox', role: 'switch', class: 'switch', 'aria-label': label });
+  input.checked = on;
+  input.addEventListener('change', function () { onchange(input.checked); });
+  return h('label', { class: 'switch-row' },
+    h('span', null, label, hint ? h('span', { class: 'switch-hint' }, hint) : null),
+    input);
+}
+
+/** Таблица сокращений: своё название предмета — этому браузеру. */
+function subjectsEditor(app) {
+  var schedule = app.shown();
+  var seen = {};
+  var items = [];
+  (schedule && schedule.days ? schedule.days : []).forEach(function (day) {
+    (day.l || []).forEach(function (lesson) {
+      if (lesson.x || seen[lesson.s]) return;
+      seen[lesson.s] = true;
+      items.push({ s: lesson.s, sn: lesson.sn });
+    });
+  });
+  items.sort(function (a, b) { return a.s.toLowerCase() < b.s.toLowerCase() ? -1 : 1; });
+  if (!items.length) return h('p', { class: 'muted small' }, 'Расписание ещё не загружено — предметов пока нет.');
+  var custom = app.subjectShorts();
+  return h('div', { class: 'subject-table' },
+    h('p', { class: 'muted small' },
+      'Пустое поле — название из словаря или полное. Своё видит только этот браузер и только на сайте: ' +
+        'уведомления рисует служба, в них словарь.'),
+    items.map(function (item) {
+      var input = h('input', {
+        type: 'text', class: 'subject-input', value: custom[item.s] || '',
+        placeholder: item.sn || item.s, 'aria-label': 'Как показывать «' + item.s + '»',
+      });
+      // Пишем по уходу из поля: перестройка на каждую букву теряла бы курсор.
+      input.addEventListener('change', function () { app.setSubjectShort(item.s, input.value); });
+      return h('label', { class: 'subject-row' },
+        h('span', { class: 'subject-full' }, item.s),
+        input);
+    }));
+}
+
 export function settingsScreen(app) {
   var teacherMode = app.isTeacher();
   var own = app.chosen();
@@ -196,6 +238,12 @@ export function settingsScreen(app) {
               'ближайшем следующем.')),
         link ? actionLink('Открыть таблицу колледжа', link)
           : actionButton('Открыть таблицу колледжа', function () { snackbar('Адрес таблицы ещё не получен от сервера'); }),
+      ]),
+
+      section('Предметы', [
+        switchLine('Короткие названия', app.shortSubjects(), app.setShortSubjects,
+          '«Алгоритмы» вместо «Основы алгоритмизации и программирования». Не нравится — напишите своё ниже.'),
+        subjectsEditor(app),
       ]),
 
       section('Оформление', [

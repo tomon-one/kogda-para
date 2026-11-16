@@ -2,6 +2,7 @@
 // (DayCard в DayList.kt, LessonRow.kt).
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
+import * as store from '../store.js';
 import { dayTitle, capitalize } from '../time.js';
 import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, stateDayText, unreadNotes } from '../schedule.js';
 import {
@@ -119,6 +120,13 @@ function summaryLine(text) {
   return text ? h('span', { class: 'day-summary' }, text) : null;
 }
 
+/** Название предмета как показывать: своё, короткое от службы или полное. */
+function subjectText(lesson) {
+  var custom = store.get('subjectShorts') || {};
+  if (custom[lesson.s]) return custom[lesson.s];
+  return store.get('shortSubjects') === true && lesson.sn ? lesson.sn : lesson.s;
+}
+
 function isForeign(lesson, groups) {
   return groups.length > 0 && (lesson.slots || []).indexOf(0) < 0;
 }
@@ -140,7 +148,7 @@ function lessonRow(lesson, bells, isNow, key, groups, byName, saidAbove) {
   var body = h('div', { class: 'lesson-body' },
     // Чья пара — первой строкой: сначала видно, что она не своя.
     foreign && !saidAbove ? h('div', { class: 'sub only-at' }, onlyAt(lesson.slots, groups)) : null,
-    h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, lesson.s),
+    h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, subjectText(lesson)),
     h('div', { class: 'lesson-meta' }, place),
     lesson.u ? onlineLink(lesson.u, key) : null,
     // Подпись группы — вместо преподавателя: у преподавателя важно, кому

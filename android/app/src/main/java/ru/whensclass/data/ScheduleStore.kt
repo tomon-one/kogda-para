@@ -12,6 +12,15 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import ru.whensclass.BuildConfig
 
+/** Свои короткие названия из хранилища: «полное \t короткое» построчно. */
+internal fun readShorts(raw: String?): Map<String, String> =
+    raw.orEmpty().lineSequence()
+        .mapNotNull { line ->
+            val at = line.indexOf('\t')
+            if (at <= 0 || at == line.lastIndex) null else line.substring(0, at) to line.substring(at + 1)
+        }
+        .toMap()
+
 // Испорченный файл настроек — начать с пустого: иначе каждый старт падает на CorruptionException.
 internal val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     "whensclass",
@@ -235,6 +244,10 @@ class ScheduleStore(internal val context: Context) {
             gone = prefs[KEY_GONE] == "1",
             fetchedAt = prefs[KEY_FETCHED_AT]?.toLongOrNull() ?: 0L,
             theme = prefs[KEY_THEME] ?: "system",
+            subjects = SubjectNames(
+                short = prefs[KEY_SHORT_SUBJECTS] == "1",
+                custom = readShorts(prefs[KEY_SUBJECT_SHORTS]),
+            ),
         )
     }
 
@@ -267,6 +280,24 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit {
             it[KEY_TEACHER_ID] = id
             it[KEY_TEACHER_NAME] = name
+        }
+    }
+
+    /** Короткие названия предметов вместо полных; по умолчанию полные. */
+    val shortSubjects: Flow<Boolean> = context.dataStore.data.map { it[KEY_SHORT_SUBJECTS] == "1" }
+
+    suspend fun setShortSubjects(on: Boolean) {
+        context.dataStore.edit { it[KEY_SHORT_SUBJECTS] = if (on) "1" else "0" }
+    }
+
+    /** Свои короткие названия: полное имя → как человек хочет видеть, строки через перевод строки. */
+    val subjectShorts: Flow<Map<String, String>> = context.dataStore.data.map { readShorts(it[KEY_SUBJECT_SHORTS]) }
+
+    suspend fun setSubjectShort(full: String, short: String?) {
+        context.dataStore.edit { prefs ->
+            val map = readShorts(prefs[KEY_SUBJECT_SHORTS]).toMutableMap()
+            if (short.isNullOrBlank()) map.remove(full) else map[full] = short.trim()
+            prefs[KEY_SUBJECT_SHORTS] = map.entries.joinToString("\n") { "${it.key}\t${it.value}" }
         }
     }
 
@@ -426,5 +457,7 @@ class ScheduleStore(internal val context: Context) {
         val editing: Boolean = false,
         val fetchedAt: Long,
         val theme: String,
+        /** Как показывать названия предметов — виджету и напоминаниям тоже. */
+        val subjects: SubjectNames = SubjectNames(),
     )
 }

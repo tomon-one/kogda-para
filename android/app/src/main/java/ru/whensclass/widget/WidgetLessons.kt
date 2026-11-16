@@ -40,6 +40,8 @@ internal fun Lessons(
     modifier: GlanceModifier = GlanceModifier.fillMaxWidth(),
     /** Занято над парами сверх шапки (сводка дня). */
     reserved: Dp = 0.dp,
+    /** Как показывать названия предметов: короткие или свои. */
+    subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
 ) {
     if (lessons.isEmpty()) {
         // Подстраховка: без строк виджет остался бы одной шапкой.
@@ -92,7 +94,7 @@ internal fun Lessons(
             // Пара и отступ под ней — одним контейнером: в контейнере не больше десяти детей.
             Column(modifier = GlanceModifier.fillMaxWidth()) {
                 // Отменённая пара в своё время — не «идёт сейчас».
-                LessonRow(lesson, day, bells, isNow = lesson.number == current && !lesson.isCancelled, fit, colors)
+                LessonRow(lesson, day, bells, isNow = lesson.number == current && !lesson.isCancelled, fit, colors, subjects)
                 Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 4.dp))
             }
         }
@@ -124,6 +126,7 @@ private fun LessonRow(
     isNow: Boolean,
     fit: Fit,
     colors: Palette,
+    subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
 ) {
     Row(
         modifier = GlanceModifier
@@ -177,7 +180,7 @@ private fun LessonRow(
         Spacer(GlanceModifier.width(6.dp))
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
-                lesson.subject,
+                subjects.text(lesson),
                 maxLines = 1,
                 style = TextStyle(
                     fontSize = 13.sp,

@@ -161,8 +161,11 @@ fun lessonTime(bells: Map<String, List<String>>, number: Int): String? {
 }
 
 /** Названия пар одного номера без повторов: у преподавателя одна пара в двух залах — две записи. */
-fun distinctSubjects(lessons: List<LessonDto>): List<String> =
-    lessons.map { it.subject.trim(' ', '.') }.distinctBy { it.lowercase() }
+fun distinctSubjects(
+    lessons: List<LessonDto>,
+    names: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
+): List<String> =
+    lessons.map { names.text(it).trim(' ', '.') }.distinctBy { it.lowercase() }
 
 /**
  * Названия пар одного номера в одну строку: общая часть один раз —
