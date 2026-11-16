@@ -9,6 +9,7 @@ from __future__ import annotations
 import urllib.parse
 
 from . import webpush
+from .digest import DIGEST_MAX, DIGEST_MIN
 
 # Службы рассылки браузеров: без списка служба слала бы POST на любой адрес,
 # который ей назовут, — в том числе во внутреннюю сеть машины.
@@ -75,6 +76,11 @@ def parse_subscription(body: object) -> dict:
     changes_on = body.get("changes", False)
     if not isinstance(changes_on, bool):
         raise BadSubscription("changes — true или false")
+    # Минута дня по часам колледжа; 0 — сводки нет.
+    digest = body.get("digest", 0)
+    if isinstance(digest, bool) or not isinstance(digest, int) \
+            or not (digest == 0 or DIGEST_MIN <= digest <= DIGEST_MAX):
+        raise BadSubscription(f"digest — 0 или от {DIGEST_MIN} до {DIGEST_MAX} минут дня")
     # Какой сайт подписан — туда и ведёт нажатие на уведомление.
     site = body.get("site", "main")
     if site not in ("main", "tested"):
@@ -87,6 +93,7 @@ def parse_subscription(body: object) -> dict:
         "id": subject,
         "changes": changes_on,
         "remind": remind,
+        "digest": digest,
         "site": site,
     }
 

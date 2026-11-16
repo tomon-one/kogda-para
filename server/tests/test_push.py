@@ -11,7 +11,7 @@ import datetime as dt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from whensclass.push import changes, service, subscription, webpush
+from whensclass.push import changes, digest, service, subscription, webpush
 from whensclass.push.webpush import b64encode
 
 # --- подписки ------------------------------------------------------------------
@@ -53,10 +53,16 @@ def _body(**extra) -> dict:
 def test_subscription_parsed_and_checked():
     sub = subscription.parse_subscription(_body())
     assert sub["kind"] == "group" and sub["remind"] == 20 and sub["changes"] is True
+    assert sub["digest"] == 0
+    # Сводка — минута дня по часам колледжа, 0 — выключена.
+    assert subscription.parse_subscription(_body(digest=20 * 60))["digest"] == 1200
+    assert subscription.parse_subscription(_body(digest=digest.DIGEST_MAX))["digest"] == 1439
     for bad in (
         _body(kind="room"), _body(id=""), _body(remind=5), _body(remind=241), _body(remind=True),
         _body(changes="да"), _body(keys={"p256dh": "AAAA", "auth": "AAAA"}),
         _body(endpoint="https://example.com/x"), [], "текст",
+        _body(digest=5), _body(digest=digest.DIGEST_MIN - 1), _body(digest=1440),
+        _body(digest=True), _body(digest="20:00"),
     ):
         with pytest.raises(subscription.BadSubscription):
             subscription.parse_subscription(bad)
@@ -132,6 +138,31 @@ def test_tested_site_is_opened_by_its_notifications(tmp_path):
     assert push.sent[0].message["notification"]["navigate"] == "https://kogda-para-nsk.ru/tested/"
     with pytest.raises(subscription.BadSubscription):
         subscription.parse_subscription(_body(site="evil"))
+
+
+def test_evening_digest_goes_once_at_its_minute(tmp_path, snapshots):
+    _, _, after, at, day, _ = snapshots
+    push = Recorder(tmp_path, _vapid())
+    # Только сводка: ни изменений, ни напоминаний — подписка всё равно нужна.
+    assert push.subscribe(subscription.parse_subscription(
+        _body(id="isp-924-2", changes=False, remind=0, digest=20 * 60)), day)
+    push.sent.clear()
+    # Вечер накануне 8 сентября: сводка о завтрашнем дне.
+    push.remind(after, at, now=dt.datetime(2026, 9, 7, 20, 0))
+    digests = [j for j in push.sent if j.message["notification"]["data"]["t"] == "digest"]
+    assert len(digests) == 1
+    note = digests[0].message["notification"]
+    assert note["title"].startswith("Завтра к ")
+    assert note["data"]["day"] == "2026-09-08"
+    assert digests[0].sub["endpoint"] == "https://web.push.apple.com/abc"
+    # Та же минута и следующие — молча: отметка за завтрашний день.
+    push.sent.clear()
+    push.remind(after, at, now=dt.datetime(2026, 9, 7, 20, 1))
+    assert not [j for j in push.sent if j.message["notification"]["data"]["t"] == "digest"]
+    # Перезапуск службы отметку помнит.
+    again = Recorder(tmp_path, _vapid())
+    again.remind(after, at, now=dt.datetime(2026, 9, 7, 20, 5))
+    assert not [j for j in again.sent if j.message["notification"]["data"]["t"] == "digest"]
 
 
 def test_after_refresh_tells_only_subscribers_of_that_group(tmp_path, snapshots):

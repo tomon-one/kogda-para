@@ -15,6 +15,13 @@ test('второй выключатель до ответа службы — о�
   assert.deepEqual(push.intended(), push.choice());
   push.update({ changes: true, remind: 0 }, { kind: 'group', id: 'isp-1' });
   // Служба ещё не ответила, сохранённого нет — а выбор уже этот.
-  assert.deepEqual(push.choice(), { changes: false, remind: 0 });
+  assert.deepEqual(push.choice(), { changes: false, remind: 0, digest: 0 });
   assert.deepEqual(push.intended(), { changes: true, remind: 0 });
+});
+
+test('вечерняя сводка: по умолчанию выключена, время — 20:00', () => {
+  assert.equal(push.choice().digest, 0);
+  assert.equal(push.lastDigest(), 20 * 60);
+  assert.equal(push.DIGEST_MIN, 16 * 60);
+  assert.equal(push.DIGEST_MAX, 23 * 60 + 59);
 });

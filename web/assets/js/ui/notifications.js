@@ -3,7 +3,7 @@
 
 import { h, actionButton, isIos, isIpad, isAndroid, isChrome, dialog, closeDialog, section } from './dom.js';
 import { durationShort, tileLabel } from '../format.js';
-import { REMIND_CHOICES, lastRemind, revoked, service } from '../push.js';
+import { DIGEST_DEFAULT, DIGEST_MAX, DIGEST_MIN, REMIND_CHOICES, lastDigest, lastRemind, revoked, service } from '../push.js';
 import { CHANNEL } from '../store.js';
 
 /** Выключатель строкой: подпись слева, бегунок справа (SwitchRow в приложении). */
@@ -58,9 +58,9 @@ export function notifications(app, teacherMode) {
 
   // Браузер сам снял разрешение: выключатели — как есть на деле, выключены.
   var lost = revoked();
-  var now = lost ? { changes: false, remind: 0 } : app.pushChoice();
+  var now = lost ? { changes: false, remind: 0, digest: 0 } : app.pushChoice();
   function change(next) {
-    if ((app.pushEnabled() && !lost) || (!next.changes && !next.remind)) {
+    if ((app.pushEnabled() && !lost) || (!next.changes && !next.remind && !next.digest)) {
       app.setPush(next);
       return;
     }
@@ -96,7 +96,7 @@ export function notifications(app, teacherMode) {
     // Порядок: напоминание, подсказка, минуты, изменения.
     switchRow('Напоминать о паре', now.remind > 0, function (on) {
       var cur = lost ? now : app.pushIntended();
-      change({ changes: cur.changes, remind: on ? (cur.remind || lastRemind()) : 0 });
+      change({ changes: cur.changes, remind: on ? (cur.remind || lastRemind()) : 0, digest: cur.digest || 0 });
     }, 'push-remind'),
   ];
   if (now.remind > 0) {
@@ -105,7 +105,11 @@ export function notifications(app, teacherMode) {
     // выглядит чужим, и своего времени в нём не задать.
     body.push(h('div', { class: 'value-row' }, h('span', null, 'За сколько предупредить'),
       actionButton(durationShort(now.remind), function () {
-        remindDialog(now.remind, function (m) { app.setPush({ changes: app.pushIntended().changes, remind: m }); });
+        remindDialog(now.remind, function (m) {
+          app.setPush({
+            changes: app.pushIntended().changes, remind: m, digest: app.pushIntended().digest || 0,
+          });
+        });
       }, 'fixed', 'remind-minutes', 'За сколько предупредить: ' + durationShort(now.remind) + '. Изменить')));
     body.push(h('p', { class: 'warning small' }, ios
       ? 'Нестабильно: ' + device[2] + ' может задержать напоминание.'
@@ -116,9 +120,29 @@ export function notifications(app, teacherMode) {
   // было при отрисовке (app.pushIntended).
   body.push(switchRow('Сообщать об изменениях', now.changes, function (on) {
     var cur = lost ? now : app.pushIntended();
-    change({ changes: on, remind: cur.remind });
+    change({ changes: on, remind: cur.remind, digest: cur.digest || 0 });
   }, 'push-changes'));
   body.push(h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.'));
+
+  // Вечерняя сводка: первая пара завтрашнего дня.
+  body.push(switchRow('Вечерняя сводка', now.digest > 0, function (on) {
+    var cur = lost ? now : app.pushIntended();
+    change({
+      changes: cur.changes, remind: cur.remind, digest: on ? (cur.digest || lastDigest()) : 0,
+    });
+  }, 'push-digest'));
+  if (now.digest > 0) {
+    body.push(h('p', { class: 'muted small' }, 'Первая пара завтрашнего дня. В субботу вечером не приходит; ' +
+      'нет пар — молчит.'));
+    body.push(h('div', { class: 'value-row' }, h('span', null, 'Во сколько'),
+      actionButton(timeText(now.digest), function () {
+        digestDialog(now.digest, function (minute) {
+          app.setPush({
+            changes: app.pushIntended().changes, remind: app.pushIntended().remind, digest: minute,
+          });
+        });
+      }, 'fixed', 'digest-time', 'Вечерняя сводка в ' + timeText(now.digest) + '. Изменить')));
+  }
   if (!ios) {
     // Служба рассылки — по адресу подписки, до неё — по браузеру: у Safari на
     // Mac это Apple, у Edge — Microsoft, а не Google.
@@ -138,6 +162,85 @@ export function notifications(app, teacherMode) {
 /** Границы своего времени — те же, что у службы (REMIND_MIN, REMIND_MAX в push/subscription.py). */
 var REMIND_MIN = 10;
 var REMIND_MAX = 240;
+
+/** «20:00» из минуты дня. */
+function timeText(minutes) {
+  var h = Math.floor(minutes / 60);
+  var m = minutes % 60;
+  return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+}
+
+/** Окно времени сводки: быстрые вечера и своё «ЧЧ:ММ». */
+function digestDialog(current, onPick) {
+  var quick = [17 * 60, 18 * 60, 19 * 60, 20 * 60, 21 * 60, 22 * 60];
+  var hh = h('input', {
+    type: 'text', inputmode: 'numeric', maxlength: '2', class: 'own-input', 'aria-label': 'Часы',
+  });
+  var mm = h('input', {
+    type: 'text', inputmode: 'numeric', maxlength: '2', class: 'own-input', 'aria-label': 'Минуты',
+  });
+  if (quick.indexOf(current) < 0) {
+    hh.value = String(Math.floor(current / 60));
+    mm.value = ('0' + (current % 60)).slice(-2);
+  }
+  var done = actionButton('Готово', submit, 'fixed');
+  var hint = h('p', { class: 'muted small own-hint' },
+    'С ' + timeText(DIGEST_MIN) + ' до ' + timeText(DIGEST_MAX));
+
+  function value() {
+    if (!/^[0-9]{1,2}$/.test(hh.value) || !/^[0-9]{1,2}$/.test(mm.value)) return 0;
+    var h = Number(hh.value);
+    var m = Number(mm.value);
+    var all = h * 60 + m;
+    return m < 60 && all >= DIGEST_MIN && all <= DIGEST_MAX ? all : 0;
+  }
+  function update() {
+    var digitsH = hh.value.replace(/[^0-9]/g, '').slice(0, 2);
+    if (digitsH !== hh.value) hh.value = digitsH;
+    var digitsM = mm.value.replace(/[^0-9]/g, '').slice(0, 2);
+    if (digitsM !== mm.value) mm.value = digitsM;
+    var ok = !!value();
+    done.disabled = !ok;
+    hint.classList.toggle('error', (!!hh.value || !!mm.value) && !ok);
+  }
+  function submit() {
+    var minute = value();
+    if (!minute) return;
+    closeDialog();
+    onPick(minute);
+  }
+  hh.addEventListener('input', update);
+  mm.addEventListener('input', update);
+  [hh, mm].forEach(function (input) {
+    input.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      submit();
+    });
+  });
+  update();
+
+  dialog('Вечерняя сводка', [
+    h('div', { class: 'dialog-caption' }, 'Быстрый выбор'),
+    h('div', { class: 'tiles', role: 'radiogroup', 'aria-label': 'Быстрый выбор' }, quick.map(function (minute) {
+      var on = minute === current;
+      return h('button', {
+        type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false', 'aria-label': timeText(minute),
+        class: 'tile' + (on ? ' on' : ''),
+        onclick: function () {
+          closeDialog();
+          onPick(minute);
+        },
+      }, h('span', { class: 'tile-number' }, timeText(minute)));
+    })),
+    h('div', { class: 'dialog-caption' }, 'Своё время'),
+    h('div', { class: 'own-row' },
+      h('label', { class: 'own-field' }, hh, h('span', { class: 'own-unit', 'aria-hidden': 'true' }, 'ч')),
+      h('label', { class: 'own-field' }, mm, h('span', { class: 'own-unit', 'aria-hidden': 'true' }, 'мин')),
+      done),
+    hint,
+  ], [], { close: true, cls: 'remind-dialog' });
+}
 
 /**
  * Окно выбора минут (ReminderDialog.kt): сверху крестик, быстрый выбор

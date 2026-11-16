@@ -25,6 +25,8 @@ data class PhoneState(
     val subgroupChannelOff: Boolean = false,
     /** Канал «Новые версии» выключен. */
     val updateChannelOff: Boolean = false,
+    /** Канал «Вечерняя сводка» выключен. */
+    val digestChannelOff: Boolean = false,
     /** Почему фоновая работа может не идти — словами; пусто — не видно причин. */
     val backgroundLimits: List<String> = emptyList(),
     /** Пояс телефона не совпадает с поясом колледжа при выключенном автоопределении. */
@@ -41,6 +43,7 @@ data class PhoneState(
             serverChannelOff = Notifications.channelOff(context, Notifications.CHANNEL_SERVER),
             subgroupChannelOff = Notifications.channelOff(context, Notifications.CHANNEL_SUBGROUP),
             updateChannelOff = Notifications.channelOff(context, Notifications.CHANNEL_UPDATE),
+            digestChannelOff = Notifications.channelOff(context, Notifications.CHANNEL_DIGEST),
             backgroundLimits = backgroundLimits(context),
             zoneWarning = zoneWarning(context),
             canInstall = runCatching { context.packageManager.canRequestPackageInstalls() }.getOrDefault(true),

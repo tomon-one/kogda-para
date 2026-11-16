@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 internal val KEY_GROUP_ID = stringPreferencesKey("group_id")
 internal val KEY_SERVER_SINCE = stringPreferencesKey("server_since")
 internal val KEY_SERVER_CHECKED = stringPreferencesKey("server_checked")
+internal val KEY_DIGEST = stringPreferencesKey("digest_minutes")
+internal val KEY_DIGEST_LAST = stringPreferencesKey("digest_last")
 internal val KEY_STALE_NOTIFIED = stringPreferencesKey("stale_notified")
 internal val KEY_LISTS_AT = stringPreferencesKey("lists_at")
 internal val KEY_GITHUB_AT = stringPreferencesKey("github_at")

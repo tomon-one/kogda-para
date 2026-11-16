@@ -134,6 +134,10 @@
             android:name=".notify.LessonAlarmReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".notify.DigestReceiver"
+            android:exported="false" />
+
         <!-- Итог установки обновления от установщика Android. -->
         <receiver
             android:name=".data.InstallResultReceiver"

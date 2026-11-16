@@ -79,6 +79,10 @@ fun SettingsScreen(
     notifyUpdates: Boolean,
     notifyServer: Boolean = true,
     notifyGroupsGone: Boolean = true,
+    /** Вечерняя сводка: минута дня, 0 — выключена. */
+    digestMinutes: Int = 0,
+    onDigest: (Boolean) -> Unit = {},
+    onDigestTime: (Int) -> Unit = {},
     exactAlarms: Boolean,
     notifications: Boolean,
     /** Что телефон делает с приложением помимо его настроек. */
@@ -121,6 +125,17 @@ fun SettingsScreen(
             onPick = {
                 onNotifyBefore(it)
                 askMinutes = false
+            },
+        )
+    }
+    var askDigest by rememberSaveable { mutableStateOf(false) }
+    if (askDigest) {
+        DigestTimeDialog(
+            current = digestMinutes.takeIf { it > 0 } ?: ru.whensclass.notify.Digest.DEFAULT,
+            onDismiss = { askDigest = false },
+            onPick = {
+                onDigestTime(it)
+                askDigest = false
             },
         )
     }
@@ -206,6 +221,9 @@ fun SettingsScreen(
             onNotifyServer = onNotifyServer,
             notifyGroupsGone = notifyGroupsGone,
             onNotifyGroupsGone = onNotifyGroupsGone,
+            digestMinutes = digestMinutes,
+            onDigest = onDigest,
+            onAskDigest = { askDigest = true },
             notifyUpdates = notifyUpdates,
             onNotifyUpdates = onNotifyUpdates,
         )

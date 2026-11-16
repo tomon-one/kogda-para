@@ -135,6 +135,10 @@ internal fun NotificationsSection(
     onNotifyGroupsGone: (Boolean) -> Unit,
     notifyUpdates: Boolean,
     onNotifyUpdates: (Boolean) -> Unit,
+    /** Вечерняя сводка: минута дня, 0 — выключена. */
+    digestMinutes: Int = 0,
+    onDigest: (Boolean) -> Unit = {},
+    onAskDigest: () -> Unit = {},
 ) {
     Section("Уведомления") {
         NotificationsDenied(notifications)
@@ -178,6 +182,17 @@ internal fun NotificationsSection(
                 ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SUBGROUP)
             }
         }
+
+        // Вечерняя сводка: первая пара завтрашнего дня, по умолчанию выключена.
+        SwitchRow(
+            "Вечерняя сводка", digestMinutes > 0, onDigest,
+            hint = "Первая пара завтрашнего дня. В субботу вечером не приходит; нет пар — молчит."
+                .takeIf { digestMinutes > 0 },
+        )
+        if (digestMinutes > 0 && notifications && phone.digestChannelOff) {
+            ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_DIGEST)
+        }
+        if (digestMinutes > 0) DigestRow(current = digestMinutes, onOpen = onAskDigest)
 
         // Магазина нет, обновление никто не принесёт.
         SwitchRow(

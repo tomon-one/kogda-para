@@ -95,4 +95,6 @@ def welcome_text(sub: dict) -> str:
         what.append("отмены и замены на сегодня и завтра")
     if sub["remind"]:
         what.append("напоминания о паре")
+    if sub.get("digest"):
+        what.append("сводка о завтрашнем дне")
     return "Сюда будут приходить " + " и ".join(what) + "."

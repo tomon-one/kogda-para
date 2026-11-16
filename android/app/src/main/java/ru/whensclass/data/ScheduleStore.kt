@@ -115,6 +115,23 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit { it[KEY_NOTIFY_ON] = if (enabled) "1" else "0" }
     }
 
+    /** Вечерняя сводка: минута дня по часам колледжа; 0 — выключена. */
+    val digestMinutes: Flow<Int> = context.dataStore.data.map { it[KEY_DIGEST]?.toIntOrNull() ?: 0 }
+
+    suspend fun digestMinutes(): Int = digestMinutes.first()
+
+    suspend fun setDigestMinutes(minutes: Int) {
+        context.dataStore.edit {
+            it[KEY_DIGEST] = minutes.toString()
+            // Выключение помнит выбранный вечер: включив снова, человек ждёт своё время.
+            if (minutes > 0) it[KEY_DIGEST_LAST] = minutes.toString()
+        }
+    }
+
+    /** Когда приходила сводка, пока её не выключили; по умолчанию 20:00. */
+    suspend fun digestLast(): Int = context.dataStore.data.first()[KEY_DIGEST_LAST]
+        ?.toIntOrNull()?.takeIf { it > 0 } ?: ru.whensclass.notify.Digest.DEFAULT
+
     private fun rememberedMinutes(prefs: Preferences): Int =
         prefs[KEY_NOTIFY_BEFORE]?.toIntOrNull()?.takeIf { it > 0 } ?: DEFAULT_NOTIFY_BEFORE
 

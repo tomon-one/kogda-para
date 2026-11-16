@@ -53,15 +53,33 @@ export function blocker() {
   return null;
 }
 
-/** Что выбрано: {changes, remind} — remind в минутах, 0 — не напоминать. */
+/**
+ * Что выбрано: {changes, remind, digest} — remind в минутах, digest — минута
+ * дня вечерней сводки (0 — выключена).
+ */
 export function choice() {
   var saved = store.get(KEY);
-  return { changes: !!(saved && saved.changes), remind: (saved && saved.remind) || 0 };
+  return {
+    changes: !!(saved && saved.changes),
+    remind: (saved && saved.remind) || 0,
+    digest: (saved && saved.digest) || 0,
+  };
 }
 
 export function enabled() {
   var c = choice();
-  return c.changes || c.remind > 0;
+  return c.changes || c.remind > 0 || c.digest > 0;
+}
+
+/** Границы вечерней сводки — те же, что у службы (push/digest.py). */
+export var DIGEST_MIN = 16 * 60;
+export var DIGEST_MAX = 23 * 60 + 59;
+export var DIGEST_DEFAULT = 20 * 60;
+
+/** Во сколько приходит сводка, если её включают впервые; выключение помнит выбор. */
+export function lastDigest() {
+  var saved = store.get(KEY);
+  return (saved && (saved.digest || saved.lastDigest)) || DIGEST_DEFAULT;
 }
 
 /** За сколько напоминать при включении: прежний выбор (его помнит и выключение), иначе 20. */
@@ -212,7 +230,9 @@ function settle(next, run) {
 
 /** Включить или поменять. `who` — {kind: 'group'|'teacher', id}. */
 export function update(next, who) {
-  if (!next.changes && !(next.remind > 0)) return settle({ changes: false, remind: 0 }, disable());
+  if (!next.changes && !(next.remind > 0) && !(next.digest > 0)) {
+    return settle({ changes: false, remind: 0, digest: 0 }, disable());
+  }
   // Вопрос о разрешении — в этом же нажатии, до очереди: айфон спрашивает
   // только по нажатию.
   var permission = askPermission();
@@ -232,10 +252,12 @@ function subscribe(next, who, permission) {
       id: who.id,
       changes: !!next.changes,
       remind: next.remind || 0,
+      digest: next.digest || 0,
       site: SITE,
     }).then(function () {
       store.set(KEY, {
         changes: !!next.changes, remind: next.remind || 0, last: next.remind || lastRemind(),
+        digest: next.digest || 0, lastDigest: next.digest || lastDigest(),
         kind: who.kind, id: who.id, key: found.key, site: SITE, sent: Date.now(),
         endpoint: json.endpoint,
       });
@@ -249,8 +271,8 @@ var REMOVE_KEY = 'push-remove';
 /** Выключить: отписать браузер и стереть запись у службы. */
 export function disable() {
   return serial(function () {
-    // Минуты — помнить для следующего включения.
-    store.set(KEY, { last: lastRemind() });
+    // Минуты и время сводки — помнить для следующего включения.
+    store.set(KEY, { last: lastRemind(), lastDigest: lastDigest() });
     if (!supported()) return choice();
     return ownRegistration().then(function (registration) {
       return registration ? registration.pushManager.getSubscription() : null;

@@ -43,6 +43,8 @@ object LessonAlarms {
     suspend fun rescheduleNow(context: Context) {
         val app = context.applicationContext
         val store = AppContainer.store(app)
+        // Вечерняя сводка — своя настройка: переставляется и тогда, когда напоминаний нет.
+        Digest.rescheduleNow(app)
         val minutes = store.notifyBeforeMinutes()
         cancelAll(app)
         if (minutes <= 0) return

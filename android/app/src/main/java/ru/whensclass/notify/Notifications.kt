@@ -28,6 +28,7 @@ object Notifications {
     // прежний канал висеть в настройках.
     const val CHANNEL_SERVER = "server_down"
     const val CHANNEL_SUBGROUP = "subgroup_gone"
+    const val CHANNEL_DIGEST = "evening_digest"
 
     /** Названия каналов, как их показывает телефон: ими же говорят настройки и отчёт. */
     private val NAMES = mapOf(
@@ -36,6 +37,7 @@ object Notifications {
         CHANNEL_SERVER to "Сбои сервера",
         CHANNEL_SUBGROUP to "Другие группы",
         CHANNEL_UPDATE to "Новые версии",
+        CHANNEL_DIGEST to "Вечерняя сводка",
     )
 
     fun channelName(channel: String): String = NAMES[channel] ?: channel
@@ -46,6 +48,7 @@ object Notifications {
     // У каждого вида свой id: с общим новое уведомление затирает непрочитанное другого вида.
     private const val ID_SERVER = 4
     private const val ID_SUBGROUP = 5
+    private const val ID_DIGEST = 6
 
     fun ensureChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -83,6 +86,13 @@ object Notifications {
                 channelName(CHANNEL_UPDATE),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply { description = "Вышла новая сборка приложения" },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_DIGEST,
+                channelName(CHANNEL_DIGEST),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply { description = "Первая пара завтрашнего дня" },
         )
     }
 
@@ -212,6 +222,11 @@ object Notifications {
      */
     fun serverDown(context: Context, title: String, text: String): Boolean =
         show(context, CHANNEL_SERVER, ID_SERVER, title, text, day = null) && !channelOff(context, CHANNEL_SERVER)
+
+    /** Вечерняя сводка: куда идти завтра. */
+    fun digest(context: Context, title: String, text: String, day: String?): Boolean =
+        show(context, CHANNEL_DIGEST, ID_DIGEST, title, text, day) &&
+            !channelOff(context, CHANNEL_DIGEST)
 
     /** Сервер починился — снять «не обновляется» из шторки. */
     fun serverBack(context: Context) {

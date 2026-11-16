@@ -29,7 +29,7 @@ import httpx
 from ..config import settings
 from ..service import alerts
 from ..storage.atomic import write_json
-from . import changes, webpush
+from . import changes, digest, webpush
 from .delivery import MAX_PENDING_RETRIES, TIMEOUT, Delivery, Job, _Delayed
 from .labels import _cancelled
 from .messages import (
@@ -85,6 +85,11 @@ class Push(Delivery, Quiet):
         self._reminded_day: str | None = None
         self._last_remind: dt.datetime | None = None
         self._load_reminded()
+        # Вечерняя сводка: кому за какой завтрашний день уже ушла — на диске,
+        # чтобы выкладка в минуту сводки не прислала её дважды.
+        self._digest_path = state_dir / "push-digest.json"
+        self._digest_sent: set[str] = set()
+        self._load_digest()
         # Отложить повтор: в тестах подменяется. False — очередь полна.
         self._delayed = _Delayed(MAX_PENDING_RETRIES)
         self._later = self._delayed.add
@@ -129,7 +134,7 @@ class Push(Delivery, Quiet):
         доходят, а не ждёт первой отмены пары.
         """
         with self._lock:
-            if not sub["changes"] and not sub["remind"]:
+            if not sub["changes"] and not sub["remind"] and not sub.get("digest"):
                 self.unsubscribe(sub["endpoint"])
                 return True
             old = self._subs.get(sub["endpoint"])
@@ -150,9 +155,11 @@ class Push(Delivery, Quiet):
             self._save()
         # В журнал — служба рассылки и выбор, без адреса и группы: по ним
         # видно, откуда взялось лишнее «Уведомления включены».
-        log.info("%s подписка на уведомления: %s, изменения %s, напоминание %s, всего %d",
+        log.info("%s подписка на уведомления: %s, изменения %s, напоминание %s, "
+                 "сводка %s, всего %d",
                  "новая" if new else "обновлена", _host(sub["endpoint"]),
-                 "да" if sub["changes"] else "нет", sub["remind"] or "нет", len(self._subs))
+                 "да" if sub["changes"] else "нет", sub["remind"] or "нет",
+                 _clock_text(sub.get("digest")) or "нет", len(self._subs))
         if new:
             self._dispatch([Job(sub, message(sub, "hello", "Уведомления включены",
                                              welcome_text(sub)), 3600)])
@@ -427,6 +434,20 @@ class Push(Delivery, Quiet):
         except OSError as exc:
             log.warning("отметки напоминаний не записались: %s", exc)
 
+    def _load_digest(self) -> None:
+        try:
+            data = json.loads(self._digest_path.read_text("utf-8"))
+            marks = data.get("marks", []) if isinstance(data, dict) else []
+            self._digest_sent = {str(mark) for mark in marks}
+        except (OSError, ValueError, TypeError):
+            self._digest_sent = set()
+
+    def _save_digest(self) -> None:
+        try:
+            write_json(self._digest_path, {"marks": sorted(self._digest_sent)})
+        except OSError as exc:
+            log.warning("отметки вечерней сводки не записались: %s", exc)
+
     def remind(self, snapshot, teachers, now: dt.datetime | None = None, fresh: bool = True) -> None:
         """Раз в минуту: кому пора напомнить о паре.
 
@@ -479,6 +500,54 @@ class Push(Delivery, Quiet):
             log.info("напоминания о паре: %d", len(jobs))
             self._save_reminded()
             self._dispatch(jobs)
+        self._digest(snapshot, teachers, self._snapshot_subs(), now, since, today)
+
+    def _digest(self, snapshot, teachers, subs, now: dt.datetime, since: dt.datetime,
+                today: dt.date) -> None:
+        """Вечерняя сводка: у кого её минута пришлась на время с прошлого
+        запуска (после перезапуска — тоже) и у кого ещё нет отметки за
+        завтрашний день. Готовое — только когда день прочитан и пары есть."""
+        wanted = [s for s in subs if s.get("digest") and not s.get("gone")]
+        if not wanted or not digest.evening(today):
+            return
+        tomorrow = today + dt.timedelta(days=1)
+        payloads: dict[tuple[str, str], dict | None] = {}
+        jobs = []
+        for sub in wanted:
+            minutes = sub["digest"]
+            moment = dt.datetime.combine(today, dt.time(minutes // 60, minutes % 60))
+            if not since < moment <= now:
+                continue
+            mark = tomorrow.isoformat() + "|" + _mark(sub["endpoint"])
+            if mark in self._digest_sent:
+                continue
+            key = (sub["kind"], sub["id"])
+            if key not in payloads:
+                try:
+                    payloads[key] = _payload(snapshot, teachers, key, today, self.known_teacher)
+                except Exception:
+                    log.exception("вечерняя сводка для %s не посчиталась", key[0])
+                    payloads[key] = None
+            pair = digest.text(payloads[key], tomorrow)
+            if pair is None:
+                continue
+            title, body = pair
+            self._digest_sent.add(mark)
+            jobs.append(Job(sub, message(sub, "digest", title, body,
+                                         {"day": tomorrow.isoformat()}), 12 * 3600))
+        if jobs:
+            log.info("вечерняя сводка: %d", len(jobs))
+            # Старые отметки — прочь: файл не должен расти годами.
+            keep = today.isoformat() + "|"
+            self._digest_sent = {m for m in self._digest_sent if m >= keep}
+            self._save_digest()
+            self._dispatch(jobs)
+
+
+def _clock_text(minutes: int | None) -> str | None:
+    if not minutes:
+        return None
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
 def _reminder(sub: dict, alarm: dict, start: int, end: int) -> dict:

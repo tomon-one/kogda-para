@@ -113,6 +113,7 @@ internal fun App(
     val tableUrl by container.store.sourceUrl.collectAsState(initial = null)
     val serverSince by container.store.serverSince.collectAsState(initial = null)
     val serverChecked by container.store.serverChecked.collectAsState(initial = null)
+    val digestMinutes by container.store.digestMinutes.collectAsState(initial = 0)
     val gone by container.store.gone.collectAsState(initial = false)
     val notFoundPending by container.store.notFoundPending.collectAsState(initial = false)
     val teacherName by container.store.teacherName.collectAsState(initial = null)
@@ -367,6 +368,21 @@ internal fun App(
                         notifyUpdates = notifyUpdates,
                         notifyServer = notifyServer,
                         notifyGroupsGone = notifyGroupsGone,
+                        digestMinutes = digestMinutes,
+                        onDigest = { on ->
+                            scope.launch {
+                                container.store.setDigestMinutes(
+                                    if (on) container.store.digestLast() else 0,
+                                )
+                                ru.whensclass.notify.Digest.reschedule(context)
+                            }
+                        },
+                        onDigestTime = { minutes ->
+                            scope.launch {
+                                container.store.setDigestMinutes(minutes)
+                                ru.whensclass.notify.Digest.reschedule(context)
+                            }
+                        },
                         exactAlarms = exactAlarms,
                         notifications = notifications,
                         phone = phone,
