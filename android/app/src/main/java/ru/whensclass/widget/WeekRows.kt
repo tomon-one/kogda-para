@@ -79,7 +79,7 @@ internal fun Week(
                             it.date == day.date.plusDays(1) &&
                                 ru.whensclass.ui.freeOwnDay(it.date, it.absent, it.unread, it.lessons)
                         } == true
-                        EmptyLine(day.date, colors, day.absent, day.unread != null, teacher, nextFree)
+                        EmptyLine(day.date, colors, day.absent, day.unread != null, teacher, nextFree, day.state)
                     } else {
                         // Заголовок дня занял одного ребёнка. С другими группами пар бывает больше
                         // девяти — последняя строка говорит, сколько не поместилось.
@@ -232,6 +232,8 @@ private fun span(day: WeekDay, bells: Map<String, List<String>>): String? {
 private fun EmptyLine(
     date: LocalDate, colors: Palette, absent: Boolean = false, unread: Boolean = false,
     teacher: Boolean = false, nextFree: Boolean = false,
+    /** Календарный график: с ним день не «пустой», а сессия, каникулы или практика. */
+    state: ru.whensclass.data.DayState? = null,
 ) {
     val context = LocalContext.current
     Text(
@@ -239,6 +241,7 @@ private fun EmptyLine(
         // Свободный будний — та же фраза, что на экране в этот день, строчными, как строки недели.
         when {
             unread -> "сервер не прочитал день"
+            state != null -> ru.whensclass.ui.stateWord(state)
             absent -> "выходной"
             else -> ru.whensclass.ui.freeDay(date.toString(), teacher, nextFree, now = collegeNow())
                 .replaceFirstChar { it.lowercase() }

@@ -88,6 +88,8 @@ internal class WeekDay(
     val unread: ru.whensclass.data.UnreadDay? = null,
     /** Свои звонки дня; пусто — обычные. */
     val ownBells: Map<String, List<String>> = emptyMap(),
+    /** Календарный график: сессия, каникулы или практика. */
+    val state: ru.whensclass.data.DayState? = null,
 )
 
 internal fun weekDays(days: List<DayDto>, today: LocalDate): List<WeekDay> {
@@ -99,7 +101,7 @@ internal fun weekDays(days: List<DayDto>, today: LocalDate): List<WeekDay> {
         if (date.isAfter(today.plusDays(WEEK_AHEAD))) return@mapNotNull null
         WeekDay(
             date, formatWeekDay(date), date == today, day.lessons, day.absent,
-            unread = day.unread, ownBells = day.ownBells,
+            unread = day.unread, ownBells = day.ownBells, state = day.state,
         )
     }
 }

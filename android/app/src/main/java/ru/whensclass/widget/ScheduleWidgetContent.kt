@@ -127,7 +127,8 @@ fun ScheduleWidgetContent(
             // Свободный день: «нажмите, чтобы обновить» читалось бы как «не загрузилось», поэтому
             // нажатие ведёт в приложение. Фраза та же, что на экране.
             today.lessons.isEmpty() -> MissingHint(
-                ru.whensclass.ui.freeDay(
+                // График колледжа важнее шутки: в неделю сессии «пар нет» — неправда.
+                today.state?.let { ru.whensclass.ui.stateDayText(it) } ?: ru.whensclass.ui.freeDay(
                     day.toString(), schedule.isTeacher,
                     nextFree = schedule.days.firstOrNull { it.date == day.plusDays(1).toString() }
                         ?.let { ru.whensclass.ui.freeOwnDay(it, schedule.groupNames) } == true,

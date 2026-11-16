@@ -13,6 +13,7 @@ import {
 import {
   coversDay,
   bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daySummary, openingDay, daysWithGaps, freeDay, freeOwnDay,
+  stateDayText, stateNote, stateWord,
   lessonTime, ownOnly,
   onlyAt, shortLabels, subgroupsOf, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
@@ -218,6 +219,32 @@ test('свободный день', () => {
   assert.equal(freeDay({ d: '2026-09-29', l: [] }, false, false, morning), 'Пар нет. Можно открыть шторы');
   assert.notEqual(freeDay({ d: '2026-09-29', l: [] }, false, false, { date: '2026-09-29', sec: 13 * 3600 }),
     'Пар нет. Можно открыть шторы');
+});
+
+test('календарный график: поле st переживает чистку ответа', () => {
+  const body = cleanSchedule({
+    g: 'g', gn: 'Г', days: [
+      { d: '2026-12-21', l: [], st: 'session' },
+      { d: '2026-12-22', l: [], st: 'что-то' },
+      { d: '2026-12-23', l: [] },
+    ],
+  });
+  assert.equal(body.days[0].st, 'session');
+  assert.equal(body.days[1].st, undefined);
+  assert.equal(body.days[2].st, undefined);
+});
+
+test('календарный график: слова состояния', () => {
+  assert.equal(stateWord('session'), 'сессия');
+  assert.equal(stateWord('holidays'), 'каникулы');
+  assert.equal(stateWord('practice'), 'практика');
+  // Пусто и незнакомое — обычный учебный день.
+  assert.equal(stateWord(undefined), null);
+  assert.equal(stateWord('что-то'), null);
+  // Пустой день — словом с большой буквы; у дня с парами — тихая пометка.
+  assert.equal(stateDayText('session'), 'Сессия');
+  assert.equal(stateNote('session'), 'по графику сессия');
+  assert.equal(stateNote(undefined), null);
 });
 
 test('идущая пара — конец включительно до секунды', () => {

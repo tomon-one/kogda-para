@@ -416,12 +416,24 @@ private fun DayCard(
                 // Сказано выше.
             } else if (day.lessons.isEmpty()) {
                 Text(
-                    if (day.absent) absentDay(day.date) else freeDay(day.date, teacher, nextFree, now, idle),
+                    // График колледжа важнее шутки: «пар нет» в неделю сессии — неправда.
+                    day.state?.let(::stateDayText)
+                        ?: if (day.absent) absentDay(day.date) else freeDay(day.date, teacher, nextFree, now, idle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                 )
             } else {
+                // День с парами, но по графику сессия или практика: пары остаются, пометка — тихой
+                // строкой под заголовком (вариант В).
+                day.state?.let {
+                    Text(
+                        stateNote(it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+                    )
+                }
                 // Своих пар нет, а у выбранных групп есть: это сказала сводка под датой, подпись не
                 // повторяем; отменённые сводка не считает — у них подпись остаётся.
                 val allForeign = groups.isNotEmpty() && day.lessons.none { 0 in it.slots }

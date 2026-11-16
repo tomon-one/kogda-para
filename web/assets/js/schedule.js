@@ -282,6 +282,28 @@ var FREE = [
 /** Ещё одна — только студенту. */
 var FREE_STUDENT = ['Пар нет. Можно одичать'];
 
+var STATE_WORDS = { session: 'сессия', holidays: 'каникулы', practice: 'практика' };
+
+/**
+ * Календарный график колледжа (stateWord и stateNote в DayText.kt): день
+ * сессии, каникул или практики. Незнакомое состояние — null, обычный день.
+ */
+export function stateWord(state) {
+  return STATE_WORDS[state] || null;
+}
+
+/** Тихая пометка у дня с парами: пары не прячем, но человек видит график. */
+export function stateNote(state) {
+  var word = stateWord(state);
+  return word ? 'по графику ' + word : null;
+}
+
+/** Пустой день по графику: вместо шутки «пар нет» — что на самом деле. */
+export function stateDayText(state) {
+  var word = stateWord(state);
+  return word ? word.charAt(0).toUpperCase() + word.slice(1) : null;
+}
+
 /**
  * Что написать в день без пар (freeDay в DayList.kt — правила одни).
  * Строка выбирается по дате. Воскресенье и день, которого в ответе нет, —
@@ -429,6 +451,8 @@ export function cleanSchedule(body) {
     if (typeof day.row === 'number') clean.row = day.row;
     var own = cleanBells(day.bl);
     if (Object.keys(own).length) clean.bl = own;
+    // Календарный график: только известные состояния, прочее — обычный день.
+    if (day.st === 'session' || day.st === 'holidays' || day.st === 'practice') clean.st = day.st;
     if (day.un === 'kept' || day.un === 'missing') {
       clean.un = day.un;
       var ug = Array.isArray(day.ug) ? day.ug.filter(function (g) { return typeof g === 'string'; }) : [];

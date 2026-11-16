@@ -95,6 +95,8 @@ data class DayDto(
     @SerialName("uk") val unreadKept: List<String> = emptyList(),
     /** Только для экрана: другие выбранные группы, чей этот день не прочитан ([combineGroups]). */
     @kotlinx.serialization.Transient val unreadOthers: List<UnreadOther> = emptyList(),
+    /** Календарный график колледжа: «session», «holidays» или «practice» ([DayState]). */
+    @SerialName("st") val stateMark: String? = null,
 ) {
     val unread: UnreadDay?
         get() = when (unreadMark) {
@@ -102,6 +104,21 @@ data class DayDto(
             "missing" -> UnreadDay.MISSING
             else -> null
         }
+
+    val state: DayState?
+        get() = when (stateMark) {
+            "session" -> DayState.SESSION
+            "holidays" -> DayState.HOLIDAYS
+            "practice" -> DayState.PRACTICE
+            else -> null
+        }
+}
+
+/** Что говорит календарный график колледжа про день ([DayDto.state]). */
+enum class DayState {
+    SESSION,
+    HOLIDAYS,
+    PRACTICE,
 }
 
 enum class UnreadDay {

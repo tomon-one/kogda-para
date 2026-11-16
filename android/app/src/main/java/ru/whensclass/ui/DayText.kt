@@ -5,6 +5,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import ru.whensclass.data.DayDto
+import ru.whensclass.data.DayState
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
 import ru.whensclass.data.UnreadDay
@@ -193,6 +194,23 @@ internal fun freeOwnDay(date: LocalDate, absent: Boolean, unread: UnreadDay?, le
 
 private fun freeOwnDay(date: LocalDate, absent: Boolean, unread: UnreadDay?, own: Boolean): Boolean =
     own && !absent && unread != UnreadDay.MISSING && date.dayOfWeek != DayOfWeek.SUNDAY
+
+/** Что говорит календарный график: словами, как их ждёт человек в дне. */
+internal fun stateWord(state: DayState): String = when (state) {
+    DayState.SESSION -> "сессия"
+    DayState.HOLIDAYS -> "каникулы"
+    DayState.PRACTICE -> "практика"
+}
+
+/**
+ * Тихая пометка у дня с парами (вариант В): пары не прячем, но человек видит,
+ * что по графику колледжа это сессия, каникулы или практика.
+ */
+internal fun stateNote(state: DayState): String = "по графику " + stateWord(state)
+
+/** Пустой день по графику: вместо шутки «пар нет» — что на самом деле. */
+internal fun stateDayText(state: DayState): String =
+    stateWord(state).replaceFirstChar { it.titlecase() }
 
 /**
  * День, которого в ответе нет, а по листу он есть (воскресенье, праздник). Не фраза свободного дня

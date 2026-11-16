@@ -3,7 +3,7 @@
 
 import { h, actionLink, snackbar, copyText } from './dom.js';
 import { dayTitle, capitalize } from '../time.js';
-import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, unreadNotes } from '../schedule.js';
+import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, stateDayText, stateNote, unreadNotes } from '../schedule.js';
 import {
   isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
@@ -74,9 +74,13 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   // Свой день не прочитан, и пар нет — это не «пар нет».
   var unknown = day.un === 'missing';
   if (!lessons.length) {
-    if (!unknown) card.appendChild(h('p', { class: 'day-empty' }, freeDay(day, teacher, nextFree, now)));
+    // График колледжа важнее шутки: «пар нет» в неделю сессии — неправда.
+    if (!unknown) card.appendChild(h('p', { class: 'day-empty' },
+      stateDayText(day.st) || freeDay(day, teacher, nextFree, now)));
     return card;
   }
+  // День с парами, но по графику сессия или практика: пары остаются, пометка тихая.
+  if (stateNote(day.st)) card.appendChild(h('p', { class: 'day-note' }, stateNote(day.st)));
   // Своих пар нет, а у выбранных групп есть: это уже сказала сводка под датой
   // («Пары только у …»), у самих пар подпись не повторяем. Отменённые сводка
   // не считает — у них подпись остаётся.
