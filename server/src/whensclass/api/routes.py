@@ -223,10 +223,12 @@ def meta(request: Request) -> Response:
     if store.snapshot is None:
         return _not_loaded()
     status, since, error = _outward(store, refresher)
+    calendar = getattr(request.app.state, "calendar", None)
     body = meta_payload(store.snapshot, store.generated, status,
                         refresher.checked_at, today=_today(),
                         failing_since=since, error=error, refresh=refresher.status,
-                        editing=refresher.status != "ok" and refresher.editing())
+                        editing=refresher.status != "ok" and refresher.editing(),
+                        calendar_at=calendar.read_at if calendar is not None else None)
     return _json_response(request, body, cache=False)
 
 
@@ -345,6 +347,8 @@ def schedule(
     if store.snapshot is None:
         return _not_loaded()
 
+    calendar = getattr(request.app.state, "calendar", None)
+
     def build(gid: str) -> dict | None:
         return schedule_payload(
             store.snapshot,
@@ -355,6 +359,7 @@ def schedule(
             bells=BELLS,
             today=_today(),
             marks=_marks(request),
+            calendar=calendar.states(gid) if calendar is not None else None,
         )
 
     body = build(group_id)

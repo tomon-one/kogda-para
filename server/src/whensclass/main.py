@@ -26,6 +26,7 @@ from .push.service import Push, load_vapid
 from .service.bells import BELLS
 from .service.crosscheck import CrossCheck
 from .service.refresher import Refresher, state_dir
+from .service.calendar import CalendarSource
 from .service.retakes import RetakesSource
 from .storage.snapshot_store import SnapshotStore
 from .vk.bot import VkBot
@@ -93,6 +94,12 @@ async def lifespan(app: FastAPI):
     app.state.push = push
     retakes = RetakesSource(directory, lambda: store.teachers)
     app.state.retakes = retakes
+    # Имена групп в листе графика — id в расписании: график отдаётся по id.
+    calendar = CalendarSource(
+        directory,
+        lambda: {g.name: g.id for g in store.snapshot.groups} if store.snapshot else {},
+    )
+    app.state.calendar = calendar
 
     if store.load():
         log.info("поднял снимок с диска: лист %r", store.snapshot.sheet_title)
@@ -171,6 +178,17 @@ async def lifespan(app: FastAPI):
     )
     scheduler.add_job(retakes.refresh, "date",
                       run_date=dt.datetime.now(zone) + dt.timedelta(seconds=30))
+
+    # Календарный график меняется редко: раз в сутки утром и раз при старте.
+    scheduler.add_job(
+        calendar.refresh,
+        cron(hour=f"{first}-{last}", minute=23),
+        id="calendar",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(calendar.refresh, "date",
+                      run_date=dt.datetime.now(zone) + dt.timedelta(seconds=45))
 
     # Сверка с листами преподавателей: раз в три часа, в стороне от обновления —
     # только тревога владельцу, ответы клиентам она не меняет. Листы большие,

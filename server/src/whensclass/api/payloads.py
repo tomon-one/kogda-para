@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, date, datetime, timedelta
 
 from ..config import settings
@@ -272,11 +273,14 @@ def schedule_payload(
     bells: dict[str, list[str]] | None = None,
     today: date | None = None,
     marks: bool = True,
+    calendar: Mapping[str, str] | None = None,
 ) -> dict | None:
     """Тело для виджета. None, если такой группы в листе нет.
 
     `today` — сегодня по часам колледжа: от него считается недописанный
     хвост (`group_published`). Без него покрытие — весь лист.
+    `calendar` — календарный график группы (дата → сессия, каникулы, практика):
+    день с парами его тоже получает, клиент покажет тихую пометку.
     """
     group = next((g for g in snapshot.groups if g.id == group_id), None)
     if group is None:
@@ -308,6 +312,8 @@ def schedule_payload(
             out_day["col"] = a1_column(moved)
             for item in out_day["l"]:
                 item["col"] = out_day["col"]
+        if calendar and (state := calendar.get(day.isoformat())) is not None:
+            out_day["st"] = state
         if bells and (own := own_bells(snapshot, day, bells)):
             out_day["bl"] = own
         if marks and (mark := _unread_mark(snapshot, group_id, day)):
@@ -348,6 +354,7 @@ def meta_payload(
     error: str | None = None,
     refresh: str | None = None,
     editing: bool = False,
+    calendar_at: str | None = None,
 ) -> dict:
     """`status` — для всех версий; `refresh` — состояние обновления без
     непрочитанных дней (их список — `unread`), его читают новые. `editing` —
@@ -372,6 +379,10 @@ def meta_payload(
         out["cov"] = cov
     if checked:
         out["checked"] = _iso(checked)
+    if calendar_at:
+        # Когда прочитан календарный график: он меняется редко, и «пар нет
+        # по графику сессия» должно быть видно, от какого числа пометка.
+        out["calendar"] = calendar_at
     if settings.min_build > 0:
         # Сборки ниже этой служба не обслуживает (426): приложение скажет
         # «обновите», не дожидаясь отказа.
