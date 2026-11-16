@@ -1,7 +1,7 @@
 // Главный экран: шапка, вкладки, своё расписание и чужие (TodayScreen.kt,
 // TeacherScreen.kt).
 
-import { h, icon, actionButton, actionLink, dialog, closeDialog, spinner } from './dom.js';
+import { h, icon, actionButton, actionLink, dialog, closeDialog, spinner, shiftBack } from './dom.js';
 import { dayCards } from './days.js';
 import { othersList } from './lists.js';
 import { retakesActive, retakesView } from './retakes.js';
@@ -155,7 +155,7 @@ export function refreshButton(app) {
     var since = Date.now() - s.flashAt;
     if (since < 320) {
       refreshIcon.classList.add('pop');
-      refreshIcon.style.setProperty('--shift', -since + 'ms');
+      shiftBack(refreshIcon, since);
     }
   } else {
     refreshIcon = icon('refresh', spinning ? 'spin' : '');

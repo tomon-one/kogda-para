@@ -2,7 +2,7 @@
 // какие заняты и где накладки (docs/api.md, /v1/rooms). «По расписанию» —
 // всерьёз: ключей, переносов и мероприятий таблица колледжа не знает.
 
-import { h, spinner, loadFailed } from './dom.js';
+import { h, spinner, loadFailed, shiftBack } from './dom.js';
 import { addDays, dayTitle, plural } from '../time.js';
 import { currentLessonNumber, lessonTime, openingDay, parseTime } from '../schedule.js';
 import { failureText } from './retakes.js';
@@ -69,7 +69,7 @@ function entering(el, st) {
   var since = Date.now() - (st.changedAt || 0);
   if (since < ENTER_MS) {
     el.classList.add('rooms-enter');
-    el.style.setProperty('--shift', -since + 'ms');
+    shiftBack(el, since);
   }
   return el;
 }
@@ -79,7 +79,7 @@ function chipEntering(el, st) {
   var since = Date.now() - (st.changedAt || 0);
   if (since < ENTER_MS) {
     el.classList.add('chip-enter');
-    el.style.setProperty('--shift', -since + 'ms');
+    shiftBack(el, since);
   }
   return el;
 }

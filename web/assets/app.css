@@ -38,6 +38,10 @@
   --outline: #808387;
   --overlay: rgba(0, 0, 0, 0.45);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  /* Скругление полей, чипов и мелких карточек — одно на весь сайт. */
+  --radius: 14px;
+  /* Кривая движения: к ней же приводятся анимации из motion.css. */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   color-scheme: light;
 }
 
@@ -184,6 +188,16 @@ p a, .point a { text-decoration: underline; }
 
 /* ——— шапка ——— */
 
+/* Карточка сайта: день, плашка, список, настройки — фон и скругление одни на всех. */
+.plate, .day, .list-card, .card {
+  background: var(--surface);
+  border-radius: 20px;
+}
+/* Рамка — у всех, кроме списка: там строки разделены линейками. */
+.plate, .day, .card {
+  border: 1px solid var(--divider);
+}
+
 .head {
   position: -webkit-sticky;
   position: sticky;
@@ -282,7 +296,7 @@ p a, .point a { text-decoration: underline; }
   /* Над полоской 6 (под рядом вкладок у того свои 8). */
   margin: 6px auto 8px;
   padding: 4px;
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--surface);
   /* Поля полоски — фоном страницы: дни не просвечивают по краям, когда едут под ней. */
   box-shadow: 0 0 0 6px var(--bg);

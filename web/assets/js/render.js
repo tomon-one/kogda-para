@@ -4,7 +4,7 @@
 
 import * as repo from './repo.js';
 import * as store from './store.js';
-import { h, clear, fitLabels } from './ui/dom.js';
+import { h, clear, fitLabels, shiftBack } from './ui/dom.js';
 import { dayIndex } from './schedule.js';
 import { mainScreen, refreshButton } from './ui/today.js';
 import { forgetPick, headHeight, syncRow } from './ui/week.js';
@@ -23,7 +23,7 @@ function continueAnimation(el, cls, startedAt, longest) {
   var since = Date.now() - startedAt;
   if (!cls || since >= longest) return;
   el.classList.add(cls);
-  if (since > 0) el.style.setProperty('--shift', -since + 'ms');
+  shiftBack(el, since);
 }
 
 function screenFor(route) {

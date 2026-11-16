@@ -15,7 +15,7 @@
 .retake-past { margin-left: 8px; font-size: 12px; color: var(--muted); }
 .retake-slot.past .retake-day, .retake-slot.past .retake-time { color: var(--muted); text-decoration: line-through; }
 .retake-line.subjects { color: var(--muted); }
-.retake-memo { margin: 8px 0 4px; padding: 12px 16px; border-radius: 14px; background: var(--mark-bg); font-size: 14px; }
+.retake-memo { margin: 8px 0 4px; padding: 12px 16px; border-radius: var(--radius); background: var(--mark-bg); font-size: 14px; }
 .retake-memo p + p { margin-top: 6px; }
 
 /* Пересдачи идут: вкладка подсвечена, как сегодняшний день, — заметно, но не кричит. */

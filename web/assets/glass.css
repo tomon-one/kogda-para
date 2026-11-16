@@ -195,7 +195,7 @@
   align-items: center;
   margin-top: 12px;
   padding: 10px;
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--surface-variant);
   cursor: pointer;
 }

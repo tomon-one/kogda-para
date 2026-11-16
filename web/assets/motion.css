@@ -16,7 +16,7 @@
     animation-delay: var(--shift, 0ms);
   }
   .rooms-enter {
-    animation: rooms-enter 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: rooms-enter 0.26s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
@@ -25,19 +25,19 @@
   /* Полоска дней: выделение перетекает с дня на день. Цвет подписи меняется
      сразу, как в приложении: под плашкой это не видно, а переход цвета считался
      на основном потоке и вдвое резал частоту кадров при листании на телефоне. */
-  .week-pill { transition: transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s; }
+  .week-pill { transition: transform 0.36s var(--ease), opacity 0.2s; }
   /* Смена недели: ряд дней уезжает в сторону листания (--dir ставит week.js). */
-  .week-enter { animation: week-enter 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-  .week-leave { animation: week-leave 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .week-enter { animation: week-enter 0.3s var(--ease) both; }
+  .week-leave { animation: week-leave 0.3s var(--ease) both; }
   .switch::after { transition: transform 0.15s; }
 
   .screen.enter-forward > :not(.bottom-bar) {
-    animation: enter-forward 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: enter-forward 0.26s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
   .screen.enter-back > :not(.bottom-bar) {
-    animation: enter-back 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: enter-back 0.26s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
@@ -50,7 +50,7 @@
 
   .screen.enter-fade .tab.on::after,
   .screen.enter-forward .tab.on::after {
-    animation: underline 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: underline 0.3s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
@@ -58,13 +58,13 @@
      переезжает от прежней к новой. */
   .screen.tab-right > .content,
   .screen.content-forward > .content {
-    animation: enter-forward 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: enter-forward 0.26s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
   .screen.tab-left > .content,
   .screen.content-back > .content {
-    animation: enter-back 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: enter-back 0.26s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
@@ -77,18 +77,18 @@
   }
 
   .screen.tab-right .tab.on::after {
-    animation: underline-from-left 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: underline-from-left 0.28s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
   .screen.tab-left .tab.on::after {
-    animation: underline-from-right 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: underline-from-right 0.28s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
   /* Дни всплывают по очереди — когда расписание только появилось. */
   .days.appear > * {
-    animation: rise 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: rise 0.34s var(--ease) both;
     animation-delay: calc(var(--i, 0) * 45ms + var(--shift, 0ms));
   }
 
@@ -101,7 +101,7 @@
 
   .icon.pop,
   .pin-star.pop {
-    animation: pop 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation: pop 0.32s var(--ease) both;
     animation-delay: var(--shift, 0ms);
   }
 
@@ -115,12 +115,12 @@
     will-change: opacity;
   }
 
-  .snackbar { animation: snack-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .snackbar { animation: snack-in 0.22s var(--ease) both; }
   .snackbar.hide { animation: snack-out 0.18s ease-in both; }
 
   .overlay { animation: fade-in 0.16s ease-out both; }
   .overlay.closing { animation: fade-out 0.14s ease-in both; }
-  .dialog { animation: dialog-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .dialog { animation: dialog-in 0.24s var(--ease) both; }
 
   /* Нажатие: кнопка чуть проседает, строка — только подсветкой. */
   .action, .text-button, .icon-button, .primary-button, .link-button, .segment, .pin-star, .tile,

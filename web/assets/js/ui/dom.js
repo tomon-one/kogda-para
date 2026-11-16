@@ -343,3 +343,12 @@ export function searchField(app, key, label, onChange, spoken) {
   });
   return input;
 }
+
+/**
+ * Продолжить анимацию с того места, где она была: сдвиг назад на прошедшее
+ * время (--shift читают keyframes в motion.css). Иначе каждый ответ сервера
+ * обрывал бы въезд и начинал его заново.
+ */
+export function shiftBack(el, since) {
+  if (since > 0) el.style.setProperty('--shift', -since + 'ms');
+}
