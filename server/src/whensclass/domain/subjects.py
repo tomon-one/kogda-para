@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import difflib
 import re
 
 # Хвост типа занятия в скобках: его снимаем перед сверкой и возвращаем после.
@@ -81,10 +82,32 @@ def split_suffix(name: str) -> tuple[str, str]:
     return name[: match.start()].rstrip(), match.group(0).strip()
 
 
+# В таблице колледжа опечаток много («зашиты», «прнактика», «государсва»):
+# точного совпадения мало. Похожее имя ищем по близости строк, а приписки
+# («… Замкна Компьютерная графика») отсекаем по началу названия.
+FUZZY_CUTOFF = 0.88
+MIN_FUZZY = 12
+
+
+def _find(base: str) -> str | None:
+    text = key(base)
+    found = SHORT.get(text)
+    if found is not None:
+        return found
+    if len(text) < MIN_FUZZY:
+        return None
+    # Приписка после названия: «Основы материаловедения Замкна …».
+    prefixes = [name for name in SHORT if len(name) >= MIN_FUZZY and text.startswith(name)]
+    if prefixes:
+        return SHORT[max(prefixes, key=len)]
+    close = difflib.get_close_matches(text, list(SHORT), n=1, cutoff=FUZZY_CUTOFF)
+    return SHORT[close[0]] if close else None
+
+
 def short_name(name: str) -> str | None:
     """Короткое имя предмета или None, если его нет в словаре."""
     base, suffix = split_suffix(name)
-    found = SHORT.get(key(base))
+    found = _find(base)
     if found is None:
         return None
     return f"{found} {suffix}".strip() if suffix else found
