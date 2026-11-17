@@ -21,7 +21,7 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт: по нему приложение узнаёт
         // о новой сборке на сервере.
-        versionCode = 13
+        versionCode = 15
         versionName = "r-Голец.1.3.0"
     }
     // Tested-сборка (docs/versions.md, «Tested»): отдельное приложение рядом с основным, на нём
@@ -125,7 +125,7 @@ kotlin {
 }
 
 /** Попытка tested-сборки; см. комментарий у versionCode. */
-val TESTED_TRY = 5
+val TESTED_TRY = 1
 
 androidComponents {
     onVariants(selector().withBuildType("candidate")) { variant ->
