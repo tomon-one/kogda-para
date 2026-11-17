@@ -33,7 +33,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root[data-vice]:not([data-theme="light"]) {
-    --bg: #1b0a2e;
+    --bg: #361365;
     --fg: #f7eff6;
     --surface: #421a78;
     --surface-variant: #4e2189;
@@ -58,7 +58,7 @@
 }
 
 :root[data-vice][data-theme="dark"] {
-  --bg: #1b0a2e;
+  --bg: #361365;
   --fg: #f7eff6;
   --surface: #421a78;
   --surface-variant: #4e2189;
@@ -96,18 +96,18 @@
 
 @media (prefers-color-scheme: dark) {
   :root[data-vice]:not([data-theme="light"]) body {
-    background-color: #1b0a2e;
+    background-color: #361365;
     background-image:
       radial-gradient(95% 85% at 105% 108%, rgba(238, 139, 112, 0.55), rgba(238, 139, 112, 0) 70%),
-      linear-gradient(135deg, #1b0a2e, #2e1048 35%, #4c1668 68%, #6b2275);
+      linear-gradient(135deg, #361365, #451a72 35%, #5a1f7a 68%, #7b2b76);
   }
 }
 
 :root[data-vice][data-theme="dark"] body {
-  background-color: #1b0a2e;
+  background-color: #361365;
   background-image:
     radial-gradient(95% 85% at 105% 108%, rgba(238, 139, 112, 0.55), rgba(238, 139, 112, 0) 70%),
-    linear-gradient(135deg, #1b0a2e, #2e1048 35%, #4c1668 68%, #6b2275);
+    linear-gradient(135deg, #361365, #451a72 35%, #5a1f7a 68%, #7b2b76);
 }
 
 /* ——— плашка в настройках ——— */

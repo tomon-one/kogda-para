@@ -124,7 +124,7 @@ internal val GlassLightScheme = LightScheme.copy(
  * подложка «Стекла» под ней не нужна.
  */
 internal val ViceDarkScheme = DarkScheme.copy(
-    background = Color(0xFF1B0A2E),
+    background = Color(0xFF361365),
     onBackground = Color(0xFFF7EFF6),
     surface = Color(0xFF421A78),
     onSurface = Color(0xFFF7EFF6),
@@ -186,7 +186,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.viceBackdrop(dark:
     if (dark) {
         drawRect(
             androidx.compose.ui.graphics.Brush.linearGradient(
-                listOf(Color(0xFF1B0A2E), Color(0xFF2E1048), Color(0xFF4C1668), Color(0xFF6B2275)),
+                listOf(Color(0xFF361365), Color(0xFF451A72), Color(0xFF5A1F7A), Color(0xFF7B2B76)),
                 start = androidx.compose.ui.geometry.Offset.Zero,
                 end = androidx.compose.ui.geometry.Offset(size.width, size.height),
             ),
