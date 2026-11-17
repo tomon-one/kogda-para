@@ -25,6 +25,7 @@ var FILES = [
   'assets/screens.css',
   'assets/rooms.css',
   'assets/glass.css',
+  'assets/vice.css',
   'assets/motion.css',
   'assets/boot.js',
   'assets/icon.svg',

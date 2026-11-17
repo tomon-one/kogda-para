@@ -196,6 +196,16 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit { it[KEY_GLOW] = if (on) "1" else "0" }
     }
 
+    /**
+     * «Vice» — временная тема заката. Флаг отдельный от [glow]: пока «Vice» включён, «Стекло» не
+     * применяется, но свой выбор не теряет и возвращается вместе с ним.
+     */
+    val vice: Flow<Boolean> = context.dataStore.data.map { it[KEY_VICE] == "1" }
+
+    suspend fun setVice(on: Boolean) {
+        context.dataStore.edit { it[KEY_VICE] = if (on) "1" else "0" }
+    }
+
     /** Ряд «Пересдачи · Аудитории · Экзамены» стоит при листании. По умолчанию уезжает. */
     val rowStays: Flow<Boolean> = context.dataStore.data.map { it[KEY_ROW_STAYS] == "1" }
 

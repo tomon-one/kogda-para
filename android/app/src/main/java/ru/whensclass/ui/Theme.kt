@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.luminance
+import java.time.LocalDate
 
 /** Красный колледжа — из его же логотипа. */
 private val BRAND = Color(0xFFD60403)
@@ -22,6 +23,9 @@ internal val ColorScheme.online: Color
 /** Плитка пары внутри карточки дня (--tile сайта). У «Стекла» — полупрозрачная, как карточка. */
 internal val ColorScheme.tile: Color
     get() = when {
+        // У «Vice» плитка своего оттенка: на фиолетовом и розовом фоне прозрачная, как у «Стекла», не читалась бы.
+        this === ViceDarkScheme -> Color(0xFF4E2189)
+        this === ViceLightScheme -> Color(0xFFFBEDF3)
         background.alpha < 1f -> if (isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.55f)
         isDark -> Color(0xFF1C1C1C)
         else -> Color(0xFFF4F5F7)
@@ -114,6 +118,70 @@ internal val GlassLightScheme = LightScheme.copy(
     onSurfaceVariant = Color(0xFF4D5155),
     primary = Color(0xFFA00302),
 )
+
+/**
+ * «Vice» — временная тема заката: фиолетово-персиковый. Фон и карточки непрозрачные, поэтому
+ * подложка «Стекла» под ней не нужна.
+ */
+internal val ViceDarkScheme = DarkScheme.copy(
+    background = Color(0xFF361365),
+    onBackground = Color(0xFFF7EFF6),
+    surface = Color(0xFF421A78),
+    onSurface = Color(0xFFF7EFF6),
+    surfaceVariant = Color(0xFF4E2189),
+    onSurfaceVariant = Color(0xFFC9AEDC),
+    primary = Color(0xFFF57CAB),
+    onPrimary = Color(0xFF2A0C4A),
+    error = Color(0xFFF57CAB),
+    secondaryContainer = Color(0xFF5B2A9C),
+    onSecondaryContainer = Color(0xFFF7EFF6),
+    surfaceContainerLowest = Color(0xFF2C0F55),
+    surfaceContainerLow = Color(0xFF3B1670),
+    surfaceContainer = Color(0xFF421A78),
+    surfaceContainerHigh = Color(0xFF4E2189),
+    surfaceContainerHighest = Color(0xFF5B2A9C),
+    outline = Color(0xFFA97BC0),
+    outlineVariant = Color(0xFF6E3EA0),
+    inverseSurface = Color(0xFFF7EFF6),
+    inverseOnSurface = Color(0xFF361365),
+)
+
+/** «Vice» в светлой теме: розовый лист, белые карточки, пурпурный акцент. */
+internal val ViceLightScheme = LightScheme.copy(
+    background = Color(0xFFFBF0F2),
+    onBackground = Color(0xFF2A0C2E),
+    onSurface = Color(0xFF2A0C2E),
+    surfaceVariant = Color(0xFFF3E3EC),
+    onSurfaceVariant = Color(0xFF6B4A6E),
+    primary = Color(0xFFB42EB4),
+    error = Color(0xFFB42EB4),
+    secondaryContainer = Color(0xFFF6DCF0),
+    onSecondaryContainer = Color(0xFF2A0C2E),
+    surfaceContainerLow = Color(0xFFFDF6F8),
+    surfaceContainer = Color(0xFFFBF0F2),
+    surfaceContainerHighest = Color(0xFFF3E3EC),
+    outline = Color(0xFFA97BAE),
+    outlineVariant = Color(0xFFE2CFE4),
+    inverseSurface = Color(0xFF361365),
+    inverseOnSurface = Color(0xFFF7EFF6),
+)
+
+/** Закат «Vice»: от фиолетового через пурпур и розовый к персиковому. Для плашки в настройках. */
+internal val VICE_SUNSET = listOf(
+    Color(0xFF361365),
+    Color(0xFFB42EB4),
+    Color(0xFFE15F97),
+    Color(0xFFEE8B70),
+)
+
+/** Срок «Vice»: 31 декабря ещё действует, с 1 января — нет. Выбор в хранилище при этом не трогается. */
+private val VICE_END: LocalDate = LocalDate.of(2027, 1, 1)
+
+/** Показывать ли «Vice» в настройках. */
+internal fun viceOffered(today: LocalDate): Boolean = today.isBefore(VICE_END)
+
+/** Действует ли включённый «Vice» сейчас. */
+internal fun viceActive(flag: Boolean, today: LocalDate): Boolean = flag && viceOffered(today)
 
 /** Тёмная ли схема. По фону не понять: у «Стекла» он прозрачный. */
 internal val ColorScheme.isDark: Boolean

@@ -1,6 +1,7 @@
 // Вокруг расписания: тема, окно тестового режима, счёт открытий, сервис-воркер.
 
 import * as store from './store.js';
+import { collegeNow, viceActive } from './time.js';
 import { h, closeDialog, dialog, externalLink } from './ui/dom.js';
 import { build } from './version.js';
 import { app } from './state.js';
@@ -11,7 +12,12 @@ export function applyTheme() {
   var theme = app.theme();
   if (theme === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', theme);
-  if (app.glass()) document.documentElement.setAttribute('data-glass', '');
+  // «Vice» и «Стекло» несовместимы: при включённой «Vice» стекло не ставится,
+  // но флаг glass в хранилище остаётся и вернётся, когда «Vice» выключат.
+  var vice = viceActive(app.vice(), collegeNow());
+  if (vice) document.documentElement.setAttribute('data-vice', '');
+  else document.documentElement.removeAttribute('data-vice');
+  if (!vice && app.glass()) document.documentElement.setAttribute('data-glass', '');
   else document.documentElement.removeAttribute('data-glass');
   // Полоса браузера и строка состояния — в цвет выбранной темы, а не системной:
   // у двух тегов свои media, при ручной теме оба — её.

@@ -1,0 +1,142 @@
+/*
+  «Vice» — временная тема: закат из фиолетового, пурпурного, розового и
+  персикового. Включена — у <html> атрибут data-vice (boot.js, site.js).
+  Действует до 1 января 2027 по часам колледжа; после этого флаг в хранилище
+  остаётся, но тема не применяется. Со «Стеклом» несовместима: при Vice
+  data-glass не ставится, а флаг glass не трогается — выключили Vice, стекло
+  вернулось. --online и --online-bg не переопределяются: зелёный значит
+  «онлайн», а не часть палитры.
+*/
+
+:root[data-vice] {
+  --bg: #fbf0f2;
+  --fg: #2a0c2e;
+  --surface: #ffffff;
+  --surface-variant: #f3e3ec;
+  --muted: #6b4a6e;
+  --primary: #b42eb4;
+  --on-primary: #ffffff;
+  --today-bg: rgba(180, 46, 180, 0.12);
+  --now-bg: rgba(180, 46, 180, 0.07);
+  --mark-bg: rgba(180, 46, 180, 0.12);
+  --foreign-bg: rgba(0, 0, 0, 0.05);
+  --selected-bg: rgba(180, 46, 180, 0.10);
+  --chip-bg: #f6dcf0;
+  --chip-border: #e2cfe4;
+  --button-border: rgba(180, 46, 180, 0.4);
+  --today-border: rgba(180, 46, 180, 0.35);
+  --tile: #fbedf3;
+  --divider: #f0dce6;
+  --outline: #a97bae;
+  --overlay: rgba(42, 12, 46, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-vice]:not([data-theme="light"]) {
+    --bg: #361365;
+    --fg: #f7eff6;
+    --surface: #421a78;
+    --surface-variant: #4e2189;
+    --muted: #c9aedc;
+    --primary: #f57cab;
+    --on-primary: #2a0c4a;
+    --today-bg: rgba(225, 95, 151, 0.18);
+    --now-bg: rgba(225, 95, 151, 0.09);
+    --mark-bg: rgba(225, 95, 151, 0.14);
+    --foreign-bg: rgba(255, 255, 255, 0.08);
+    --selected-bg: rgba(225, 95, 151, 0.14);
+    --chip-bg: #5b2a9c;
+    --chip-border: #7a4ab0;
+    --button-border: rgba(245, 124, 171, 0.45);
+    --today-border: rgba(245, 124, 171, 0.4);
+    --tile: #4e2189;
+    --divider: #5b2a9c;
+    --outline: #a97bc0;
+    --overlay: rgba(20, 6, 40, 0.6);
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  }
+}
+
+:root[data-vice][data-theme="dark"] {
+  --bg: #361365;
+  --fg: #f7eff6;
+  --surface: #421a78;
+  --surface-variant: #4e2189;
+  --muted: #c9aedc;
+  --primary: #f57cab;
+  --on-primary: #2a0c4a;
+  --today-bg: rgba(225, 95, 151, 0.18);
+  --now-bg: rgba(225, 95, 151, 0.09);
+  --mark-bg: rgba(225, 95, 151, 0.14);
+  --foreign-bg: rgba(255, 255, 255, 0.08);
+  --selected-bg: rgba(225, 95, 151, 0.14);
+  --chip-bg: #5b2a9c;
+  --chip-border: #7a4ab0;
+  --button-border: rgba(245, 124, 171, 0.45);
+  --today-border: rgba(245, 124, 171, 0.4);
+  --tile: #4e2189;
+  --divider: #5b2a9c;
+  --outline: #a97bc0;
+  --overlay: rgba(20, 6, 40, 0.6);
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* ——— плашка в настройках ——— */
+
+.vice-toggle {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--surface-variant);
+  cursor: pointer;
+}
+
+/* Превью — квадрат заката; в круг в углу — галочка, когда тема включена. */
+.vice-preview {
+  flex: none;
+  order: 1;
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #361365, #b42eb4, #e15f97, #ee8b70);
+}
+
+.vice-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(42, 12, 46, 0.55);
+  opacity: 0;
+}
+
+.vice-check::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 3px;
+  width: 6px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Поле идёт первым в разметке, чтобы :checked доставал до превью. */
+.vice-toggle .switch { order: 3; }
+.vice-toggle input:checked ~ .vice-preview .vice-check { opacity: 1; }
+
+.vice-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  order: 2;
+  padding: 0 8px 0 12px;
+}
+.vice-name { display: block; font-weight: 600; }
+.vice-name .badge { margin-left: 6px; }
+.vice-note { display: block; font-size: 13px; color: var(--muted); }

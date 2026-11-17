@@ -10,6 +10,7 @@ import { groupMark } from './days.js';
 import { notifications } from './notifications.js';
 import { VERSION, build } from '../version.js';
 import { CHANNEL } from '../store.js';
+import { viceActive, viceAvailable } from '../time.js';
 
 function row(main, sub, buttons) {
   return h('div', { class: 'setting-row' },
@@ -32,6 +33,25 @@ function glassToggle(app) {
       h('span', { class: 'glass-note' },
         'Красный свет за расписанием, полупрозрачные карточки, матовые шапка и полоска дней.')),
     input);
+}
+
+/**
+ * Плашка «Vice»: квадрат заката с галочкой, название с меткой срока и
+ * пояснение; нажимается целиком. После срока плашки нет.
+ */
+function viceToggle(app) {
+  var now = app.now();
+  if (!viceAvailable(now)) return null;
+  var input = h('input', { type: 'checkbox', role: 'switch', class: 'switch', 'aria-label': 'Vice' });
+  input.checked = viceActive(app.vice(), now);
+  input.addEventListener('change', function () { app.setVice(input.checked); });
+  return h('label', { class: 'vice-toggle' },
+    input,
+    h('span', { class: 'vice-preview', 'aria-hidden': 'true' }, h('span', { class: 'vice-check' })),
+    h('span', { class: 'vice-text' },
+      h('span', { class: 'vice-name' }, 'Vice', h('span', { class: 'badge' }, 'до 1 января')),
+      h('span', { class: 'vice-note' },
+        'Закат: фиолетовый, пурпурный, розовый, персиковый. «Стекло» с ним не работает.')));
 }
 
 function segmented(options, selected, onPick) {
@@ -200,7 +220,10 @@ export function settingsScreen(app) {
 
       section('Оформление', [
         segmented([['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']], app.theme(), app.setTheme),
-        glassToggle(app),
+        // «Vice» и «Стекло» вместе не работают: при включённой «Vice» плашки
+        // стекла нет, а его флаг в хранилище не трогается.
+        viceToggle(app),
+        viceActive(app.vice(), app.now()) ? null : glassToggle(app),
       ]),
 
       // Два текста, которые читают один раз, — одной карточкой.

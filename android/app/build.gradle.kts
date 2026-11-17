@@ -21,8 +21,8 @@ android {
         targetSdk = 37
         // Правила имени — в docs/versions.md. versionCode просто растёт: по нему приложение узнаёт
         // о новой сборке на сервере.
-        versionCode = 12
-        versionName = "r-Витим.1.2.3"
+        versionCode = 14
+        versionName = "r-Vice.1.2.4"
     }
     // Tested-сборка (docs/versions.md, «Tested»): отдельное приложение рядом с основным, на нём
     // автор проверяет новое до выкладки. Номер — versionCode × 100 + TESTED_TRY, имя —
@@ -125,7 +125,7 @@ kotlin {
 }
 
 /** Попытка tested-сборки; см. комментарий у versionCode. */
-val TESTED_TRY = 7
+val TESTED_TRY = 1
 
 androidComponents {
     onVariants(selector().withBuildType("candidate")) { variant ->
