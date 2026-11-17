@@ -51,7 +51,7 @@ function viceToggle(app) {
     h('span', { class: 'vice-text' },
       h('span', { class: 'vice-name' }, 'Vice', h('span', { class: 'badge' }, 'до 1 января')),
       h('span', { class: 'vice-note' },
-        'Закат: фиолетовый, пурпурный, розовый, персиковый. «Стекло» с ним не работает.')));
+        'Тёплый свет города, где не бывает зимы.')));
 }
 
 function segmented(options, selected, onPick) {

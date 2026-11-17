@@ -124,7 +124,7 @@ internal val GlassLightScheme = LightScheme.copy(
  * подложка «Стекла» под ней не нужна.
  */
 internal val ViceDarkScheme = DarkScheme.copy(
-    background = Color(0xFF361365),
+    background = Color(0xFF1B0A2E),
     onBackground = Color(0xFFF7EFF6),
     surface = Color(0xFF421A78),
     onSurface = Color(0xFFF7EFF6),
@@ -148,7 +148,7 @@ internal val ViceDarkScheme = DarkScheme.copy(
 
 /** «Vice» в светлой теме: розовый лист, белые карточки, пурпурный акцент. */
 internal val ViceLightScheme = LightScheme.copy(
-    background = Color(0xFFFBF0F2),
+    background = Color(0xFFFDF4F8),
     onBackground = Color(0xFF2A0C2E),
     onSurface = Color(0xFF2A0C2E),
     surfaceVariant = Color(0xFFF3E3EC),
@@ -176,6 +176,45 @@ internal val VICE_SUNSET = listOf(
 
 /** Срок «Vice»: 31 декабря ещё действует, с 1 января — нет. Выбор в хранилище при этом не трогается. */
 private val VICE_END: LocalDate = LocalDate.of(2027, 1, 1)
+
+/**
+ * Закат под карточками «Vice»: тёмно-фиолетовый по диагонали и тёплое пятно у нижнего правого угла —
+ * как закат за домами. Пятно держится в углу: там только фон, а текст на нём терял бы контраст.
+ */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.viceBackdrop(dark: Boolean) {
+    val corner = androidx.compose.ui.geometry.Offset(size.width * 1.05f, size.height * 1.1f)
+    if (dark) {
+        drawRect(
+            androidx.compose.ui.graphics.Brush.linearGradient(
+                listOf(Color(0xFF1B0A2E), Color(0xFF2E1048), Color(0xFF4C1668), Color(0xFF6B2275)),
+                start = androidx.compose.ui.geometry.Offset.Zero,
+                end = androidx.compose.ui.geometry.Offset(size.width, size.height),
+            ),
+        )
+        drawRect(
+            androidx.compose.ui.graphics.Brush.radialGradient(
+                listOf(Color(0x8CEE8B70), Color(0x00EE8B70)),
+                center = corner,
+                radius = maxOf(size.width * 0.95f, 1f),
+            ),
+        )
+    } else {
+        drawRect(
+            androidx.compose.ui.graphics.Brush.linearGradient(
+                listOf(Color(0xFFFDF4F8), Color(0xFFFBE7EE)),
+                start = androidx.compose.ui.geometry.Offset.Zero,
+                end = androidx.compose.ui.geometry.Offset(size.width, size.height),
+            ),
+        )
+        drawRect(
+            androidx.compose.ui.graphics.Brush.radialGradient(
+                listOf(Color(0x73FBCFC4), Color(0x00FBCFC4)),
+                center = corner,
+                radius = maxOf(size.width * 0.95f, 1f),
+            ),
+        )
+    }
+}
 
 /** Показывать ли «Vice» в настройках. */
 internal fun viceOffered(today: LocalDate): Boolean = today.isBefore(VICE_END)

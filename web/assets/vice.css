@@ -9,7 +9,7 @@
 */
 
 :root[data-vice] {
-  --bg: #fbf0f2;
+  --bg: #fdf4f8;
   --fg: #2a0c2e;
   --surface: #ffffff;
   --surface-variant: #f3e3ec;
@@ -33,7 +33,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root[data-vice]:not([data-theme="light"]) {
-    --bg: #361365;
+    --bg: #1b0a2e;
     --fg: #f7eff6;
     --surface: #421a78;
     --surface-variant: #4e2189;
@@ -58,7 +58,7 @@
 }
 
 :root[data-vice][data-theme="dark"] {
-  --bg: #361365;
+  --bg: #1b0a2e;
   --fg: #f7eff6;
   --surface: #421a78;
   --surface-variant: #4e2189;
@@ -79,6 +79,35 @@
   --outline: #a97bc0;
   --overlay: rgba(20, 6, 40, 0.6);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* ——— закат под карточками ——— */
+
+/* Тёмно-фиолетовый по диагонали и тёплое пятно у нижнего правого угла — как закат за домами.
+   Пятно держится в углу: там только фон, а текст на нём терял бы контраст. Верхний край фона
+   совпадает с цветом липкой шапки, иначе под ней видна ступенька. */
+:root[data-vice] body {
+  background-color: #fdf4f8;
+  background-image:
+    radial-gradient(95% 85% at 105% 108%, rgba(251, 207, 196, 0.45), rgba(251, 207, 196, 0) 70%),
+    linear-gradient(135deg, #fdf4f8, #fbe7ee);
+  background-repeat: no-repeat;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-vice]:not([data-theme="light"]) body {
+    background-color: #1b0a2e;
+    background-image:
+      radial-gradient(95% 85% at 105% 108%, rgba(238, 139, 112, 0.55), rgba(238, 139, 112, 0) 70%),
+      linear-gradient(135deg, #1b0a2e, #2e1048 35%, #4c1668 68%, #6b2275);
+  }
+}
+
+:root[data-vice][data-theme="dark"] body {
+  background-color: #1b0a2e;
+  background-image:
+    radial-gradient(95% 85% at 105% 108%, rgba(238, 139, 112, 0.55), rgba(238, 139, 112, 0) 70%),
+    linear-gradient(135deg, #1b0a2e, #2e1048 35%, #4c1668 68%, #6b2275);
 }
 
 /* ——— плашка в настройках ——— */

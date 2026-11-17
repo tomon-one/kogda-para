@@ -248,7 +248,7 @@ fun SettingsScreen(
             if (viceOffered(ru.whensclass.widget.collegeToday())) ViceToggle(vice, onVice)
             if (!vice) GlassToggle(glow, onGlow)
             SwitchRow(
-                "Второй ряд вкладок не уезжает",
+                "Второй ряд вкладок остаётся на месте",
                 checked = rowStays,
                 onCheckedChange = onRowStays,
                 hint = "«Пересдачи», «Аудитории» и «Экзамены» остаются на месте, когда листаете расписание. " +
@@ -415,7 +415,7 @@ private fun ViceToggle(on: Boolean, onChange: (Boolean) -> Unit) {
                 )
             }
             Text(
-                "Закат: фиолетовый, пурпурный, розовый, персиковый. «Стекло» с ним не работает.",
+                "Тёплый свет города, где не бывает зимы.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

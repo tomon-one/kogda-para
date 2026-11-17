@@ -393,8 +393,13 @@ internal fun App(
     }
     MaterialTheme(colorScheme = scheme) {
         Surface(
-            modifier = if (glass) Modifier.fillMaxSize().drawBehind { glowBackdrop(dark) } else Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
+            // Закат «Vice» рисуется под карточками: у схемы непрозрачный фон, и Surface закрыл бы его.
+            modifier = when {
+                glass -> Modifier.fillMaxSize().drawBehind { glowBackdrop(dark) }
+                vice -> Modifier.fillMaxSize().drawBehind { viceBackdrop(dark) }
+                else -> Modifier.fillMaxSize()
+            },
+            color = if (vice) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         ) {
             // Пустой фон, пока настройки читаются с диска: иначе мелькнёт чужой экран.
             if (!loaded || glowStored == null || viceStored == null) return@Surface
