@@ -39,6 +39,7 @@ from .messages import (
 )
 from .quiet import Quiet, _by_day, quiet_hours
 from .reminders import Reminders, _mark
+from .reminders import _reminder as _reminder  # noqa: PLC0414
 from .subscription import _host
 
 log = logging.getLogger(__name__)
