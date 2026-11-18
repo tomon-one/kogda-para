@@ -72,6 +72,16 @@ internal fun daysWithGaps(schedule: ScheduleDto): List<DayDto> {
     return out
 }
 
+/**
+ * Перед днём [date] в списке — строка «Следующая неделя»: стык воскресенья и понедельника. Считаем
+ * по датам, а не по месту в списке: дни могут прийти с пропусками.
+ */
+internal fun startsNextWeek(previous: String?, date: String?): Boolean {
+    val prev = previous?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return false
+    val day = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return false
+    return prev.dayOfWeek == DayOfWeek.SUNDAY && day == prev.plusDays(1)
+}
+
 /** Строка карточки «Сегодня» 2 апреля (как на сайте, `ui/days.js`). */
 internal const val BIRTHDAY = "🎂 Сегодня у автора день рождения. Он не вправе отменить пары, но очень хотел бы"
 

@@ -1,7 +1,7 @@
 // Главный экран: шапка, вкладки, своё расписание и чужие (TodayScreen.kt,
 // TeacherScreen.kt).
 
-import { h, icon, actionButton, actionLink, dialog, closeDialog, spinner, shiftBack } from './dom.js';
+import { h, icon, actionButton, actionLink, dialog, closeDialog, spinner, shiftBack, standalone, isIos, installKind } from './dom.js';
 import { dayCards } from './days.js';
 import { othersList } from './lists.js';
 import { retakesActive, retakesView } from './retakes.js';
@@ -359,10 +359,26 @@ function ownView(app, content) {
   if (missing) {
     if (platesEl) content.appendChild(platesEl);
     content.appendChild(missing);
-    return;
+  } else {
+    // Вместе с парами остальных выбранных групп — только на экране.
+    content.appendChild(dayCards(app.shown() || schedule, app.now(), platesEl, app.scrollTarget(), app.groupsByName()));
   }
-  // Вместе с парами остальных выбранных групп — только на экране.
-  content.appendChild(dayCards(app.shown() || schedule, app.now(), platesEl, app.scrollTarget(), app.groupsByName()));
+  var bar = installBar(app);
+  if (bar) content.appendChild(bar);
+}
+
+/**
+ * Установка — внизу своего расписания: на виду, а не только в настройках.
+ * Где браузер даёт установку — кнопка; на айфоне её нет, там подсказка.
+ */
+function installBar(app) {
+  var kind = installKind(standalone(), !!app.installPrompt(), isIos());
+  if (!kind) return null;
+  return h('div', { class: 'install-bar' },
+    kind === 'prompt' ? actionButton('Установить', app.install, null, 'install') : null,
+    kind === 'ios' ? h('p', { class: 'install-note' },
+      'В Safari — «Поделиться» (на панели или в «•••» у адреса) → «На экран „Домой“».') : null,
+    h('button', { type: 'button', class: 'text-button', onclick: function () { app.go('settings'); } }, 'Настройки'));
 }
 
 function chosenView(app, kind, id) {

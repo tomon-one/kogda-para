@@ -477,3 +477,39 @@ test('поздравление только в праздник', async () => {
   assert.equal(holidayNote('2026-11-04'), '🤝 С Днём народного единства!');
   assert.equal(holidayNote('2027-01-09'), null);
 });
+
+test('«Следующая неделя» — только на стыке вс → пн', async () => {
+  const { startsNextWeek } = await import('../assets/js/ui/days.js');
+  // Воскресенье → понедельник.
+  assert.equal(startsNextWeek('2026-11-15', '2026-11-16'), true);
+  // Суббота → воскресенье — та же неделя.
+  assert.equal(startsNextWeek('2026-11-14', '2026-11-15'), false);
+  // Пропуск в данных — это не стык: строка не появляется.
+  assert.equal(startsNextWeek('2026-11-13', '2026-11-16'), false);
+  // Соседние дни посреди недели.
+  assert.equal(startsNextWeek('2026-11-16', '2026-11-17'), false);
+  assert.equal(startsNextWeek('2026-11-16', '2026-11-16'), false);
+});
+
+test('компактный вид: ширина сама, выбор человека сильнее', async () => {
+  const { compactOn } = await import('../assets/js/ui/dom.js');
+  // Не выбирали — решает ширина экрана.
+  assert.equal(compactOn(null, true), true);
+  assert.equal(compactOn(null, false), false);
+  // Выбрали — так и показывать на любой ширине.
+  assert.equal(compactOn(true, false), true);
+  assert.equal(compactOn(false, true), false);
+});
+
+test('установка: кнопка, подсказка на айфоне или ничего', async () => {
+  const { installKind } = await import('../assets/js/ui/dom.js');
+  // Уже открыт значком — предлагать нечего ни на айфоне, ни с кнопкой браузера.
+  assert.equal(installKind(true, true, true), null);
+  assert.equal(installKind(true, false, false), null);
+  // Браузер даёт установку — кнопка.
+  assert.equal(installKind(false, true, false), 'prompt');
+  // На айфоне установки из браузера нет — подсказка про «Поделиться».
+  assert.equal(installKind(false, false, true), 'ios');
+  // Ни установки, ни айфона — строки нет.
+  assert.equal(installKind(false, false, false), null);
+});

@@ -94,9 +94,16 @@ fun ScheduleDays(
     dragSink: androidx.compose.runtime.MutableState<((Float) -> Unit)?>? = null,
     /** Картинка дня в чат: null — кнопки нет (расписание преподавателя, чужой день). */
     onImage: ((String) -> Unit)? = null,
+    /** Компактный вид: карточки теснее ([compactView]). */
+    compact: Boolean? = null,
 ) {
     val now = clock ?: rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
+    val tight = compactView(
+        choice = compact,
+        widthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp /
+            androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f),
+    )
 
     // Открываемся на сегодняшнем дне, а не на понедельнике: позиция задаётся при создании списка,
     // иначе прокрутка успела бы показать понедельник. Дня нет — ближайший ([dayIndex]). День из
@@ -292,11 +299,15 @@ fun ScheduleDays(
             }
         },
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = top, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (tight) 10.dp else 12.dp),
     ) {
         days.forEachIndexed { index, day ->
             if (header != null && index == rows.headerAt) item(key = "header") { header() }
             item(key = day.date) {
+            // На стыке недель — тихая строка: искать понедельник глазами не надо.
+            val weekBreak = startsNextWeek(days.getOrNull(index - 1)?.date, day.date)
+            Column {
+            if (weekBreak) NextWeekMark()
             Box(modifier = Modifier.appear(appearing.value, rows.of(index) - firstAtStart)) {
             DayCard(
                 day, schedule.bellsOf(day), now, teacher = schedule.isTeacher,
@@ -304,7 +315,9 @@ fun ScheduleDays(
                 nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
                 idle = idle,
                 onImage = onImage,
+                compact = tight,
             )
+            }
             }
             }
         }
@@ -382,6 +395,8 @@ private fun DayCard(
     idle: Boolean = false,
     /** Картинка дня в чат; null — кнопки нет. */
     onImage: ((String) -> Unit)? = null,
+    /** Компактный вид: отступы меньше, пары теснее. */
+    compact: Boolean = false,
 ) {
     val today = now.toLocalDate()
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
@@ -410,9 +425,10 @@ private fun DayCard(
             val ownUnreadShort = day.unread != null && day.unreadGroups.isEmpty()
             DayHeader(
                 date?.let { formatDayTitle(it, today) } ?: day.date, isToday, past, daySummary(day.lessons, groups, bells),
-                bottom = if (notes.isEmpty()) 8.dp else 4.dp,
+                bottom = if (notes.isEmpty()) (if (compact) 6.dp else 8.dp) else 4.dp,
                 chips = listOfNotNull(day.state?.let(::stateDayText), "Не прочитан".takeIf { day.unread != null }),
                 onImage = onImage?.let { share -> { share(day.date) } },
+                compact = compact,
             )
 
             // Свой день не прочитан — «пар нет» тут было бы неправдой.
@@ -459,6 +475,7 @@ private fun DayCard(
                         groupsByName = groupsByName,
                         subject = subjects.text(lesson),
                         saidAbove = allForeign && !lesson.isCancelled,
+                        compact = compact,
                     )
                 }
                 // День, в котором отменили все свои пары.
@@ -475,6 +492,17 @@ private fun DayCard(
             }
         }
     }
+}
+
+/** На стыке воскресенья и понедельника: мелкая тихая строка вместо заголовка, без карточки. */
+@Composable
+private fun NextWeekMark() {
+    Text(
+        "Следующая неделя",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+    )
 }
 
 /** Метка дня: график колледжа или непрочитанный день — одной строкой у даты. */
@@ -506,8 +534,10 @@ private fun DayHeader(
     chips: List<String> = emptyList(),
     /** Картинка дня в чат: null — кнопки нет. */
     onImage: (() -> Unit)? = null,
+    /** Компактный вид: шапка дня ниже. */
+    compact: Boolean = false,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = bottom)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = if (compact) 10.dp else 12.dp, bottom = bottom)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 title.replaceFirstChar { it.uppercase() },

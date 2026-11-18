@@ -111,6 +111,10 @@ fun SettingsScreen(
     onVice: (Boolean) -> Unit = {},
     rowStays: Boolean = false,
     onRowStays: (Boolean) -> Unit = {},
+    /** Компактный вид карточек дней. */
+    /** Компактный вид: null — не выбирали, решает ширина экрана. */
+    compact: Boolean? = null,
+    onCompact: (Boolean) -> Unit = {},
     onChangeGroup: () -> Unit,
     onAddGroup: () -> Unit = {},
     onAddSubgroup: (ru.whensclass.data.GroupDto) -> Unit = {},
@@ -280,6 +284,13 @@ fun SettingsScreen(
             // «Vice» включён, плашка «Стекла» скрыта — оно в это время не применяется.
             if (viceOffered(ru.whensclass.widget.collegeToday())) ViceToggle(vice, onVice)
             if (!vice) GlassToggle(glow, onGlow)
+            SwitchRow(
+                "Компактный вид",
+                checked = compactView(compact, LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale),
+                onCheckedChange = onCompact,
+                hint = "Время пары — одной строкой, кабинет и преподаватель — в одну, отступы меньше. " +
+                    "На экране уже 360 dp включается сам.",
+            )
             SwitchRow(
                 "Второй ряд вкладок остаётся на месте",
                 checked = rowStays,

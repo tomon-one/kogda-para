@@ -77,6 +77,8 @@ import ru.whensclass.widget.plural
 fun TodayScreen(
     /** Нижний ряд вкладок стоит при листании (настройка «Второй ряд вкладок остаётся на месте»). */
     rowStays: Boolean = false,
+    /** Компактный вид карточек (настройка «Компактный вид»). */
+    compact: Boolean? = null,
     startDay: String? = null,
     /** Растёт на каждое открытие с днём по живому экрану (onNewIntent). */
     startKey: Int = 0,
@@ -341,6 +343,7 @@ fun TodayScreen(
                                         plural(n, "группа", "группы", "групп") +
                                         "."
                                 },
+                                compact = compact,
                             )
                         }
                         return@ScheduleTabs
@@ -390,6 +393,7 @@ fun TodayScreen(
                                 enterKey = teachersEnterKey,
                                 onLeaveOpened = { tab = Tab.RETAKES },
                                 subjects = subjects,
+                                compact = compact,
                             )
                           }
                         }
@@ -455,6 +459,7 @@ fun TodayScreen(
                     underHead = true,
                     clock = now,
                     onImage = onImage,
+                    compact = compact,
                 )
             }
         }

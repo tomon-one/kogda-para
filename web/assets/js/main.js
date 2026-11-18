@@ -15,7 +15,7 @@ import { render, focusKey, measureHead } from './render.js';
 import { parseRoute, go, back, home, onRoute, stepsNow } from './route.js';
 import { emptyList, loadLists, loadRetakes, loadRooms, refresh } from './data.js';
 import { mixedBuild } from './version.js';
-import { applyTheme, closeReminders, closeStaleChanges, checkWorkerUpdate, countOpen, countReturn, registerWorker, testNotice, workerUpdated } from './site.js';
+import { applyCompact, applyTheme, closeReminders, closeStaleChanges, checkWorkerUpdate, compactView, countOpen, countReturn, registerWorker, testNotice, workerUpdated } from './site.js';
 
 var installEvent = null;
 
@@ -66,6 +66,12 @@ Object.assign(app, {
     store.set('theme', theme);
     // Без перестройки экрана: цвета меняются сразу.
     applyTheme();
+  },
+  /** Тесные карточки: время одной строкой. Сам — на узком экране. */
+  compact: compactView,
+  setCompact: function (on) {
+    store.set('compact', on);
+    applyCompact();
   },
   /** «Стекло» (beta): свет за страницей и матовые полосы (glass.css). */
   glass: function () { return store.get('glass') === true; },
@@ -305,12 +311,16 @@ window.addEventListener('resize', function () {
     fitPending = false;
     fitLabels(document.body);
     measureHead();
+    // Повернули телефон или потянули окно — компактность зависит от ширины.
+    applyCompact();
   });
 });
 
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
   installEvent = e;
+  // Кнопка внизу своего расписания — сразу: событие приходит уже после первой отрисовки.
+  render();
 });
 
 // ——— запуск ———
@@ -335,6 +345,7 @@ if (/[?&]gone=1(&|$)/.test(location.search)) {
 // Снимок до веб-0.2.0 склеен с парами соседней подгруппы — до первого показа.
 repo.migrateGroups();
 applyTheme();
+applyCompact();
 countOpen();
 // К сегодняшнему дню и на первом заходе, а не только при смене экрана, иначе
 // наверху стоял бы понедельник.

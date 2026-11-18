@@ -71,6 +71,8 @@ fun TeacherScreen(
     onLeaveOpened: () -> Unit = {},
     /** Как показывать названия предметов: короткие от службы или свои. */
     subjects: ru.whensclass.data.SubjectNames = ru.whensclass.data.SubjectNames(),
+    /** Компактный вид карточек дней (настройка). */
+    compact: Boolean? = null,
     /** Сервер больше не обслуживает эту сборку — «проверьте интернет» было бы неправдой. */
     unsupported: Boolean = false,
     /**
@@ -148,6 +150,7 @@ fun TeacherScreen(
                 underHead = true,
                 header = plates,
                 subjects = subjects,
+                compact = compact,
             )
             TextButton(
                 onClick = { browsing = true },
@@ -226,6 +229,7 @@ fun TeacherScreen(
             today = now.toLocalDate(),
             now = now,
             subjects = subjects,
+            compact = compact,
             onBack = { close() },
         )
         return
@@ -349,6 +353,7 @@ private fun ChosenTeacher(
     today: java.time.LocalDate,
     now: java.time.LocalDateTime,
     subjects: ru.whensclass.data.SubjectNames,
+    compact: Boolean? = null,
     onBack: () -> Unit,
 ) {
     // Палец на строке с именем листает список, как с полоски: в альбомной строка и полоска — почти
@@ -413,6 +418,7 @@ private fun ChosenTeacher(
                         header = plates,
                         dragSink = dragSink,
                         subjects = subjects,
+                        compact = compact,
                     )
                 }
             }

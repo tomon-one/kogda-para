@@ -56,6 +56,16 @@ private val TIME_COLUMN = 72.dp
 /** Уже этого (ширина экрана в dp, делённая на шрифт) — время над названием, а не сбоку. */
 private const val STACK_BELOW_DP = 340
 
+/** Уже этого (ширина экрана в dp) компактный вид включается сам, без настройки. */
+private const val COMPACT_BELOW_DP = 360f
+
+/**
+ * Компактный вид: выбор человека сильнее ширины, а пока выбора нет, решает она — экран уже
+ * [COMPACT_BELOW_DP] теснее всегда (как на сайте: `compactOn`).
+ */
+internal fun compactView(choice: Boolean?, widthDp: Float): Boolean =
+    choice ?: (widthDp < COMPACT_BELOW_DP)
+
 /**
  * Строка пары. Колонка времени одной ширины на все строки, чтобы взгляд находил начало следующей; в
  * тесноте время уходит строкой над названием.
@@ -73,6 +83,8 @@ internal fun LessonRow(
     saidAbove: Boolean = false,
     /** Название предмета как его показывать: короткое от службы или своё. */
     subject: String = lesson.subject,
+    /** Компактный вид: время одной строкой, подписи в одну строку, отступы меньше; null — по ширине. */
+    compact: Boolean? = null,
 ) {
     // Пара только у других выбранных групп: видна сразу — приглушённая строка на сером фоне и подпись.
     val foreign = groups.isNotEmpty() && 0 !in lesson.slots
@@ -82,10 +94,12 @@ internal fun LessonRow(
     val timeColumn = TIME_COLUMN * scale
     // Тесно (крупный шрифт или масштаб) — время строкой над названием: сбоку названию остаётся
     // мало, и длинные слова рвутся.
-    val stacked = LocalConfiguration.current.screenWidthDp / scale < STACK_BELOW_DP
+    val width = LocalConfiguration.current.screenWidthDp / scale
+    val stacked = width < STACK_BELOW_DP
+    val tight = compactView(choice = compact, widthDp = width)
     // Пара — плитка внутри карточки дня: видно, где кончается одна и начинается другая.
     val background = Modifier
-        .padding(start = 6.dp, end = 6.dp, bottom = 4.dp)
+        .padding(start = 6.dp, end = 6.dp, bottom = if (tight) 3.dp else 4.dp)
         .fillMaxWidth()
         // Скруглённый фон без обрезки: обрезка по форме на каждом кадре утяжеляла листание, а
         // содержимое за край плитки не выходит.
@@ -124,32 +138,55 @@ internal fun LessonRow(
                 textDecoration = if (lesson.isCancelled) TextDecoration.LineThrough else null,
             )
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(if (tight) 2.dp else 4.dp))
             // Тип занятия и аудитория — то, ради чего сюда заглядывают: сразу под названием.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val shrink = Modifier.weight(1f, fill = false)
+            val place: @Composable (Modifier) -> Unit = { placeModifier ->
                 if (lesson.isOnline) {
-                    Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, muted = past || foreign, modifier = shrink)
+                    Place(onlineLabel(lesson).replaceFirstChar { it.uppercase() }, muted = past || foreign, modifier = placeModifier)
                 } else {
                     // Ни кабинета, ни ссылки — так и говорим: пустая строка читается как «не загрузилось».
                     val room = roomLabel(lesson.room)
-                    Place(room ?: "Не указано", muted = room == null || past || foreign, modifier = shrink)
+                    Place(room ?: "Не указано", muted = room == null || past || foreign, modifier = placeModifier)
                 }
             }
-
-            lesson.url?.let { OnlineLink(it, muted = past) }
 
             // Подпись группы — вместо преподавателя: в своём расписании преподавателю важно, кому читается пара.
             val who = lesson.groups?.let(::listOf) ?: lesson.teachers.map(::shortenName)
             // Тип занятия — через точку после последней подписи: рядом с длинным местом он висел бы посреди его строк.
             val kind = kindName(lesson.kind)
-            (if (kind == null) who else if (who.isEmpty()) listOf(kind)
-            else who.dropLast(1) + "${who.last()} · $kind").forEach {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            val line = if (kind == null) who else if (who.isEmpty()) listOf(kind)
+            else who.dropLast(1) + "${who.last()} · $kind"
+            if (tight) {
+                // Тесно: место и подпись — одной строкой, а не столбиком; длинная переносится по словам.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    place(Modifier)
+                    if (line.isNotEmpty()) {
+                        Text(
+                            line.joinToString(", "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else {
+                // Обычный вид: ссылка на пару идёт сразу за местом, подписи — под ней (как было).
+                Row(verticalAlignment = Alignment.CenterVertically) { place(Modifier.weight(1f, fill = false)) }
+                lesson.url?.let { OnlineLink(it, muted = past) }
+                line.forEach {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (tight) {
+                lesson.url?.let { OnlineLink(it, muted = past) }
             }
 
             if (lesson.isCancelled) {
@@ -173,22 +210,23 @@ internal fun LessonRow(
         }
     }
     if (stacked) {
-        Column(modifier = background.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Column(modifier = background.padding(horizontal = if (tight) 12.dp else 16.dp, vertical = if (tight) 8.dp else 12.dp)) {
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (tight) 8.dp else 10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "${lesson.number} пара",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = if (tight) MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                    else MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
                 lessonTime(bells, lesson.number)?.let {
                     Text(
                         it,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = if (tight) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
                         fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
                         color = if (isNow) MaterialTheme.colorScheme.primary else main,
                         maxLines = 1,
@@ -207,39 +245,53 @@ internal fun LessonRow(
                 }
                 if (groups.isNotEmpty()) GroupMarks(lesson.slots, groups, groupsByName)
             }
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(if (tight) 4.dp else 6.dp))
             subject()
         }
     } else {
         Row(
             modifier = background
                 .height(IntrinsicSize.Min)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = if (tight) 10.dp else 12.dp, vertical = if (tight) 8.dp else 10.dp),
             verticalAlignment = Alignment.Top,
         ) {
             Column(modifier = Modifier.width(timeColumn)) {
                 Text(
                     "${lesson.number} пара",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = if (tight) MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                    else MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
-                // Начало крупно, конец под ним.
-                bells[lesson.number.toString()]?.getOrNull(0)?.takeIf { it.isNotEmpty() }?.let { start ->
-                    Text(
-                        start,
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 22.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = if (isNow) MaterialTheme.colorScheme.primary else main,
-                        maxLines = 1,
-                    )
-                    bells[lesson.number.toString()]?.getOrNull(1)?.takeIf { it.isNotEmpty() }?.let { end ->
+                if (tight) {
+                    // Компактно — одна строка «09:00–10:30» вместо начала крупно и конца под ним.
+                    lessonTime(bells, lesson.number)?.let {
                         Text(
-                            end,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            it,
+                            style = MaterialTheme.typography.labelMedium.copy(lineHeight = 15.sp),
+                            fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isNow) MaterialTheme.colorScheme.primary else main,
                             maxLines = 1,
                         )
+                    }
+                } else {
+                    // Начало крупно, конец под ним.
+                    bells[lesson.number.toString()]?.getOrNull(0)?.takeIf { it.isNotEmpty() }?.let { start ->
+                        Text(
+                            start,
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 22.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = if (isNow) MaterialTheme.colorScheme.primary else main,
+                            maxLines = 1,
+                        )
+                        bells[lesson.number.toString()]?.getOrNull(1)?.takeIf { it.isNotEmpty() }?.let { end ->
+                            Text(
+                                end,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
                 if (isNow) {
@@ -253,10 +305,10 @@ internal fun LessonRow(
                         )
                     }
                 }
-                if (groups.isNotEmpty()) GroupMarks(lesson.slots, groups, groupsByName, Modifier.padding(top = 6.dp))
+                if (groups.isNotEmpty()) GroupMarks(lesson.slots, groups, groupsByName, Modifier.padding(top = if (tight) 4.dp else 6.dp))
             }
 
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(if (tight) 8.dp else 10.dp))
 
             Box(modifier = Modifier.weight(1f)) { subject() }
         }

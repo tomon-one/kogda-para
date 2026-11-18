@@ -268,6 +268,9 @@ export function settingsScreen(app) {
 
       section('Оформление', [
         segmented([['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']], app.theme(), app.setTheme),
+        switchLine('Компактный вид', app.compact(), app.setCompact,
+          'Время одной строкой, кабинет и преподаватель рядом, отступы меньше. ' +
+          'На экране шириной меньше 360 px включается сам.'),
         // «Vice» и «Стекло» вместе не работают: при включённой «Vice» плашки
         // стекла нет, а его флаг в хранилище не трогается.
         viceToggle(app),

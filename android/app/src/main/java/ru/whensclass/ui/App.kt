@@ -103,6 +103,7 @@ internal fun App(
     // «Стекло» не работает, пока включён «Vice»; свой выбор оно при этом не теряет.
     val glass = glow && !vice
     val rowStays by container.store.rowStays.collectAsState(initial = false)
+    val compact by container.store.compact.collectAsState(initial = null)
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
     val loaded by container.store.loaded.collectAsState(initial = false)
     val notifyBefore by container.store.notifyBefore
@@ -373,6 +374,8 @@ internal fun App(
                         onVice = { on -> scope.launch { container.store.setVice(on) } },
                         rowStays = rowStays,
                         onRowStays = { on -> scope.launch { container.store.setRowStays(on) } },
+                        compact = compact,
+                        onCompact = { on -> scope.launch { container.store.setCompact(on) } },
                         update = upd.update,
                         installing = upd.installing,
                         notifyBefore = notifyBefore,
@@ -481,6 +484,7 @@ internal fun App(
 
                     Screen.TODAY -> TodayScreen(
                         rowStays = rowStays,
+                        compact = compact,
                         retakes = rt.body,
                         retakesFailed = rt.failed,
                         retakesAnswered = rt.answered,

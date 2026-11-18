@@ -291,6 +291,24 @@ export function standalone() {
     navigator.standalone === true;
 }
 
+/**
+ * Компактный вид: выбор человека сильнее ширины экрана, а пока выбора нет —
+ * решает ширина: уже 360 px — теснее.
+ */
+export function compactOn(choice, narrow) {
+  return choice === true || (choice !== false && narrow);
+}
+
+/**
+ * Что предложить про установку: 'prompt' — кнопка установки, 'ios' — подсказка
+ * про «Поделиться», null — ничего: значок уже стоит или ставить нечем.
+ */
+export function installKind(installed, prompt, ios) {
+  if (installed) return null;
+  if (prompt) return 'prompt';
+  return ios ? 'ios' : null;
+}
+
 /** iPhone и iPad; iPadOS называет себя Mac, но с касаниями. */
 export function isIos() {
   var ua = navigator.userAgent || '';

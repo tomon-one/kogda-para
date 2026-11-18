@@ -250,6 +250,16 @@ class ScheduleStore(internal val context: Context) {
         context.dataStore.edit { it[KEY_ROW_STAYS] = if (on) "1" else "0" }
     }
 
+    /** Компактный вид: те же карточки недели теснее. По умолчанию тесно только на узком экране. */
+    /** Компактный вид; null — человек не выбирал, и решает ширина экрана (как на сайте). */
+    val compact: Flow<Boolean?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_COMPACT]?.let { it == "1" }
+    }
+
+    suspend fun setCompact(on: Boolean) {
+        context.dataStore.edit { it[KEY_COMPACT] = if (on) "1" else "0" }
+    }
+
     suspend fun currentGroupId(): String? = groupId.first()
 
     /** Всё, что нужно виджету, за одно чтение: по чтению на поле переключение дня тормозило. */

@@ -93,6 +93,23 @@ html:has(.screen.with-bottom) { scroll-padding-bottom: 80px; }
 
 .text-link { color: var(--primary); }
 
+/* Установка приложения — тихой строкой внизу своего расписания. */
+.install-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin: 4px 0 8px;
+  padding: 4px;
+  text-align: center;
+}
+.install-bar > * { margin: 4px 6px 0; }
+.install-note {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
 /* Нижний ряд — три раздела равными третями во всю ширину. */
 .tabs.soon .tab { padding-left: 2px; padding-right: 2px; }
 

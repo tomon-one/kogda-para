@@ -2,7 +2,7 @@
 
 import * as store from './store.js';
 import { collegeNow, viceActive } from './time.js';
-import { h, closeDialog, dialog, externalLink } from './ui/dom.js';
+import { h, closeDialog, dialog, externalLink, compactOn } from './ui/dom.js';
 import { build } from './version.js';
 import { app } from './state.js';
 
@@ -26,6 +26,18 @@ export function applyTheme() {
     var own = /dark/.test(metas[i].getAttribute('media') || '') ? 'dark' : 'light';
     metas[i].setAttribute('content', THEME_COLOR[theme === 'system' ? own : theme]);
   }
+}
+
+/** Компактный вид: включает сам на экране уже 360 px, выбор человека — сильнее. */
+export function compactView() {
+  var narrow = window.matchMedia ? window.matchMedia('(max-width: 359px)').matches : false;
+  return compactOn(store.get('compact'), narrow);
+}
+
+/** Класс на html — его читают правила days.css. */
+export function applyCompact() {
+  if (compactView()) document.documentElement.classList.add('compact');
+  else document.documentElement.classList.remove('compact');
 }
 
 /** Окно «Тестовый режим» — только на /tested/, проверочной копии сайта. */

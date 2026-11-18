@@ -3,7 +3,7 @@
 
 import { h, actionLink, snackbar, copyText, icon } from './dom.js';
 import * as store from '../store.js';
-import { dayTitle, capitalize } from '../time.js';
+import { dayTitle, capitalize, weekday, addDays } from '../time.js';
 import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, stateDayText, unreadNotes } from '../schedule.js';
 import {
   dayImageLink, isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
@@ -28,6 +28,10 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
       placed = true;
     }
     var nextFree = freeOwnDay(days[i + 1], schedule.groupNames || []);
+    // Новая неделя — тонкой строкой, а не ещё одной карточкой.
+    if (i > 0 && startsNextWeek(days[i - 1].d, day.d)) {
+      list.appendChild(h('div', { class: 'week-next' }, 'Следующая неделя'));
+    }
     list.appendChild(dayCard(day, dayBells(schedule, day), now, teacher, schedule.groupNames || [], byName !== false, nextFree, group));
   });
   if (before && !placed) {
@@ -35,6 +39,14 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
     else list.insertBefore(before, list.firstChild);
   }
   return list;
+}
+
+/**
+ * Перед днём `date` — строка «Следующая неделя»: стык воскресенья и
+ * понедельника. По датам, а не по месту в списке: дни бывают с пропусками.
+ */
+export function startsNextWeek(prev, date) {
+  return weekday(prev) === 6 && date === addDays(prev, 1);
 }
 
 /** Строка карточки «Сегодня» 2 апреля (как в `DayList.kt`). */
@@ -148,18 +160,21 @@ function lessonRow(lesson, bells, isNow, key, groups, byName, saidAbove) {
     place = h('span', { class: 'place' + (room ? '' : ' muted') }, room || 'Не указано');
   }
   var kind = kindName(lesson.k);
+  // Кабинет и кто ведёт — в одном блоке: в компактном виде они идут одной
+  // строкой, в обычном — друг под другом.
   var body = h('div', { class: 'lesson-body' },
     // Чья пара — первой строкой: сначала видно, что она не своя.
     foreign && !saidAbove ? h('div', { class: 'sub only-at' }, onlyAt(lesson.slots, groups)) : null,
     h('div', { class: 'subject' + (isCancelled(lesson) ? ' cancelled' : '') }, subjectText(lesson)),
-    h('div', { class: 'lesson-meta' }, place),
+    h('div', { class: 'lesson-meta' },
+      place,
+      // Подпись группы — вместо преподавателя: у преподавателя важно, кому
+      // читается пара. Чья пара у выбранных групп — видно по значкам.
+      // Тип занятия — через точку после последней подписи: рядом с длинным
+      // местом он висел бы посреди его строк.
+      whoLines(lesson.gr != null ? [lesson.gr] : (lesson.t || []).map(shortenName), kind)
+        .map(function (line) { return h('div', { class: 'sub' }, line); })),
     lesson.u ? onlineLink(lesson.u, key) : null,
-    // Подпись группы — вместо преподавателя: у преподавателя важно, кому
-    // читается пара. Чья пара у выбранных групп — видно по значкам.
-    // Тип занятия — через точку после последней подписи: рядом с длинным местом
-    // он висел бы посреди его строк.
-    whoLines(lesson.gr != null ? [lesson.gr] : (lesson.t || []).map(shortenName), kind)
-      .map(function (line) { return h('div', { class: 'sub' }, line); }),
     note(lesson));
   return h('div', { class: 'lesson' + (isNow ? ' now' : '') + (foreign ? ' foreign' : '') },
     h('div', { class: 'lesson-time' + (groups.length ? ' with-marks' : '') },

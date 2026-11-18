@@ -37,6 +37,15 @@
   margin-bottom: 12px;
 }
 
+/* Стык недель: тонкая строка без карточки, тише заголовка дня. */
+.week-next {
+  padding: 0 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
 /* Рамка сегодняшнего дня — 35 % основного цвета в обеих темах. */
 .day.today { border-color: var(--today-border, var(--button-border)); }
 
@@ -265,6 +274,9 @@
   margin-top: 4px;
 }
 
+/* Преподаватель — под кабинетом; в компактном виде эта же строка идёт рядом с ним. */
+.lesson-meta .sub { flex-basis: 100%; }
+
 .place {
   min-width: 0;
   font-size: 12px;
@@ -339,3 +351,27 @@
 
 /* Прошедшая пара: ссылка ещё работает, но не зовёт. */
 .past .link-button.open { background: var(--foreign-bg); color: var(--muted); }
+
+/* ——— компактный вид ——— */
+/* Те же карточки, теснее: время одной строкой, кабинет и преподаватель рядом,
+   номер пары мельче. Включается сам на экране уже 360 px, переключателем — на
+   любом. Ничего не прячется: место, ссылка, отмена и значки групп остаются. */
+.compact .day { margin-bottom: 8px; }
+.compact .day-title { padding: 8px 12px 6px; }
+.compact .day-empty, .compact .day-note { padding: 0 12px 10px; }
+.compact .week-next { padding: 0 12px; margin-bottom: 6px; }
+.compact .lesson { margin: 0 4px 3px; padding: 8px 10px; }
+.compact .lesson:last-child { margin-bottom: 2px; }
+.compact .lesson-body { margin-left: 8px; }
+.compact .lesson-time, .compact .lesson-time.with-marks { width: 5.75em; }
+.compact .pair { font-size: 10px; line-height: 14px; }
+.compact .time-start, .compact .time-end { display: inline; font-size: 14px; line-height: 20px; }
+.compact .time-end::before { content: "–"; }
+.compact .lesson-meta { display: inline-flex; flex-wrap: wrap; align-items: baseline; margin-top: 2px; }
+.compact .lesson-meta .sub { flex-basis: auto; margin-left: 8px; }
+.compact .marks { margin-top: 4px; }
+
+/* Узкая раскладка уже поставила время строкой над парой — колонке ширины не нужно. */
+@media (max-width: 21.25em) {
+  .compact .lesson-time, .compact .lesson-time.with-marks { width: auto; }
+}
