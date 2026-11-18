@@ -46,6 +46,32 @@ def before_each_lesson(minutes: int) -> list[tuple[str, tuple[int, int]]]:
     return out
 
 
+def schedule_calendar(scheduler: BackgroundScheduler, calendar: CalendarSource,
+                      zone: zoneinfo.ZoneInfo, first: int, last: int) -> None:
+    """Заходы календарного графика: раз в сутки утром и раз при старте.
+
+    График меняется редко, а каждая выгрузка листа приближает отказ Google и
+    для расписания, поэтому обычный заход один в сутки. Повтор каждый час —
+    только пока чтение не удалось (`refresh_if_failed`).
+    """
+    scheduler.add_job(
+        calendar.refresh,
+        CronTrigger(timezone=zone, hour=first, minute=23),
+        id="calendar",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        calendar.refresh_if_failed,
+        CronTrigger(timezone=zone, hour=f"{first}-{last}", minute=53),
+        id="calendar-retry",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(calendar.refresh, "date",
+                      run_date=dt.datetime.now(zone) + dt.timedelta(seconds=45))
+
+
 def build_state(directory) -> tuple[SnapshotStore, Refresher, Push]:
     """Снимок, обновление и рассылка, связанные между собой.
 
@@ -179,16 +205,10 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(retakes.refresh, "date",
                       run_date=dt.datetime.now(zone) + dt.timedelta(seconds=30))
 
-    # Календарный график меняется редко: раз в сутки утром и раз при старте.
-    scheduler.add_job(
-        calendar.refresh,
-        cron(hour=f"{first}-{last}", minute=23),
-        id="calendar",
-        max_instances=1,
-        coalesce=True,
-    )
-    scheduler.add_job(calendar.refresh, "date",
-                      run_date=dt.datetime.now(zone) + dt.timedelta(seconds=45))
+    # Календарный график меняется редко: раз в сутки утром, раз при старте и
+    # повтор каждый час, пока не прочитается: каждая лишняя выгрузка листа
+    # приближает отказ Google и для расписания.
+    schedule_calendar(scheduler, calendar, zone, first, last)
 
     # Сверка с листами преподавателей: раз в три часа, в стороне от обновления —
     # только тревога владельцу, ответы клиентам она не меняет. Листы большие,

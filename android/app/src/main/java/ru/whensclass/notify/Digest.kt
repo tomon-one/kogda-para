@@ -26,6 +26,9 @@ import ru.whensclass.widget.millisOf
  */
 object Digest {
 
+    /** День, о котором сводка: extra у будильника (см. [pending]). */
+    private const val EXTRA_DIGEST_DAY = "ru.whensclass.digest.day"
+
     /** Время сводки — минута дня по часам колледжа. Раньше 16:00 «завтра» ещё не думают. */
     const val MIN = 16 * 60
     const val MAX = 23 * 60 + 59
@@ -44,11 +47,18 @@ object Digest {
         // Прежний будильник — прочь: время могли поменять, а вечер — пройти.
         pending(app, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)?.let { manager.cancel(it) }
         val minutes = store.digestMinutes()
-        if (minutes <= 0) return
+        if (minutes <= 0) {
+            // Выключили — висящая сводка тоже уходит из шторки, а не живёт до завтра.
+            Notifications.digestGone(app)
+            return
+        }
         // Группы нет в таблице — о прежнем снимке сводку не шлём.
         if (store.widgetState().gone) return
         val at = nextEvening(collegeNow(), minutes)
-        val fresh = pending(app, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE) ?: return
+        // День, о котором сводка, едет вместе с будильником: опоздавший (неточный будильник,
+        // Doze, полночь) не станет считать «завтра» от своего часа срабатывания.
+        val day = at.toLocalDate().plusDays(1).toString()
+        val fresh = pending(app, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE, day) ?: return
         // Время колледжа, не телефона: millisOf закреплён тестом в чужом поясе.
         val millis = millisOf(at)
         if (LessonAlarms.exactAllowed(app)) {
@@ -76,7 +86,13 @@ object Digest {
      * Заголовок и текст сводки; null — сказать нечего: дня нет, он не прочитан, одни отмены или
      * пар нет. Короткое название — словарное, но своё, написанное человеком, важнее.
      */
-    fun digestText(schedule: ScheduleDto, tomorrow: LocalDate, names: SubjectNames): Pair<String, String>? {
+    fun digestText(
+        schedule: ScheduleDto,
+        tomorrow: LocalDate,
+        names: SubjectNames,
+        /** «Завтра» или «Сегодня»: будильник мог сработать уже после полуночи. */
+        word: String = "Завтра",
+    ): Pair<String, String>? {
         val day = schedule.days.firstOrNull { it.date == tomorrow.toString() } ?: return null
         if (day.unread != null) return null
         val bells = schedule.bellsOf(day)
@@ -91,7 +107,7 @@ object Digest {
         val subject = names.custom[first.subject] ?: first.shortSubject?.takeIf { it.isNotBlank() }
         ?: first.subject
         val parts = listOfNotNull(subject.trim(), start(first), place(first))
-        return "Завтра к ${first.number}-й паре" to parts.filter { it.isNotEmpty() }.joinToString(", ")
+        return "$word к ${first.number}-й паре" to parts.filter { it.isNotEmpty() }.joinToString(", ")
     }
 
     /** «ауд. 214», «онлайн»; пусто у пары без места. */
@@ -102,12 +118,25 @@ object Digest {
             ?.let { "ауд. $it" }
     }
 
-    private fun pending(context: Context, flags: Int): PendingIntent? = PendingIntent.getBroadcast(
-        context,
-        0,
-        Intent(context, DigestReceiver::class.java),
-        flags or PendingIntent.FLAG_IMMUTABLE,
-    )
+    /** День сводки — extra: приёмнику нельзя верить своим часам, они бывают и после полуночи. */
+    private fun pending(context: Context, flags: Int, day: String? = null): PendingIntent? {
+        val intent = Intent(context, DigestReceiver::class.java)
+        if (day != null) intent.putExtra(EXTRA_DIGEST_DAY, day)
+        return PendingIntent.getBroadcast(context, 0, intent, flags or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    /** Какой день называет сводка, поставленная будильником. */
+    internal fun dayOf(intent: Intent?): LocalDate? =
+        intent?.getStringExtra(EXTRA_DIGEST_DAY)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+
+    /**
+     * День сводки: из будильника, а если его нет — «завтра» от [now]. null — день уже прошёл:
+     * сводка о нём опоздала на сутки и врала бы.
+     */
+    internal fun digestDay(asked: LocalDate?, now: LocalDateTime): LocalDate? {
+        val day = asked ?: now.toLocalDate().plusDays(1)
+        return day.takeIf { !it.isBefore(now.toLocalDate()) }
+    }
 }
 
 /** Показывает сводку и ставит будильник на следующий вечер. */
@@ -120,9 +149,12 @@ class DigestReceiver : BroadcastReceiver() {
                 val store = AppContainer.store(app)
                 val state = store.widgetState()
                 val schedule = ScheduleWidget.parse(state.scheduleJson)
-                val tomorrow = collegeNow().toLocalDate().plusDays(1)
-                if (schedule != null && !state.gone) {
-                    Digest.digestText(schedule, tomorrow, state.subjects)?.let { (title, text) ->
+                val now = collegeNow()
+                // День едет с будильником: свои часы приёмника после полуночи врут (см. digestDay).
+                val tomorrow = Digest.digestDay(Digest.dayOf(intent), now)
+                if (tomorrow != null && schedule != null && !state.gone) {
+                    val word = if (tomorrow == now.toLocalDate()) "Сегодня" else "Завтра"
+                    Digest.digestText(schedule, tomorrow, state.subjects, word)?.let { (title, text) ->
                         Notifications.digest(app, title, text, tomorrow.toString())
                     }
                 }

@@ -30,6 +30,8 @@ internal fun StatusLine(
     unread: Boolean,
     colors: Palette,
     openApp: Action,
+    /** Тихая пометка графика: «сессия», «каникулы», «практика»; null — график обычный. */
+    state: String? = null,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -40,6 +42,15 @@ internal fun StatusLine(
             // Имя уступает место: статус и ⟳ меряются первыми, иначе на узком виджете режутся.
             modifier = GlanceModifier.defaultWeight().clickable(openApp),
         )
+        // График колледжа — второй, после имени: день с парами не прячет ни пар, ни сессии.
+        if (state != null) {
+            Text(
+                " · $state",
+                maxLines = 1,
+                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+                modifier = GlanceModifier.clickable(openApp),
+            )
+        }
         // Пометка дня — здесь, а не у даты: рядом со стрелками ей не хватало места.
         if (unread) {
             Text(

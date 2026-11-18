@@ -200,6 +200,13 @@ fun distinctSubjects(
     lessons.map { names.text(it).trim(' ', '.') }.distinctBy { it.lowercase() }
 
 /**
+ * Тихая пометка календарного графика у дня с парами: «сессия», «каникулы», «практика».
+ * У дня без пар её не надо: там график говорит сама строка дня, и метка повторила бы её.
+ */
+internal fun stateNote(state: ru.whensclass.data.DayState?, hasLessons: Boolean): String? =
+    if (hasLessons) state?.let { ru.whensclass.ui.stateWord(it) } else null
+
+/**
  * Названия пар одного номера в одну строку: общая часть один раз —
  * «Иностранный язык: немецкий / английский» (_join_subjects в push/changes.py).
  */

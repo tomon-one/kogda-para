@@ -166,6 +166,14 @@ private fun DayTitle(day: WeekDay, colors: Palette) {
                 style = TextStyle(fontSize = 11.sp, color = colors.textDim),
             )
         }
+        // График колледжа важнее: у дня с парами — тихая метка, пары остаются на месте.
+        stateNote(day.state, day.lessons.isNotEmpty())?.let {
+            Text(
+                "  · $it",
+                maxLines = 1,
+                style = TextStyle(fontSize = 11.sp, color = colors.textDim),
+            )
+        }
     }
 }
 
@@ -204,23 +212,32 @@ private fun DaySummary(day: WeekDay, bells: Map<String, List<String>>, colors: P
     ) {
         DayName(day, colors)
         Text(
-            if (day.lessons.isEmpty()) {
-                when {
-                    day.unread != null -> "  не прочитан"
-                    day.absent -> "  выходной"
-                    else -> "  пар нет"
-                }
-            } else {
-                // Пары прежние: сервер этот день не прочитал.
-                "  " + pairsCount(numbers(day.lessons)) + (span(day, bells)?.let { " · $it" } ?: "") +
-                    (if (day.unread != null) " · не прочитан" else "")
-            },
+            "  " + summaryText(day, bells),
             maxLines = 1,
             style = TextStyle(fontSize = 11.sp, color = colors.textDim),
             modifier = GlanceModifier.defaultWeight(),
         )
     }
 }
+
+/**
+ * Вторая половина строки-сводки свёрнутого дня: сколько пар и с какого по какое. У пустого дня —
+ * что он такое: график важнее шутки, а «не прочитан» важнее графика (как у [EmptyLine]).
+ */
+internal fun summaryText(day: WeekDay, bells: Map<String, List<String>>): String =
+    if (day.lessons.isEmpty()) {
+        when {
+            day.unread != null -> "не прочитан"
+            day.state != null -> ru.whensclass.ui.stateWord(day.state)
+            day.absent -> "выходной"
+            else -> "пар нет"
+        }
+    } else {
+        // Пары прежние: сервер этот день не прочитал.
+        pairsCount(numbers(day.lessons)) + (span(day, bells)?.let { " · $it" } ?: "") +
+            (stateNote(day.state, true)?.let { " · $it" } ?: "") +
+            (if (day.unread != null) " · не прочитан" else "")
+    }
 
 /** «12:30–19:10»: от начала первой пары до конца последней. */
 private fun span(day: WeekDay, bells: Map<String, List<String>>): String? {

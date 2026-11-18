@@ -31,19 +31,58 @@ class DigestTest {
         online = online, cancelled = cancelled,
     )
 
-    private fun schedule(lessons: List<LessonDto>, unread: String? = null) = ScheduleDto(
+    private fun schedule(
+        lessons: List<LessonDto>,
+        unread: String? = null,
+        ownBells: Map<String, List<String>> = emptyMap(),
+    ) = ScheduleDto(
         groupId = "isp-924-1", groupName = "ИСП-924/1", generatedAt = "", bells = bells,
-        days = listOf(DayDto(date = tomorrow.toString(), lessons = lessons, unreadMark = unread)),
+        days = listOf(
+            DayDto(date = tomorrow.toString(), lessons = lessons, unreadMark = unread, ownBells = ownBells),
+        ),
     )
 
     @Test
-    fun `первая пара — по звонку, а не по номеру`() {
+    fun `день сводки едет с будильником, а не берётся из часов приёмника`() {
+        val evening = LocalDateTime.of(2026, 11, 18, 20, 0)
+        assertEquals(LocalDate.of(2026, 11, 19), Digest.digestDay(LocalDate.of(2026, 11, 19), evening))
+        // Будильник сработал после полуночи — день тот же, 19-е, а не 20-е.
+        val afterMidnight = LocalDateTime.of(2026, 11, 19, 0, 12)
+        assertEquals(LocalDate.of(2026, 11, 19), Digest.digestDay(LocalDate.of(2026, 11, 19), afterMidnight))
+        // Старый будильник без дня: «завтра» от момента срабатывания.
+        assertEquals(LocalDate.of(2026, 11, 20), Digest.digestDay(null, afterMidnight))
+    }
+
+    @Test
+    fun `опоздавшая сводка говорит «сегодня», а суточной давности — не показывается`() {
+        val morning = LocalDateTime.of(2026, 11, 19, 8, 30)
+        // За полночь, но про этот же день: сводка ещё полезна, только слово другое.
+        assertEquals(LocalDate.of(2026, 11, 19), Digest.digestDay(LocalDate.of(2026, 11, 19), morning))
+        assertNull(Digest.digestDay(LocalDate.of(2026, 11, 18), morning))
         val text = Digest.digestText(
-            schedule(listOf(lesson(3, "Основы алгоритмизации", "алгоритмы", room = "214"), lesson(1))),
+            schedule(listOf(lesson(3, "Основы алгоритмизации", "алгоритмы", room = "214"))),
+            tomorrow,
+            SubjectNames(),
+            "Сегодня",
+        )
+        assertEquals("Сегодня к 3-й паре" to "алгоритмы, 11:30, ауд. 214", text)
+    }
+
+    @Test
+    fun `первая пара — по звонку, а не по номеру`() {
+        // Сокращённый день со своими звонками: первой идёт 3-я пара, хотя номер у 1-й меньше.
+        val text = Digest.digestText(
+            schedule(
+                listOf(
+                    lesson(3, "Основы алгоритмизации", "алгоритмы", room = "214"),
+                    lesson(1),
+                ),
+                ownBells = mapOf("3" to listOf("09:00", "10:30"), "1" to listOf("11:30", "13:00")),
+            ),
             tomorrow,
             SubjectNames(),
         )
-        assertEquals("Завтра к 1-й паре" to "Физика, 09:00, ауд. 305", text)
+        assertEquals("Завтра к 3-й паре" to "алгоритмы, 09:00, ауд. 214", text)
     }
 
     @Test

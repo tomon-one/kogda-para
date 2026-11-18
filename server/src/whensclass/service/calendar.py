@@ -39,6 +39,8 @@ class CalendarSource:
         self.path = directory / "calendar.json"
         # {"sheet": ..., "updated": ..., "groups": {id: {дата: состояние}}}
         self.payload: dict | None = None
+        # Последняя попытка чтения не удалась: суточный заход повторяют.
+        self.failed = False
         try:
             self.payload = json.loads(self.path.read_text(encoding="utf-8"))
         except FileNotFoundError:
@@ -55,7 +57,11 @@ class CalendarSource:
         return ((self.payload or {}).get("groups") or {}).get(group_id)
 
     def refresh(self) -> None:
-        # Рычаг заморозки: в таблицу не ходит никто, график тоже.
+        # До конца захода `failed` — «не прочитано»: любой возврат ниже, кроме
+        # успешного, оставит его True и позовёт повтор.
+        self.failed = True
+        # Рычаг заморозки: в таблицу не ходит никто, график тоже. Повтор после
+        # разморозки прочитает график, не дожидаясь следующего утра.
         if settings.freeze:
             return
         # Google просил ходить реже — график подождёт, отдаётся прежний.
@@ -100,11 +106,26 @@ class CalendarSource:
             },
         }
         self._put(body)
+        self.failed = False
+
+    def refresh_if_failed(self) -> None:
+        """Повтор суточного чтения — только когда оно не удалось.
+
+        График меняется редко, а каждая выгрузка листа приближает отказ
+        Google и для расписания; поэтому обычный заход один в сутки, а частые
+        попытки — лишь пока не прочитано.
+        """
+        if self.failed and not settings.freeze:
+            self.refresh()
 
     def _put(self, body: dict) -> None:
         old = dict(self.payload or {})
         old.pop("updated", None)
-        if old == body:
+        fresh = dict(body)
+        fresh.pop("updated", None)
+        if old == fresh:
+            # График тот же: `updated` остаётся временем, когда пометки
+            # сменились, — и файл не переписывается зря.
             return
         self.payload = body
         try:

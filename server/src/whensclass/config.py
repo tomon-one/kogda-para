@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -92,6 +93,20 @@ class Settings(BaseSettings):
     # На сколько дней вперёд держим расписание. Неделя часто перешагивает
     # границу листа, поэтому при необходимости склеиваем два.
     window_days: int = 8
+
+    @field_validator("vk_token")
+    @classmethod
+    def _clean_vk_token(cls, value: str | None) -> str | None:
+        """Пробелы и переводы строки вокруг токена — не токен.
+
+        Незакавыченное значение systemd обрезает сам, а в кавычках хвост
+        остаётся; « » поднимало бота, который потом вечно писал ошибку.
+        Пустое после обрезки — как незаданное: бота нет.
+        """
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
 
 settings = Settings()

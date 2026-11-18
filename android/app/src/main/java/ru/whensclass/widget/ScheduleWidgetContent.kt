@@ -77,6 +77,8 @@ fun ScheduleWidgetContent(
             .padding(horizontal = if (fit.narrow) 6.dp else 10.dp)
             .padding(vertical = if (fit.dense) 4.dp else 8.dp),
     ) {
+        // День виджета: пары, пометки графика и непрочитанность — из одной записи.
+        val today = schedule?.days?.firstOrNull { it.date == day.toString() }
         Header(
             groupName ?: "Расписание",
             day,
@@ -94,14 +96,14 @@ fun ScheduleWidgetContent(
             gone,
             unsupported,
             // Пары дня прежние или неполные: сервер его не прочитал; пустой такой день говорит это строкой ниже.
-            schedule?.days?.firstOrNull { it.date == day.toString() }
-                ?.let { it.unread != null && it.lessons.isNotEmpty() } == true,
+            today?.let { it.unread != null && it.lessons.isNotEmpty() } == true,
             fit,
             colors,
+            // График колледжа — и у дня с парами; у пустого он скажет сам день строкой ниже.
+            state = stateNote(today?.state, today?.lessons?.isNotEmpty() == true),
         )
         Spacer(GlanceModifier.height(if (fit.dense) 3.dp else 6.dp))
 
-        val today = schedule?.days?.firstOrNull { it.date == day.toString() }
         when {
             // Обновлять нечего: нажатие ведёт в приложение.
             groupName == null -> MissingHint(
@@ -209,6 +211,8 @@ private fun Header(
     unread: Boolean,
     fit: Fit,
     colors: Palette,
+    /** Тихая пометка графика: «сессия», «каникулы», «практика»; null — график обычный. */
+    state: String? = null,
 ) {
     val context = LocalContext.current
     val openApp = actionStartActivity(openDay(context, day))
@@ -264,6 +268,7 @@ private fun Header(
                     unread = unread,
                     colors = colors,
                     openApp = openApp,
+                    state = state,
                 )
             }
         }

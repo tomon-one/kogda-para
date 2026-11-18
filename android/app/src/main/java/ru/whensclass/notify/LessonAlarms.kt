@@ -63,7 +63,7 @@ object LessonAlarms {
                 val url = joinUrl(lessonsOf(schedule, key))
                 if (url != Notifications.shownLessonUrl(app)) Notifications.addJoin(app, url)
                 // Кабинет или преподавателя сменили — текст за ними.
-                val text = currentText(schedule, key, minutes)
+                val text = currentText(schedule, key, minutes, state.subjects)
                 if (text != null && text != Notifications.shownLessonText(app)) {
                     Notifications.replaceLessonText(app, text)
                 }
@@ -82,10 +82,15 @@ object LessonAlarms {
      */
     internal fun stillOn(schedule: ScheduleDto, key: String): Boolean = lessonsOf(schedule, key).isNotEmpty()
 
-    /** Текст напоминания о паре из ключа — каким он был бы по нынешнему снимку. */
-    internal fun currentText(schedule: ScheduleDto, key: String, minutes: Int): String? {
+    /** Текст напоминания о паре из ключа — каким он был бы по нынешнему снимку и с теми же именами. */
+    internal fun currentText(
+        schedule: ScheduleDto,
+        key: String,
+        minutes: Int,
+        names: ru.whensclass.data.SubjectNames,
+    ): String? {
         val start = runCatching { LocalDateTime.parse(key.substringBefore('|')) }.getOrNull() ?: return null
-        return plan(schedule, minutes, now = start.minusMinutes(minutes.toLong() + 1))
+        return plan(schedule, minutes, now = start.minusMinutes(minutes.toLong() + 1), names = names)
             .firstOrNull { it.start == start }?.let { text(it) }
     }
 

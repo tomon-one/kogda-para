@@ -145,18 +145,22 @@ class NextLessonWidget : GlanceAppWidget() {
                     next.unreadOn == next.day -> "не прочитан"
                     else -> formatDayTitleShort(next.unreadOn).substringBefore(",") + " не прочитан"
                 }
+                // Календарный график — тихой пометкой и у дня с парой: сессия пар не отменяет.
+                val mark = schedule?.days?.firstOrNull { it.date == next.day.toString() }
+                    ?.let { stateNote(it.state, hasLessons = true) }
                 // В низкой клетке при крупном шрифте три строки не влезают: место пары переезжает в шапку.
                 val scale = fontScale()
                 val tight = LocalSize.current.height < (TIGHT_HEIGHT_SP * scale + 14).dp
                 // Длинное название — в две строки, если хватает высоты на четыре: место пары остаётся своей строкой.
-                val subject = joinSubjects(distinctSubjects(next.lessons, state?.subjects ?: ru.whensclass.data.SubjectNames()))
+                val names = state?.subjects ?: ru.whensclass.data.SubjectNames()
+                val subject = joinSubjects(distinctSubjects(next.lessons, names))
                 val perLine = ((LocalSize.current.width.value - 20f) / (SUBJECT_SP * CHAR_EM * scale)).toInt()
                 val long = subject.length > perLine
                 val roomy = LocalSize.current.height >= (ROOMY_HEIGHT_SP * scale + 14).dp
                 // Группы всех пар номера: у преподавателя одна пара в двух залах.
                 val groups = next.lessons.mapNotNull { it.groups }.distinct().joinToString(", ").ifEmpty { null }
                 val head = status + nextLessonHead(
-                    time, when_, ongoing, groups, unread = unread,
+                    time, when_, ongoing, groups, unread = unread, state = mark,
                     // Без «⧉»: нажатие на шапку открывает приложение, а не копирует.
                     place = if (tight) places(next) else null,
                 )
@@ -230,8 +234,11 @@ class NextLessonWidget : GlanceAppWidget() {
                 if (then != null && !tight && roomy && !long) {
                     Text(
                         // Две пары номера (подгруппы с разными языками) — обе: какая своя, неизвестно.
-                        "потом " + (lessonStart(bells, then.number) ?: "${then.number} пара") + " · " +
-                            joinSubjects(distinctSubjects(listOf(then) + next.thenAlso)),
+                        thenLine(
+                            lessonStart(bells, then.number) ?: "${then.number} пара",
+                            listOf(then) + next.thenAlso,
+                            names,
+                        ),
                         maxLines = 1,
                         style = TextStyle(fontSize = 11.sp, color = colors.textDim),
                         modifier = GlanceModifier.padding(top = 2.dp),
@@ -382,6 +389,8 @@ internal fun nextLessonHead(
     groups: String?,
     place: String? = null,
     unread: String? = null,
+    /** Тихая пометка графика: «сессия», «каникулы», «практика». */
+    state: String? = null,
 ): String {
     // [place] — только в тесной клетке без третьей строки: место сразу за временем; у идущей пары «идёт» и место.
     if (place != null) {
@@ -390,11 +399,15 @@ internal fun nextLessonHead(
         } else {
             listOfNotNull(time, place, whenWord.takeUnless { it == "сегодня" })
         }
-        return (parts + listOfNotNull(unread, groups)).joinToString(" · ")
+        return (parts + listOfNotNull(state, unread, groups)).joinToString(" · ")
     }
     val core = if (ongoing) "$whenWord · $time" else "$time · $whenWord"
-    return listOfNotNull(core, unread, groups).joinToString(" · ")
+    return listOfNotNull(core, state, unread, groups).joinToString(" · ")
 }
+
+/** Строка «потом 3 пара · Алг»: те же имена, что у самой пары выше. */
+internal fun thenLine(time: String, lessons: List<LessonDto>, names: ru.whensclass.data.SubjectNames): String =
+    "потом $time · " + joinSubjects(distinctSubjects(lessons, names))
 
 /** Три строки маленького виджета — в sp, без отступов. */
 private const val TIGHT_HEIGHT_SP = 55

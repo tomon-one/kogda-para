@@ -349,7 +349,9 @@ applyCompact();
 countOpen();
 // К сегодняшнему дню и на первом заходе, а не только при смене экрана, иначе
 // наверху стоял бы понедельник.
-state.wanted = repo.openingDate();
+// «?day=2026-11-19» — адрес из нажатой сводки: открываем тот день, о котором она.
+var askedDay = new URLSearchParams(location.search).get('day');
+state.wanted = /^\d{4}-\d{2}-\d{2}$/.test(askedDay || '') ? askedDay : repo.openingDate();
 if (repo.cachedGroups().length) state.groups = repo.cachedGroups();
 if (repo.cachedTeachers().length) state.teachers = repo.cachedTeachers();
 onRoute();
@@ -365,7 +367,9 @@ syncPush();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', function (event) {
     if (event.data && event.data.t === 'own' && repo.chosen()) {
-      state.wanted = repo.openingDate();
+      // Из сводки приходит день, о котором она; из остальных уведомлений — день открытия.
+      var asked = /^\d{4}-\d{2}-\d{2}$/.test((event.data && event.data.day) || '') ? event.data.day : null;
+      state.wanted = asked || repo.openingDate();
       home();
       if (event.data.gone) {
         repo.expectGone();

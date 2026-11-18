@@ -198,6 +198,14 @@ function collegeToday() {
 
 var ICON = new URL('assets/icon-192.png', self.registration.scope).href;
 
+/** «Завтра» по часам колледжа — запасной путь, когда служба не прислала день. */
+function tomorrow() {
+  var today = collegeToday();
+  var d = new Date(today + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /** {t, title, body, …данные} из декларативного сообщения. */
 function unpack(raw) {
   var note = raw && raw.notification;
@@ -333,6 +341,20 @@ function closeEnded() {
   ]);
 }
 
+/**
+ * Вечерняя сводка: прежнюю закрыть и показать новую. Тот же tag на айфоне не
+ * заменяет уведомление, а ставит второе рядом (WebKit 258922) — вчерашняя
+ * сводка висела бы стопкой и читалась как завтрашняя.
+ */
+function showDigest(data) {
+  var day = /^\d{4}-\d{2}-\d{2}$/.test(data.day || '') ? data.day : tomorrow();
+  return self.registration.getNotifications({ tag: 'digest' }).then(function (open) {
+    open.forEach(function (n) { n.close(); });
+  }, function () { /* нечего закрывать */ }).then(function () {
+    return show(data.title || 'Завтра', data.body, 'digest', { day: day });
+  });
+}
+
 self.addEventListener('push', function (event) {
   var data = {};
   try {
@@ -342,7 +364,8 @@ self.addEventListener('push', function (event) {
   }
   var shown = data.t === 'changes' ? showChanges(data)
     : data.t === 'lesson' ? showLesson(data)
-      : show(data.title || 'Когда пара?', data.body, data.t || 'other');
+      : data.t === 'digest' ? showDigest(data)
+        : show(data.title || 'Когда пара?', data.body, data.t || 'other');
   event.waitUntil(Promise.all([shown, data.t === 'lesson' ? null : closeEnded()]));
 });
 
@@ -365,13 +388,17 @@ self.addEventListener('notificationclick', function (event) {
   // «Выберите заново»: служба уже ждала час — страница не ждёт своего
   // (main.js). Вид сообщения — в теге уведомления (show).
   var gone = event.notification.tag === 'gone';
-  var url = (data.url || self.registration.scope) + (gone ? '?gone=1' : '');
+  // Сводка — про завтрашний день: открываем именно его, а не сегодняшний.
+  var day = event.notification.tag === 'digest' && /^\d{4}-\d{2}-\d{2}$/.test(data.day || '')
+    ? data.day : null;
+  var url = (data.url || self.registration.scope) + (gone ? '?gone=1'
+    : day ? '?day=' + day : '');
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
     for (var i = 0; i < list.length; i++) {
       if (ours(list[i]) && 'focus' in list[i]) {
         // Уведомление — о своём расписании: страница уходит к нему, а не
         // остаётся на открытом чужом.
-        list[i].postMessage({ t: 'own', gone: gone });
+        list[i].postMessage({ t: 'own', gone: gone, day: day });
         return list[i].focus();
       }
     }

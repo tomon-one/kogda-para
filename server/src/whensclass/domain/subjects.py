@@ -26,12 +26,6 @@ NOTE = re.compile(
     re.IGNORECASE,
 )
 
-# Слова, которые в коротком имени ничего не несут.
-STOP = {
-    "и", "в", "во", "на", "по", "для", "с", "со", "у", "к", "ко", "о", "об", "от", "до",
-    "не", "а", "как", "или", "при", "их", "его", "её", "ее", "the", "of",
-}
-
 # «Технология выполнения работ по профессии "Графический дизайнер"» — суть в
 # кавычках: в виджете нужно «графический дизайнер», а не «технология…».
 PROFESSION = re.compile(r"(?:по профессии|в должности)\s+[«\"“]([^»\"”]+)[»\"”]", re.IGNORECASE)
@@ -222,6 +216,8 @@ SHORT: dict[str, str] = {
     "кураторский час, полная явка группы обязательна": "кураторский час",
     "основы журналиститки": "журналистика",
     "основы логистической деятельностиа": "логистика",
+    "налоговое планирование, контроль и администрирование": "налоговое планирование",
+    "технические средства контроля, видеонаблюдения и связи в системе обеспечения общественной безопасности": "технические средства",
 }
 
 
@@ -266,37 +262,18 @@ def _find(base: str) -> str | None:
 
 
 def abbreviate(base: str) -> str | None:
-    """Короткое имя на сквозь, без словаря: первые два значимых слова.
+    """Короткое имя без словаря — только профессия в кавычках.
 
-    Нужно для длинного хвоста предметов других отделений: полное название в
-    виджет не влезает, а своё человек всегда может написать в настройках.
+    У «Технология выполнения работ по профессии "Вожатый"» суть стоит в
+    кавычках, и она коротка. Обрезки первых слов не даём: у русских названий
+    суть в конце, и «Основы юридической» или «Теория методика» — не имя
+    предмета. Незнакомый предмет остаётся с полным.
     """
-    text = NOTE.sub("", base).strip(" .,;:")
-    profession = PROFESSION.search(text)
-    if profession is not None:
-        # Суть — в кавычках; если и она длинная, сокращаем её тем же правилом.
-        text = profession.group(1).strip()
-        if len(text) <= 26:
-            return text
-    words = [
-        word
-        for word in re.split(r"[^0-9A-Za-zА-Яа-яЁё+]+", text)
-        if word and word.lower() not in STOP
-    ]
-    if not words or len(" ".join(words)) <= 20:
+    profession = PROFESSION.search(NOTE.sub("", base).strip(" .,;:"))
+    if profession is None:
         return None
-    picked: list[str] = []
-    for word in words:
-        piece = word if len(word) <= 14 else word[:12].rstrip("-") + "."
-        if picked and len(" ".join([*picked, piece])) > 26:
-            break
-        picked.append(piece)
-        if len(picked) == 2:
-            break
-    short = " ".join(picked)
-    if len(short) < 3 or len(short) >= len(base.strip()):
-        return None
-    return short
+    text = profession.group(1).strip()
+    return text if len(text) <= 26 else None
 
 
 def short_name(name: str) -> str | None:

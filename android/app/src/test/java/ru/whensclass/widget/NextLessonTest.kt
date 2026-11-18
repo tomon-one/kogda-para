@@ -8,6 +8,7 @@ import org.junit.Test
 import ru.whensclass.data.DayDto
 import ru.whensclass.data.LessonDto
 import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.SubjectNames
 
 /**
  * Маленький виджет «Ближайшая пара»: какую пару он называет и что говорит,
@@ -123,6 +124,41 @@ class NextLessonTest {
         )
         assertEquals("09:00 · каб. 275 · завтра", nextLessonHead("09:00", "завтра", false, null, place = "каб. 275"))
         assertEquals("идёт · онлайн", nextLessonHead("14:20", "идёт сейчас", true, null, place = "онлайн"))
+    }
+
+    @Test
+    fun `строка «потом» называет предмет так же, как сама пара`() {
+        val then = LessonDto(
+            number = 3,
+            subject = "Основы алгоритмизации и программирования",
+            shortSubject = "Алг",
+        )
+        // Словарь службы и своё имя — те же, что у названия пары строкой выше.
+        assertEquals(
+            "потом 3 пара · Алг",
+            thenLine("3 пара", listOf(then), SubjectNames(short = true)),
+        )
+        assertEquals(
+            "потом 3 пара · Алг",
+            thenLine("3 пара", listOf(then), SubjectNames(custom = mapOf(then.subject to "Алг"))),
+        )
+        // Полные имена по умолчанию — как и было.
+        assertEquals(
+            "потом 3 пара · Основы алгоритмизации и программирования",
+            thenLine("3 пара", listOf(then), SubjectNames()),
+        )
+    }
+
+    @Test
+    fun `метка графика — в шапке, после времени`() {
+        assertEquals(
+            "09:00 · завтра · сессия",
+            nextLessonHead("09:00", "завтра", false, null, state = "сессия"),
+        )
+        assertEquals(
+            "14:20 · каб. 275 · завтра · сессия",
+            nextLessonHead("14:20", "завтра", false, null, place = "каб. 275", state = "сессия"),
+        )
     }
 
     @Test

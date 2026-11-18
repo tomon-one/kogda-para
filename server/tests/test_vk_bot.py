@@ -319,6 +319,23 @@ def test_send_retries_on_too_many_requests(monkeypatch):
     assert len(calls) == 2  # первая попытка и один повтор
 
 
+def test_пробельный_токен_бота_не_поднимает(monkeypatch):
+    """«Пусто — бота нет» верно и для строки из пробелов.
+
+    Незакавыченное значение systemd обрезает сам, а в кавычках хвост остаётся;
+    такой «токен» поднимал бота, который вечно писал ошибку в журнал.
+    """
+    from whensclass.config import Settings
+
+    for raw in ("", " ", "\n", "\t", "  \n "):
+        assert Settings(_env_file=None, vk_token=raw).vk_token is None
+    # Верный токен с хвостом остаётся токеном, но без хвоста.
+    assert Settings(_env_file=None, vk_token=" tok\n").vk_token == "tok"
+    # Значение из окружения обрезается так же, как заданное руками.
+    monkeypatch.setenv("WHENSCLASS_VK_TOKEN", "  ")
+    assert Settings(_env_file=None).vk_token is None
+
+
 def test_error_log_has_no_token_or_url(caplog, monkeypatch):
     monkeypatch.setattr(settings, "vk_token", "SECRET_TOKEN_123")
     bot = VkBot(FakeStore())

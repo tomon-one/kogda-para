@@ -132,6 +132,18 @@ def test_new_subscription_gets_a_hello_once(tmp_path):
     assert note["navigate"] == "https://kogda-para-nsk.ru/"
 
 
+def test_digest_only_subscription_hello_agrees_with_itself(tmp_path):
+    """Подписка только со сводкой законна — и приветствие про одну сводку."""
+    push = Recorder(tmp_path, _vapid())
+    assert push.subscribe(
+        subscription.parse_subscription(_body(changes=False, remind=0, digest=1200)),
+        dt.date(2026, 9, 29),
+    )
+    assert push.sent[0].message["notification"]["body"] == (
+        "Сюда будет приходить сводка о завтрашнем дне."
+    )
+
+
 def test_tested_site_is_opened_by_its_notifications(tmp_path):
     push = Recorder(tmp_path, _vapid())
     push.subscribe(subscription.parse_subscription(_body(site="tested")), dt.date(2026, 9, 29))

@@ -20,6 +20,10 @@ from whensclass.parser.export import parse_csv
 GENERATED = dt.datetime(2026, 9, 7, 3, 32, 11, tzinfo=dt.UTC)
 START = dt.date(2026, 9, 7)
 
+# Поля пары по контракту (docs/api.md). `col` — у пар дня, прочитанного по
+# повторному заголовку с другой раскладкой.
+LESSON_FIELDS = {"n", "s", "sn", "k", "t", "r", "u", "x", "c", "o", "col"}
+
 
 @pytest.fixture(scope="module")
 def snapshot(fixture_csv):
@@ -43,7 +47,32 @@ def test_empty_fields_are_absent(snapshot):
     for day in body["days"]:
         for lesson in day["l"]:
             assert None not in lesson.values()
-            assert set(lesson) <= {"n", "s", "sn", "k", "t", "r", "u", "x", "c", "o"}
+            assert set(lesson) <= LESSON_FIELDS
+
+
+def test_moved_day_may_carry_its_column(fixture_csv, monkeypatch):
+    """`col` у пары — по контракту, а не лишнее поле.
+
+    День, прочитанный по повторному заголовку с другой раскладкой, ставит
+    `col` и дню, и каждой паре; список полей, заведённый раньше поля,
+    ронял бы верный ответ на первом же таком дне.
+    """
+    from test_sections import _week_from_another_template
+
+    from whensclass.parser import sections
+    from whensclass.parser.csv_schedule import parse_sheet
+
+    monkeypatch.setattr(sections, "SETTLE_MIN_LESSONS", 8)
+    _honest, rows, _below = _week_from_another_template(fixture_csv, days=2)
+    snap = parse_sheet(rows, "фикстура", FIXTURE)
+    checked = 0
+    for group_id, days in snap.day_columns.items():
+        for day in days:
+            for lesson in schedule_payload(snap, group_id, day, 1, GENERATED)["days"][0]["l"]:
+                checked += 1
+                assert "col" in lesson
+                assert set(lesson) <= LESSON_FIELDS
+    assert checked, "в перенесённых днях должны быть пары"
 
 
 def test_day_out_of_coverage_is_omitted(snapshot):

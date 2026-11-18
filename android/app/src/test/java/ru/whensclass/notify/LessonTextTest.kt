@@ -4,7 +4,10 @@ import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ru.whensclass.data.DayDto
 import ru.whensclass.data.LessonDto
+import ru.whensclass.data.ScheduleDto
+import ru.whensclass.data.SubjectNames
 
 /**
  * Тело напоминания — то, что человек читает на заблокированном экране: куда
@@ -19,6 +22,28 @@ class LessonTextTest {
         minutes = 20,
         day = "2026-09-09",
     )
+
+    @Test
+    fun `пересчёт висящего напоминания берёт те же имена, что при постановке`() {
+        // Блок пополам: предмет виден в теле, и после показа приёмник пересчитывает текст.
+        val names = SubjectNames(custom = mapOf("Немецкий" to "нем", "Английский" to "англ"))
+        val german = LessonDto(
+            number = 4, subject = "Немецкий", room = "55/1", teachers = listOf("Миллер Д. Х."),
+        )
+        val english = LessonDto(
+            number = 4, subject = "Английский", room = "467", teachers = listOf("Уэллс Д. Р."),
+        )
+        val schedule = ScheduleDto(
+            groupId = "g", groupName = "Г", generatedAt = "2026-10-05T00:00:00Z",
+            bells = mapOf("4" to listOf("14:20", "15:50")),
+            days = listOf(DayDto(date = "2026-10-05", lessons = listOf(german, english))),
+        )
+        val alarm = LessonAlarms.plan(
+            schedule, minutes = 15, now = LocalDateTime.of(2026, 10, 5, 13, 0), names = names,
+        ).single()
+        val key = alarm.start.toString() + "|" + alarm.lessons.joinToString("\u001f") { it.subject }
+        assertEquals(LessonAlarms.text(alarm), LessonAlarms.currentText(schedule, key, 15, names))
+    }
 
     @Test
     fun `очная пара называет аудиторию первой, потом номер, вид и преподавателя`() {

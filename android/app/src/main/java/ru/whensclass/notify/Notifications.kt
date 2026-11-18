@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import ru.whensclass.R
 import ru.whensclass.ui.MainActivity
+import ru.whensclass.widget.millisOf
 
 /**
  * Уведомления приложения — каждый вид в своём канале: любое можно отключить в системных настройках,
@@ -223,10 +224,20 @@ object Notifications {
     fun serverDown(context: Context, title: String, text: String): Boolean =
         show(context, CHANNEL_SERVER, ID_SERVER, title, text, day = null) && !channelOff(context, CHANNEL_SERVER)
 
-    /** Вечерняя сводка: куда идти завтра. */
-    fun digest(context: Context, title: String, text: String, day: String?): Boolean =
-        show(context, CHANNEL_DIGEST, ID_DIGEST, title, text, day) &&
+    /**
+     * Вечерняя сводка: куда идти завтра. Живёт до начала описанного дня — в полночь «завтра»
+     * становится «сегодня», и строка начинала бы врать.
+     */
+    fun digest(context: Context, title: String, text: String, day: String?): Boolean {
+        val until = day?.let { runCatching { millisOf(java.time.LocalDate.parse(it).atStartOfDay()) }.getOrNull() }
+        return show(context, CHANNEL_DIGEST, ID_DIGEST, title, text, day, until = until) &&
             !channelOff(context, CHANNEL_DIGEST)
+    }
+
+    /** Снять сводку: настройку выключили. */
+    fun digestGone(context: Context) {
+        runCatching { NotificationManagerCompat.from(context).cancel(ID_DIGEST) }
+    }
 
     /** Сервер починился — снять «не обновляется» из шторки. */
     fun serverBack(context: Context) {

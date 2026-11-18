@@ -453,7 +453,14 @@ internal fun App(
                         groupsByName = groupsByName,
                         onGroupsByName = { byName -> scope.launch { container.store.setGroupsByName(byName) } },
                         shortSubjects = shortSubjects,
-                        onShortSubjects = { on -> scope.launch { container.store.setShortSubjects(on) } },
+                        onShortSubjects = { on ->
+                            scope.launch {
+                                container.store.setShortSubjects(on)
+                                // Виджеты и висящее напоминание берут имена из хранилища — сразу и перерисовываем.
+                                container.repository.redrawWidgets()
+                                LessonAlarms.reschedule(context)
+                            }
+                        },
                         onSubjects = { screen = Screen.SUBJECTS },
                         // Подгруппы своей группы, ещё не выбранные, — строками с «Добавить», сколько влезет.
                         subgroups = groupName?.let { name -> subgroupsOf(name, lists.groups.orEmpty()) }.orEmpty()
@@ -474,10 +481,17 @@ internal fun App(
                     )
 
                     Screen.SUBJECTS -> SubjectsScreen(
-                        schedule = schedule,
+                        // Все выбранные группы, а не только своя: у предметов других групп тоже
+                        // бывает своё название.
+                        schedule = shownSchedule ?: schedule,
                         names = subjects,
                         onSave = { full, short ->
-                            scope.launch { container.store.setSubjectShort(full, short) }
+                            scope.launch {
+                                container.store.setSubjectShort(full, short)
+                                // Виджеты и висящее напоминание берут имена из хранилища — сразу и перерисовываем.
+                                container.repository.redrawWidgets()
+                                LessonAlarms.reschedule(context)
+                            }
                         },
                         onBack = { screen = Screen.SETTINGS },
                     )
