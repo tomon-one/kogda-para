@@ -1,7 +1,13 @@
 package ru.whensclass.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -13,12 +19,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.whensclass.BuildConfig
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.notify.Vendor
 
-/** Раздел «Моя группа» или «Преподаватель»: своя, другие группы и подгруппы. */
+/** Раздел «Группы и подгруппы» или «Преподаватель»: своя, другие группы и подгруппы. */
 @Composable
 internal fun GroupSection(
     teacherMode: Boolean,
@@ -27,12 +34,18 @@ internal fun GroupSection(
     subgroups: List<ru.whensclass.data.GroupDto>,
     groupsByName: Boolean,
     onGroupsByName: (Boolean) -> Unit,
+    onChangeGroup: () -> Unit,
     onAddGroup: () -> Unit,
     onAddSubgroup: (ru.whensclass.data.GroupDto) -> Unit,
     onRemoveGroup: (String) -> Unit,
 ) {
-    Section(if (teacherMode) "Преподаватель" else "Моя группа") {
-        // Название и подпись одной строкой; с другими группами у каждой её значок, как под временем пар.
+    Section(
+        if (teacherMode) "Преподаватель" else "Группы и подгруппы",
+        // Строки добавляются и пропадают по одной: высота карточки едет за ними, а не прыгает.
+        modifier = Modifier.animateContentSize(),
+    ) {
+        // Название и кнопка одной строкой; кнопки раздела одной ширины. С другими группами у каждой
+        // её значок, как под временем пар.
         val marks = if (teacherMode || extraGroups.isEmpty()) null
         else if (groupsByName) shortLabels(listOf(groupName.orEmpty()) + extraGroups.map { it.name })
         else (1..extraGroups.size + 1).map { it.toString() }
@@ -42,10 +55,21 @@ internal fun GroupSection(
             if (ownMark != null) {
                 GroupMark(ownMark, own = true, modifier = Modifier.widthIn(max = MARK_IN_ROW).clearAndSetSemantics {})
             }
+            // Одна строка: длинное имя не переносится и не двигает строки под собой.
             Text(
                 groupName ?: "не выбрано",
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f).padding(start = if (ownMark != null) 10.dp else 0.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = if (ownMark != null) 10.dp else 0.dp, end = 8.dp),
+            )
+            // Группа из таблицы: не нашлась, переименовали — здесь и выбирают заново.
+            ActionButton(
+                label = if (teacherMode) "Выбрать заново" else "Сменить",
+                onClick = onChangeGroup,
+                modifier = Modifier.width(ROW_BUTTON),
+                top = 0.dp,
+                side = 8.dp,
             )
         }
 
@@ -54,23 +78,27 @@ internal fun GroupSection(
             // «Убрать» следующая строка забирает подсветку нажатия ушедшей.
             extraGroups.forEachIndexed { index, group ->
                 key(group.id) {
-                    GroupRow(
-                        name = group.name + if (group.gone) " — нет в таблице" else "",
-                        mark = marks?.getOrNull(index + 1)?.takeIf { it != group.name },
-                        action = "Убрать",
-                        onAction = { onRemoveGroup(group.id) },
-                    )
+                    Appearing {
+                        GroupRow(
+                            name = group.name + if (group.gone) " — нет в таблице" else "",
+                            mark = marks?.getOrNull(index + 1)?.takeIf { it != group.name },
+                            action = "Убрать",
+                            onAction = { onRemoveGroup(group.id) },
+                        )
+                    }
                 }
             }
             // Подгруппы своей группы — строками с «Добавить», как у добавленных «Убрать».
             subgroups.forEach { group ->
                 key(group.id) {
-                    GroupRow(
-                        name = group.name,
-                        note = "подгруппа вашей группы",
-                        action = "Добавить",
-                        onAction = { onAddSubgroup(group) },
-                    )
+                    Appearing {
+                        GroupRow(
+                            name = group.name,
+                            note = "подгруппа вашей группы",
+                            action = "Добавить",
+                            onAction = { onAddSubgroup(group) },
+                        )
+                    }
                 }
             }
             if (extraGroups.size < ru.whensclass.data.MAX_GROUPS - 1) {
@@ -108,6 +136,19 @@ internal fun GroupSection(
     }
 }
 
+/**
+ * Строка группы появляется не рывком: карточка выросла бы сразу на её высоту, а соседние названия
+ * сдвинулись бы одним кадром.
+ */
+@Composable
+private fun Appearing(content: @Composable () -> Unit) {
+    val shown = remember { androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true } }
+    AnimatedVisibility(
+        visibleState = shown,
+        enter = fadeIn(tween(180)) + expandVertically(tween(220)),
+    ) { content() }
+}
+
 /** Раздел «Уведомления»: выключатель и канал у каждого вида. */
 @Composable
 internal fun NotificationsSection(
@@ -134,10 +175,11 @@ internal fun NotificationsSection(
 ) {
     Section("Уведомления") {
         NotificationsDenied(notifications)
-        // Напоминаем не о каждой паре — сказать заранее, чтобы это не приняли за поломку.
+        // Напоминаем не о каждой паре — сказать заранее, чтобы это не приняли за поломку. Пояснение
+        // видно и у выключенного: иначе непонятно, что включает тумблер.
         SwitchRow(
             "Напоминать о паре", notifyEnabled, onNotifyEnabled,
-            hint = "Напоминание о первой паре дня или между парами.".takeIf { notifyEnabled },
+            hint = "Напоминание о первой паре дня или между парами.",
         )
         if (notifyEnabled && notifications && phone.lessonChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_LESSON)
@@ -151,8 +193,7 @@ internal fun NotificationsSection(
         // Вечерняя сводка: первая пара завтрашнего дня, по умолчанию выключена.
         SwitchRow(
             "Вечерняя сводка", digestMinutes > 0, onDigest,
-            hint = "Первая пара завтрашнего дня. В субботу вечером не приходит; нет пар — молчит."
-                .takeIf { digestMinutes > 0 },
+            hint = "Первая пара завтрашнего дня.",
         )
         if (digestMinutes > 0 && notifications && phone.digestChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_DIGEST)
@@ -161,7 +202,7 @@ internal fun NotificationsSection(
 
         SwitchRow(
             "Сообщать об изменениях", notifyChanges, onNotifyChanges,
-            hint = "Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.",
+            hint = "Отмены и замены на сегодня и завтра.",
         )
         if (notifyChanges && notifications && phone.changesChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES)
@@ -181,7 +222,7 @@ internal fun NotificationsSection(
         // Магазина нет, обновление никто не принесёт.
         SwitchRow(
             "Сообщать о новых версиях", notifyUpdates, onNotifyUpdates,
-            hint = "Приложение проверяет это раз в час вместе с расписанием.",
+            hint = "Приложение проверяет наличие обновлений раз в час.",
         )
         if (notifyUpdates && notifications && phone.updateChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_UPDATE)

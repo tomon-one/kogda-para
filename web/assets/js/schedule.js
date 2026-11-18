@@ -177,6 +177,46 @@ export function subgroupsOf(name, groups) {
     .map(function (x) { return x.g; });
 }
 
+// Пометка зачёта или экзамена в названии из таблицы: «Экономика отрасли ЗАЧЕТ» —
+// тот же предмет, что без неё, и своё имя в таблице сокращений у обоих вариантов одно.
+var SUBJECT_MARK = /\s+(зач[её]т(ы)?|экзамен)\s*$/i;
+
+/**
+ * Предметы расписания строками таблицы сокращений: варианты с пометкой таблицы
+ * сведены к названию без неё. `names` — все написания (своё имя пишется
+ * каждому), `sn` — короткое имя службы для пустого поля: пометку «зачёт» в нём
+ * не срезаем, она и отличает зачётную пару.
+ */
+export function subjectRows(days) {
+  var rows = [];
+  var seen = {};
+  (days || []).forEach(function (day) {
+    (day.l || []).forEach(function (lesson) {
+      if (lesson.x) return;
+      var base = lesson.s.replace(SUBJECT_MARK, '').trim() || lesson.s;
+      var key = base.toLowerCase();
+      var row = seen[key];
+      if (!row) {
+        row = seen[key] = { s: base, names: [], plain: null, marked: null };
+        rows.push(row);
+      }
+      if (row.names.indexOf(lesson.s) < 0) row.names.push(lesson.s);
+      if (lesson.s === base) row.plain = lesson;
+      else if (!row.marked) row.marked = lesson;
+    });
+  });
+  rows.forEach(function (row) {
+    // Короткое имя — от написания без пометки; если без неё предмета нет,
+    // годится и вариант с зачётом, тогда пометка видна: «История (зачёт)».
+    var given = row.plain || row.marked;
+    row.sn = given ? given.sn || null : null;
+    delete row.plain;
+    delete row.marked;
+  });
+  rows.sort(function (a, b) { return a.s.toLowerCase() < b.s.toLowerCase() ? -1 : 1; });
+  return rows;
+}
+
 /**
  * Дни, которых нет в ответе, а по листу они есть, — воскресенье или будень без
  * строки. Только между первым и последним пришедшим днём и только внутри

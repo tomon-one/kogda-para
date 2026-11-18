@@ -91,13 +91,18 @@
     animation: rise 0.34s var(--ease) both;
     animation-delay: calc(var(--i, 0) * 45ms + var(--shift, 0ms));
   }
-
   .days.appear > :nth-child(2) { --i: 1; }
   .days.appear > :nth-child(3) { --i: 2; }
   .days.appear > :nth-child(4) { --i: 3; }
   .days.appear > :nth-child(5) { --i: 4; }
   .days.appear > :nth-child(6) { --i: 5; }
   .days.appear > :nth-child(n+7) { --i: 6; }
+
+  /* Настройки: группа добавилась или ушла — новый набор карточек всплывает,
+     а не сменяется рывком (класс ставит ui/settings.js). */
+  .settings .cards.changed > section {
+    animation: rise 0.28s var(--ease) both;
+  }
 
   .icon.pop,
   .pin-star.pop {

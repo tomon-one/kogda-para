@@ -89,8 +89,8 @@ export function mainScreen(app) {
   } else if (route.kind === 'rooms') {
     content.appendChild(roomsView(app));
   } else if (route.kind === 'exams') {
-    // Листа экзаменов в таблице ещё нет: говорим, когда будет, а не показываем пустоту.
-    content.appendChild(explanation('Экзаменов нет', 'Расписание экзаменов колледж выкладывает к сессии, в декабре.'));
+    // Листа экзаменов в таблице нет — говорим это, а не показываем пустоту.
+    content.appendChild(explanation('Экзаменов нет', 'Действующего графика экзаменов в таблице колледжа нет.'));
   } else {
     ownView(app, content);
     if (teacherMode) {

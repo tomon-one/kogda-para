@@ -37,13 +37,15 @@
   margin-bottom: 12px;
 }
 
-/* Стык недель: тонкая строка без карточки, тише заголовка дня. */
+/* Стык недель: строка без карточки. Крупнее прежней и контрастнее, но тише
+   заголовка дня (16 px, 700). */
 .week-next {
-  padding: 0 16px;
+  padding: 2px 16px;
   margin-bottom: 8px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--muted);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--fg);
 }
 
 /* Рамка сегодняшнего дня — 35 % основного цвета в обеих темах. */
@@ -64,14 +66,19 @@
 .day-name { flex: 1 1 auto; min-width: 0; }
 
 /* «Картинка» в шапке дня — справа от даты, мелкой плашкой как у ссылок:
-   на узком экране уезжает под дату, а не выдавливает её. */
+   полем 26 px она вровень со строкой даты (24 px) и не поднимает её.
+   На узком экране уезжает под дату, а не выдавливает её. */
 .day-image.link-button {
   display: inline-flex;
   align-items: center;
   flex: none;
   align-self: center;
-  margin-left: 8px;
+  height: 26px;
+  margin: -1px 0 -1px 8px;
   padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 26px;
 }
 .day-image .icon { margin-right: 4px; }
 .day-image .icon svg { width: 16px; height: 16px; }
@@ -133,6 +140,10 @@
   border-radius: var(--radius);
 }
 .subject-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* Кнопка сохранения внизу таблицы: пока правок нет — не нажимается и бледная. */
+.subject-table .action { width: 100%; margin-top: 12px; }
+.subject-table .action:disabled { opacity: 0.5; }
 
 .day-empty {
   padding: 0 16px 14px;
@@ -223,8 +234,9 @@
 .lesson.foreign .time-start, .lesson.foreign .subject { color: var(--muted); }
 
 .group-name { display: flex; align-items: center; min-width: 0; }
-/* Длинное название без пробелов переносится внутри строки, а не уходит под кнопку. */
-.group-name-text { min-width: 0; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
+/* Название — одной строкой с многоточием: добавленная группа с длинным
+   названием не переносит строку и не дёргает вёрстку. */
+.group-name-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Длинное название в значке — многоточием: целиком оно и так рядом. */
 .group-name .mark { margin: 0 10px 0 0; flex: none; max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
 .setting-sub { margin: 12px 0 6px; }

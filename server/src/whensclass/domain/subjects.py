@@ -281,7 +281,12 @@ def abbreviate(base: str) -> str | None:
 
 
 def short_name(name: str) -> str | None:
-    """Короткое имя предмета; None — только если сокращать нечего."""
+    """Короткое имя предмета; None — только если сокращать нечего.
+
+    Пометка «ЗАЧЕТ» — не мусор: зачётная пара отличается от обычной, и в коротком
+    имени она остаётся («экономика (зачёт)»), а не пропадает.
+    """
+    marked = MARK.search(name) is not None
     base, suffix = split_suffix(name)
     cleaned = NOTE.sub("", base).strip(" .,;:")
     found = _find(cleaned) or abbreviate(cleaned)
@@ -294,4 +299,5 @@ def short_name(name: str) -> str | None:
             found = base
     if found is None or found == name.strip():
         return None
-    return f"{found} {suffix}".strip() if suffix else found
+    result = f"{found} {suffix}".strip() if suffix else found
+    return f"{result} (зачёт)" if marked else result

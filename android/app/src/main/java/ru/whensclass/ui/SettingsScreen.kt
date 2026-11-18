@@ -51,8 +51,8 @@ import ru.whensclass.data.ReleaseDto
 import ru.whensclass.widget.ThemeChoice
 
 /**
- * Настройки и короткий рассказ о данных. Разделы — от частого к разовому: группа, оформление,
- * виджеты, уведомления и всё, что им мешает в телефоне; дальше таблица с обновлением, версия и
+ * Настройки и короткий рассказ о данных. Сверху — таблица колледжа, откуда всё берётся; дальше
+ * группы, оформление, виджеты, уведомления и всё, что им мешает в телефоне; внизу — версия и
  * «О приложении».
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -188,6 +188,35 @@ fun SettingsScreen(
             .verticalScroll(scroll)
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
+        Section("Таблица и данные") {
+            Text(
+                // «Чаще и перед каждой парой» — про сервер; телефон ходит за расписанием раз в час
+                // и при открытии. Куда ведёт ссылка — см. sheetLink.
+                "Телефон забирает его раз в час и при каждом открытии, сервер " +
+                    "читает таблицу колледжа чаще и перед каждой парой. Кнопка ниже " +
+                    (if (teacherMode) "откроет таблицу на сегодняшнем дне, а если его в таблице " +
+                        "нет — на ближайшем следующем; в день с парами — у колонки группы первой из них."
+                    else "откроет таблицу на вашей колонке и сегодняшнем дне, а если его в таблице " +
+                        "нет — на ближайшем следующем."),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Постоянное место для ссылки: её хотят и в обычный день — сверить, посмотреть соседей.
+            val context = LocalContext.current
+            ActionButton(
+                label = "Открыть таблицу колледжа",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    val url = sheetUrl()
+                    if (url == null) {
+                        Toast.makeText(context, "Адрес таблицы ещё не получен от сервера", Toast.LENGTH_SHORT).show()
+                    } else {
+                        openLink(context, url)
+                    }
+                },
+            )
+        }
+
         GroupSection(
             teacherMode = teacherMode,
             groupName = groupName,
@@ -195,6 +224,7 @@ fun SettingsScreen(
             subgroups = subgroups,
             groupsByName = groupsByName,
             onGroupsByName = onGroupsByName,
+            onChangeGroup = onChangeGroup,
             onAddGroup = onAddGroup,
             onAddSubgroup = onAddSubgroup,
             onRemoveGroup = onRemoveGroup,
@@ -219,22 +249,21 @@ fun SettingsScreen(
                 "Компактный вид",
                 checked = compactView(compact, LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale),
                 onCheckedChange = onCompact,
-                hint = "Время пары — одной строкой, кабинет и преподаватель — в одну, отступы меньше. " +
-                    "На экране уже 360 dp включается сам.",
+                hint = "Тесные карточки: время и место с преподавателем в одну строку. Включается сам на " +
+                    "узком экране (уже́ 360 dp).",
             )
             SwitchRow(
                 "Второй ряд вкладок остаётся на месте",
                 checked = rowStays,
                 onCheckedChange = onRowStays,
-                hint = "Стоят, пока листаете расписание. В альбомной уезжают.",
+                hint = "Стоят, пока листаете расписание. В альбомном всё равно скрываются.",
             )
             // Сокращать имена — такой же вид, как тема и компактность.
             SwitchRow(
                 "Короткие названия",
                 shortSubjects,
                 onShortSubjects,
-                hint = "«Алгоритмы» вместо «Основы алгоритмизации и программирования». " +
-                    "Не нравится — напишите своё в таблице сокращений.",
+                hint = "«Алгоритмы» вместо длинного названия. Своё можно написать в таблице сокращений.",
             )
             ActionButton("Таблица сокращений", onSubjects)
         }
@@ -266,41 +295,6 @@ fun SettingsScreen(
         // Всё, что упирается в настройки телефона, — одним разделом сразу под уведомлениями:
         // ограничения режут и их, и виджеты.
         BackgroundWork(phone, exactAlarms, notifyEnabled)
-
-        Section("Таблица и данные") {
-            Text(
-                // «Чаще и перед каждой парой» — про сервер; телефон ходит за расписанием раз в час
-                // и при открытии. Куда ведёт ссылка — см. sheetLink.
-                "Телефон забирает его раз в час и при каждом открытии, сервер " +
-                    "читает таблицу колледжа чаще и перед каждой парой. Кнопка ниже " +
-                    (if (teacherMode) "откроет таблицу на сегодняшнем дне, а если его в таблице " +
-                        "нет — на ближайшем следующем; в день с парами — у колонки группы первой из них."
-                    else "откроет таблицу на вашей колонке и сегодняшнем дне, а если его в таблице " +
-                        "нет — на ближайшем следующем."),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // Постоянное место для ссылки: её хотят и в обычный день — сверить, посмотреть соседей.
-            val context = LocalContext.current
-            ActionButton(
-                label = "Открыть таблицу колледжа",
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    val url = sheetUrl()
-                    if (url == null) {
-                        Toast.makeText(context, "Адрес таблицы ещё не получен от сервера", Toast.LENGTH_SHORT).show()
-                    } else {
-                        openLink(context, url)
-                    }
-                },
-            )
-            // Группа из таблицы: не нашлась, переименовали — здесь и выбирают заново.
-            ActionButton(
-                label = if (teacherMode) "Выбрать заново" else "Сменить",
-                onClick = onChangeGroup,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
 
         VersionSection(
             update = update,
@@ -384,7 +378,7 @@ private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
                 )
             }
             Text(
-                "Красный свет за расписанием, полупрозрачные карточки, матовые шапка и полоска дней.",
+                "Красный свет, полупрозрачные карточки, матовые шапка и полоска дней.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

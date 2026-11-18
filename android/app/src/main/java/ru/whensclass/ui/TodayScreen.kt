@@ -420,10 +420,10 @@ fun TodayScreen(
                         return@ScheduleTabs
                     }
 
-                    // Листа экзаменов в таблице ещё нет: говорим, когда будет, а не показываем
-                    // пустоту — она читается как недоделка.
+                    // Листа экзаменов в таблице ещё нет: говорим, чего нет, а не показываем
+                    // пустоту — она читается как недоделка. Так же про пересдачи.
                     Tab.EXAMS -> {
-                        Explanation("Экзаменов нет", "Расписание экзаменов колледж выкладывает к сессии, в декабре.")
+                        Explanation("Экзаменов нет", "Действующего графика экзаменов в таблице колледжа нет.")
                         return@ScheduleTabs
                     }
                 }
@@ -442,7 +442,14 @@ fun TodayScreen(
                 val onImage = if (schedule.isTeacher) null else { date: String ->
                     imageScope.launch {
                         runCatching { saveDayImage(schedule.groupId, date) }
-                            .onSuccess { file -> shareDayImage(imageContext, file) }
+                            .onSuccess { file ->
+                                shareDayImage(
+                                    imageContext,
+                                    file,
+                                    schedule.days.firstOrNull { it.date == date }
+                                        ?.let { day -> dayShareText(day, schedule.bellsOf(day)) },
+                                )
+                            }
                             .onFailure { error -> snackbar.showSnackbar(dayImageError(error)) }
                     }
                     Unit

@@ -7,7 +7,7 @@ import {
   viceActive, viceAvailable, weekStart, weekday,
 } from '../assets/js/time.js';
 import {
-  dayImageLink, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel, roomLabel, sheetLink,
+  dayCaption, dayImageLink, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel, roomLabel, sheetLink,
   shiftColumn, shortenName, tileLabel,
 } from '../assets/js/format.js';
 import {
@@ -15,7 +15,7 @@ import {
   bellsOn, cleanSchedule, combineGroups, currentLessonNumber, dayBells, dayIndex, daySummary, openingDay, daysWithGaps, freeDay, freeOwnDay,
   stateDayText, stateWord, teacherNow,
   lessonTime, ownOnly,
-  onlyAt, shortLabels, subgroupsOf, unreadNotes, windowMark,
+  onlyAt, shortLabels, subgroupsOf, subjectRows, unreadNotes, windowMark,
 } from '../assets/js/schedule.js';
 import { letterOf, lettered, matchesQuery } from '../assets/js/search.js';
 
@@ -202,6 +202,61 @@ test('картинка дня — адрес от id группы и даты', 
   assert.ok(link.indexOf('//') < 0);
   assert.equal(dayImageLink(null, '2026-11-18'), null);
   assert.equal(dayImageLink('isp-924-2', null), null);
+});
+
+test('подпись к картинке дня: когда пары и ссылки на занятия', () => {
+  const bells = { 1: ['09:00', '10:30'], 2: ['10:45', '12:15'], 3: ['12:45', '17:30'] };
+  const lessons = [
+    { n: 1, s: 'Математика' },
+    { n: 3, s: 'Управление проектами', sn: 'проекты', u: 'https://e.mail.ru/message/1' },
+    { n: 2, s: 'Информатика', sn: 'информатика', u: 'https://example.org/room/2' },
+  ];
+  assert.equal(dayCaption(lessons, bells),
+    'Пары с 09:00 до 17:30\n' +
+    '2 Пара: Информатика, https://example.org/room/2\n' +
+    '3 Пара: Проекты, https://e.mail.ru/message/1');
+  // Ссылки нет ни у одной пары — остаётся только строка о времени.
+  assert.equal(dayCaption([{ n: 1, s: 'Математика' }], bells), 'Пары с 09:00 до 10:30');
+  // Отменённая пара в подпись не идёт; две подгруппы одной пары — одна строка.
+  assert.equal(dayCaption([
+    { n: 1, s: 'Математика', u: 'https://example.org/a' },
+    { n: 1, s: 'Математика', u: 'https://example.org/b' },
+    { n: 2, s: 'Физика', x: 1, u: 'https://example.org/c' },
+  ], bells), 'Пары с 09:00 до 10:30\n1 Пара: Математика, https://example.org/a');
+  // Звонков нет — не выдумываем время; пар нет — пусто.
+  assert.equal(dayCaption([{ n: 1, s: 'Математика', u: 'https://example.org/a' }], {}),
+    '1 Пара: Математика, https://example.org/a');
+  assert.equal(dayCaption([], bells), '');
+  assert.equal(dayCaption(null, null), '');
+});
+
+test('таблица сокращений: зачётный вариант — та же строка', () => {
+  const days = [{ d: '2026-11-16', l: [
+    { n: 1, s: 'Экономика отрасли', sn: 'экономика' },
+    { n: 2, s: 'Экономика отрасли ЗАЧЕТ', sn: 'экономика (зачёт)' },
+    { n: 3, s: 'Экономика отрасли', sn: 'экономика' },
+    // Отменённой пары в таблице нет: сокращать нечего.
+    { n: 4, s: 'Физика', x: 1 },
+  ] }];
+  const rows = subjectRows(days);
+  assert.equal(rows.length, 1);
+  // Своё имя получают оба написания из таблицы.
+  assert.deepEqual(rows[0].names, ['Экономика отрасли', 'Экономика отрасли ЗАЧЕТ']);
+  assert.equal(rows[0].s, 'Экономика отрасли');
+  // Пометку «зачёт» в коротком имени не срезаем.
+  assert.equal(rows[0].sn, 'экономика');
+
+  // Без написания без пометки пометка остаётся видимой в коротком имени.
+  const onlyMarked = subjectRows([{ d: '2026-11-16', l: [{ n: 1, s: 'История ЗАЧЕТ', sn: 'История (зачёт)' }] }]);
+  assert.equal(onlyMarked[0].s, 'История');
+  assert.equal(onlyMarked[0].sn, 'История (зачёт)');
+
+  // Строки по алфавиту, отменённого предмета нет.
+  const many = subjectRows([{ l: [
+    { n: 1, s: 'Физика' }, { n: 2, s: 'Алгебра' }, { n: 3, s: 'Химия', x: 1 },
+  ] }]);
+  assert.deepEqual(many.map((row) => row.s), ['Алгебра', 'Физика']);
+  assert.deepEqual(subjectRows(null), []);
 });
 
 test('воскресенье внутри снимка — снимок свежий, за его краем — нет', () => {

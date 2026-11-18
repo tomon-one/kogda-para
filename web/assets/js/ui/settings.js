@@ -1,11 +1,11 @@
 // Настройки (SettingsScreen.kt) — без того, чего у сайта нет: виджетов, работы
-// в фоне и обновления приложения. Разделы: «Моя группа», «Оформление»,
-// «Уведомления», «Таблица и данные», «О сайте». Раздел уведомлений —
+// в фоне и обновления приложения. Разделы: «Таблица и данные», «Группы и
+// подгруппы», «Оформление», «Уведомления», «О сайте». Раздел уведомлений —
 // notifications.js.
 
 import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, dialog, copyText, section } from './dom.js';
 import { sheetLink } from '../format.js';
-import { MAX_GROUPS, shortLabels, subgroupsOf } from '../schedule.js';
+import { MAX_GROUPS, shortLabels, subgroupsOf, subjectRows } from '../schedule.js';
 import { groupMark } from './days.js';
 import { notifications } from './notifications.js';
 import { VERSION, build } from '../version.js';
@@ -31,7 +31,7 @@ function glassToggle(app) {
     h('span', { class: 'glass-text' },
       h('span', { class: 'glass-name' }, 'Стекло', h('span', { class: 'badge' }, 'beta')),
       h('span', { class: 'glass-note' },
-        'Красный свет за расписанием, полупрозрачные карточки, матовые шапка и полоска дней.')),
+        'Красный свет, полупрозрачные карточки, матовые шапка и полоска дней.')),
     input);
 }
 
@@ -77,6 +77,10 @@ function segmented(options, selected, onPick) {
 
 var SITE = 'https://kogda-para-nsk.ru';
 var REPO = 'https://github.com/tomon-one/kogda-para';
+
+// Какие группы были на прошлой отрисовке: добавление или уборка меняют набор
+// карточек, и они появляются плавно (motion.css), а не рывком.
+var shownGroups = null;
 
 /**
  * «Поделиться» (ShareDialog в приложении): код для камеры, ссылки на сайт и
@@ -124,33 +128,40 @@ function switchLine(label, on, onchange, hint) {
 /** Таблица сокращений: своё название предмета — этому браузеру. */
 function subjectsEditor(app) {
   var schedule = app.shown();
-  var seen = {};
-  var items = [];
-  (schedule && schedule.days ? schedule.days : []).forEach(function (day) {
-    (day.l || []).forEach(function (lesson) {
-      if (lesson.x || seen[lesson.s]) return;
-      seen[lesson.s] = true;
-      items.push({ s: lesson.s, sn: lesson.sn });
-    });
-  });
-  items.sort(function (a, b) { return a.s.toLowerCase() < b.s.toLowerCase() ? -1 : 1; });
+  var items = subjectRows(schedule && schedule.days);
   if (!items.length) return h('p', { class: 'muted small' }, 'Расписание ещё не загружено — предметов пока нет.');
   var custom = app.subjectShorts();
-  return h('div', { class: 'subject-table' },
+  var inputs = [];
+  var save = h('button', { type: 'button', class: 'action', disabled: true }, 'Сохранить');
+  var table = h('div', { class: 'subject-table' },
     h('p', { class: 'muted small' },
       'Пустое поле — название из словаря или полное. Своё видит только этот браузер и только на сайте: ' +
         'уведомления рисует служба, в них словарь.'),
     items.map(function (item) {
+      var saved = '';
+      item.names.forEach(function (name) { if (!saved && custom[name]) saved = custom[name]; });
       var input = h('input', {
-        type: 'text', class: 'subject-input', value: custom[item.s] || '',
+        type: 'text', class: 'subject-input', value: saved,
         placeholder: item.sn ? capitalize(item.sn) : item.s, 'aria-label': 'Как показывать «' + item.s + '»',
       });
-      // Пишем по уходу из поля: перестройка на каждую букву теряла бы курсор.
-      input.addEventListener('change', function () { app.setSubjectShort(item.s, input.value); });
+      // Пишем не на каждую букву: пока человек печатает, ничего не сохраняется,
+      // и видно, когда записалось.
+      input.addEventListener('input', function () { save.disabled = false; });
+      inputs.push(input);
       return h('label', { class: 'subject-row' },
         h('span', { class: 'subject-full' }, item.s),
         input);
-    }));
+    }),
+    save);
+  save.addEventListener('click', function () {
+    items.forEach(function (item, i) {
+      // Вариант с пометкой зачёта — тот же предмет: своё имя получают все написания.
+      item.names.forEach(function (name) { app.setSubjectShort(name, inputs[i].value); });
+    });
+    save.disabled = true;
+    snackbar('Сохранено');
+  });
+  return table;
 }
 
 export function settingsScreen(app) {
@@ -216,6 +227,10 @@ export function settingsScreen(app) {
   var ios = isIos();
   var android = !ios && isAndroid();
 
+  var groupSig = (own ? own.id : '') + '|' + extras.map(function (g) { return g.id; }).join(',');
+  var changed = shownGroups !== null && shownGroups !== groupSig;
+  shownGroups = groupSig;
+
   // Своё у сайта и о сайте — в последней карточке: значок и сборка для Android.
   // Только во вкладке браузера: открытому значком он ни к чему. Есть кнопка
   // браузера — она вместо шагов; шаги — для этого телефона, а на компьютере без
@@ -243,8 +258,24 @@ export function settingsScreen(app) {
     h('header', { class: 'topbar' },
       h('button', { type: 'button', class: 'icon-button', 'aria-label': 'Назад', onclick: app.back }, icon('back')),
       h('h1', { class: 'topbar-title' }, 'Настройки')),
-    h('main', { class: 'content cards' },
-      section(teacherMode ? 'Преподаватель' : 'Моя группа', group),
+    h('main', { class: 'content cards' + (changed ? ' changed' : '') },
+      // Откуда расписание — первое, что ищут в настройках, и одна короткая
+      // фраза о том, что уходит на сервер: остальное читают один раз.
+      section('Таблица и данные', [
+        // Дня нет в ответе (воскресенье, каникулы) — ссылка ведёт на ближайший
+        // следующий; у преподавателя — колонка группы первой пары, без пар —
+        // только строка дня (sheetLink).
+        h('p', null, 'Сайт забирает расписание при открытии и раз в час, пока страница открыта; ' +
+          'сервер читает таблицу колледжа чаще и перед каждой парой.'),
+        link ? actionLink('Открыть таблицу колледжа', link)
+          : actionButton('Открыть таблицу колледжа', function () { snackbar('Адрес таблицы ещё не получен от сервера'); }),
+        h('p', null, teacherMode
+          ? 'На сервер уходит выбранное имя, как оно записано в таблице, — больше ничего.'
+          : 'На сервер уходят только названия вашей группы и других, если вы их выбрали, — больше ничего.'),
+        h('p', null, 'Что написано в таблице колледжа, то и покажет сайт.'),
+      ]),
+
+      section(teacherMode ? 'Преподаватель' : 'Группы и подгруппы', group),
 
       section('Оформление', [
         segmented([['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']], app.theme(), app.setTheme),
@@ -253,51 +284,15 @@ export function settingsScreen(app) {
         viceToggle(app),
         viceActive(app.vice(), app.now()) ? null : glassToggle(app),
         switchLine('Компактный вид', app.compact(), app.setCompact,
-          'Время одной строкой, кабинет и преподаватель рядом, отступы меньше. ' +
-          'На экране шириной меньше 360 px включается сам.'),
+          'Тесные карточки: время и место с преподавателем в одну строку. ' +
+          'Включается сам на узком экране (уже́ 360 px).'),
         switchLine('Короткие названия', app.shortSubjects(), app.setShortSubjects,
-          '«Алгоритмы» вместо «Основы алгоритмизации и программирования». Не нравится — напишите своё ниже.'),
+          '«Алгоритмы» вместо длинного названия. Своё можно написать в таблице сокращений.'),
         h('div', { class: 'setting-sub' }, 'Таблица сокращений'),
         subjectsEditor(app),
       ]),
 
       own ? notifications(app, teacherMode) : null,
-
-      section('Таблица и данные', [
-        // Дня нет в ответе (воскресенье, каникулы) — ссылка ведёт на ближайший
-        // следующий; у преподавателя — колонка группы первой пары, без пар —
-        // только строка дня (sheetLink).
-        h('p', null, 'Сайт забирает его при открытии и раз в час, пока страница открыта; сервер читает ' +
-          'таблицу колледжа чаще и перед каждой парой. Кнопка ниже ' +
-          (teacherMode ? 'откроет таблицу на сегодняшнем дне, а если его в таблице нет — на ближайшем ' +
-            'следующем; в день с парами — у колонки группы первой из них.'
-            : 'откроет таблицу на вашей колонке и сегодняшнем дне, а если его в таблице нет — на ' +
-              'ближайшем следующем.')),
-        link ? actionLink('Открыть таблицу колледжа', link)
-          : actionButton('Открыть таблицу колледжа', function () { snackbar('Адрес таблицы ещё не получен от сервера'); }),
-
-        // Два текста, которые читают один раз, — в этой же карточке.
-        h('p', null, (teacherMode
-          ? 'На сервер уходит выбранное имя, как оно записано в таблице колледжа. Больше ничего: '
-          : 'На сервер уходят только названия вашей группы и других, если вы их выбрали. ' +
-            'Больше ничего: ни имени, ') +
-          'ни номера телефона, ни местоположения. Учётной записи нет, аналитики и рекламы нет, ' +
-          'выбор хранится в этом браузере, а с уведомлениями — ещё и на сервере. Когда смотрите ' +
-          'чужое расписание, серверу уходит, чьё именно: иначе его неоткуда взять. Всё для вашего удобства.'),
-        // Уведомления — единственное, что сервер хранит о браузере;
-        // перечень — как в записи на сервере.
-        h('p', null, 'Пока включены уведомления, сервер хранит адрес и ключи, по которым этот браузер ' +
-          'их принимает, ' + (teacherMode ? 'выбранное имя' : 'вашу группу') + ', что присылать, какой ' +
-          'сайт, когда вы его открывали последний раз и когда сюда впервые дошло уведомление, а если ' +
-          (teacherMode ? 'имени' : 'группы') +
-          ' не станет в таблице — когда об этом сообщили. Доставляет их служба браузера — Apple, Google, ' +
-          'Mozilla или Microsoft: текст ей не виден. Выключите — запись сотрётся.'),
-        h('p', null, 'Что написано в таблице колледжа, то и покажет сайт: за ошибки, замены и ' +
-          'опоздавшие обновления автор не отвечает.'),
-        h('p', null, 'Если однажды что-то сломается, автор постарается починить, но сроков не обещает. ' +
-          'Пропущенная пара остаётся на вашей совести, даже если сайт в этот момент показывал ' +
-          'неправильно. Сверяйтесь с таблицей, когда это важно.'),
-      ]),
 
       // «Я преподаватель» здесь нет: тот же переход — первой строкой списка,
       // куда ведёт «Сменить».

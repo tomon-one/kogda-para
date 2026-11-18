@@ -99,8 +99,9 @@ export function notifications(app, teacherMode) {
       change({ changes: cur.changes, remind: on ? (cur.remind || lastRemind()) : 0, digest: cur.digest || 0 });
     }, 'push-remind'),
   ];
+  // Пояснение видно и с выключенным переключателем: по нему решают, включать ли.
+  body.push(h('p', { class: 'muted small' }, 'Напоминание о первой паре дня или между парами.'));
   if (now.remind > 0) {
-    body.push(h('p', { class: 'muted small' }, 'Напоминание о первой паре дня или между парами.'));
     // Кнопка с выбранным, выбор — в своём окне: выпадающий список браузера
     // выглядит чужим, и своего времени в нём не задать.
     body.push(h('div', { class: 'value-row' }, h('span', null, 'За сколько предупредить'),
@@ -122,7 +123,7 @@ export function notifications(app, teacherMode) {
     var cur = lost ? now : app.pushIntended();
     change({ changes: on, remind: cur.remind, digest: cur.digest || 0 });
   }, 'push-changes'));
-  body.push(h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.'));
+  body.push(h('p', { class: 'muted small' }, 'Отмены и замены на сегодня и завтра.'));
 
   // Вечерняя сводка: первая пара завтрашнего дня.
   body.push(switchRow('Вечерняя сводка', now.digest > 0, function (on) {
@@ -131,9 +132,8 @@ export function notifications(app, teacherMode) {
       changes: cur.changes, remind: cur.remind, digest: on ? (cur.digest || lastDigest()) : 0,
     });
   }, 'push-digest'));
+  body.push(h('p', { class: 'muted small' }, 'Первая пара завтрашнего дня.'));
   if (now.digest > 0) {
-    body.push(h('p', { class: 'muted small' }, 'Первая пара завтрашнего дня. В субботу вечером не приходит; ' +
-      'нет пар — молчит.'));
     body.push(h('div', { class: 'value-row' }, h('span', null, 'Во сколько'),
       actionButton(timeText(now.digest), function () {
         digestDialog(now.digest, function (minute) {

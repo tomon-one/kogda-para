@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +31,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -427,7 +428,9 @@ private fun DayCard(
                 date?.let { formatDayTitle(it, today) } ?: day.date, isToday, past, daySummary(day.lessons, groups, bells),
                 bottom = if (notes.isEmpty()) (if (compact) 4.dp else 8.dp) else 4.dp,
                 chips = listOfNotNull(day.state?.let(::stateDayText), "Не прочитан".takeIf { day.unread != null }),
-                onImage = onImage?.let { share -> { share(day.date) } },
+                // У дня без пар картинка ни о чём — кнопки нет.
+                onImage = onImage?.takeIf { day.lessons.any { lesson -> !lesson.isCancelled } }
+                    ?.let { share -> { share(day.date) } },
                 compact = compact,
             )
 
@@ -494,13 +497,15 @@ private fun DayCard(
     }
 }
 
-/** На стыке воскресенья и понедельника: мелкая тихая строка вместо заголовка, без карточки. */
+/** На стыке воскресенья и понедельника: тихая строка вместо заголовка, без карточки. */
 @Composable
 private fun NextWeekMark() {
     Text(
         "Следующая неделя",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Чуть крупнее и контрастнее прежнего, но тише заголовка дня: это не день, а стык.
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
         modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
     )
 }
@@ -552,13 +557,21 @@ private fun DayHeader(
                 modifier = Modifier.weight(1f).semantics { heading() },
             )
             chips.forEach { DayChip(it) }
+            // Картинка дня у дня без пар ни о чём: кнопки нет. Поле — 32 dp, чтобы не растить строку
+            // с датой: у IconButton оно 48 dp.
             if (onImage != null) {
-                IconButton(onClick = onImage, modifier = Modifier.size(40.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .clickable(onClick = onImage),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         Icons.Filled.Share,
                         contentDescription = "Картинка дня в чат",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }

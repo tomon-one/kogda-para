@@ -131,6 +131,16 @@ def _pairs(number: int) -> str:
     return "пар"
 
 
+def _day_span(lessons: list[dict], bells: dict) -> tuple[str, str] | None:
+    """Начало первой и конец последней пары дня по звонкам; None — не по чему считать."""
+    spans = [bells[str(l.get("n"))] for l in lessons
+             if isinstance(l.get("n"), int) and isinstance(bells.get(str(l.get("n"))), list)
+             and len(bells[str(l.get("n"))]) == 2]
+    if not spans:
+        return None
+    return min(span[0] for span in spans), max(span[1] for span in spans)
+
+
 def _date_text(day: dt.date) -> str:
     return f"{WEEKDAYS[day.weekday()]}, {day.day} {MONTHS[day.month - 1]}"
 
@@ -275,19 +285,25 @@ def render(payload: dict, day: dt.date) -> bytes:
     draw.text((left, 64), _ellipsis(draw, payload["gn"], name_font, inner),
               font=name_font, fill=MAIN)
     draw.text((left, 138), _date_text(day), font=_font(36), fill=QUIET)
+    lessons = body.get("l") or []
+    bells = body.get("bl") or payload.get("bells") or {}
+    top = 190
+    # Сразу видно, во сколько начинается и кончается день: по этой строке решают,
+    # ехать ли к первой паре.
+    span = _day_span(lessons, bells)
+    if span is not None:
+        draw.text((left, top), f"Пары с {span[0]} до {span[1]}", font=_font(32), fill=QUIET)
+        top += 46
     state = body.get("st")
-    top = 188
     if state in STATES:
         draw.text((left, top), STATES[state], font=_font(32), fill=QUIET)
         top += 46
     top += 30
     bottom = HEIGHT - 120
 
-    lessons = body.get("l") or []
     if not lessons:
         draw.text((left, top + 20), "Пар нет", font=_font(56, bold=True), fill=MAIN)
     else:
-        bells = body.get("bl") or payload.get("bells") or {}
         parts, pad, gap = _card_plan(draw, lessons[:MAX_CARDS], bells, inner,
                                      bottom - top)
         # Пустое место внизу растягиваем между карточками, но не в дыры: на четыре

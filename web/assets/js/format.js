@@ -175,6 +175,38 @@ export function dayImageLink(group, day) {
   return '/v1/day-image/' + encodeURIComponent(group) + '/' + encodeURIComponent(day) + '.png';
 }
 
+/**
+ * Текст к картинке дня для «Поделиться»: первой строкой — во сколько
+ * начинаются и кончаются пары по звонкам дня, дальше — только пары со
+ * ссылкой: в беседе по ней сразу открывают занятие. Название — как на
+ * картинке: короткое из словаря службы, без него полное.
+ */
+export function dayCaption(lessons, bells) {
+  var own = (lessons || []).filter(function (lesson) { return !lesson.x; });
+  if (!own.length) return '';
+  var numbers = own.map(function (lesson) { return lesson.n; })
+    .filter(function (n) { return typeof n === 'number'; })
+    .sort(function (a, b) { return a - b; });
+  var lines = [];
+  if (numbers.length) {
+    var first = bells && bells[String(numbers[0])];
+    var last = bells && bells[String(numbers[numbers.length - 1])];
+    var from = first && first[0];
+    var to = last && last[1];
+    if (from && to) lines.push('Пары с ' + from + ' до ' + to);
+  }
+  // Две подгруппы на одной паре — одна строка: номер у них общий.
+  var said = {};
+  own.filter(function (lesson) { return lesson.u; }).sort(function (a, b) { return a.n - b.n; })
+    .forEach(function (lesson) {
+      if (said[lesson.n]) return;
+      said[lesson.n] = true;
+      var subject = lesson.sn || lesson.s || '';
+      lines.push(lesson.n + ' Пара: ' + subject.charAt(0).toUpperCase() + subject.slice(1) + ', ' + lesson.u);
+    });
+  return lines.join('\n');
+}
+
 /** «3-я пара» — о том, что идёт сейчас (pairLabel в приложении). */
 export function pairLabel(number) {
   return number + '-я пара';

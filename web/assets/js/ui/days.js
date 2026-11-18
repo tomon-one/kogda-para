@@ -6,7 +6,7 @@ import * as store from '../store.js';
 import { dayTitle, capitalize, weekday, addDays } from '../time.js';
 import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, stateDayText, unreadNotes } from '../schedule.js';
 import {
-  dayImageLink, isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
+  dayCaption, dayImageLink, isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
 } from '../format.js';
 
@@ -74,6 +74,9 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree, group) {
   var past = day.d < now.date;
   var current = isToday ? currentLessonNumber(bells, day.d, now) : null;
   var lessons = day.l || [];
+  // Картинку служба рисует по расписанию группы: чужие пары и отменённые в
+  // подпись не идут, а у дня без пар кнопки нет — отправлять нечего.
+  var imageLessons = group ? lessons.filter(function (l) { return !isCancelled(l) && !isForeign(l, groups); }) : [];
   // Метки дня — в шапке, справа от даты (вариант А): график колледжа и
   // непрочитанность видно сразу, а не строкой между датой и парами.
   var chips = [];
@@ -85,7 +88,7 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree, group) {
   }, h('h2', { class: 'day-title' },
     h('span', { class: 'day-name' }, dayTitle(day.d, now.date)),
     chips.map(function (chip) { return h('span', { class: 'day-state' }, chip); }),
-    group ? dayImageButton(group, day.d) : null,
+    imageLessons.length ? dayImageButton(group, day.d, imageLessons, bells) : null,
     summaryLine(daySummary(lessons, groups, bells))));
 
   var notes = unreadNotes(day);
@@ -216,10 +219,11 @@ export function groupMark(label, own, name) {
 
 /**
  * «Картинка»: служба рисует день PNG 1080×1920. Где браузер отдаёт файлы
- * системным «Поделиться» — туда; где нет — файл скачивается. Ошибка — словами:
- * код ответа человеку ни о чём не говорит.
+ * системным «Поделиться» — туда, с подписью: во сколько пары и ссылки на
+ * занятия. Где нет — файл скачивается. Ошибка — словами: код ответа человеку
+ * ни о чём не говорит.
  */
-function dayImageButton(group, day) {
+function dayImageButton(group, day, lessons, bells) {
   var busy = false;
   var button = h('button', {
     type: 'button', class: 'link-button day-image',
@@ -229,13 +233,13 @@ function dayImageButton(group, day) {
       busy = true;
       button.disabled = true;
       var done = function () { busy = false; button.disabled = false; };
-      sendDayImage(dayImageLink(group, day), day).then(done, done);
+      sendDayImage(dayImageLink(group, day), day, dayCaption(lessons, bells)).then(done, done);
     },
   }, icon('image'), 'Картинка');
   return button;
 }
 
-function sendDayImage(url, day) {
+function sendDayImage(url, day, caption) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     snackbar('Нет связи — картинка не скачалась');
     return Promise.resolve();
@@ -250,7 +254,7 @@ function sendDayImage(url, day) {
     var file = typeof File === 'function' ? new File([blob], name, { type: 'image/png' }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       return navigator.share({
-        files: [file], title: 'Расписание на ' + day.split('-').reverse().join('.'),
+        files: [file], title: 'Расписание на ' + day.split('-').reverse().join('.'), text: caption || undefined,
       }).then(null, function (error) {
         // Передумали в «Поделиться» — это не сбой.
         if (error && error.name === 'AbortError') return;

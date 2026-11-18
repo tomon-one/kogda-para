@@ -42,4 +42,29 @@ class SubjectsTest {
         assertEquals(mapOf("Физика" to "Физ"), readShorts("мусор\n\t\nФизика\tФиз\nЕщё\t"))
         assertEquals(emptyMap<String, String>(), readShorts(null))
     }
+
+    @Test
+    fun `предмет с пометкой ЗАЧЕТ — та же строка таблицы`() {
+        val lessons = listOf(
+            LessonDto(number = 1, subject = "Экономика отрасли", shortSubject = "экономика"),
+            LessonDto(number = 2, subject = "Экономика отрасли ЗАЧЕТ", shortSubject = "экономика (зачёт)"),
+            LessonDto(number = 3, subject = "Физика"),
+        )
+        val lines = subjectLines(lessons)
+        assertEquals(listOf("Физика", "Экономика отрасли"), lines.map { it.subject })
+        val economy = lines.first { it.subject == "Экономика отрасли" }
+        // Своё имя из строки пишется обоим вариантам — они и записаны в ней поимённо.
+        assertEquals(listOf("Экономика отрасли", "Экономика отрасли ЗАЧЕТ"), economy.variants)
+        // Подсказка — от обычной пары; если без пометки предмета нет, пометка остаётся видимой.
+        assertEquals("экономика", economy.short)
+        val onlyMarked = subjectLines(listOf(LessonDto(1, "История ЗАЧЕТ", shortSubject = "История (зачёт)")))
+        assertEquals("История", onlyMarked.single().subject)
+        assertEquals("История (зачёт)", onlyMarked.single().short)
+    }
+
+    @Test
+    fun `короткое имя с пометкой показывается как есть`() {
+        val marked = LessonDto(number = 1, subject = "Экономика отрасли ЗАЧЕТ", shortSubject = "экономика (зачёт)")
+        assertEquals("Экономика (зачёт)", SubjectNames(short = true).text(marked))
+    }
 }
