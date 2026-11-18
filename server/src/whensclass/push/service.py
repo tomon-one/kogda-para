@@ -38,7 +38,7 @@ from .messages import (
     welcome_text,
 )
 from .quiet import Quiet, _by_day, quiet_hours
-from .reminders import Reminders, _mark, _reminder as _reminder
+from .reminders import Reminders, _mark
 from .subscription import _host
 
 log = logging.getLogger(__name__)
