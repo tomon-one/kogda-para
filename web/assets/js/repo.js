@@ -359,7 +359,8 @@ function refreshOnce(force) {
       }
       // Занят — своё и другие группы упрутся в тот же лимит: не тратить его.
       if (busy || silent) return { kind: 'failed', error: busy || silent };
-      if (!force && !outdated && meta && meta.gen === store.get('gen')) {
+      if (!force && !outdated && meta && meta.gen === store.get('gen') &&
+          (meta.calendar || null) === store.get('scheduleCalendar')) {
         // Данные те же, но проверку показать надо: иначе кнопка выглядит нерабочей.
         store.set('fetchedAt', now);
         return { kind: 'fresh' };
@@ -398,6 +399,9 @@ function refreshOnce(force) {
           if (answers.length) writeExtras(answers);
           store.set('schedule', fresh);
           store.set('gen', fresh.gen);
+          if (!answers.some(function (a) { return a.missed; })) {
+            store.set('scheduleCalendar', meta && meta.calendar);
+          }
           store.set('fetchedAt', Date.now());
           store.set('window', windowMark(from));
           // Своё пришло, другие — не все: без галочки и с их именами.

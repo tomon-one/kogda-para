@@ -127,8 +127,13 @@ function subjectsEditor(app) {
   var items = subjectRows(schedule && schedule.days);
   if (!items.length) return h('p', { class: 'muted small' }, 'Расписание ещё не загружено — предметов пока нет.');
   var custom = app.subjectShorts();
-  var inputs = [];
+  var drafts = app.state.subjectDrafts || (app.state.subjectDrafts = Object.create(null));
+  var key = (schedule.kind || 'group') + ':' + schedule.g;
+  var edits = drafts[key] || (drafts[key] = Object.create(null));
   var save = h('button', { type: 'button', class: 'action', disabled: true }, 'Сохранить');
+  function updateSave() {
+    save.disabled = !items.some(function (item) { return item.s in edits; });
+  }
   var table = h('div', { class: 'subject-table' },
     h('p', { class: 'muted small' },
       'Пустое поле — название из словаря или полное. Своё видит только этот браузер и только на сайте: ' +
@@ -137,26 +142,33 @@ function subjectsEditor(app) {
       var saved = '';
       item.names.forEach(function (name) { if (!saved && custom[name]) saved = custom[name]; });
       var input = h('input', {
-        type: 'text', class: 'subject-input', value: saved,
+        type: 'text', class: 'subject-input', value: item.s in edits ? edits[item.s] : saved,
         placeholder: item.sn ? capitalize(item.sn) : item.s, 'aria-label': 'Как показывать «' + item.s + '»',
       });
       // Пишем не на каждую букву: пока человек печатает, ничего не сохраняется,
       // и видно, когда записалось.
-      input.addEventListener('input', function () { save.disabled = false; });
-      inputs.push(input);
+      input.addEventListener('input', function () {
+        if (input.value === saved) delete edits[item.s];
+        else edits[item.s] = input.value;
+        updateSave();
+      });
       return h('label', { class: 'subject-row' },
         h('span', { class: 'subject-full' }, item.s),
         input);
     }),
     save);
   save.addEventListener('click', function () {
-    items.forEach(function (item, i) {
-      // Вариант с пометкой зачёта — тот же предмет: своё имя получают все написания.
-      item.names.forEach(function (name) { app.setSubjectShort(name, inputs[i].value); });
+    var changes = Object.create(null);
+    items.forEach(function (item) {
+      if (!(item.s in edits)) return;
+      item.names.forEach(function (name) { changes[name] = edits[item.s]; });
+      delete edits[item.s];
     });
-    save.disabled = true;
+    app.setSubjectShorts(changes);
     snackbar('Сохранено');
+    app.render();
   });
+  updateSave();
   return table;
 }
 
@@ -300,9 +312,7 @@ export function settingsScreen(app) {
         switchLine('Короткие названия предметов', app.shortSubjects(), app.setShortSubjects,
           'Короткие имена вместо длинных: например, «Алгоритмы» вместо «Основы алгоритмизации ' +
           'и программирования».'),
-        // Таблица — только при включённом переключателе: без коротких имён она
-        // ни на что не влияет.
-        app.shortSubjects() ? [
+        app.shortSubjects() || Object.keys(app.subjectShorts()).length ? [
           h('div', { class: 'setting-sub' }, 'Таблица сокращений'),
           subjectsEditor(app),
         ] : null,

@@ -15,7 +15,7 @@ from ..domain.models import Lesson, SheetPlace, Snapshot, a1_column
 from ..domain.subjects import short_name
 from ..domain.teachers import TeacherIndex, same_person, spelling_twin
 from ..service.bells import own_bells
-from .published import group_published, published, teacher_published
+from .published import Filling, group_published, published, teacher_published
 
 API_VERSION = 1
 
@@ -158,6 +158,7 @@ def teacher_answer(
     bells: dict[str, list[str]] | None = None,
     today: date | None = None,
     marks: bool = True,
+    counts: Filling | None = None,
 ) -> dict | None:
     """Ответ /v1/teacher. None — такого преподавателя нет.
 
@@ -170,7 +171,7 @@ def teacher_answer(
     """
     def build(tid: str, known_name: str | None = None) -> dict | None:
         return teacher_payload(snapshot, index, tid, start, days, generated,
-                               bells=bells, known_name=known_name, today=today, marks=marks)
+                               bells=bells, known_name=known_name, today=today, marks=marks, counts=counts)
 
     body = build(teacher_id)
     if body is None and (full := index.aliases.get(teacher_id)):
@@ -198,6 +199,7 @@ def teacher_payload(
     known_name: str | None = None,
     today: date | None = None,
     marks: bool = True,
+    counts: Filling | None = None,
 ) -> dict | None:
     """Расписание преподавателя. None, если такого в таблице нет.
 
@@ -210,7 +212,7 @@ def teacher_payload(
         return None
 
     by_date = index.days(teacher_id)
-    shown = teacher_published(snapshot, index, teacher_id, today, marks)
+    shown = teacher_published(snapshot, index, teacher_id, today, marks, counts)
     covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
 
@@ -279,6 +281,7 @@ def schedule_payload(
     today: date | None = None,
     marks: bool = True,
     calendar: Mapping[str, str] | None = None,
+    counts: Filling | None = None,
 ) -> dict | None:
     """Тело для виджета. None, если такой группы в листе нет.
 
@@ -293,7 +296,7 @@ def schedule_payload(
         return None
 
     by_date = snapshot.schedule.get(group_id, {})
-    shown = group_published(snapshot, group_id, today, marks)
+    shown = group_published(snapshot, group_id, today, marks, counts)
     covered = set(shown)
     gid, placed = _place_days(snapshot, start, days)
 

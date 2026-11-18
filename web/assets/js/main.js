@@ -57,9 +57,12 @@ Object.assign(app, {
   },
   /** Свои короткие названия: полное → как человек хочет видеть. */
   subjectShorts: function () { return store.get('subjectShorts') || {}; },
-  setSubjectShort: function (full, short) {
-    var map = Object.assign({}, store.get('subjectShorts') || {});
-    if (short && short.trim()) map[full] = short.trim(); else delete map[full];
+  setSubjectShorts: function (changes) {
+    var map = Object.assign(Object.create(null), store.get('subjectShorts') || {});
+    Object.keys(changes).forEach(function (full) {
+      var short = changes[full].trim();
+      if (short) map[full] = short; else delete map[full];
+    });
     store.set('subjectShorts', map);
   },
   setTheme: function (theme) {

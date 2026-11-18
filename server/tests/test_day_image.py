@@ -2,6 +2,8 @@
 
 import datetime as dt
 import io
+from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -59,7 +61,7 @@ def test_картинка_дня_png_1080x1920(client):
     response = client.get(f"/v1/day-image/isp-924-2/{DAY}.png")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
-    assert response.headers["cache-control"] == "public, max-age=86400"
+    assert response.headers["cache-control"] == "public, no-cache"
     image = _open(response.content)
     assert image.size == (1080, 1920)
     # Не пустая: на чёрном фоне есть карточки и текст.
@@ -112,6 +114,32 @@ def test_второй_запрос_не_рисует(client, monkeypatch):
     assert client.get(url).status_code == 200
     assert client.get(url).status_code == 200
     assert len(calls) == 1
+
+
+def test_отмена_не_входит_в_часы_дня():
+    assert day_image._day_span([{"n": 1, "x": 1}, {"n": 2}], routes.BELLS) == ("10:40", "12:10")
+    assert day_image._day_span([{"n": 1, "x": 1}], routes.BELLS) is None
+
+
+def test_смена_графика_меняет_картинку_при_том_же_gen(client):
+    states = {DAY.isoformat(): "session"}
+    client.app.state.calendar = SimpleNamespace(states=lambda _: states)
+    url = f"/v1/day-image/isp-924-2/{DAY}.png"
+    first = client.get(url)
+    states[DAY.isoformat()] = "practice"
+    second = client.get(url, headers={"If-None-Match": first.headers["etag"]})
+    assert second.status_code == 200
+    assert second.headers["etag"] != first.headers["etag"]
+
+
+def test_непрочитанный_день_с_графиком_не_показывается_пустым(client):
+    group = "isp-924-2"
+    snapshot = deepcopy(client.app.state.store.snapshot)
+    snapshot.schedule[group].pop(DAY)
+    snapshot.unread.setdefault(group, {})[DAY] = False
+    client.app.state.store.snapshot = snapshot
+    client.app.state.calendar = SimpleNamespace(states=lambda _: {DAY.isoformat(): "session"})
+    assert client.get(f"/v1/day-image/{group}/{DAY}.png").status_code == 404
 
 
 def test_кэш_лежит_в_state_dir(client, tmp_path):

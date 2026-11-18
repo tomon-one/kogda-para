@@ -262,7 +262,7 @@ fun SettingsScreen(
                 hint = "Короткие имена вместо длинных: например, «Алгоритмы» вместо «Основы " +
                     "алгоритмизации и программирования».",
             )
-            if (shortSubjects) ActionButton("Таблица сокращений", onSubjects)
+            ActionButton("Таблица сокращений", onSubjects)
         }
 
         PinWidgets()

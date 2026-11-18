@@ -15,7 +15,7 @@ class SubjectNamesSaveTest {
     fun `сохранение имён перерисовывает виджеты и переставляет напоминания`() {
         val lines = File("src/main/java/ru/whensclass/ui/App.kt").readLines()
         // Запись имени и то, что должно случиться сразу за ней: у темы перерисовка есть, у имён не было.
-        listOf("setShortSubjects(", "setSubjectShort(").forEach { call ->
+        listOf("setShortSubjects(", "setSubjectShorts(").forEach { call ->
             val at = lines.indexOfFirst { call in it }
             assertTrue("в App.kt нет $call", at >= 0)
             val after = lines.drop(at).take(8).joinToString("\n")

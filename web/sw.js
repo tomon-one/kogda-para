@@ -38,6 +38,7 @@ var FILES = [
   'assets/js/catalog.js',
   'assets/js/data.js',
   'assets/js/format.js',
+  'assets/js/group-merge.js',
   'assets/js/main.js',
   'assets/js/push.js',
   'assets/js/render.js',

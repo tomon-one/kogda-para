@@ -293,6 +293,7 @@ data class MetaDto(
     @SerialName("since") val since: String? = null,
     /** Когда служба последний раз читала таблицу (UTC); null — ещё ни разу. */
     @SerialName("checked") val checked: String? = null,
+    @SerialName("calendar") val calendar: String? = null,
     /**
      * Состояние обновления без непрочитанных дней одной-двух групп. Прежним версиям сервер отдаёт
      * такие дни общим `stale`.

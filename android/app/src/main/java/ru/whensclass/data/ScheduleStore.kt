@@ -207,6 +207,7 @@ class ScheduleStore(internal val context: Context) {
         prefs.remove(KEY_GONE)
         prefs.remove(KEY_SCHEDULE)
         prefs.remove(KEY_GENERATED_AT)
+        prefs.remove(KEY_SCHEDULE_CALENDAR)
         prefs.remove(KEY_FETCHED_AT)
         prefs.remove(KEY_PENDING_CHANGES)
         prefs.remove(KEY_CHANGES_HELD)
@@ -333,10 +334,12 @@ class ScheduleStore(internal val context: Context) {
     /** Свои короткие названия: полное имя → как человек хочет видеть, строки через перевод строки. */
     val subjectShorts: Flow<Map<String, String>> = context.dataStore.data.map { readShorts(it[KEY_SUBJECT_SHORTS]) }
 
-    suspend fun setSubjectShort(full: String, short: String?) {
+    suspend fun setSubjectShorts(changes: Map<String, String?>) {
         context.dataStore.edit { prefs ->
             val map = readShorts(prefs[KEY_SUBJECT_SHORTS]).toMutableMap()
-            if (short.isNullOrBlank()) map.remove(full) else map[full] = short.trim()
+            changes.forEach { (full, short) ->
+                if (short.isNullOrBlank()) map.remove(full) else map[full] = short.trim()
+            }
             prefs[KEY_SUBJECT_SHORTS] = map.entries.joinToString("\n") { "${it.key}\t${it.value}" }
         }
     }
@@ -415,14 +418,18 @@ class ScheduleStore(internal val context: Context) {
         body: String,
         generatedAt: String,
         windowFrom: String? = null,
+        calendar: String? = null,
     ) {
         context.dataStore.edit {
             it[KEY_SCHEDULE] = body
             it[KEY_GENERATED_AT] = generatedAt
+            if (calendar != null) it[KEY_SCHEDULE_CALENDAR] = calendar else it.remove(KEY_SCHEDULE_CALENDAR)
             it[KEY_FETCHED_AT] = System.currentTimeMillis().toString()
             if (windowFrom != null) it[KEY_WINDOW_FROM] = windowFrom else it.remove(KEY_WINDOW_FROM)
         }
     }
+
+    suspend fun scheduleCalendar(): String? = context.dataStore.data.first()[KEY_SCHEDULE_CALENDAR]
 
     /** С какого дня просили лежащее расписание (понедельник той недели). */
     suspend fun windowFrom(): String? = context.dataStore.data.first()[KEY_WINDOW_FROM]

@@ -36,8 +36,8 @@ internal fun dayShareText(day: DayDto, bells: Map<String, List<String>>): String
     val to = bells[own.maxOf { it.number }.toString()]?.getOrNull(1)?.takeIf { it.isNotBlank() }
     if (from != null && to != null) lines += "Пары с $from до $to"
     own.filter { !it.url.isNullOrBlank() }
-        // Две подгруппы на одной паре — одна строка: номер у них общий.
-        .distinctBy { it.number }
+        // Одна ссылка на один номер может повторяться у нескольких подгрупп.
+        .distinctBy { it.number to it.url }
         .sortedBy { it.number }
         .forEach {
             // Название — как на картинке: короткое из словаря службы, без него полное.
@@ -49,7 +49,7 @@ internal fun dayShareText(day: DayDto, bells: Map<String, List<String>>): String
 
 /** Почему картинка не пришла — словами, а не кодом ответа. */
 internal fun dayImageError(error: Throwable): String = when {
-    error is HttpFailure && error.code == 404 -> "Такого дня в таблице нет"
+    error is HttpFailure && error.code == 404 -> "Картинка за этот день недоступна"
     error is HttpFailure -> "Сервер не смог собрать картинку. Попробуйте позже"
     error is IOException -> "Картинка не пришла: проверьте связь"
     else -> "Картинка не собралась. Попробуйте ещё раз"

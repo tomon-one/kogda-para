@@ -420,7 +420,7 @@ class ScheduleRepository(
             // Сервер не ответил вовсе (таймаут, обрыв): расписание упрётся в тот же таймаут.
             metaAnswer.exceptionOrNull()?.takeIf { it is java.io.IOException && it !is HttpFailure }?.let { throw it }
             if (!force && !outdated && meta != null) {
-                if (meta.generatedAt == store.generatedAt.first()) {
+                if (meta.generatedAt == store.generatedAt.first() && meta.calendar == store.scheduleCalendar()) {
                     // Данные те же, но проверку показать надо: иначе кажется, что ⟳ не работает.
                     store.touchChecked()
                     updateWidgets()
@@ -441,7 +441,11 @@ class ScheduleRepository(
                     // 404 при здоровом сервере — группы в таблице больше нет (переименовали,
                     // разделили, убрали); не с первого раза ([ScheduleStore.gone]).
                     if (error.code == 404 && meta?.health == "ok") {
-                        val confirmed = store.noteNotFound(System.currentTimeMillis())
+                        val confirmed = choiceLock.withLock {
+                            writeIfStillAsked(asked.own(), { subject().own() }) {
+                                store.noteNotFound(System.currentTimeMillis())
+                            }
+                        } ?: return@coroutineScope RefreshResult.AlreadyFresh
                         if (confirmed) {
                             updateWidgets()
                             // Будильники по прежнему снимку снять сразу: иначе позвали бы на пару пропавшей группы.
@@ -451,7 +455,6 @@ class ScheduleRepository(
                     }
                     throw error
                 }
-                store.clearNotFound()
                 // Отметка «не отвечает» снимается любым удачным ответом, даже без /v1/meta, — и плашка с ней.
                 store.clearUnreachable()
                 if (store.forgetUnreachable()) announceStale("ok", null)
@@ -460,6 +463,7 @@ class ScheduleRepository(
                 // Сверка выбора ([subject]) — внутри writeIfStillAsked, чтобы её нельзя было забыть
                 // или переставить за запись. Другие группы пишет writeExtras.
                 choiceLock.withLock { writeIfStillAsked(asked.own(), { subject().own() }) {
+                    store.clearNotFound()
                     // Ответ под другим id: группу или преподавателя переименовали, сервер ответил
                     // по памяти о старом имени.
                     val adopted = fresh.groupId != subject
@@ -476,7 +480,10 @@ class ScheduleRepository(
                     // следующий заход уже не объявит и не переставит будильники — иначе сработал бы
                     // будильник об отменённой паре.
                     withContext(NonCancellable) {
-                        store.putSchedule(json.encodeToString(fresh), fresh.generatedAt, windowFrom = windowMark(from))
+                        store.putSchedule(
+                            json.encodeToString(fresh), fresh.generatedAt, windowFrom = windowMark(from),
+                            calendar = meta?.calendar?.takeIf { extras.missed.isEmpty() },
+                        )
                         updateWidgets()
                         // Об изменениях — только своей группы: остальные для справки.
                         if (comparable) announceChanges(previous, fresh, adopted)

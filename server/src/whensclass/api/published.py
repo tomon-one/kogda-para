@@ -23,7 +23,10 @@ FILLED_SHARE = 0.5
 ALMOST_ALL_SHARE = 0.9
 
 
-def published(snapshot: Snapshot, today: date | None) -> list[date]:
+Filling = tuple[Counter[date], int]
+
+
+def published(snapshot: Snapshot, today: date | None, counts: Filling | None = None) -> list[date]:
     """Дни листа, которые колледж уже выложил, а не только начал, — по листу.
 
     Недописанный день в `cov` дал бы группам, до которых колледж ещё не
@@ -43,7 +46,7 @@ def published(snapshot: Snapshot, today: date | None) -> list[date]:
     dates = sorted(snapshot.dates)
     if today is None:
         return dates
-    busy, fullest = filling(snapshot)
+    busy, fullest = counts if counts is not None else filling(snapshot)
     end = len(dates)
     while end:
         day = dates[end - 1]
@@ -53,7 +56,7 @@ def published(snapshot: Snapshot, today: date | None) -> list[date]:
     return dates[:end]
 
 
-def filling(snapshot: Snapshot) -> tuple[Counter[date], int]:
+def filling(snapshot: Snapshot) -> Filling:
     """(у скольких групп в дне есть пары; столько же у самого полного дня)."""
     busy: Counter[date] = Counter()
     for by_date in snapshot.schedule.values():
@@ -124,10 +127,11 @@ def _upto(snapshot: Snapshot, edge: date | None) -> list[date]:
 
 
 def group_published(
-    snapshot: Snapshot, group_id: str, today: date | None, marks: bool = True
+    snapshot: Snapshot, group_id: str, today: date | None, marks: bool = True,
+    counts: Filling | None = None,
 ) -> list[date]:
     """Дни листа, которые колледж уже выложил этой группе (`cov` группы)."""
-    sheet = published(snapshot, today)
+    sheet = published(snapshot, today, counts)
     if today is None:
         return sheet
     return _upto(snapshot, _group_edge(snapshot, group_id, sheet, today, marks))
@@ -136,6 +140,7 @@ def group_published(
 def teacher_published(
     snapshot: Snapshot, index: TeacherIndex, teacher_id: str, today: date | None,
     marks: bool = True,
+    counts: Filling | None = None,
 ) -> list[date]:
     """Дни, выложенные преподавателю: дописаны все его нынешние группы.
 
@@ -151,7 +156,9 @@ def teacher_published(
     «Пар нет». Живых групп нет — берутся все. Сегодня и прожитые дни не
     отрезаются никогда, как в `published`.
     """
-    sheet = published(snapshot, today)
+    if today is not None and counts is None:
+        counts = filling(snapshot)
+    sheet = published(snapshot, today, counts)
     groups = index.groups.get(teacher_id)
     if today is None or not groups or not sheet:
         return sheet
@@ -162,7 +169,7 @@ def teacher_published(
     # — практика, а не «ещё не дошёл». Группа, уходящая на практику со
     # следующей недели, на этой ещё жива и иначе отрезала бы преподавателю
     # выложенную неделю.
-    busy, fullest = filling(snapshot)
+    busy, fullest = counts if counts is not None else filling(snapshot)
     done = next((d for d in reversed(sheet) if busy[d] >= ALMOST_ALL_SHARE * fullest), None)
     if done is not None:
         edges = [max(edge, done) if edge is not None else None for edge in edges]

@@ -10,7 +10,7 @@ class DayImageErrorTest {
 
     @Test
     fun `дня нет в таблице`() {
-        assertEquals("Такого дня в таблице нет", dayImageError(HttpFailure(404, "/v1/day-image/x.png")))
+        assertEquals("Картинка за этот день недоступна", dayImageError(HttpFailure(404, "/v1/day-image/x.png")))
     }
 
     @Test

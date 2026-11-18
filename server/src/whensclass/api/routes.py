@@ -390,12 +390,12 @@ def day_image(request: Request, group_id: str, day: str) -> Response:
     calendar = getattr(request.app.state, "calendar", None)
     payload = schedule_payload(
         store.snapshot, group_id, wanted, 1, store.generated,
-        bells=BELLS, today=_today(), marks=False,
+        bells=BELLS, today=_today(), marks=True,
         calendar=calendar.states(group_id) if calendar is not None else None,
     )
     if payload is None:
         return _error(404, "группа не найдена")
-    if not payload["days"]:
+    if not payload["days"] or payload["days"][0].get("un") == "missing":
         return _error(404, "этого дня нет в таблице")
 
     try:
@@ -406,7 +406,7 @@ def day_image(request: Request, group_id: str, day: str) -> Response:
         return _error(503, "картинка дня недоступна")
 
     tag = etag_for(png)
-    headers = {"ETag": tag, "Cache-Control": "public, max-age=86400"}
+    headers = {"ETag": tag, "Cache-Control": "public, no-cache"}
     if matches(request.headers.get("if-none-match"), tag):
         return Response(status_code=304, headers=headers)
     return Response(content=png, media_type="image/png", headers=headers)

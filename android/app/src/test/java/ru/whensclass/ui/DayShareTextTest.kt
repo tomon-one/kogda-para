@@ -49,6 +49,17 @@ class DayShareTextTest {
     }
 
     @Test
+    fun `подгруппы сохраняют разные ссылки и не дублируют одинаковые`() {
+        val one = LessonDto(1, "Физика", url = "https://example.test/one")
+        val two = one.copy(url = "https://example.test/two")
+        val day = DayDto(date = "2026-11-18", lessons = listOf(one, two, one))
+        assertEquals(
+            "Пары с 09:00 до 10:30\n1 Пара: Физика, https://example.test/one\n1 Пара: Физика, https://example.test/two",
+            dayShareText(day, bells),
+        )
+    }
+
+    @Test
     fun `без ссылок — только звонки, без пар — подписи нет`() {
         val one = DayDto(date = "2026-11-18", lessons = listOf(LessonDto(number = 1, subject = "Физика")))
         assertEquals("Пары с 09:00 до 10:30", dayShareText(one, bells))

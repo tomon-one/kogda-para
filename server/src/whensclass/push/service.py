@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import concurrent.futures
 import datetime as dt
-import hashlib
 import json
 import logging
 import pathlib
@@ -31,10 +30,7 @@ from ..service import alerts
 from ..storage.atomic import write_json
 from . import changes, digest, webpush
 from .delivery import MAX_PENDING_RETRIES, TIMEOUT, Delivery, Job, _Delayed
-from .labels import _cancelled
 from .messages import (
-    MAX_LINE,
-    MAX_PAYLOAD,
     changes_message,
     changes_ttl,
     gone_message,
@@ -42,6 +38,7 @@ from .messages import (
     welcome_text,
 )
 from .quiet import Quiet, _by_day, quiet_hours
+from .reminders import Reminders, _mark, _reminder as _reminder
 from .subscription import _host
 
 log = logging.getLogger(__name__)
@@ -56,12 +53,9 @@ ALARM_MIN_FAILS = 5
 # одно уведомление «выберите заново», через две недели запись стирается.
 GONE_NOTICE_AFTER = 3600
 GONE_DROP_DAYS = 14
-# Напоминания, чья минута пропущена (перезапуск, выкладка), догоняются, пока
-# пара не началась; после перезапуска — за столько минут назад.
-CATCH_UP_MINUTES = 10
 
 
-class Push(Delivery, Quiet):
+class Push(Delivery, Quiet, Reminders):
     """Подписки на диске и рассылка. Один на службу."""
 
     def __init__(self, state_dir: pathlib.Path, vapid: webpush.Vapid | None):
@@ -239,7 +233,8 @@ class Push(Delivery, Quiet):
         now = time.monotonic()
         subs = self._snapshot_subs()
         keys = {(s["kind"], s["id"]) for s in subs}
-        gone = {key for key in keys if _payload(snapshot, teachers, key, today, self.known_teacher) is None}
+        payload_for = self._payload_for(snapshot, teachers, today)
+        gone = {key for key in keys if payload_for(key) is None}
         self._missing = {key: self._missing.get(key, now) for key in gone}
         notices, drop, changed = [], [], False
         with self._lock:
@@ -273,7 +268,9 @@ class Push(Delivery, Quiet):
         """Снимок обновился — сравнить сегодня и завтра у каждого, кто подписан."""
         if not self.enabled or before is None or settings.freeze:
             return
-        self._rewrite_reminders(before, before_teachers, snapshot, teachers, today)
+        old_payload = self._payload_for(before, before_teachers, today)
+        new_payload = self._payload_for(snapshot, teachers, today)
+        self._rewrite_reminders(old_payload, new_payload, today)
         subs = [s for s in self._snapshot_subs() if s.get("changes") and not s.get("gone")]
         if not subs:
             return
@@ -281,8 +278,8 @@ class Push(Delivery, Quiet):
         lines_for: dict[tuple[str, str], list[list[str]]] = {}
         for key in {(s["kind"], s["id"]) for s in subs}:
             try:
-                old = _payload(before, before_teachers, key, today, self.known_teacher)
-                new = _payload(snapshot, teachers, key, today, self.known_teacher)
+                old = old_payload(key)
+                new = new_payload(key)
                 if old is None or new is None:
                     continue
                 lines = changes.change_lines(old, new, today, same=True)
@@ -320,78 +317,6 @@ class Push(Delivery, Quiet):
                 jobs.append(Job(sub, changes_message(sub, lines), changes_ttl(lines)))
         log.info("изменения в расписании: %d субъектов, %d уведомлений", len(lines_for), len(jobs))
         self._dispatch(jobs)
-
-    def _rewrite_reminders(self, before, before_teachers, snapshot, teachers, today: dt.date) -> None:
-        """Ушедшее сегодня напоминание о паре, которую потом отменили или
-        перенесли, — переписать, как приложение переписывает своё.
-
-        Только тем, кто без «изменений»: у остальных напоминание закрывает
-        строка об изменении (sw.js). Молча снять уведомление браузер не даёт —
-        на его месте встаёт новое: прежнее закрывает сервис-воркер.
-        """
-        now = self.clock().replace(tzinfo=None)
-        with self._lock:
-            reminded = set(self._reminded) if self._reminded_day == today.isoformat() else set()
-        if not reminded:
-            return
-        subs = [s for s in self._snapshot_subs()
-                if s.get("remind") and not s.get("changes") and not s.get("gone")]
-        zone = zoneinfo.ZoneInfo(settings.timezone)
-
-        def ms(moment: dt.datetime) -> int:
-            return int(moment.replace(tzinfo=zone).timestamp() * 1000)
-
-        plans: dict[tuple[str, str, int], tuple[dict, dict, dict] | None] = {}
-        jobs = []
-        for sub in subs:
-            mark = _mark(sub["endpoint"])
-            numbers = sorted(n for h, n in reminded if h == mark)
-            if not numbers:
-                continue
-            key = (sub["kind"], sub["id"], sub["remind"])
-            if key not in plans:
-                try:
-                    old = _payload(before, before_teachers, key[:2], today, self.known_teacher)
-                    new = _payload(snapshot, teachers, key[:2], today, self.known_teacher)
-                except Exception:
-                    log.exception("напоминания для %s не пересчитались", key[0])
-                    old = new = None
-                if old is None or new is None:
-                    plans[key] = None
-                else:
-                    day = next((d for d in new.get("days", []) if d["d"] == today.isoformat()), {"l": []})
-                    plans[key] = (
-                        {a["number"]: a for a in changes.reminders(old, key[2], today)},
-                        {a["number"]: a for a in changes.reminders(new, key[2], today)},
-                        # Номера, где пара осталась: напоминание о ней могло
-                        # не попасть в план из-за соседней пары, но пара есть.
-                        {x["n"] for x in day["l"] if not _cancelled(x)},
-                    )
-            plan = plans[key]
-            if plan is None:
-                continue
-            was, now_plan, standing = plan
-            for number in numbers:
-                old_alarm = was.get(number)
-                if old_alarm is None or old_alarm["end"] <= now:
-                    continue
-                fresh = now_plan.get(number)
-                if fresh is not None:
-                    if all(fresh.get(f) == old_alarm.get(f) for f in ("title", "text", "join")):
-                        continue
-                    data = _reminder(sub, fresh, ms(fresh["start"]), ms(fresh["end"]))
-                    end = fresh["end"]
-                elif number in standing:
-                    continue
-                else:
-                    end = old_alarm["end"]
-                    data = message(sub, "lesson", f"Пару отменили — {old_alarm['subject']}"[:MAX_LINE],
-                                   f"{old_alarm['start']:%H:%M}, {number} пара",
-                                   {"end": ms(end), "n": number})
-                jobs.append(Job(sub, data, max(60, int((end - now).total_seconds())), deadline=ms(end) / 1000))
-        if jobs:
-            log.info("напоминания переписаны: %d", len(jobs))
-            self._dispatch(jobs)
 
     def _suspects(self, before, snapshot, today: dt.date) -> dict | None:
         """Группы, чья правка похожа на пары соседа (сдвиг, который отказ не
@@ -448,61 +373,20 @@ class Push(Delivery, Quiet):
         except OSError as exc:
             log.warning("отметки вечерней сводки не записались: %s", exc)
 
-    def remind(self, snapshot, teachers, now: dt.datetime | None = None, fresh: bool = True) -> None:
-        """Раз в минуту: кому пора напомнить о паре.
+    def _payload_for(self, snapshot, teachers, today: dt.date):
+        from ..api.published import filling
 
-        Шлётся всё, чья минута пришлась на время с прошлого запуска (после
-        перезапуска — за CATCH_UP_MINUTES), пока пара не началась: выкладка в
-        минуту напоминания не должна его терять. При заморозке — молчит: снимок
-        заведомо чужой.
-        """
-        if not self.enabled or snapshot is None:
-            return
-        zone = zoneinfo.ZoneInfo(settings.timezone)
-        now = (now or dt.datetime.now(zone)).replace(tzinfo=None, second=0, microsecond=0)
-        today = now.date()
-        self._check(snapshot, teachers, today, fresh)
-        if settings.freeze:
-            return
-        if self._held and not quiet_hours(now):
-            self._release(today)
-        since = self._last_remind
-        if since is None or since.date() != today or since >= now:
-            since = now - dt.timedelta(minutes=CATCH_UP_MINUTES)
-        self._last_remind = now
-        if self._reminded_day != today.isoformat():
-            self._reminded = set()
-            self._reminded_day = today.isoformat()
-        subs = [s for s in self._snapshot_subs() if s.get("remind") and not s.get("gone")]
-        plans: dict[tuple[str, str, int], list[dict]] = {}
-        jobs = []
-        for sub in subs:
-            key = (sub["kind"], sub["id"], sub["remind"])
-            if key not in plans:
-                payload = _payload(snapshot, teachers, key[:2], today, self.known_teacher)
-                plans[key] = changes.reminders(payload, key[2], today) if payload else []
-            for alarm in plans[key]:
-                if not since < alarm["at"] <= now or alarm["start"] <= now:
-                    continue
-                mark = (_mark(sub["endpoint"]), alarm["number"])
-                if mark in self._reminded:
-                    continue
-                self._reminded.add(mark)
-                start = alarm["start"].replace(tzinfo=zone).timestamp()
-                end = alarm["end"].replace(tzinfo=zone).timestamp()
-                jobs.append(Job(
-                    sub,
-                    _reminder(sub, alarm, int(start * 1000), int(end * 1000)),
-                    max(60, int((alarm["start"] - now).total_seconds())),
-                    deadline=start,
-                ))
-        if jobs:
-            log.info("напоминания о паре: %d", len(jobs))
-            self._save_reminded()
-            self._dispatch(jobs)
-        self._digest(snapshot, teachers, self._snapshot_subs(), now, since, today)
+        counts = None
 
-    def _digest(self, snapshot, teachers, subs, now: dt.datetime, since: dt.datetime,
+        def build(key: tuple[str, str]) -> dict | None:
+            nonlocal counts
+            if counts is None:
+                counts = filling(snapshot)
+            return _payload(snapshot, teachers, key, today, self.known_teacher, counts=counts)
+
+        return build
+
+    def _digest(self, payload_for, subs, now: dt.datetime, since: dt.datetime,
                 today: dt.date) -> None:
         """Вечерняя сводка: у кого её минута пришлась на время с прошлого
         запуска (после перезапуска — тоже) и у кого ещё нет отметки за
@@ -524,7 +408,7 @@ class Push(Delivery, Quiet):
             key = (sub["kind"], sub["id"])
             if key not in payloads:
                 try:
-                    payloads[key] = _payload(snapshot, teachers, key, today, self.known_teacher)
+                    payloads[key] = payload_for(key)
                 except Exception:
                     log.exception("вечерняя сводка для %s не посчиталась", key[0])
                     payloads[key] = None
@@ -550,28 +434,8 @@ def _clock_text(minutes: int | None) -> str | None:
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
-def _reminder(sub: dict, alarm: dict, start: int, end: int) -> dict:
-    """Напоминание, которое влезает в сообщение: больше MAX_PAYLOAD служба
-    рассылки не примет, и напоминание молча не пришло бы никому. Сначала
-    уходит «Войти» (длинная ссылка), потом строки короче."""
-    join = {"join": alarm["join"]} if alarm.get("join") else {}
-    for cut, extra in ((MAX_LINE, join), (MAX_LINE, {}), (100, {}), (40, {})):
-        data = message(sub, "lesson", alarm["title"][:cut], alarm["text"][:cut], {
-            "subject": alarm["subject"][:cut], "start": start, "end": end,
-            "n": alarm["number"], **extra,
-        })
-        if len(json.dumps(data, ensure_ascii=False).encode("utf-8")) <= MAX_PAYLOAD:
-            break
-    return data
-
-
-def _mark(endpoint: str) -> str:
-    """Отметка напоминания на диске — хеш адреса, а не сам адрес: он секретен."""
-    return hashlib.sha256(endpoint.encode("utf-8")).hexdigest()[:16]
-
-
 def _payload(
-    snapshot, teachers, key: tuple[str, str], today: dt.date, known_teacher=None
+    snapshot, teachers, key: tuple[str, str], today: dt.date, known_teacher=None, *, counts=None
 ) -> dict | None:
     """Сегодня и завтра этого субъекта — как их отдал бы API: у преподавателя
     тем же путём, что /v1/teacher, с полной записью по краткой и днями без пар
@@ -582,12 +446,12 @@ def _payload(
     kind, subject = key
     generated = dt.datetime.now(dt.UTC)
     if kind == "group":
-        return schedule_payload(snapshot, subject, today, 2, generated, bells=BELLS, today=today)
+        return schedule_payload(snapshot, subject, today, 2, generated, bells=BELLS, today=today, counts=counts)
     if teachers is None:
         return None
     return teacher_answer(
         snapshot, teachers, known_teacher or (lambda _: None), subject, today, 2, generated,
-        bells=BELLS, today=today,
+        bells=BELLS, today=today, counts=counts,
     )
 
 

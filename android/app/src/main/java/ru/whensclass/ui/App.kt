@@ -26,7 +26,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.withStateAtLeast
@@ -485,10 +487,9 @@ internal fun App(
                         // бывает своё название.
                         schedule = shownSchedule ?: schedule,
                         names = subjects,
-                        onSave = { full, short ->
-                            scope.launch {
-                                container.store.setSubjectShort(full, short)
-                                // Виджеты и висящее напоминание берут имена из хранилища — сразу и перерисовываем.
+                        onSave = { changes ->
+                            withContext(NonCancellable) {
+                                container.store.setSubjectShorts(changes)
                                 container.repository.redrawWidgets()
                                 LessonAlarms.reschedule(context)
                             }

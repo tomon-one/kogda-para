@@ -195,12 +195,13 @@ export function dayCaption(lessons, bells) {
     var to = last && last[1];
     if (from && to) lines.push('Пары с ' + from + ' до ' + to);
   }
-  // Две подгруппы на одной паре — одна строка: номер у них общий.
+  // Одна ссылка на один номер может повторяться у нескольких подгрупп.
   var said = {};
   own.filter(function (lesson) { return lesson.u; }).sort(function (a, b) { return a.n - b.n; })
     .forEach(function (lesson) {
-      if (said[lesson.n]) return;
-      said[lesson.n] = true;
+      var key = lesson.n + ":" + lesson.u;
+      if (said[key]) return;
+      said[key] = true;
       var subject = lesson.sn || lesson.s || '';
       lines.push(lesson.n + ' Пара: ' + subject.charAt(0).toUpperCase() + subject.slice(1) + ', ' + lesson.u);
     });

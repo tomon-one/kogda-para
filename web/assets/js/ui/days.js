@@ -1,5 +1,5 @@
 // Дни расписания карточками — общий вид для своего и чужого расписания
-// (DayCard в DayList.kt, LessonRow.kt).
+// (DayCard в DayCard.kt, LessonRow.kt).
 
 import { h, actionLink, snackbar, copyText, icon } from './dom.js';
 import * as store from '../store.js';
@@ -245,7 +245,7 @@ function sendDayImage(url, day, caption) {
     return Promise.resolve();
   }
   var status = 0;
-  return fetch(url, { credentials: 'omit' }).then(function (response) {
+  return fetch(url, { credentials: 'omit', cache: 'no-cache' }).then(function (response) {
     status = response.status;
     if (!response.ok) throw new Error('ответ ' + status);
     return response.blob();

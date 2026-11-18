@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import io
+import json
 import os
 import pathlib
 import tempfile
@@ -40,9 +41,8 @@ STATES = {
     "practice": "практика",
 }
 
-# Версия вида картинки: меняется раскладка — подними, иначе на диске останутся
-# старые файлы с тем же ключом (группа, день, поколение снимка).
-RENDER_VERSION = 4
+# Версия раскладки входит в ключ кэша вместе с данными картинки.
+RENDER_VERSION = 5
 
 MAX_CARDS = 6
 TIME_LINE = 44
@@ -138,7 +138,7 @@ def _pairs(number: int) -> str:
 def _day_span(lessons: list[dict], bells: dict) -> tuple[str, str] | None:
     """Начало первой и конец последней пары дня по звонкам; None — не по чему считать."""
     spans = [bells[str(l.get("n"))] for l in lessons
-             if isinstance(l.get("n"), int) and isinstance(bells.get(str(l.get("n"))), list)
+             if not l.get("x") and isinstance(l.get("n"), int) and isinstance(bells.get(str(l.get("n"))), list)
              and len(bells[str(l.get("n"))]) == 2]
     if not spans:
         return None
@@ -298,6 +298,9 @@ def render(payload: dict, day: dt.date) -> bytes:
     if span is not None:
         draw.text((left, top), f"Пары с {span[0]} до {span[1]}", font=_font(32), fill=QUIET)
         top += 46
+    if body.get("un"):
+        draw.text((left, top), "День не прочитан", font=_font(32), fill=QUIET)
+        top += 46
     state = body.get("st")
     if state in STATES:
         draw.text((left, top), STATES[state], font=_font(32), fill=QUIET)
@@ -333,11 +336,12 @@ def render(payload: dict, day: dt.date) -> bytes:
 def day_png(payload: dict, day: dt.date, directory: pathlib.Path) -> bytes:
     """PNG дня из кэша на диске или после рендера.
 
-    Ключ — группа, день и поколение снимка: после обновления листа картинка
-    перерисуется, а тот же день, спрошенный снова, отдаётся файлом.
+    Ключ учитывает данные дня, звонки и версию рисунка. При тех же
+    данных отдаётся готовый файл.
     """
     key = hashlib.blake2b(
-        f"{payload['g']}|{day.isoformat()}|{payload.get('gen', '')}|{RENDER_VERSION}".encode(),
+        json.dumps((RENDER_VERSION, day.isoformat(), payload["gn"], payload["days"][0],
+                    payload.get("bells")), sort_keys=True).encode(),
         digest_size=16,
     ).hexdigest()
     path = directory / f"{key}.png"

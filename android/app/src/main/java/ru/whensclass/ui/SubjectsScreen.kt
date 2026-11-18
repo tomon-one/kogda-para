@@ -47,7 +47,7 @@ import ru.whensclass.data.subjectLines
 internal fun SubjectsScreen(
     schedule: ScheduleDto?,
     names: SubjectNames,
-    onSave: (String, String?) -> Unit,
+    onSave: suspend (Map<String, String?>) -> Unit,
     onBack: () -> Unit,
 ) {
     // Один предмет — одна строка: у пары в разных днях имя одно и то же, а пометка
@@ -56,7 +56,7 @@ internal fun SubjectsScreen(
         subjectLines(schedule?.days.orEmpty().flatMap { it.lessons })
     }
     // Правки до сохранения: кнопка внизу пишет их разом.
-    var edits by remember(subjects) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var edits by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     fun saved(line: SubjectLine): String =
         line.variants.firstNotNullOfOrNull { names.custom[it]?.takeIf { text -> text.isNotBlank() } }.orEmpty()
     fun value(line: SubjectLine): String = edits[line.subject] ?: saved(line)
@@ -91,12 +91,16 @@ internal fun SubjectsScreen(
                 enabled = changed.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 onClick = {
-                    changed.forEach { line ->
-                        val text = value(line).trim()
-                        // Своё имя из строки — обоим вариантам: «Экономика отрасли» и «… ЗАЧЕТ».
-                        line.variants.forEach { full -> onSave(full, text.takeIf { it.isNotBlank() }) }
+                    val changes = buildMap {
+                        changed.forEach { line ->
+                            val text = value(line).trim().ifEmpty { null }
+                            line.variants.forEach { full -> put(full, text) }
+                        }
                     }
-                    scope.launch { snackbar.showSnackbar("Сохранено", duration = SnackbarDuration.Short) }
+                    scope.launch {
+                        onSave(changes)
+                        snackbar.showSnackbar("Сохранено", duration = SnackbarDuration.Short)
+                    }
                 },
             )
         },

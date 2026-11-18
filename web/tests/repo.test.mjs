@@ -37,7 +37,8 @@ function schedule(id, name, gen, extra) {
 
 function reset() {
   ['role', 'group', 'teacher', 'second', 'schedule', 'gen', 'fetchedAt', 'window', 'partial', 'server',
-    'unreachable', 'gone', 'goneHint', 'secondGone', 'lastOk', 'extras', 'extraSchedules'].forEach(store.remove);
+    'unreachable', 'gone', 'goneHint', 'secondGone', 'lastOk', 'extras', 'extraSchedules',
+    'scheduleCalendar'].forEach(store.remove);
   clock = MONDAY_NOON;
   requests = [];
 }
@@ -71,6 +72,23 @@ test('первый заход качает, второй с тем же gen — 
   requests = [];
   assert.equal((await repo.refresh(true)).kind, 'updated');
   assert.equal(requests.length, 2);
+});
+
+test('смена графика — перезапрос при том же gen', async () => {
+  reset();
+  let calendar = '2026-09-28T00:00:00Z';
+  let mark;
+  server = (url) => url === '/v1/meta'
+    ? [200, { gen: 'G1', status: 'ok', calendar }]
+    : [200, schedule('isp-1', 'ИСП-1', 'G1', { days: [{ d: '2026-09-28', l: [], st: mark }] })];
+  repo.selectGroup({ id: 'isp-1', name: 'ИСП-1' });
+  assert.equal((await repo.refresh(false)).kind, 'updated');
+  assert.equal((await repo.refresh(false)).kind, 'fresh');
+  calendar = '2026-09-28T01:00:00Z';
+  mark = 'practice';
+  assert.equal((await repo.refresh(false)).kind, 'updated');
+  assert.equal(repo.saved().days[0].st, 'practice');
+  assert.equal((await repo.refresh(false)).kind, 'fresh');
 });
 
 test('новая неделя — перезапрос при том же gen', async () => {
