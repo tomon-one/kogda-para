@@ -14,6 +14,22 @@ function switchRow(label, on, onChange, key) {
   return h('label', { class: 'switch-row' }, h('span', null, label), input);
 }
 
+// Были ли видны поднастройки на прошлой отрисовке: появившиеся при включении
+// раскрываются, а не встают рывком. Экран строится заново, поэтому начало
+// перехода — следующим кадром после вставки.
+var shownRemind = null;
+var shownDigest = null;
+
+/** Поднастройка, которой не было на прошлой отрисовке, — раскрывается. */
+function reveal(fresh, kids) {
+  var box = h('div', { class: 'reveal' + (fresh ? '' : ' open done') }, kids);
+  if (!fresh) return box;
+  window.requestAnimationFrame(function () { box.classList.add('open'); });
+  // Раскрытая высота не ограничена: иначе крупный шрифт обрезался бы.
+  box.addEventListener('transitionend', function () { box.classList.add('done'); });
+  return box;
+}
+
 /**
  * Уведомления: считает и шлёт их служба (push.js). Везде — beta: не на
  * айфоне они идут через серверы Google (у Firefox — Mozilla), а до Google с
@@ -59,6 +75,10 @@ export function notifications(app, teacherMode) {
   // Браузер сам снял разрешение: выключатели — как есть на деле, выключены.
   var lost = revoked();
   var now = lost ? { changes: false, remind: 0, digest: 0 } : app.pushChoice();
+  var freshRemind = shownRemind === false;
+  var freshDigest = shownDigest === false;
+  shownRemind = now.remind > 0;
+  shownDigest = now.digest > 0;
   function change(next) {
     if ((app.pushEnabled() && !lost) || (!next.changes && !next.remind && !next.digest)) {
       app.setPush(next);
@@ -104,18 +124,20 @@ export function notifications(app, teacherMode) {
   if (now.remind > 0) {
     // Кнопка с выбранным, выбор — в своём окне: выпадающий список браузера
     // выглядит чужим, и своего времени в нём не задать.
-    body.push(h('div', { class: 'value-row' }, h('span', null, 'За сколько предупредить'),
-      actionButton(durationShort(now.remind), function () {
-        remindDialog(now.remind, function (m) {
-          app.setPush({
-            changes: app.pushIntended().changes, remind: m, digest: app.pushIntended().digest || 0,
+    body.push(reveal(freshRemind, [
+      h('div', { class: 'value-row' }, h('span', null, 'За сколько предупредить'),
+        actionButton(durationShort(now.remind), function () {
+          remindDialog(now.remind, function (m) {
+            app.setPush({
+              changes: app.pushIntended().changes, remind: m, digest: app.pushIntended().digest || 0,
+            });
           });
-        });
-      }, 'fixed', 'remind-minutes', 'За сколько предупредить: ' + durationShort(now.remind) + '. Изменить')));
-    body.push(h('p', { class: 'warning small' }, ios
-      ? 'Нестабильно: ' + device[2] + ' может задержать напоминание.'
-      : 'Нестабильно: браузер может задержать напоминание или не показать его.' +
-        (isAndroid() ? ' Надёжнее — приложение.' : '')));
+        }, 'fixed', 'remind-minutes', 'За сколько предупредить: ' + durationShort(now.remind) + '. Изменить')),
+      h('p', { class: 'warning small' }, ios
+        ? 'Нестабильно: ' + device[2] + ' может задержать напоминание.'
+        : 'Нестабильно: браузер может задержать напоминание или не показать его.' +
+          (isAndroid() ? ' Надёжнее — приложение.' : '')),
+    ]));
   }
   // Второе нажатие до ответа службы — от выбора первого, а не от того, что
   // было при отрисовке (app.pushIntended).
@@ -134,14 +156,14 @@ export function notifications(app, teacherMode) {
   }, 'push-digest'));
   body.push(h('p', { class: 'muted small' }, 'Первая пара завтрашнего дня.'));
   if (now.digest > 0) {
-    body.push(h('div', { class: 'value-row' }, h('span', null, 'Во сколько'),
+    body.push(reveal(freshDigest, h('div', { class: 'value-row' }, h('span', null, 'Во сколько'),
       actionButton(timeText(now.digest), function () {
         digestDialog(now.digest, function (minute) {
           app.setPush({
             changes: app.pushIntended().changes, remind: app.pushIntended().remind, digest: minute,
           });
         });
-      }, 'fixed', 'digest-time', 'Вечерняя сводка в ' + timeText(now.digest) + '. Изменить')));
+      }, 'fixed', 'digest-time', 'Вечерняя сводка в ' + timeText(now.digest) + '. Изменить'))));
   }
   if (!ios) {
     // Служба рассылки — по адресу подписки, до неё — по браузеру: у Safari на

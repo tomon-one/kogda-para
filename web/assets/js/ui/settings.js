@@ -31,7 +31,7 @@ function glassToggle(app) {
     h('span', { class: 'glass-text' },
       h('span', { class: 'glass-name' }, 'Стекло', h('span', { class: 'badge' }, 'beta')),
       h('span', { class: 'glass-note' },
-        'Красный свет, полупрозрачные карточки, матовые шапка и полоска дней.')),
+        'Почти как Liquid Glass на iPhone.')),
     input);
 }
 
@@ -77,10 +77,6 @@ function segmented(options, selected, onPick) {
 
 var SITE = 'https://kogda-para-nsk.ru';
 var REPO = 'https://github.com/tomon-one/kogda-para';
-
-// Какие группы были на прошлой отрисовке: добавление или уборка меняют набор
-// карточек, и они появляются плавно (motion.css), а не рывком.
-var shownGroups = null;
 
 /**
  * «Поделиться» (ShareDialog в приложении): код для камеры, ссылки на сайт и
@@ -175,37 +171,59 @@ export function settingsScreen(app) {
     : byName ? shortLabels([own ? own.name : ''].concat(extras.map(function (g) { return g.name; })))
       : extras.concat([null]).map(function (g, i) { return String(i + 1); });
 
+  // Подгруппы своей группы — какие есть в списке: им и место под значок.
+  var subs = !teacherMode && own ? subgroupsOf(own.name, app.state.groups || []) : [];
   // Значок, повторяющий название целиком, только сжимал бы его — такой не
   // ставится ни своей группе, ни другим.
   var ownMark = marks && own && marks[0] !== own.name ? marks[0] : null;
+  // Слот одной ширины под значок: с ним и без него название начинается там же,
+  // и добавленная подгруппа не сдвигает названия. Есть он, только если значок
+  // вообще бывает: у самого названия или у подгрупп.
+  var withSlot = !!marks || subs.length > 0;
+  function nameCell(mark, ownMarked, text) {
+    return h('span', { class: 'group-name' },
+      withSlot ? h('span', { class: 'mark-slot' }, mark ? groupMark(mark, ownMarked) : null) : null,
+      h('span', { class: 'group-name-text' }, text));
+  }
   var group = [row(
-    h('span', { class: 'group-name' }, ownMark ? groupMark(ownMark, true) : null,
-      h('span', { class: 'group-name-text' }, own ? own.name : 'не выбрано')),
+    nameCell(ownMark, true, own ? own.name : 'не выбрано'),
     null,
     actionButton(teacherMode ? 'Выбрать заново' : 'Сменить', function () { app.go(teacherMode ? 'pick/self' : 'pick'); }, 'fixed'))];
   if (!teacherMode) {
-    // Остальные группы — любые, до шести вместе со своей.
+    // Подгруппы своей группы — каждая своей строкой на своём месте: «Добавить»
+    // в ней сменяется на «Убрать», и ничего не переезжает и не появляется
+    // заново в списке доступных.
+    var added = {};
+    extras.forEach(function (g, i) { added[g.id] = i; });
+    // Сколько ещё влезает: строк «Добавить» сверх этого нет.
+    var room = MAX_GROUPS - 1 - extras.length;
+    subs.forEach(function (g) {
+      var i = added[g.id];
+      var mark = marks && i != null && marks[i + 1] !== g.name ? marks[i + 1] : null;
+      if (i != null) {
+        group.push(row(nameCell(mark, false, g.name), 'подгруппа вашей группы',
+          actionButton('Убрать', function () { app.removeExtra(g.id); }, 'fixed', 'remove:' + g.id, 'Убрать ' + g.name)));
+        return;
+      }
+      if (!room) return;
+      room--;
+      group.push(row(nameCell(null, false, g.name), 'подгруппа вашей группы',
+        actionButton('Добавить', function () { app.addExtras([g]); }, 'fixed', 'add:' + g.id, 'Добавить ' + g.name)));
+    });
+    // Остальные группы — любые, до шести вместе со своей; они идут после
+    // подгрупп, и добавление подгруппы их не сдвигает.
     extras.forEach(function (g, i) {
+      if (subs.some(function (s) { return s.id === g.id; })) return;
       group.push(row(
-        h('span', { class: 'group-name' }, marks && marks[i + 1] !== g.name ? groupMark(marks[i + 1], false) : null,
-          h('span', { class: 'group-name-text' }, g.name + (g.gone ? ' — нет в таблице' : ''))),
+        nameCell(marks && marks[i + 1] !== g.name ? marks[i + 1] : null, false,
+          g.name + (g.gone ? ' — нет в таблице' : '')),
         null,
         // Несколько одинаковых «Убрать» — чтецу с названием.
         actionButton('Убрать', function () { app.removeExtra(g.id); }, 'fixed', 'remove:' + g.id, 'Убрать ' + g.name)));
     });
-    var room = MAX_GROUPS - 1 - extras.length;
-    var subgroups = own ? subgroupsOf(own.name, app.state.groups || []).filter(function (g) {
-      return !extras.some(function (x) { return x.id === g.id; });
-    }).slice(0, room) : [];
-    // Подгруппы своей группы — строками с «Добавить», как у добавленных
-    // «Убрать»: две кнопки рядом вышли бы разной высоты.
-    subgroups.forEach(function (g) {
-      group.push(row(g.name, 'подгруппа вашей группы',
-        actionButton('Добавить', function () { app.addExtras([g]); }, 'fixed', 'add:' + g.id, 'Добавить ' + g.name)));
-    });
     if (room > 0) {
       group.push(h('div', { class: 'setting-actions' },
-        actionButton(extras.length || subgroups.length ? 'Добавить другую группу' : 'Добавить группу',
+        actionButton(extras.length || subs.length ? 'Добавить другую группу' : 'Добавить группу',
           function () { app.go('pick/extra'); }, null, 'add-group')));
     }
     if (!extras.length) {
@@ -226,10 +244,6 @@ export function settingsScreen(app) {
   var install = app.installPrompt();
   var ios = isIos();
   var android = !ios && isAndroid();
-
-  var groupSig = (own ? own.id : '') + '|' + extras.map(function (g) { return g.id; }).join(',');
-  var changed = shownGroups !== null && shownGroups !== groupSig;
-  shownGroups = groupSig;
 
   // Своё у сайта и о сайте — в последней карточке: значок и сборка для Android.
   // Только во вкладке браузера: открытому значком он ни к чему. Есть кнопка
@@ -258,7 +272,7 @@ export function settingsScreen(app) {
     h('header', { class: 'topbar' },
       h('button', { type: 'button', class: 'icon-button', 'aria-label': 'Назад', onclick: app.back }, icon('back')),
       h('h1', { class: 'topbar-title' }, 'Настройки')),
-    h('main', { class: 'content cards' + (changed ? ' changed' : '') },
+    h('main', { class: 'content cards' },
       // Откуда расписание — первое, что ищут в настройках, и одна короткая
       // фраза о том, что уходит на сервер: остальное читают один раз.
       section('Таблица и данные', [
@@ -285,7 +299,7 @@ export function settingsScreen(app) {
         viceActive(app.vice(), app.now()) ? null : glassToggle(app),
         switchLine('Компактный вид', app.compact(), app.setCompact,
           'Тесные карточки: время и место с преподавателем в одну строку. ' +
-          'Включается сам на узком экране (уже́ 360 px).'),
+          'Включается сам, если экран у́же 360 px.'),
         switchLine('Короткие названия', app.shortSubjects(), app.setShortSubjects,
           '«Алгоритмы» вместо длинного названия. Своё можно написать в таблице сокращений.'),
         h('div', { class: 'setting-sub' }, 'Таблица сокращений'),

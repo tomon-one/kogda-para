@@ -422,8 +422,8 @@ p a, .point a { text-decoration: underline; }
 /* Шире колонки подчёркивание упиралось в пустоту: край растворяется. На телефоне
    оно идёт до края экрана и остаётся резким. */
 @media (min-width: 641px) {
-  .head .tab:first-child::after { background: linear-gradient(to right, transparent, var(--primary) 96px); }
-  .head .tab:last-child::after { background: linear-gradient(to left, transparent, var(--primary) 96px); }
+  .tabs .tab:first-child::after { background: linear-gradient(to right, transparent, var(--primary) 96px); }
+  .tabs .tab:last-child::after { background: linear-gradient(to left, transparent, var(--primary) 96px); }
 }
 
 .tabs.soon { margin-bottom: 8px; }

@@ -3,6 +3,7 @@ package ru.whensclass.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -28,6 +29,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -134,24 +137,29 @@ internal fun DigestTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int)
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
+                // Узко или крупный шрифт — «Готово» уходит строкой ниже: колонки полей шире, и
+                // «Минуты» не переносится на вторую строку.
+                val tight = LocalConfiguration.current.screenWidthDp /
+                    LocalDensity.current.fontScale < 360f
+                val gap = Arrangement.spacedBy(8.dp)
+                // Подпись в одну строку: перенос «Минут|ы» читается как поломка поля.
+                val hoursField: @Composable RowScope.() -> Unit = {
                     OutlinedTextField(
                         value = hours,
                         onValueChange = { hours = it.filter(Char::isDigit).take(2) },
-                        label = { Text("Часы") },
+                        label = { Text("Часы", maxLines = 1, softWrap = false) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number, imeAction = ImeAction.Next,
                         ),
                         modifier = Modifier.weight(1f),
                     )
+                }
+                val minutesField: @Composable RowScope.() -> Unit = {
                     OutlinedTextField(
                         value = minutes,
                         onValueChange = { minutes = it.filter(Char::isDigit).take(2) },
-                        label = { Text("Минуты") },
+                        label = { Text("Минуты", maxLines = 1, softWrap = false) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number, imeAction = ImeAction.Done,
@@ -159,14 +167,40 @@ internal fun DigestTimeDialog(current: Int, onDismiss: () -> Unit, onPick: (Int)
                         keyboardActions = KeyboardActions(onDone = { submit() }),
                         modifier = Modifier.weight(1f),
                     )
+                }
+                if (tight) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = gap,
+                    ) {
+                        hoursField()
+                        minutesField()
+                    }
                     ActionButton(
                         label = "Готово",
                         onClick = submit,
                         enabled = value > 0,
-                        modifier = Modifier.width(96.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         top = 0.dp,
                         side = 8.dp,
                     )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = gap,
+                    ) {
+                        hoursField()
+                        minutesField()
+                        ActionButton(
+                            label = "Готово",
+                            onClick = submit,
+                            enabled = value > 0,
+                            modifier = Modifier.width(96.dp),
+                            top = 0.dp,
+                            side = 8.dp,
+                        )
+                    }
                 }
                 Text(
                     "С ${clockText(Digest.MIN)} до ${clockText(Digest.MAX)}",

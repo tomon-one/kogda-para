@@ -313,6 +313,8 @@ fun TodayScreen(
                 teacherMode = teacherMode,
                 live = retakes?.activeOn(today) == true,
                 rowStays = rowStays,
+                // «Компактный вид»: ряды вкладок уезжают при прокрутке, полоска дней остаётся.
+                compact = compact,
                 // Под плашками: у «Стекла» список заходит под них и под шапку.
                 modifier = Modifier.zIndex(-1f),
                 onPick = { picked ->

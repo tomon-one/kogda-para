@@ -72,6 +72,9 @@ private fun topTabs(teacherMode: Boolean): List<Tab> =
  * Вкладки над разделом и сам раздел ([content]). Нижний ряд (пересдачи, аудитории, экзамены)
  * уезжает вместе со списком и возвращается, когда список докручен до верха, как на сайте. Раздел из
  * нижнего ряда, идущие пересдачи ([live]) или настройка ([rowStays]) — ряд стоит.
+ *
+ * В альбомной и компактной раскладке уезжают оба верхних ряда, а полоска дней недели остаётся: она
+ * живёт в списке ([DayList]).
  */
 @Composable
 internal fun ScheduleTabs(
@@ -81,17 +84,27 @@ internal fun ScheduleTabs(
     modifier: Modifier = Modifier,
     live: Boolean = false,
     rowStays: Boolean = false,
+    /** Компактный вид (настройка): ряды уезжают, как в альбомной. */
+    compact: Boolean? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val tabsBottom = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val top = topTabs(teacherMode)
     // В альбомной ряды уезжают всегда: шапка иначе отнимает больше половины высоты.
-    val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < SHORT_SCREEN_DP
-    val pinned by rememberUpdatedState((current.ordinal >= 2 || live || rowStays) && !short)
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    val short = config.screenHeightDp < SHORT_SCREEN_DP
+    val tight = compactView(
+        choice = compact,
+        widthDp = config.screenWidthDp /
+            androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f),
+    )
+    // В компактном виде место нужно карточкам: оба ряда уезжают, как в альбомной.
+    val rowsGo = short || tight
+    val pinned by rememberUpdatedState((current.ordinal >= 2 || live || rowStays) && !rowsGo)
     var rowHeight by remember { mutableIntStateOf(0) }
-    // Насколько нижний ряд уехал вверх: от минус его высоты до нуля.
+    // Насколько ряды уехали вверх: от минус их высоты до нуля.
     var shift by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(current, live, rowStays) { shift = 0f }
+    LaunchedEffect(current, live, rowStays, tight) { shift = 0f }
     val collapse = remember {
         object : NestedScrollConnection {
             fun move(dy: Float): Float {
@@ -131,8 +144,8 @@ internal fun ScheduleTabs(
     }
     androidx.compose.runtime.CompositionLocalProvider(LocalTabsBottom provides tabsBottom) {
     Column(modifier.fillMaxSize()) {
-        // В альбомной уезжают оба ряда, вместе с шапкой экрана.
-        if (!short) upper()
+        // В обычной раскладке верхний ряд стоит; в альбомной и компактной уезжает вместе с нижним.
+        if (!rowsGo) upper()
         // Сдвиг читается только при раскладке: прокрутка не пересобирает экран.
         Box(
             Modifier
@@ -149,7 +162,7 @@ internal fun ScheduleTabs(
                 },
         ) {
             Column {
-                if (short) upper()
+                if (rowsGo) upper()
                 SecondaryTabRow(
                     selectedTabIndex = (current.ordinal - 2).coerceIn(0, 2),
                     containerColor = MaterialTheme.colorScheme.background,

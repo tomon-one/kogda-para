@@ -5,6 +5,9 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
@@ -19,11 +22,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.whensclass.BuildConfig
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.notify.Vendor
+
+/** Одна строка списка групп: добавленная группа («Убрать») или подгруппа своей («Добавить»). */
+private data class GroupLine(
+    val id: String,
+    val name: String,
+    val action: String,
+    val onAction: () -> Unit,
+    val mark: String? = null,
+    val note: String? = null,
+)
 
 /** Раздел «Группы и подгруппы» или «Преподаватель»: своя, другие группы и подгруппы. */
 @Composable
@@ -51,9 +70,29 @@ internal fun GroupSection(
         else (1..extraGroups.size + 1).map { it.toString() }
         // Значок, повторяющий название целиком, только сжимает его; чтецу он не нужен.
         val ownMark = marks?.getOrNull(0)?.takeIf { it != groupName }
+        // Слот под значок — по самому широкому значку списка и один на все строки: названия стоят
+        // на одной линии, а на узком экране место под них не тратится зря.
+        val density = LocalDensity.current
+        val measurer = rememberTextMeasurer()
+        val markSlot = remember(marks, density) {
+            val widest = marks?.maxOfOrNull { label ->
+                measurer.measure(
+                    AnnotatedString(label),
+                    TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                ).size.width
+            }
+            if (widest == null) 0.dp else with(density) {
+                maxOf(widest.toDp() + 8.dp, 18.dp * fontScale.coerceAtLeast(1f))
+                    .coerceAtMost(MARK_IN_ROW) + 10.dp
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (ownMark != null) {
-                GroupMark(ownMark, own = true, modifier = Modifier.widthIn(max = MARK_IN_ROW).clearAndSetSemantics {})
+            if (marks != null) {
+                Box(Modifier.width(markSlot)) {
+                    if (ownMark != null) {
+                        GroupMark(ownMark, own = true, modifier = Modifier.widthIn(max = MARK_IN_ROW).clearAndSetSemantics {})
+                    }
+                }
             }
             // Одна строка: длинное имя не переносится и не двигает строки под собой.
             Text(
@@ -61,7 +100,7 @@ internal fun GroupSection(
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(start = if (ownMark != null) 10.dp else 0.dp, end = 8.dp),
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
             )
             // Группа из таблицы: не нашлась, переименовали — здесь и выбирают заново.
             ActionButton(
@@ -74,29 +113,45 @@ internal fun GroupSection(
         }
 
         if (!teacherMode) {
-            // Остальные группы — любые, до [MAX_GROUPS] вместе со своей. С ключом: иначе после
-            // «Убрать» следующая строка забирает подсветку нажатия ушедшей.
-            extraGroups.forEachIndexed { index, group ->
-                key(group.id) {
-                    Appearing {
-                        GroupRow(
+            // Остальные группы и подгруппы — одним списком с ключом по id: добавленная подгруппа
+            // остаётся в своей строке и меняет «Добавить» на «Убрать», а не пропадает и не
+            // появляется заново. Ключ нужен и после «Убрать»: иначе следующая строка забирает
+            // подсветку нажатия ушедшей.
+            val lines = buildList {
+                // До [MAX_GROUPS] вместе со своей.
+                extraGroups.forEachIndexed { index, group ->
+                    add(
+                        GroupLine(
+                            id = group.id,
                             name = group.name + if (group.gone) " — нет в таблице" else "",
                             mark = marks?.getOrNull(index + 1)?.takeIf { it != group.name },
                             action = "Убрать",
                             onAction = { onRemoveGroup(group.id) },
-                        )
-                    }
+                        ),
+                    )
                 }
-            }
-            // Подгруппы своей группы — строками с «Добавить», как у добавленных «Убрать».
-            subgroups.forEach { group ->
-                key(group.id) {
-                    Appearing {
-                        GroupRow(
+                subgroups.forEach { group ->
+                    add(
+                        GroupLine(
+                            id = group.id,
                             name = group.name,
                             note = "подгруппа вашей группы",
                             action = "Добавить",
                             onAction = { onAddSubgroup(group) },
+                        ),
+                    )
+                }
+            }
+            lines.forEach { line ->
+                key(line.id) {
+                    Appearing {
+                        GroupRow(
+                            name = line.name,
+                            mark = line.mark,
+                            note = line.note,
+                            action = line.action,
+                            onAction = line.onAction,
+                            slot = markSlot,
                         )
                     }
                 }
@@ -184,8 +239,13 @@ internal fun NotificationsSection(
         if (notifyEnabled && notifications && phone.lessonChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_LESSON)
         }
-        if (notifyEnabled) {
-            // Строка с кнопкой, выбор в своём окне: фишки в карточке занимали бы полэкрана.
+        // Строка с кнопкой, выбор в своём окне: фишки в карточке занимали бы полэкрана. Появляется
+        // вместе с тумблером раскрытием, а не рывком.
+        AnimatedVisibility(
+            visible = notifyEnabled,
+            enter = fadeIn(tween(180)) + expandVertically(tween(220)),
+            exit = fadeOut(tween(180)) + shrinkVertically(tween(220)),
+        ) {
             MinutesRow(current = notifyBefore, onOpen = onAskMinutes)
         }
 
@@ -198,7 +258,13 @@ internal fun NotificationsSection(
         if (digestMinutes > 0 && notifications && phone.digestChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_DIGEST)
         }
-        if (digestMinutes > 0) DigestRow(current = digestMinutes, onOpen = onAskDigest)
+        AnimatedVisibility(
+            visible = digestMinutes > 0,
+            enter = fadeIn(tween(180)) + expandVertically(tween(220)),
+            exit = fadeOut(tween(180)) + shrinkVertically(tween(220)),
+        ) {
+            DigestRow(current = digestMinutes, onOpen = onAskDigest)
+        }
 
         SwitchRow(
             "Сообщать об изменениях", notifyChanges, onNotifyChanges,

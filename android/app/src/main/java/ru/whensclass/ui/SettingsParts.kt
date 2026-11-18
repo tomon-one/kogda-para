@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ru.whensclass.notify.Background
 import ru.whensclass.notify.Vendor
@@ -69,16 +71,22 @@ internal fun GroupRow(
     onAction: () -> Unit,
     mark: String? = null,
     note: String? = null,
+    /** Ширина слота под значок: одна на все строки, чтобы названия не плавали. */
+    slot: Dp = 0.dp,
 ) {
     Row(
         modifier = Modifier.padding(top = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Длинное название в значке — многоточием (целиком оно рядом); чтецу значок не нужен.
-        if (mark != null) {
-            GroupMark(mark, own = false, modifier = Modifier.widthIn(max = MARK_IN_ROW).clearAndSetSemantics {})
+        if (slot > 0.dp) {
+            Box(Modifier.width(slot)) {
+                if (mark != null) {
+                    GroupMark(mark, own = false, modifier = Modifier.widthIn(max = MARK_IN_ROW).clearAndSetSemantics {})
+                }
+            }
         }
-        Column(modifier = Modifier.weight(1f).padding(start = if (mark != null) 10.dp else 0.dp, end = 8.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
             Text(name, style = MaterialTheme.typography.bodyLarge)
             if (note != null) {
                 Text(

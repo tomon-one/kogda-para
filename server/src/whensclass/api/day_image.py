@@ -40,6 +40,10 @@ STATES = {
     "practice": "практика",
 }
 
+# Версия вида картинки: меняется раскладка — подними, иначе на диске останутся
+# старые файлы с тем же ключом (группа, день, поколение снимка).
+RENDER_VERSION = 3
+
 MAX_CARDS = 6
 TIME_LINE = 44
 SUBJECT_LINE = 54
@@ -65,7 +69,7 @@ FONT_PAIRS = BUNDLED + (
      "/usr/share/fonts/adwaita-sans-fonts/AdwaitaSans-Regular.ttf"),
 )
 
-PROFILES = ((28, 14), (20, 6))   # (отступ в карточке, зазор между строками)
+PROFILES = ((22, 10), (16, 6))   # (отступ в карточке, зазор между строками)
 
 
 class NoFont(Exception):
@@ -311,9 +315,9 @@ def render(payload: dict, day: dt.date) -> bytes:
         step = gap
         if len(parts) > 1:
             spare = bottom - top - sum(_height(item, pad, gap) for item in parts) - gap * (len(parts) - 1)
-            step = gap + max(0, min(spare // (len(parts) - 1), 96))
-        used = sum(_height(item, pad, gap) for item in parts) + step * (len(parts) - 1)
-        y = top + max(0, (bottom - top - used) // 3)
+            step = gap + max(0, min(spare // (len(parts) - 1), 40))
+        # Карточки идут сразу под шапкой: пустое место внизу честнее дыры посреди кадра.
+        y = top
         for item in parts:
             _draw_card(draw, item, y, pad, gap)
             y += _height(item, pad, gap) + step
@@ -338,7 +342,7 @@ def day_png(payload: dict, day: dt.date, directory: pathlib.Path) -> bytes:
     перерисуется, а тот же день, спрошенный снова, отдаётся файлом.
     """
     key = hashlib.blake2b(
-        f"{payload['g']}|{day.isoformat()}|{payload.get('gen', '')}".encode(),
+        f"{payload['g']}|{day.isoformat()}|{payload.get('gen', '')}|{RENDER_VERSION}".encode(),
         digest_size=16,
     ).hexdigest()
     path = directory / f"{key}.png"

@@ -14,9 +14,10 @@ function source(path) {
 
 test('оформление: описания «Стекла», компактного вида и коротких названий', () => {
   const settings = source('assets/js/ui/settings.js');
-  assert.ok(settings.includes('Красный свет, полупрозрачные карточки, матовые шапка и полоска дней.'));
+  assert.ok(settings.includes('Почти как Liquid Glass на iPhone.'));
   assert.ok(settings.includes('Тесные карточки: время и место с преподавателем в одну строку.'));
-  assert.ok(settings.includes('Включается сам на узком экране (уже́ 360 px).'));
+  // Ударение на «у» — чтобы читалось «у́же», а не «уже́».
+  assert.ok(settings.includes('Включается сам, если экран у\u0301же 360 px.'));
   assert.ok(settings.includes('«Алгоритмы» вместо длинного названия. Своё можно написать в таблице сокращений.'));
 });
 

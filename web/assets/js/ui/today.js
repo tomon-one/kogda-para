@@ -42,25 +42,31 @@ export function mainScreen(app) {
   // Дней нет (воскресенье до выкладки) — без полоски: нажимать некуда.
   var ownDays = (app.shown() || app.saved() || {}).days || [];
   var strip = !route.kind && ownDays.length ? weekStrip(app.scrollTarget(), app.now().date) : null;
-  var head = h('div', { class: 'head' }, topbar(app, own), channelPlate(app), tabs(app, tab, teacherMode),
-    live ? secondTabs(app, tab, true) : null);
+  // Компактный вид: ряды разделов уезжают при листании, наверху остаются
+  // шапка и полоска дней — у списка она и переключатель, и навигация. В обычном
+  // виде ряды прилипают, как раньше.
+  var compact = app.compact();
+  var firstRow = tabs(app, tab, teacherMode);
+  var head = h('div', { class: 'head' }, topbar(app, own), channelPlate(app),
+    compact ? null : firstRow,
+    live && !compact ? secondTabs(app, tab, true) : null);
   var content = h('main', { class: 'content' });
   // Страница открывается у сегодняшнего дня: над полоской ряд был бы выше экрана,
   // поэтому он прилипает и уходит при листании вниз, как в приложении. На своих
   // разделах ряд стоит: уходить некуда, он и есть переключатель.
-  var row = live ? null : secondTabs(app, tab, false);
+  var row = live && !compact ? null : secondTabs(app, tab, live);
   // Открытый преподаватель или группа: ряд разделов — над именем, в шапке, как
   // в приложении и как при идущих пересдачах.
-  if (row && route.kind && route.id) {
+  if (row && !compact && route.kind && route.id) {
     head.appendChild(row);
     row = null;
   }
   var rowStays = isSection(tab);
-  if (row && (strip || rowStays)) row.classList.add('float');
-  if (row && rowStays) row.classList.add('stays');
-  // Полоска — под вторым рядом вкладок, прилипает под шапкой.
+  if (row && !compact && (strip || rowStays)) row.classList.add('float');
+  if (row && !compact && rowStays) row.classList.add('stays');
+  // Полоска — под рядами вкладок, прилипает под шапкой.
   var screen = h('div', { class: 'screen main' + (teacherMode && !route.kind ? ' with-bottom' : '') },
-    head, row, strip, content);
+    head, compact ? [firstRow, row] : row, strip, content);
 
   // Сбой и пропажа — на любой вкладке: иначе чужое
   // расписание во время сбоя выглядело бы свежим. На расписании — у сегодняшнего

@@ -259,6 +259,22 @@
 }
 .value-row > span { flex: 1 1 auto; min-width: 0; padding-right: 8px; }
 .value-row .action { flex: none; margin-top: 0; }
+/* Поднастройка («Во сколько», «За сколько предупредить») раскрывается по
+   высоте и прозрачности; запас — строка и предупреждение под ней. */
+.reveal {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.24s var(--ease), opacity 0.18s ease-out;
+}
+.reveal.open { max-height: 320px; opacity: 1; }
+/* Раскрытая высота не ограничена: крупный шрифт иначе обрезался бы. */
+.reveal.done { max-height: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { transition: none; }
+  .reveal.open { max-height: none; }
+}
 /* Ограничение, которое не вышло обойти, — рядом с тем, что оно портит. */
 .card p.warning, .warning { color: var(--primary); }
 

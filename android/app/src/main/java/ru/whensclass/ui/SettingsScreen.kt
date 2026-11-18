@@ -249,14 +249,14 @@ fun SettingsScreen(
                 "Компактный вид",
                 checked = compactView(compact, LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale),
                 onCheckedChange = onCompact,
-                hint = "Тесные карточки: время и место с преподавателем в одну строку. Включается сам на " +
-                    "узком экране (уже́ 360 dp).",
+                hint = "Тесные карточки: время и место с преподавателем в одну строку. Включается сам, " +
+                    "если экран у́же 360 dp.",
             )
             SwitchRow(
                 "Второй ряд вкладок остаётся на месте",
                 checked = rowStays,
                 onCheckedChange = onRowStays,
-                hint = "Стоят, пока листаете расписание. В альбомном всё равно скрываются.",
+                hint = "Стоят, пока листаете расписание. В альбомном и компактном всё равно скрываются.",
             )
             // Сокращать имена — такой же вид, как тема и компактность.
             SwitchRow(
@@ -378,7 +378,7 @@ private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
                 )
             }
             Text(
-                "Красный свет, полупрозрачные карточки, матовые шапка и полоска дней.",
+                "Почти как Liquid Glass на iPhone.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

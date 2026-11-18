@@ -304,6 +304,9 @@ window.addEventListener('online', function () {
 
 // Поворот, увеличение текста в браузере — надписи кнопок подгоняются заново.
 var fitPending = false;
+// Компактность решает и ширину окна: в компактном виде уезжают ряды разделов,
+// поэтому смена вида — это перестройка экрана, а не только класс на html.
+var wasCompact = compactView();
 window.addEventListener('resize', function () {
   if (fitPending) return;
   fitPending = true;
@@ -312,7 +315,12 @@ window.addEventListener('resize', function () {
     fitLabels(document.body);
     measureHead();
     // Повернули телефон или потянули окно — компактность зависит от ширины.
+    var compact = compactView();
     applyCompact();
+    if (compact !== wasCompact) {
+      wasCompact = compact;
+      render();
+    }
   });
 });
 

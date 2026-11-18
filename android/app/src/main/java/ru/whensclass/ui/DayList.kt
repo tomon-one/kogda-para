@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
@@ -497,17 +499,22 @@ private fun DayCard(
     }
 }
 
-/** На стыке воскресенья и понедельника: тихая строка вместо заголовка, без карточки. */
+/** На стыке воскресенья и понедельника: тихая строка между линиями вместо заголовка, без карточки. */
 @Composable
 private fun NextWeekMark() {
-    Text(
-        "Следующая неделя",
-        // Чуть крупнее и контрастнее прежнего, но тише заголовка дня: это не день, а стык.
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-    )
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
+        // Линии сверху и снизу: стык недель видно, не всматриваясь в подписи дней.
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        Text(
+            "Следующая неделя",
+            // Тише заголовка дня: это не день, а стык.
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        )
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+    }
 }
 
 /** Метка дня: график колледжа или непрочитанный день — одной строкой у даты. */
