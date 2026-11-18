@@ -49,6 +49,16 @@ class ScheduleRepository(
         // Один разбор на всех: экран собирает и расписание, и [shownSchedule] поверх него.
         .shareIn(scope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
+    /**
+     * Картинка дня в кэше приложения: её отдают в чат через FileProvider (res/xml/file_paths.xml).
+     * Каждый день и группа — свой файл: прежний не мешает, кэш чистит система.
+     */
+    suspend fun dayImage(groupId: String, date: String): java.io.File = withContext(Dispatchers.IO) {
+        val bytes = api.dayImage(groupId, date)
+        val dir = java.io.File(context.cacheDir, "day-image").apply { mkdirs() }
+        java.io.File(dir, "$groupId-$date.png").apply { writeBytes(bytes) }
+    }
+
     /** Остальные выбранные группы по порядку. */
     val extraGroups: Flow<List<ExtraGroup>> = store.extraGroups.distinctUntilChanged()
 

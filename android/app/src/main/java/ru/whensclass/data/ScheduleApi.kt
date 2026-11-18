@@ -79,6 +79,19 @@ class ScheduleApi(
 
     fun retakes(): RetakesDto = get("/v1/retakes").let(json::decodeFromString)
 
+    /**
+     * Картинка дня — PNG для отправки в чат (docs/api.md, «Картинка дня»). Не через [get]: там
+     * ответ читается строкой, а тут байты.
+     */
+    fun dayImage(groupId: String, date: String): ByteArray {
+        val path = "/v1/day-image/$groupId/$date.png"
+        val request = Request.Builder().url(baseUrl.trimEnd('/') + path).build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw HttpFailure(response.code, path)
+            return response.body.bytes()
+        }
+    }
+
     fun rooms(date: String?): RoomsDto =
         get("/v1/rooms" + (date?.let { "?date=$it" } ?: "")).let(json::decodeFromString)
 

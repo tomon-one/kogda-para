@@ -7,7 +7,7 @@ import {
   viceActive, viceAvailable, weekStart, weekday,
 } from '../assets/js/time.js';
 import {
-  isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel, roomLabel, sheetLink,
+  dayImageLink, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel, roomLabel, sheetLink,
   shiftColumn, shortenName, tileLabel,
 } from '../assets/js/format.js';
 import {
@@ -191,6 +191,17 @@ test('ссылка в таблицу — к блоку группы и дню', 
   // День под повторным заголовком — в колонку дня, и без пар.
   const moved = Object.assign({}, schedule, { days: [{ d: '2026-09-28', row: 76, col: 'GA', l: [] }] });
   assert.equal(sheetLink(moved, '2026-09-28', null), schedule.src_url + '&range=GA76:GD87');
+});
+
+test('картинка дня — адрес от id группы и даты', () => {
+  const link = dayImageLink('isp-924-2', '2026-11-18');
+  assert.equal(link, '/v1/day-image/isp-924-2/2026-11-18.png');
+  // id бывает длинным, с дефисами и точками — адрес не меняется.
+  assert.equal(dayImageLink('01-26-r-ii-gd-d-of-9-nsk', '2026-09-07'), '/v1/day-image/01-26-r-ii-gd-d-of-9-nsk/2026-09-07.png');
+  // Лишних слэшей нет — пустых частей пути тоже.
+  assert.ok(link.indexOf('//') < 0);
+  assert.equal(dayImageLink(null, '2026-11-18'), null);
+  assert.equal(dayImageLink('isp-924-2', null), null);
 });
 
 test('воскресенье внутри снимка — снимок свежий, за его краем — нет', () => {

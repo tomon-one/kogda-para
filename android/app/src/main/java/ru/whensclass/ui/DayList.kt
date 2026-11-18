@@ -27,6 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -88,6 +92,8 @@ fun ScheduleDays(
     clock: LocalDateTime? = null,
     /** Сюда список кладёт, чем листать его извне: строка над полоской (имя преподавателя) листает как сама полоска. */
     dragSink: androidx.compose.runtime.MutableState<((Float) -> Unit)?>? = null,
+    /** Картинка дня в чат: null — кнопки нет (расписание преподавателя, чужой день). */
+    onImage: ((String) -> Unit)? = null,
 ) {
     val now = clock ?: rememberNow(schedule.bellsOn(collegeToday()))
     val days = remember(schedule) { daysWithGaps(schedule) }
@@ -297,6 +303,7 @@ fun ScheduleDays(
                 groups = schedule.groupNames, groupsByName = groupsByName, subjects = subjects,
                 nextFree = days.getOrNull(index + 1)?.let { freeOwnDay(it, schedule.groupNames) } == true,
                 idle = idle,
+                onImage = onImage,
             )
             }
             }
@@ -373,6 +380,8 @@ private fun DayCard(
     nextFree: Boolean = false,
     /** Экран давно не трогали ([IDLE_MILLIS]). */
     idle: Boolean = false,
+    /** Картинка дня в чат; null — кнопки нет. */
+    onImage: ((String) -> Unit)? = null,
 ) {
     val today = now.toLocalDate()
     val date = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
@@ -403,6 +412,7 @@ private fun DayCard(
                 date?.let { formatDayTitle(it, today) } ?: day.date, isToday, past, daySummary(day.lessons, groups, bells),
                 bottom = if (notes.isEmpty()) 8.dp else 4.dp,
                 chips = listOfNotNull(day.state?.let(::stateDayText), "Не прочитан".takeIf { day.unread != null }),
+                onImage = onImage?.let { share -> { share(day.date) } },
             )
 
             // Свой день не прочитан — «пар нет» тут было бы неправдой.
@@ -494,6 +504,8 @@ private fun DayHeader(
     bottom: Dp = 8.dp,
     /** Короткие метки дня: график колледжа, непрочитанный день. */
     chips: List<String> = emptyList(),
+    /** Картинка дня в чат: null — кнопки нет. */
+    onImage: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = bottom)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -510,6 +522,16 @@ private fun DayHeader(
                 modifier = Modifier.weight(1f).semantics { heading() },
             )
             chips.forEach { DayChip(it) }
+            if (onImage != null) {
+                IconButton(onClick = onImage, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Filled.Share,
+                        contentDescription = "Картинка дня в чат",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
         }
         if (summary != null) {
             Text(

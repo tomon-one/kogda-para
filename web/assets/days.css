@@ -54,6 +54,19 @@
 
 .day-name { flex: 1 1 auto; min-width: 0; }
 
+/* «Картинка» в шапке дня — справа от даты, мелкой плашкой как у ссылок:
+   на узком экране уезжает под дату, а не выдавливает её. */
+.day-image.link-button {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  align-self: center;
+  margin-left: 8px;
+  padding: 0 8px;
+}
+.day-image .icon { margin-right: 4px; }
+.day-image .icon svg { width: 16px; height: 16px; }
+
 /* Метка дня: график колледжа или непрочитанный день. */
 .day-state {
   margin-left: 8px;

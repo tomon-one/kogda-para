@@ -169,6 +169,12 @@ export function sheetLink(schedule, day, fallback) {
   return base;
 }
 
+/** Картинка дня для беседы: PNG 1080×1920, адрес от id группы и даты (docs/api.md). */
+export function dayImageLink(group, day) {
+  if (!group || !day) return null;
+  return '/v1/day-image/' + encodeURIComponent(group) + '/' + encodeURIComponent(day) + '.png';
+}
+
 /** «3-я пара» — о том, что идёт сейчас (pairLabel в приложении). */
 export function pairLabel(number) {
   return number + '-я пара';

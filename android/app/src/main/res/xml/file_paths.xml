@@ -6,4 +6,6 @@
      обещание «подсунуть поддельное обновление нельзя» там не работало. -->
 <paths>
     <files-path name="updates" path="updates/" />
+    <!-- Картинка дня: её отправляют в чат, а не устанавливают. -->
+    <cache-path name="dayimage" path="day-image/" />
 </paths>

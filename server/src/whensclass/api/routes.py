@@ -22,6 +22,7 @@ from ..push.subscription import BadSubscription, parse_keys, parse_subscription
 from ..service.bells import BELLS, own_bells
 from ..service.refresher import state_dir
 from ..service.rooms import rooms_payload
+from .day_image import NoFont, day_png
 from .etag import etag_for, matches
 from .payloads import (
     groups_payload,
@@ -369,6 +370,46 @@ def schedule(
         return Response(status_code=404, content='{"error":"группа не найдена"}',
                         media_type=JSON)
     return _json_response(request, body)
+
+
+@router.api_route("/v1/day-image/{group_id}/{day}.png", methods=["GET", "HEAD"])
+def day_image(request: Request, group_id: str, day: str) -> Response:
+    """PNG дня группы — для отправки в чат.
+
+    Данные те же, что у /v1/schedule: пары, звонки, состояние дня. День вне
+    снимка и незнакомая группа — 404: пустая картинка утверждала бы «пар нет».
+    """
+    store, _refresher = _state(request)
+    if store.snapshot is None:
+        return _not_loaded()
+    try:
+        wanted = dt.date.fromisoformat(day)
+    except ValueError:
+        return _error(404, "этого дня нет в таблице")
+
+    calendar = getattr(request.app.state, "calendar", None)
+    payload = schedule_payload(
+        store.snapshot, group_id, wanted, 1, store.generated,
+        bells=BELLS, today=_today(), marks=False,
+        calendar=calendar.states(group_id) if calendar is not None else None,
+    )
+    if payload is None:
+        return _error(404, "группа не найдена")
+    if not payload["days"]:
+        return _error(404, "этого дня нет в таблице")
+
+    try:
+        png = day_png(payload, wanted, state_dir() / "day-image")
+    except NoFont as exc:
+        # Картинка — не расписание: без шрифта служба жива, но день не рисуется.
+        log.error("картинка дня: %s", exc)
+        return _error(503, "картинка дня недоступна")
+
+    tag = etag_for(png)
+    headers = {"ETag": tag, "Cache-Control": "public, max-age=86400"}
+    if matches(request.headers.get("if-none-match"), tag):
+        return Response(status_code=304, headers=headers)
+    return Response(content=png, media_type="image/png", headers=headers)
 
 
 # --- уведомления сайта --------------------------------------------------------

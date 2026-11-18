@@ -46,9 +46,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -91,6 +93,10 @@ fun TodayScreen(
     loading: Boolean = false,
     teacherMode: Boolean = false,
     reloadKey: Int = 0,
+    /** Картинка дня: служба рисует PNG, приложение отдаёт её в «Поделиться». */
+    saveDayImage: suspend (groupId: String, date: String) -> java.io.File = { _, _ ->
+        throw IllegalStateException("картинка дня не подключена")
+    },
     groups: List<GroupDto>? = null,
     loadGroupSchedule: suspend (String) -> ru.whensclass.data.ScheduleAnswer = { ru.whensclass.data.ScheduleAnswer(null) },
     pinnedGroups: List<String> = emptyList(),
@@ -426,6 +432,17 @@ fun TodayScreen(
                 if (explainMissing(schedule, today, sourceUrl, loading = refreshing || loading, header = listPlates)) return@ScheduleTabs
                 schedule ?: return@ScheduleTabs
 
+                // Картинка дня: собрать на службе, положить в кэш и отдать в системное «Поделиться».
+                val imageScope = rememberCoroutineScope()
+                val imageContext = androidx.compose.ui.platform.LocalContext.current
+                val onImage = if (schedule.isTeacher) null else { date: String ->
+                    imageScope.launch {
+                        runCatching { saveDayImage(schedule.groupId, date) }
+                            .onSuccess { file -> shareDayImage(imageContext, file) }
+                            .onFailure { error -> snackbar.showSnackbar(dayImageError(error)) }
+                    }
+                    Unit
+                }
                 ScheduleDays(
                     schedule = schedule,
                     today = today,
@@ -437,6 +454,7 @@ fun TodayScreen(
                     weekStrip = true,
                     underHead = true,
                     clock = now,
+                    onImage = onImage,
                 )
             }
         }

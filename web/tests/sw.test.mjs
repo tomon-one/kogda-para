@@ -52,7 +52,16 @@ function worker() {
     handlers.notificationclick({ notification: n, waitUntil(p) { done = p; } });
     return done;
   }
-  return { shown, opened, posted, push, click, live: () => shown.filter((n) => !n.closed) };
+  /** Прошёл ли запрос через воркер: false — он ушёл в сеть мимо кэша. */
+  function passesThrough(url) {
+    let intercepted = false;
+    handlers.fetch({
+      request: { method: 'GET', url, mode: 'cors' },
+      respondWith() { intercepted = true; },
+    });
+    return !intercepted;
+  }
+  return { shown, opened, posted, push, click, passesThrough, live: () => shown.filter((n) => !n.closed) };
 }
 
 function changes(lines, who) {
@@ -138,4 +147,13 @@ test('«выберите заново» открывает сайт с подс�
   await other.push({ t: 'hello', title: 'Уведомления включены', body: '' });
   await other.click(other.live()[0]);
   assert.deepEqual(other.opened, [SCOPE]);
+});
+
+// Картинка дня — ответ службы со своим кэшем и ETag: воркер её не держит,
+// иначе день висел бы картинкой прежней сборки.
+test('картинка дня идёт в сеть мимо кэша и не попадает в precache', () => {
+  const files = JSON.parse(SOURCE.match(/var FILES = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"').replace(/,\s*\]/, ']'));
+  assert.ok(files.every((f) => f.indexOf('day-image') < 0), 'в FILES только файлы сайта');
+  const w = worker();
+  assert.equal(w.passesThrough(SCOPE + 'v1/day-image/isp-924-2/2026-11-18.png'), true);
 });

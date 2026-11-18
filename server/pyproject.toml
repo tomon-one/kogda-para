@@ -11,6 +11,8 @@ dependencies = [
     "apscheduler>=3.10",
     # Уведомления сайта: шифрование Web Push и подпись VAPID (push/webpush.py).
     "cryptography>=44",
+    # Картинка дня для чата: PNG на сервере (api/day_image.py).
+    "pillow>=11",
 ]
 
 [project.optional-dependencies]

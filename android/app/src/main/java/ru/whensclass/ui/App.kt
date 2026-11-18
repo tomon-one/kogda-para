@@ -517,6 +517,7 @@ internal fun App(
                         refreshError = refreshError,
                         onErrorShown = { refreshError = null },
                         loadTally = { container.store.tally() },
+                        saveDayImage = { groupId, date -> container.repository.dayImage(groupId, date) },
                         serverBroken = serverStatus != "ok",
                         unreachable = serverStatus == ru.whensclass.data.STATUS_UNREACHABLE,
                         editing = serverStatus == ru.whensclass.data.STATUS_EDITING,

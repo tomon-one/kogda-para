@@ -1,12 +1,12 @@
 // Дни расписания карточками — общий вид для своего и чужого расписания
 // (DayCard в DayList.kt, LessonRow.kt).
 
-import { h, actionLink, snackbar, copyText } from './dom.js';
+import { h, actionLink, snackbar, copyText, icon } from './dom.js';
 import * as store from '../store.js';
 import { dayTitle, capitalize } from '../time.js';
 import { currentLessonNumber, dayBells, daySummary, daysWithGaps, freeDay, freeOwnDay, lessonTime, onlyAt, shortLabels, stateDayText, unreadNotes } from '../schedule.js';
 import {
-  isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
+  dayImageLink, isCancelled, isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel,
   roomLabel, shortenName,
 } from '../format.js';
 
@@ -18,6 +18,8 @@ import {
 export function dayCards(schedule, now, before, beforeDay, byName) {
   var days = daysWithGaps(schedule);
   var teacher = schedule.kind === 'teacher';
+  // Картинка — дня группы: у преподавателя день собран из чужих групп.
+  var group = teacher ? null : schedule.g || null;
   var placed = false;
   var list = h('div', { class: 'days' });
   days.forEach(function (day, i) {
@@ -26,7 +28,7 @@ export function dayCards(schedule, now, before, beforeDay, byName) {
       placed = true;
     }
     var nextFree = freeOwnDay(days[i + 1], schedule.groupNames || []);
-    list.appendChild(dayCard(day, dayBells(schedule, day), now, teacher, schedule.groupNames || [], byName !== false, nextFree));
+    list.appendChild(dayCard(day, dayBells(schedule, day), now, teacher, schedule.groupNames || [], byName !== false, nextFree, group));
   });
   if (before && !placed) {
     if (days.length && beforeDay && days[days.length - 1].d < beforeDay) list.appendChild(before);
@@ -55,7 +57,7 @@ export function holidayNote(date) {
   return day >= '01-01' && day <= '01-08' ? '🎄 С Новым годом!' : null;
 }
 
-function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
+function dayCard(day, bells, now, teacher, groups, byName, nextFree, group) {
   var isToday = day.d === now.date;
   var past = day.d < now.date;
   var current = isToday ? currentLessonNumber(bells, day.d, now) : null;
@@ -71,6 +73,7 @@ function dayCard(day, bells, now, teacher, groups, byName, nextFree) {
   }, h('h2', { class: 'day-title' },
     h('span', { class: 'day-name' }, dayTitle(day.d, now.date)),
     chips.map(function (chip) { return h('span', { class: 'day-state' }, chip); }),
+    group ? dayImageButton(group, day.d) : null,
     summaryLine(daySummary(lessons, groups, bells))));
 
   var notes = unreadNotes(day);
@@ -193,6 +196,69 @@ function groupMarks(slots, groups, byName) {
 /** Один значок. `name` — полное название во всплывающей подсказке: длинное в значке обрезано. */
 export function groupMark(label, own, name) {
   return h('span', { class: 'mark' + (own ? ' own' : ''), 'aria-hidden': 'true', title: name || null }, String(label));
+}
+
+/**
+ * «Картинка»: служба рисует день PNG 1080×1920. Где браузер отдаёт файлы
+ * системным «Поделиться» — туда; где нет — файл скачивается. Ошибка — словами:
+ * код ответа человеку ни о чём не говорит.
+ */
+function dayImageButton(group, day) {
+  var busy = false;
+  var button = h('button', {
+    type: 'button', class: 'link-button day-image',
+    'aria-label': 'Картинка дня — отправить в беседу', title: 'Картинка дня',
+    onclick: function () {
+      if (busy) return;
+      busy = true;
+      button.disabled = true;
+      var done = function () { busy = false; button.disabled = false; };
+      sendDayImage(dayImageLink(group, day), day).then(done, done);
+    },
+  }, icon('image'), 'Картинка');
+  return button;
+}
+
+function sendDayImage(url, day) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    snackbar('Нет связи — картинка не скачалась');
+    return Promise.resolve();
+  }
+  var status = 0;
+  return fetch(url, { credentials: 'omit' }).then(function (response) {
+    status = response.status;
+    if (!response.ok) throw new Error('ответ ' + status);
+    return response.blob();
+  }).then(function (blob) {
+    var name = 'raspisanie-' + day + '.png';
+    var file = typeof File === 'function' ? new File([blob], name, { type: 'image/png' }) : null;
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      return navigator.share({
+        files: [file], title: 'Расписание на ' + day.split('-').reverse().join('.'),
+      }).then(null, function (error) {
+        // Передумали в «Поделиться» — это не сбой.
+        if (error && error.name === 'AbortError') return;
+        saveFile(blob, name);
+        snackbar('Картинка скачана — её можно отправить');
+      });
+    }
+    saveFile(blob, name);
+    snackbar('Картинка скачана — её можно отправить');
+  }).then(null, function () {
+    if (status === 404) snackbar('Картинки за этот день нет');
+    else if (status) snackbar('Картинка не получилась — сбой на сервере');
+    else snackbar('Нет связи — картинка не скачалась');
+  });
+}
+
+/** Файл в загрузки — из уже полученных байтов, без второго запроса. */
+function saveFile(blob, name) {
+  var href = URL.createObjectURL(blob);
+  var link = h('a', { href: href, download: name });
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(function () { URL.revokeObjectURL(href); }, 1000);
 }
 
 // Точка у «идёт сейчас» дышит по часам страницы, а не от отрисовки строки:

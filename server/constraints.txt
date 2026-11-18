@@ -25,6 +25,8 @@ httptools==0.9.0
 httpx==0.28.1
 idna==3.20
 opentelemetry-api==1.45.2
+# Картинка дня: PNG на сервере.
+pillow==13.0.0
 pycparser==3.12
 pydantic==2.14.3
 pydantic-settings==2.16.2
