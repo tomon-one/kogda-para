@@ -46,9 +46,17 @@ SUBJECT_LINE = 54
 BOTTOM_LINE = 42
 FOOTER = "kogda-para-nsk.ru"
 
+# Свой шрифт — в api/fonts: на сервере шрифтов может не быть вовсе, а без
+# кириллицы картинка не собирается. DejaVu Sans, урезанный до нужных знаков
+# (латиница, кириллица, цифры и пунктуация), лицензия рядом, LICENSE.
+BUNDLED = (
+    (str(pathlib.Path(__file__).parent / "fonts" / "DejaVuSans-Bold.ttf"),
+     str(pathlib.Path(__file__).parent / "fonts" / "DejaVuSans-Regular.ttf")),
+)
+
 # Пары «полужирный, обычный» по порядку. env задаёт один файл на оба
 # начертания: своей копии шрифта на сервере может не быть.
-FONT_PAIRS = (
+FONT_PAIRS = BUNDLED + (
     ("/usr/share/fonts/google-noto/NotoSans-Bold.ttf",
      "/usr/share/fonts/google-noto/NotoSans-Regular.ttf"),
     ("/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",
