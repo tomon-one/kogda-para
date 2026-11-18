@@ -97,6 +97,11 @@ internal fun App(
     // Null — ещё не прочитано: первый кадр иначе мелькал бы обычной тёмной.
     val glowStored by container.store.glow.collectAsState(initial = null)
     val glow = glowStored == true
+    // «Vice» действует только до срока: флаг в хранилище остаётся, даже когда тема уже не работает.
+    val viceStored by container.store.vice.collectAsState(initial = null)
+    val vice = viceActive(viceStored == true, ru.whensclass.widget.collegeToday())
+    // «Стекло» не работает, пока включён «Vice»; свой выбор оно при этом не теряет.
+    val glass = glow && !vice
     val rowStays by container.store.rowStays.collectAsState(initial = false)
     val welcomeSeen by container.store.welcomeSeen.collectAsState(initial = true)
     val loaded by container.store.loaded.collectAsState(initial = false)
@@ -251,21 +256,27 @@ internal fun App(
         ThemeChoice.SYSTEM -> isSystemInDarkTheme()
     }
 
-    ApplyDarkTheme(dark)
-
     val scheme = when {
-        glow && dark -> GlassDarkScheme
-        glow -> GlassLightScheme
+        vice && dark -> ViceDarkScheme
+        vice -> ViceLightScheme
+        glass && dark -> GlassDarkScheme
+        glass -> GlassLightScheme
         dark -> DarkScheme
         else -> LightScheme
     }
+    ApplyDarkTheme(dark, scheme)
     MaterialTheme(colorScheme = scheme) {
         Surface(
-            modifier = if (glow) Modifier.fillMaxSize().drawBehind { glowBackdrop(dark) } else Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
+            // Закат «Vice» рисуется под карточками: у схемы непрозрачный фон, и Surface закрыл бы его.
+            modifier = when {
+                glass -> Modifier.fillMaxSize().drawBehind { glowBackdrop(dark) }
+                vice -> Modifier.fillMaxSize().drawBehind { viceBackdrop(dark) }
+                else -> Modifier.fillMaxSize()
+            },
+            color = if (vice) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.background,
         ) {
             // Пустой фон, пока настройки читаются с диска: иначе мелькнёт чужой экран.
-            if (!loaded || glowStored == null) return@Surface
+            if (!loaded || glowStored == null || viceStored == null) return@Surface
             val screenStates = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
 
             // Экраны сменяются со сдвигом (вглубь — справа налево, назад — наоборот): резкая
@@ -358,6 +369,8 @@ internal fun App(
                         theme = theme,
                         glow = glow,
                         onGlow = { on -> scope.launch { container.store.setGlow(on) } },
+                        vice = vice,
+                        onVice = { on -> scope.launch { container.store.setVice(on) } },
                         rowStays = rowStays,
                         onRowStays = { on -> scope.launch { container.store.setRowStays(on) } },
                         update = upd.update,

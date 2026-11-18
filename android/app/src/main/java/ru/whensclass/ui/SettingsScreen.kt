@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -105,6 +106,9 @@ fun SettingsScreen(
     /** «Стекло» (beta) у тёмной темы. */
     glow: Boolean = false,
     onGlow: (Boolean) -> Unit = {},
+    /** «Vice» — временная тема заката. Пока она работает, «Стекло» не применяется. */
+    vice: Boolean = false,
+    onVice: (Boolean) -> Unit = {},
     rowStays: Boolean = false,
     onRowStays: (Boolean) -> Unit = {},
     onChangeGroup: () -> Unit,
@@ -272,13 +276,15 @@ fun SettingsScreen(
                 selected = theme,
                 onPick = onTheme,
             )
-            GlassToggle(glow, onGlow)
+            // «Vice» живёт до срока: после него плашки нет, а «Стекло» снова по своему флагу. Пока
+            // «Vice» включён, плашка «Стекла» скрыта — оно в это время не применяется.
+            if (viceOffered(ru.whensclass.widget.collegeToday())) ViceToggle(vice, onVice)
+            if (!vice) GlassToggle(glow, onGlow)
             SwitchRow(
-                "Второй ряд вкладок не уезжает",
+                "Второй ряд вкладок остаётся на месте",
                 checked = rowStays,
                 onCheckedChange = onRowStays,
-                hint = "«Пересдачи», «Аудитории» и «Экзамены» остаются на месте, когда листаете расписание. " +
-                    "В альбомной уезжают всё равно: иначе парам мало места.",
+                hint = "Стоят, пока листаете расписание. В альбомной уезжают.",
             )
         }
 
@@ -365,6 +371,83 @@ private fun GlassToggle(on: Boolean, onChange: (Boolean) -> Unit) {
             }
             Text(
                 "Красный свет за расписанием, полупрозрачные карточки, матовые шапка и полоска дней.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        MinimalSwitch(checked = on, onCheckedChange = null)
+    }
+}
+
+/**
+ * Плашка «Vice»: слева — квадрат с закатным градиентом и галочкой, когда тема включена; справа —
+ * название с меткой срока, пояснение и тумблер. Нажимается целиком.
+ */
+@Composable
+private fun ViceToggle(on: Boolean, onChange: (Boolean) -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+    val tight = LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale < GLASS_PREVIEW_MIN_DP
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .toggleable(value = on, onValueChange = onChange, role = androidx.compose.ui.semantics.Role.Switch)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (!tight) {
+            Box(
+                modifier = Modifier
+                    .size(width = 56.dp, height = 64.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                    .drawBehind {
+                        drawRect(
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                VICE_SUNSET,
+                                start = androidx.compose.ui.geometry.Offset.Zero,
+                                end = androidx.compose.ui.geometry.Offset(size.width, size.height),
+                            ),
+                        )
+                    },
+                contentAlignment = Alignment.TopEnd,
+            ) {
+                if (on) {
+                    Box(
+                        modifier = Modifier
+                            .padding(4.dp)
+                            .size(18.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(Color.Black.copy(alpha = 0.35f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    }
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Vice", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "до 1 января",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+            }
+            Text(
+                "Тёплый свет города, где не бывает зимы.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -73,7 +73,7 @@ import ru.whensclass.widget.plural
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
-    /** Нижний ряд вкладок стоит при листании (настройка «Второй ряд вкладок не уезжает»). */
+    /** Нижний ряд вкладок стоит при листании (настройка «Второй ряд вкладок остаётся на месте»). */
     rowStays: Boolean = false,
     startDay: String? = null,
     /** Растёт на каждое открытие с днём по живому экрану (onNewIntent). */

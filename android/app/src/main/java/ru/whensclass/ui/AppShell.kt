@@ -39,7 +39,7 @@ internal fun AskNotificationPermission(granted: Boolean) {
  * системе даёт белые значки на белом.
  */
 @Composable
-internal fun ApplyDarkTheme(dark: Boolean) {
+internal fun ApplyDarkTheme(dark: Boolean, scheme: androidx.compose.material3.ColorScheme) {
     val view = LocalView.current
     SideEffect {
         val window = (view.context as android.app.Activity).window
@@ -50,7 +50,7 @@ internal fun ApplyDarkTheme(dark: Boolean) {
         // До Android 10 полосу навигации красит enableEdgeToEdge — по теме системы, а не приложения.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             @Suppress("DEPRECATION")
-            window.navigationBarColor = (if (dark) DarkScheme else LightScheme).background.toArgb()
+            window.navigationBarColor = scheme.background.toArgb()
         }
     }
 }

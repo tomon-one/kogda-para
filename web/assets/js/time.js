@@ -61,6 +61,20 @@ export function collegeNow(ms) {
   };
 }
 
+// «Vice» действует до 1 января 2027 по часам колледжа. Дата сравнивается
+// строкой, поэтому граница — по местной полуночи, а не по поясу браузера.
+var VICE_UNTIL = '2027-01-01';
+
+/** Тема ещё не истекла: плашка в настройках показывается. */
+export function viceAvailable(now) {
+  return !!now && now.date < VICE_UNTIL;
+}
+
+/** Тема включена и ещё действует: в хранилище флаг остаётся и после срока. */
+export function viceActive(flag, now) {
+  return flag === true && viceAvailable(now);
+}
+
 /** «2026-09-28» → миллисекунды полуночи UTC этой даты; NaN — не дата. */
 function utcOf(date) {
   var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');

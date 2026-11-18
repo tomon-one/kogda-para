@@ -3,8 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  addDays, collegeNow, dayOfYear, dayRange, dayTitle, formatDurationLong, formatSince, hourOf, plural, sinceShort, weekStart,
-  weekday,
+  addDays, collegeNow, dayOfYear, dayRange, dayTitle, formatDurationLong, formatSince, hourOf, plural, sinceShort,
+  viceActive, viceAvailable, weekStart, weekday,
 } from '../assets/js/time.js';
 import {
   isKnownWebinar, isOnline, isWebLink, kindName, linkEnd, linkHost, onlineLabel, roomLabel, sheetLink,
@@ -28,6 +28,25 @@ test('время колледжа — Новосибирск, UTC+7', () => {
   // Chrome с hour12: false пишет полночь как «24» — это 0, а не сутки вперёд.
   assert.equal(hourOf('24'), 0);
   assert.equal(hourOf('23'), 23);
+});
+
+test('«Vice» действует до 1 января 2027 по часам колледжа', () => {
+  const last = { date: '2026-12-31', sec: 23 * 3600 + 59 * 60 + 59 };
+  const first = { date: '2027-01-01', sec: 0 };
+  assert.equal(viceActive(true, last), true);
+  assert.equal(viceActive(true, first), false);
+  assert.equal(viceActive(true, { date: '2027-01-02', sec: 0 }), false);
+  assert.equal(viceActive(false, last), false);
+  // Плашка есть весь срок — и когда тема выключена: её можно включить.
+  assert.equal(viceAvailable(last), true);
+  assert.equal(viceAvailable(first), false);
+});
+
+test('граница «Vice» — по полуночи колледжа, а не UTC', () => {
+  // 31 декабря 23:59:59 в Новосибирске — ещё действует.
+  assert.equal(viceActive(true, collegeNow(Date.UTC(2026, 11, 31, 16, 59, 59))), true);
+  // 1 января 00:00 там же — уже нет: в UTC это ещё 31 декабря.
+  assert.equal(viceActive(true, collegeNow(Date.UTC(2026, 11, 31, 17, 0, 0))), false);
 });
 
 test('даты строками', () => {

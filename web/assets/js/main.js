@@ -73,6 +73,14 @@ Object.assign(app, {
     store.set('glass', on);
     applyTheme();
   },
+  /** «Vice»: закат вместо обычных цветов (vice.css), до 1 января 2027. */
+  vice: function () { return store.get('vice') === true; },
+  setVice: function (on) {
+    store.set('vice', on);
+    applyTheme();
+    // Плашка «Стекла» при включённой «Vice» не показывается — перестроить настройки.
+    render();
+  },
   installPrompt: function () { return installEvent; },
   install: function () {
     if (!installEvent) return;
@@ -246,6 +254,8 @@ function tick() {
     // Новые сутки — снова к сегодняшнему дню и за свежим окном.
     lastDate = date;
     state.wanted = date;
+    // «Vice» истекает по часам колледжа: снять её (и вернуть «Стекло») на месте.
+    applyTheme();
     refresh(false, false);
     closeStaleChanges(date);
   }

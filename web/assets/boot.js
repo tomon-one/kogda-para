@@ -14,10 +14,14 @@
   try {
     var theme = JSON.parse(localStorage.getItem(prefix + 'theme') || 'null');
     if (theme === 'dark' || theme === 'light') document.documentElement.setAttribute('data-theme', theme);
-    // «Стекло» — тоже до отрисовки: иначе мелькал бы обычный фон.
-    if (JSON.parse(localStorage.getItem(prefix + 'glass') || 'false') === true) {
-      document.documentElement.setAttribute('data-glass', '');
-    }
+    // «Стекло» и «Vice» — тоже до отрисовки: иначе мелькал бы обычный фон.
+    // Срок «Vice» здесь проверяется грубо, по часам браузера; точная проверка
+    // по часам колледжа — в site.js. Включённая «Vice» стекло не ставит.
+    var glass = JSON.parse(localStorage.getItem(prefix + 'glass') || 'false') === true;
+    var vice = JSON.parse(localStorage.getItem(prefix + 'vice') || 'false') === true &&
+      Date.now() < Date.parse('2027-01-01T00:00:00+07:00');
+    if (vice) document.documentElement.setAttribute('data-vice', '');
+    else if (glass) document.documentElement.setAttribute('data-glass', '');
   } catch (e) { /* хранилище запрещено — тема системная */ }
 
   var OLD = 'Браузер слишком старый для этого сайта. Обновите его или откройте сайт ' +
