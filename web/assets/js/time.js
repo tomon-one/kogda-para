@@ -160,16 +160,25 @@ function localDayMonth(ms) {
 }
 
 /**
+ * Когда проверено: сегодня — «19:38» (или «в 19:38» без `bare`), вчера —
+ * «вчера в 19:38», раньше — «5 сентября в 19:38». Как в приложении.
+ */
+export function formatCheckedAt(ms, bare, nowMs) {
+  if (nowMs === undefined) nowMs = Date.now();
+  var time = localTime(ms);
+  var day = localDate(ms);
+  if (day === localDate(nowMs)) return bare ? time : 'в ' + time;
+  if (day === addDays(localDate(nowMs), -1)) return 'вчера в ' + time;
+  return localDayMonth(ms) + ' в ' + time;
+}
+
+/**
  * «проверено в 19:12», «проверено вчера в 21:40», «проверено 5 сентября в 08:00».
  * «Проверено», а не «обновлено»: время ставится при каждой удачной проверке.
  */
 export function formatFetchedAt(ms, nowMs) {
   if (!ms || ms <= 0) return 'ещё не проверялось';
-  if (nowMs === undefined) nowMs = Date.now();
-  var day = localDate(ms);
-  if (day === localDate(nowMs)) return 'проверено в ' + localTime(ms);
-  if (day === addDays(localDate(nowMs), -1)) return 'проверено вчера в ' + localTime(ms);
-  return 'проверено ' + localDayMonth(ms) + ' в ' + localTime(ms);
+  return 'проверено ' + formatCheckedAt(ms, false, nowMs);
 }
 
 /** «dd.MM HH:mm» — для сведений в отчёте. */

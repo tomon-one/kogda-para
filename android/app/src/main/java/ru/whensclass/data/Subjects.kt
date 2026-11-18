@@ -9,5 +9,8 @@ data class SubjectNames(
     val custom: Map<String, String> = emptyMap(),
 ) {
     fun text(lesson: LessonDto): String =
-        custom[lesson.subject] ?: if (short) lesson.shortSubject ?: lesson.subject else lesson.subject
+        custom[lesson.subject] ?: if (short) lesson.shortSubject?.let(::withCapital) ?: lesson.subject else lesson.subject
 }
+
+/** Словарь приходит строчными («физра», «адм. право»): в карточке — с заглавной, как обычный текст. */
+private fun withCapital(name: String): String = name.replaceFirstChar { it.uppercase() }

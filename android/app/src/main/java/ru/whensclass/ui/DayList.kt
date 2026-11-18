@@ -299,7 +299,7 @@ fun ScheduleDays(
             }
         },
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = top, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(if (tight) 10.dp else 12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (tight) 8.dp else 12.dp),
     ) {
         days.forEachIndexed { index, day ->
             if (header != null && index == rows.headerAt) item(key = "header") { header() }
@@ -425,7 +425,7 @@ private fun DayCard(
             val ownUnreadShort = day.unread != null && day.unreadGroups.isEmpty()
             DayHeader(
                 date?.let { formatDayTitle(it, today) } ?: day.date, isToday, past, daySummary(day.lessons, groups, bells),
-                bottom = if (notes.isEmpty()) (if (compact) 6.dp else 8.dp) else 4.dp,
+                bottom = if (notes.isEmpty()) (if (compact) 4.dp else 8.dp) else 4.dp,
                 chips = listOfNotNull(day.state?.let(::stateDayText), "Не прочитан".takeIf { day.unread != null }),
                 onImage = onImage?.let { share -> { share(day.date) } },
                 compact = compact,
@@ -537,7 +537,7 @@ private fun DayHeader(
     /** Компактный вид: шапка дня ниже. */
     compact: Boolean = false,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = if (compact) 10.dp else 12.dp, bottom = bottom)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = if (compact) 8.dp else 12.dp, bottom = bottom)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 title.replaceFirstChar { it.uppercase() },

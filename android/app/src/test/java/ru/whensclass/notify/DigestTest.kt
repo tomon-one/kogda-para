@@ -65,7 +65,7 @@ class DigestTest {
             SubjectNames(),
             "Сегодня",
         )
-        assertEquals("Сегодня к 3-й паре" to "алгоритмы, 11:30, ауд. 214", text)
+        assertEquals("Сегодня к 3-й паре" to "Основы алгоритмизации, 11:30, ауд. 214", text)
     }
 
     @Test
@@ -82,16 +82,22 @@ class DigestTest {
             tomorrow,
             SubjectNames(),
         )
-        assertEquals("Завтра к 3-й паре" to "алгоритмы, 09:00, ауд. 214", text)
+        assertEquals("Завтра к 3-й паре" to "Основы алгоритмизации, 09:00, ауд. 214", text)
     }
 
     @Test
-    fun `короткое название и своё важнее него`() {
+    fun `выключенные короткие — полное имя, включённые — словарь с заглавной, своё важнее него`() {
+        // Выключатель коротких действует и в сводке: без него — полное имя из таблицы.
+        val full = Digest.digestText(
+            schedule(listOf(lesson(3, "Основы алгоритмизации", "алгоритмы", room = "214"))),
+            tomorrow, SubjectNames(),
+        )
+        assertEquals("Завтра к 3-й паре" to "Основы алгоритмизации, 11:30, ауд. 214", full)
         val short = Digest.digestText(
             schedule(listOf(lesson(3, "Основы алгоритмизации", "алгоритмы", room = "214"))),
             tomorrow, SubjectNames(short = true),
         )
-        assertEquals("Завтра к 3-й паре" to "алгоритмы, 11:30, ауд. 214", short)
+        assertEquals("Завтра к 3-й паре" to "Алгоритмы, 11:30, ауд. 214", short)
         val own = Digest.digestText(
             schedule(listOf(lesson(3, "Основы алгоритмизации", "алгоритмы", room = "214"))),
             tomorrow, SubjectNames(custom = mapOf("Основы алгоритмизации" to "моё имя")),

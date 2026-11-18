@@ -354,22 +354,29 @@
 
 /* ——— компактный вид ——— */
 /* Те же карточки, теснее: время одной строкой, кабинет и преподаватель рядом,
-   номер пары мельче. Включается сам на экране уже 360 px, переключателем — на
-   любом. Ничего не прячется: место, ссылка, отмена и значки групп остаются. */
+   номер пары мельче, название 15 px, шапка дня ниже. Включается сам на экране
+   уже 360 px, переключателем — на любом. Ничего не прячется: место, ссылка,
+   отмена и значки групп остаются. */
 .compact .day { margin-bottom: 8px; }
-.compact .day-title { padding: 8px 12px 6px; }
-.compact .day-empty, .compact .day-note { padding: 0 12px 10px; }
-.compact .week-next { padding: 0 12px; margin-bottom: 6px; }
-.compact .lesson { margin: 0 4px 3px; padding: 8px 10px; }
-.compact .lesson:last-child { margin-bottom: 2px; }
-.compact .lesson-body { margin-left: 8px; }
-.compact .lesson-time, .compact .lesson-time.with-marks { width: 5.75em; }
-.compact .pair { font-size: 10px; line-height: 14px; }
-.compact .time-start, .compact .time-end { display: inline; font-size: 14px; line-height: 20px; }
+.compact .day-title { padding: 6px 10px 4px; font-size: 15px; line-height: 20px; }
+.compact .day-summary { margin-top: 0; font-size: 11px; line-height: 15px; }
+.compact .day-empty, .compact .day-note { padding: 0 10px 8px; }
+.compact .week-next { padding: 0 10px; margin-bottom: 4px; }
+.compact .lesson { margin: 0 3px 2px; padding: 6px 8px; }
+.compact .lesson:last-child { margin-bottom: 1px; }
+.compact .lesson-body { margin-left: 6px; }
+.compact .lesson-time, .compact .lesson-time.with-marks { width: 5.5em; }
+.compact .pair { font-size: 10px; line-height: 13px; }
+.compact .time-start, .compact .time-end { display: inline; font-size: 14px; line-height: 18px; }
 .compact .time-end::before { content: "–"; }
-.compact .lesson-meta { display: inline-flex; flex-wrap: wrap; align-items: baseline; margin-top: 2px; }
+.compact .subject { font-size: 15px; line-height: 20px; }
+.compact .lesson-meta { display: flex; flex-wrap: wrap; align-items: baseline; margin-top: 1px; }
 .compact .lesson-meta .sub { flex-basis: auto; margin-left: 8px; }
-.compact .marks { margin-top: 4px; }
+.compact .marks { margin-top: 2px; }
+.compact .mark { min-width: 16px; height: 16px; margin-bottom: 3px; font-size: 10px; line-height: 16px; }
+.compact .online-link { margin-top: 2px; }
+.compact .link-buttons { margin-top: 4px; }
+.compact .link-button, .compact .action.link-button { height: 26px; line-height: 26px; }
 
 /* Узкая раскладка уже поставила время строкой над парой — колонке ширины не нужно. */
 @media (max-width: 21.25em) {

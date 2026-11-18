@@ -136,10 +136,11 @@ function summaryLine(text) {
 }
 
 /** Название предмета как показывать: своё, короткое от службы или полное. */
-function subjectText(lesson) {
+export function subjectText(lesson) {
   var custom = store.get('subjectShorts') || {};
   if (custom[lesson.s]) return custom[lesson.s];
-  return store.get('shortSubjects') === true && lesson.sn ? lesson.sn : lesson.s;
+  // Словарь отдаёт строчные — «алгоритмы», «физра»: заглавная только при показе.
+  return store.get('shortSubjects') === true && lesson.sn ? capitalize(lesson.sn) : lesson.s;
 }
 
 function isForeign(lesson, groups) {

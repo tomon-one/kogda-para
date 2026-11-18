@@ -3,7 +3,6 @@ package ru.whensclass.ui
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.material3.MaterialTheme
@@ -19,7 +18,7 @@ import ru.whensclass.BuildConfig
 import ru.whensclass.data.ReleaseDto
 import ru.whensclass.notify.Vendor
 
-/** Раздел «Группа» или «Преподаватель»: своя, другие группы и подгруппы. */
+/** Раздел «Моя группа» или «Преподаватель»: своя, другие группы и подгруппы. */
 @Composable
 internal fun GroupSection(
     teacherMode: Boolean,
@@ -28,14 +27,12 @@ internal fun GroupSection(
     subgroups: List<ru.whensclass.data.GroupDto>,
     groupsByName: Boolean,
     onGroupsByName: (Boolean) -> Unit,
-    onChangeGroup: () -> Unit,
     onAddGroup: () -> Unit,
     onAddSubgroup: (ru.whensclass.data.GroupDto) -> Unit,
     onRemoveGroup: (String) -> Unit,
 ) {
-    Section(if (teacherMode) "Преподаватель" else "Группа") {
-        // Название и кнопка одной строкой; кнопки раздела одной ширины. С другими группами у каждой
-        // её значок, как под временем пар.
+    Section(if (teacherMode) "Преподаватель" else "Моя группа") {
+        // Название и подпись одной строкой; с другими группами у каждой её значок, как под временем пар.
         val marks = if (teacherMode || extraGroups.isEmpty()) null
         else if (groupsByName) shortLabels(listOf(groupName.orEmpty()) + extraGroups.map { it.name })
         else (1..extraGroups.size + 1).map { it.toString() }
@@ -48,14 +45,7 @@ internal fun GroupSection(
             Text(
                 groupName ?: "не выбрано",
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f).padding(start = if (ownMark != null) 10.dp else 0.dp, end = 8.dp),
-            )
-            ActionButton(
-                label = if (teacherMode) "Выбрать заново" else "Сменить",
-                onClick = onChangeGroup,
-                modifier = Modifier.width(ROW_BUTTON),
-                top = 0.dp,
-                side = 8.dp,
+                modifier = Modifier.weight(1f).padding(start = if (ownMark != null) 10.dp else 0.dp),
             )
         }
 
@@ -113,6 +103,8 @@ internal fun GroupSection(
                 )
             }
         }
+        // Друг о друге узнают только так: магазина нет.
+        ShareLink(modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -155,21 +147,24 @@ internal fun NotificationsSection(
             MinutesRow(current = notifyBefore, onOpen = onAskMinutes)
         }
 
-        // У каждого вида уведомлений — свой выключатель и свой канал.
+        // У каждого вида уведомлений — свой выключатель и свой канал. Порядок — от частого к редкому.
+        // Вечерняя сводка: первая пара завтрашнего дня, по умолчанию выключена.
+        SwitchRow(
+            "Вечерняя сводка", digestMinutes > 0, onDigest,
+            hint = "Первая пара завтрашнего дня. В субботу вечером не приходит; нет пар — молчит."
+                .takeIf { digestMinutes > 0 },
+        )
+        if (digestMinutes > 0 && notifications && phone.digestChannelOff) {
+            ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_DIGEST)
+        }
+        if (digestMinutes > 0) DigestRow(current = digestMinutes, onOpen = onAskDigest)
+
         SwitchRow(
             "Сообщать об изменениях", notifyChanges, onNotifyChanges,
             hint = "Отмены и замены на сегодня и завтра. С 22:00 до 7:00 не приходят: утром — одно за ночь.",
         )
         if (notifyChanges && notifications && phone.changesChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_CHANGES)
-        }
-
-        SwitchRow(
-            "Сообщать о сбоях сервера", notifyServer, onNotifyServer,
-            hint = "Если расписание не обновляется дольше двух часов.",
-        )
-        if (notifyServer && notifications && phone.serverChannelOff) {
-            ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SERVER)
         }
 
         // Только студенту с другими выбранными группами: остальным его не бывает.
@@ -183,17 +178,6 @@ internal fun NotificationsSection(
             }
         }
 
-        // Вечерняя сводка: первая пара завтрашнего дня, по умолчанию выключена.
-        SwitchRow(
-            "Вечерняя сводка", digestMinutes > 0, onDigest,
-            hint = "Первая пара завтрашнего дня. В субботу вечером не приходит; нет пар — молчит."
-                .takeIf { digestMinutes > 0 },
-        )
-        if (digestMinutes > 0 && notifications && phone.digestChannelOff) {
-            ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_DIGEST)
-        }
-        if (digestMinutes > 0) DigestRow(current = digestMinutes, onOpen = onAskDigest)
-
         // Магазина нет, обновление никто не принесёт.
         SwitchRow(
             "Сообщать о новых версиях", notifyUpdates, onNotifyUpdates,
@@ -201,6 +185,14 @@ internal fun NotificationsSection(
         )
         if (notifyUpdates && notifications && phone.updateChannelOff) {
             ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_UPDATE)
+        }
+
+        SwitchRow(
+            "Сообщать о сбоях сервера", notifyServer, onNotifyServer,
+            hint = "Если расписание не обновляется дольше двух часов.",
+        )
+        if (notifyServer && notifications && phone.serverChannelOff) {
+            ChannelOff(ru.whensclass.notify.Notifications.CHANNEL_SERVER)
         }
     }
 }
@@ -357,7 +349,6 @@ internal fun AboutSections(teacherMode: Boolean, loadDiagnostics: suspend () -> 
         ReportLink(loadDiagnostics, modifier = Modifier.fillMaxWidth(), asLink = true)
         Link("Исходный код", "https://github.com/tomon-one/kogda-para")
         Link("GitHub автора", "https://github.com/tomon-one")
-        ShareLink(modifier = Modifier.fillMaxWidth())
         Text(
             "Создано Tomon",
             style = MaterialTheme.typography.bodySmall,

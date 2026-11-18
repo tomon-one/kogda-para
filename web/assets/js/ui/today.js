@@ -7,7 +7,7 @@ import { othersList } from './lists.js';
 import { retakesActive, retakesView } from './retakes.js';
 import { roomsView } from './rooms.js';
 import { weekStrip } from './week.js';
-import { formatDurationLong, formatFetchedAt, formatSince, plural, sinceShort, tallySince } from '../time.js';
+import { formatCheckedAt, formatDurationLong, formatFetchedAt, formatSince, plural, sinceShort, tallySince } from '../time.js';
 import { sheetLink } from '../format.js';
 import { STATUS_UNREACHABLE, STATUS_EDITING, openingDate } from '../repo.js';
 import { teacherNow } from '../schedule.js';
@@ -125,11 +125,11 @@ export function refreshLabel(app) {
  * проверки телефона — `fetchedAt`, и смешивать их нельзя. Нечего сказать о
  * службе (сервер не отвечает телефону, сборка не та) — остаётся время телефона.
  */
-function serviceLine(app) {
+export function serviceLine(app) {
   var server = app.server();
   if (server.status === 'ok' && server.checked) {
     var ms = Date.parse(server.checked);
-    if (!isNaN(ms)) return 'Служба читает таблицу, ' + formatFetchedAt(ms);
+    if (!isNaN(ms)) return 'Последняя проверка на сервере: ' + formatCheckedAt(ms, true);
   }
   if (server.status === STATUS_EDITING) {
     var edited = sinceShort(server.since);
@@ -137,7 +137,7 @@ function serviceLine(app) {
   }
   if (server.status === 'stale') {
     var broken = sinceShort(server.since);
-    if (broken) return 'Служба не читает таблицу ' + broken;
+    if (broken) return 'Сервер не читает таблицу ' + broken;
   }
   return formatFetchedAt(app.fetchedAt());
 }

@@ -18,7 +18,8 @@ class SubjectsTest {
     @Test
     fun `короткое — от службы, а без него полное`() {
         val names = SubjectNames(short = true)
-        assertEquals("алгоритмы", names.text(lesson))
+        // Словарь отдаёт строчными; в карточке — с заглавной, как обычный текст.
+        assertEquals("Алгоритмы", names.text(lesson))
         // Служба короткого не дала — показываем полное, а не пустое.
         assertEquals("Физика", names.text(plain))
     }

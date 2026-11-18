@@ -89,16 +89,24 @@ fun formatDayTitle(day: LocalDate, today: LocalDate = collegeToday()): String {
     return if (prefix != null) "$prefix, $date" else date
 }
 
-fun formatFetchedAt(millis: Long): String {
-    // «Проверено», а не «обновлено»: время ставится при каждой удачной проверке, а «обновлено» над
-    // плашкой сбоя обманывало бы.
-    if (millis <= 0) return "ещё не проверялось"
+/**
+ * «Проверено», а не «обновлено»: время ставится при каждой удачной проверке, а «обновлено» над
+ * плашкой сбоя обманывало бы.
+ */
+fun formatFetchedAt(millis: Long): String =
+    if (millis <= 0) "ещё не проверялось" else "проверено " + checkedAt(millis)
+
+/**
+ * Когда проверено: сегодня — «в 19:38», вчера — «вчера в 19:38», раньше — «5 сентября в 19:38».
+ * [bare] — без «в» перед сегодняшним часом: «Последняя проверка на сервере: 19:38».
+ */
+private fun checkedAt(millis: Long, bare: Boolean = false): String {
     val moment = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
     val time = moment.format(DateTimeFormatter.ofPattern("HH:mm", RU))
     return when (moment.toLocalDate()) {
-        LocalDate.now() -> "проверено в $time"
-        LocalDate.now().minusDays(1) -> "проверено вчера в $time"
-        else -> "проверено " + moment.format(DateTimeFormatter.ofPattern("d MMMM в HH:mm", RU))
+        LocalDate.now() -> if (bare) time else "в $time"
+        LocalDate.now().minusDays(1) -> "вчера в $time"
+        else -> moment.format(DateTimeFormatter.ofPattern("d MMMM в HH:mm", RU))
     }
 }
 
@@ -116,9 +124,9 @@ fun serviceLine(
     "ok" -> checkedIso
         ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
         ?.takeIf { it > 0 }
-        ?.let { "Служба читает таблицу, " + formatFetchedAt(it) }
+        ?.let { "Последняя проверка на сервере: " + checkedAt(it, bare = true) }
     STATUS_EDITING -> sinceIso?.let { "Колледж правит таблицу " + sinceShort(it, today) }
-    "stale" -> sinceIso?.let { "Служба не читает таблицу " + sinceShort(it, today) }
+    "stale" -> sinceIso?.let { "Сервер не читает таблицу " + sinceShort(it, today) }
     else -> null
 }
 

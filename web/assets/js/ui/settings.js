@@ -1,7 +1,7 @@
 // Настройки (SettingsScreen.kt) — без того, чего у сайта нет: виджетов, работы
-// в фоне и обновления приложения. Порядок тот же: группа, своё для этого
-// телефона (значок, уведомления, приложение), таблица, оформление, данные и
-// «О сайте». Раздел уведомлений — notifications.js.
+// в фоне и обновления приложения. Разделы: «Моя группа», «Оформление»,
+// «Уведомления», «Таблица и данные», «О сайте». Раздел уведомлений —
+// notifications.js.
 
 import { h, icon, actionButton, actionLink, externalLink, snackbar, standalone, isIos, isAndroid, dialog, copyText, section } from './dom.js';
 import { sheetLink } from '../format.js';
@@ -10,7 +10,7 @@ import { groupMark } from './days.js';
 import { notifications } from './notifications.js';
 import { VERSION, build } from '../version.js';
 import { CHANNEL } from '../store.js';
-import { viceActive, viceAvailable } from '../time.js';
+import { capitalize, viceActive, viceAvailable } from '../time.js';
 
 function row(main, sub, buttons) {
   return h('div', { class: 'setting-row' },
@@ -143,7 +143,7 @@ function subjectsEditor(app) {
     items.map(function (item) {
       var input = h('input', {
         type: 'text', class: 'subject-input', value: custom[item.s] || '',
-        placeholder: item.sn || item.s, 'aria-label': 'Как показывать «' + item.s + '»',
+        placeholder: item.sn ? capitalize(item.sn) : item.s, 'aria-label': 'Как показывать «' + item.s + '»',
       });
       // Пишем по уходу из поля: перестройка на каждую букву теряла бы курсор.
       input.addEventListener('change', function () { app.setSubjectShort(item.s, input.value); });
@@ -216,37 +216,54 @@ export function settingsScreen(app) {
   var ios = isIos();
   var android = !ios && isAndroid();
 
+  // Своё у сайта и о сайте — в последней карточке: значок и сборка для Android.
+  // Только во вкладке браузера: открытому значком он ни к чему. Есть кнопка
+  // браузера — она вместо шагов; шаги — для этого телефона, а на компьютере без
+  // кнопки раздела нет.
+  var installBlock = standalone() || (!install && !ios && !android) ? null : [
+    h('div', { class: 'setting-sub' }, 'Значок на экране'),
+    h('p', null, 'Сайт можно открыть значком с домашнего экрана, как приложение.'),
+    install ? actionButton('Добавить значок', app.install) : null,
+    // На iOS 26 кнопки «Поделиться» на панели по умолчанию нет — она в
+    // меню «•••» у адреса.
+    !install && ios ? h('p', null, 'В Safari: кнопка «Поделиться» — на панели или в меню «•••» у ' +
+      'адреса → «На экран „Домой“»; «Открыть как веб-приложение» не выключайте.') : null,
+    !install && android ? h('p', null, 'Меню браузера → «Добавить на главный экран».') : null,
+  ];
+  // На айфоне его не поставить.
+  var androidBlock = ios ? null : [
+    h('div', { class: 'setting-sub' }, 'Приложение для Android'),
+    h('p', null, 'Виджеты на домашнем экране, напоминания о парах и уведомления об отменах и заменах.'),
+    actionLink('Скачать', '/download/latest.apk'),
+    h('p', { class: 'small' }, externalLink('Как поставить',
+      'https://github.com/tomon-one/kogda-para/blob/master/docs/install.md')),
+  ];
+
   return h('div', { class: 'screen settings' },
     h('header', { class: 'topbar' },
       h('button', { type: 'button', class: 'icon-button', 'aria-label': 'Назад', onclick: app.back }, icon('back')),
       h('h1', { class: 'topbar-title' }, 'Настройки')),
     h('main', { class: 'content cards' },
-      section(teacherMode ? 'Преподаватель' : 'Группа', group),
+      section(teacherMode ? 'Преподаватель' : 'Моя группа', group),
 
-      // Только во вкладке браузера: открытому значком он ни к чему. Есть
-      // кнопка браузера — она вместо шагов; шаги — для этого телефона, а на
-      // компьютере без кнопки раздела нет.
-      standalone() || (!install && !ios && !android) ? null : section('Значок на экране', [
-        h('p', null, 'Сайт можно открыть значком с домашнего экрана, как приложение.'),
-        install ? actionButton('Добавить значок', app.install) : null,
-        // На iOS 26 кнопки «Поделиться» на панели по умолчанию нет — она в
-        // меню «•••» у адреса.
-        !install && ios ? h('p', null, 'В Safari: кнопка «Поделиться» — на панели или в меню «•••» у ' +
-          'адреса → «На экран „Домой“»; «Открыть как веб-приложение» не выключайте.') : null,
-        !install && android ? h('p', null, 'Меню браузера → «Добавить на главный экран».') : null,
+      section('Оформление', [
+        segmented([['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']], app.theme(), app.setTheme),
+        // «Vice» и «Стекло» вместе не работают: при включённой «Vice» плашки
+        // стекла нет, а его флаг в хранилище не трогается.
+        viceToggle(app),
+        viceActive(app.vice(), app.now()) ? null : glassToggle(app),
+        switchLine('Компактный вид', app.compact(), app.setCompact,
+          'Время одной строкой, кабинет и преподаватель рядом, отступы меньше. ' +
+          'На экране шириной меньше 360 px включается сам.'),
+        switchLine('Короткие названия', app.shortSubjects(), app.setShortSubjects,
+          '«Алгоритмы» вместо «Основы алгоритмизации и программирования». Не нравится — напишите своё ниже.'),
+        h('div', { class: 'setting-sub' }, 'Таблица сокращений'),
+        subjectsEditor(app),
       ]),
 
       own ? notifications(app, teacherMode) : null,
 
-      // На айфоне его не поставить.
-      ios ? null : section('Приложение для Android', [
-        h('p', null, 'Виджеты на домашнем экране, напоминания о парах и уведомления об отменах и заменах.'),
-        actionLink('Скачать', '/download/latest.apk'),
-        h('p', { class: 'small' }, externalLink('Как поставить',
-          'https://github.com/tomon-one/kogda-para/blob/master/docs/install.md')),
-      ]),
-
-      section('Расписание', [
+      section('Таблица и данные', [
         // Дня нет в ответе (воскресенье, каникулы) — ссылка ведёт на ближайший
         // следующий; у преподавателя — колонка группы первой пары, без пар —
         // только строка дня (sheetLink).
@@ -258,27 +275,8 @@ export function settingsScreen(app) {
               'ближайшем следующем.')),
         link ? actionLink('Открыть таблицу колледжа', link)
           : actionButton('Открыть таблицу колледжа', function () { snackbar('Адрес таблицы ещё не получен от сервера'); }),
-      ]),
 
-      section('Предметы', [
-        switchLine('Короткие названия', app.shortSubjects(), app.setShortSubjects,
-          '«Алгоритмы» вместо «Основы алгоритмизации и программирования». Не нравится — напишите своё ниже.'),
-        subjectsEditor(app),
-      ]),
-
-      section('Оформление', [
-        segmented([['Системная', 'system'], ['Тёмная', 'dark'], ['Светлая', 'light']], app.theme(), app.setTheme),
-        switchLine('Компактный вид', app.compact(), app.setCompact,
-          'Время одной строкой, кабинет и преподаватель рядом, отступы меньше. ' +
-          'На экране шириной меньше 360 px включается сам.'),
-        // «Vice» и «Стекло» вместе не работают: при включённой «Vice» плашки
-        // стекла нет, а его флаг в хранилище не трогается.
-        viceToggle(app),
-        viceActive(app.vice(), app.now()) ? null : glassToggle(app),
-      ]),
-
-      // Два текста, которые читают один раз, — одной карточкой.
-      section('Данные и ответственность', [
+        // Два текста, которые читают один раз, — в этой же карточке.
         h('p', null, (teacherMode
           ? 'На сервер уходит выбранное имя, как оно записано в таблице колледжа. Больше ничего: '
           : 'На сервер уходят только названия вашей группы и других, если вы их выбрали. ' +
@@ -305,6 +303,8 @@ export function settingsScreen(app) {
       // куда ведёт «Сменить».
       section('О сайте', [
         h('p', null, 'Неофициальный сайт для студентов и преподавателей НГОК.'),
+        installBlock,
+        androidBlock,
         h('p', null, externalLink('Новости в Telegram', 'https://t.me/kogda_para_news')),
         h('p', null, externalLink('Новости во ВКонтакте', 'https://vk.com/kogda_para_nsk')),
         h('p', null, externalLink('Нашли ошибку? Напишите автору в Telegram', 'https://t.me/toomonn')),

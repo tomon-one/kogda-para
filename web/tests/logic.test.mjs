@@ -501,6 +501,52 @@ test('компактный вид: ширина сама, выбор челов�
   assert.equal(compactOn(false, true), false);
 });
 
+test('строка о службе: проверка, правка колледжа, сбой', async () => {
+  // Модуль экрана тянет полоску недели и состояние страницы, а они на загрузке
+  // трогают window и разметку.
+  globalThis.window = { addEventListener: function () {}, pageYOffset: 0 };
+  globalThis.document = { querySelector: function () { return null; }, getElementById: function () { return null; } };
+  const { serviceLine } = await import('../assets/js/ui/today.js');
+  const app = (server, fetchedAt) => ({ server: () => server, fetchedAt: () => fetchedAt || 0 });
+  // Обычное: время последней удачной проверки на сервере, без слов о телефоне.
+  const at = new Date();
+  at.setHours(19, 38, 0, 0);
+  assert.equal(serviceLine(app({ status: 'ok', checked: at.toISOString() })), 'Последняя проверка на сервере: 19:38');
+  // Проверяли вчера — со словом «вчера», как в приложении.
+  const yesterday = new Date(at.getTime());
+  yesterday.setDate(yesterday.getDate() - 1);
+  assert.equal(serviceLine(app({ status: 'ok', checked: yesterday.toISOString() })),
+    'Последняя проверка на сервере: вчера в 19:38');
+  // Колледж правит — ожидание; служба не читает — сбой.
+  const since = new Date(Date.now() - 5 * 60000).toISOString();
+  assert.equal(serviceLine(app({ status: 'editing', since: since })), 'Колледж правит таблицу ' + sinceShort(since));
+  assert.equal(serviceLine(app({ status: 'stale', since: since })), 'Сервер не читает таблицу ' + sinceShort(since));
+  // О службе знать нечего — остаётся время проверки телефона.
+  assert.match(serviceLine(app({ status: 'unreachable' }, at.getTime())), /^проверено /);
+  assert.equal(serviceLine(app({ status: 'ok' }, 0)), 'ещё не проверялось');
+});
+
+test('короткие названия: по умолчанию полные, словарь — с заглавной', async () => {
+  const store = await import('../assets/js/store.js');
+  const { subjectText } = await import('../assets/js/ui/days.js');
+  const lesson = { s: 'Основы алгоритмизации и программирования', sn: 'алгоритмы' };
+  // Переключатель не трогали и выключали — полное название, слово словаря не меняется.
+  store.remove('shortSubjects');
+  assert.equal(subjectText(lesson), lesson.s);
+  store.set('shortSubjects', false);
+  assert.equal(subjectText(lesson), lesson.s);
+  assert.equal(lesson.sn, 'алгоритмы');
+  // Включили — короткое, первая буква заглавная.
+  store.set('shortSubjects', true);
+  assert.equal(subjectText(lesson), 'Алгоритмы');
+  assert.equal(lesson.sn, 'алгоритмы');
+  // Своё название важнее словаря и switch не спрашивает.
+  store.set('subjectShorts', { 'Основы алгоритмизации и программирования': 'Алгоритмы и структуры' });
+  assert.equal(subjectText(lesson), 'Алгоритмы и структуры');
+  store.remove('subjectShorts');
+  store.remove('shortSubjects');
+});
+
 test('установка: кнопка, подсказка на айфоне или ничего', async () => {
   const { installKind } = await import('../assets/js/ui/dom.js');
   // Уже открыт значком — предлагать нечего ни на айфоне, ни с кнопкой браузера.

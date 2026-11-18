@@ -130,6 +130,8 @@ internal fun LessonRow(
                 subject,
                 // Перенос — по слогам с дефисом и по дефису в слове, а не посреди слова без знака.
                 style = MaterialTheme.typography.bodyLarge.copy(
+                    // Компактно — на пункт меньше: строк в карточке помещается больше.
+                    fontSize = if (tight) 15.sp else MaterialTheme.typography.bodyLarge.fontSize,
                     hyphens = Hyphens.Auto,
                     lineBreak = LineBreak.Paragraph,
                 ),
@@ -210,15 +212,15 @@ internal fun LessonRow(
         }
     }
     if (stacked) {
-        Column(modifier = background.padding(horizontal = if (tight) 12.dp else 16.dp, vertical = if (tight) 8.dp else 12.dp)) {
+        Column(modifier = background.padding(horizontal = if (tight) 8.dp else 16.dp, vertical = if (tight) 6.dp else 12.dp)) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(if (tight) 8.dp else 10.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(if (tight) 2.dp else 4.dp),
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "${lesson.number} пара",
-                    style = if (tight) MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                    style = if (tight) MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
                     else MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -226,7 +228,9 @@ internal fun LessonRow(
                 lessonTime(bells, lesson.number)?.let {
                     Text(
                         it,
-                        style = if (tight) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                        style = if (tight) MaterialTheme.typography.labelMedium
+                            .copy(fontSize = 11.sp, lineHeight = 14.sp)
+                        else MaterialTheme.typography.labelLarge,
                         fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
                         color = if (isNow) MaterialTheme.colorScheme.primary else main,
                         maxLines = 1,
@@ -252,13 +256,13 @@ internal fun LessonRow(
         Row(
             modifier = background
                 .height(IntrinsicSize.Min)
-                .padding(horizontal = if (tight) 10.dp else 12.dp, vertical = if (tight) 8.dp else 10.dp),
+                .padding(horizontal = if (tight) 8.dp else 12.dp, vertical = if (tight) 6.dp else 10.dp),
             verticalAlignment = Alignment.Top,
         ) {
             Column(modifier = Modifier.width(timeColumn)) {
                 Text(
                     "${lesson.number} пара",
-                    style = if (tight) MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp)
+                    style = if (tight) MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
                     else MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -268,7 +272,7 @@ internal fun LessonRow(
                     lessonTime(bells, lesson.number)?.let {
                         Text(
                             it,
-                            style = MaterialTheme.typography.labelMedium.copy(lineHeight = 15.sp),
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, lineHeight = 14.sp),
                             fontWeight = if (isNow) FontWeight.Bold else FontWeight.Medium,
                             color = if (isNow) MaterialTheme.colorScheme.primary else main,
                             maxLines = 1,

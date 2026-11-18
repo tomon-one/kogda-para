@@ -104,8 +104,8 @@ object Digest {
         // Раньше всех начинается — она и первая; без звонка (не бывает, но) — по номеру.
         val first = lessons.minWithOrNull(compareBy<LessonDto>({ start(it) ?: "99:99" }, { it.number }))
             ?: return null
-        val subject = names.custom[first.subject] ?: first.shortSubject?.takeIf { it.isNotBlank() }
-        ?: first.subject
+        // Полное, короткое от службы или своё — как в расписании: выключатель коротких действует и здесь.
+        val subject = names.text(first)
         val parts = listOfNotNull(subject.trim(), start(first), place(first))
         return "$word к ${first.number}-й паре" to parts.filter { it.isNotEmpty() }.joinToString(", ")
     }

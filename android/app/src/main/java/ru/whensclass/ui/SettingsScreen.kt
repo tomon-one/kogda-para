@@ -51,9 +51,9 @@ import ru.whensclass.data.ReleaseDto
 import ru.whensclass.widget.ThemeChoice
 
 /**
- * Настройки и короткий рассказ о данных. Разделы — от частого к разовому: группа, виджеты,
- * уведомления и всё, что им мешает в телефоне; дальше таблица, оформление, версия, данные, «О
- * приложении».
+ * Настройки и короткий рассказ о данных. Разделы — от частого к разовому: группа, оформление,
+ * виджеты, уведомления и всё, что им мешает в телефоне; дальше таблица с обновлением, версия и
+ * «О приложении».
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -195,13 +195,40 @@ fun SettingsScreen(
             subgroups = subgroups,
             groupsByName = groupsByName,
             onGroupsByName = onGroupsByName,
-            onChangeGroup = onChangeGroup,
             onAddGroup = onAddGroup,
             onAddSubgroup = onAddSubgroup,
             onRemoveGroup = onRemoveGroup,
         )
 
-        Section("Предметы") {
+        Section("Оформление") {
+            // «Как в системе» в треть строки не влезает.
+            Segmented(
+                options = listOf(
+                    "Системная" to ThemeChoice.SYSTEM,
+                    "Тёмная" to ThemeChoice.DARK,
+                    "Светлая" to ThemeChoice.LIGHT,
+                ),
+                selected = theme,
+                onPick = onTheme,
+            )
+            // «Vice» живёт до срока: после него плашки нет, а «Стекло» снова по своему флагу. Пока
+            // «Vice» включён, плашка «Стекла» скрыта — оно в это время не применяется.
+            if (viceOffered(ru.whensclass.widget.collegeToday())) ViceToggle(vice, onVice)
+            if (!vice) GlassToggle(glow, onGlow)
+            SwitchRow(
+                "Компактный вид",
+                checked = compactView(compact, LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale),
+                onCheckedChange = onCompact,
+                hint = "Время пары — одной строкой, кабинет и преподаватель — в одну, отступы меньше. " +
+                    "На экране уже 360 dp включается сам.",
+            )
+            SwitchRow(
+                "Второй ряд вкладок остаётся на месте",
+                checked = rowStays,
+                onCheckedChange = onRowStays,
+                hint = "Стоят, пока листаете расписание. В альбомной уезжают.",
+            )
+            // Сокращать имена — такой же вид, как тема и компактность.
             SwitchRow(
                 "Короткие названия",
                 shortSubjects,
@@ -240,7 +267,7 @@ fun SettingsScreen(
         // ограничения режут и их, и виджеты.
         BackgroundWork(phone, exactAlarms, notifyEnabled)
 
-        Section("Расписание") {
+        Section("Таблица и данные") {
             Text(
                 // «Чаще и перед каждой парой» — про сервер; телефон ходит за расписанием раз в час
                 // и при открытии. Куда ведёт ссылка — см. sheetLink.
@@ -267,35 +294,11 @@ fun SettingsScreen(
                     }
                 },
             )
-        }
-
-        Section("Оформление") {
-            // «Как в системе» в треть строки не влезает.
-            Segmented(
-                options = listOf(
-                    "Системная" to ThemeChoice.SYSTEM,
-                    "Тёмная" to ThemeChoice.DARK,
-                    "Светлая" to ThemeChoice.LIGHT,
-                ),
-                selected = theme,
-                onPick = onTheme,
-            )
-            // «Vice» живёт до срока: после него плашки нет, а «Стекло» снова по своему флагу. Пока
-            // «Vice» включён, плашка «Стекла» скрыта — оно в это время не применяется.
-            if (viceOffered(ru.whensclass.widget.collegeToday())) ViceToggle(vice, onVice)
-            if (!vice) GlassToggle(glow, onGlow)
-            SwitchRow(
-                "Компактный вид",
-                checked = compactView(compact, LocalConfiguration.current.screenWidthDp / LocalDensity.current.fontScale),
-                onCheckedChange = onCompact,
-                hint = "Время пары — одной строкой, кабинет и преподаватель — в одну, отступы меньше. " +
-                    "На экране уже 360 dp включается сам.",
-            )
-            SwitchRow(
-                "Второй ряд вкладок остаётся на месте",
-                checked = rowStays,
-                onCheckedChange = onRowStays,
-                hint = "Стоят, пока листаете расписание. В альбомной уезжают.",
+            // Группа из таблицы: не нашлась, переименовали — здесь и выбирают заново.
+            ActionButton(
+                label = if (teacherMode) "Выбрать заново" else "Сменить",
+                onClick = onChangeGroup,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
 
