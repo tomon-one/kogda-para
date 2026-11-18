@@ -27,8 +27,9 @@ import ru.whensclass.notify.Notifications
 
 /**
  * Проверка и установка обновлений. Проверка и загрузка автоматические, установка по кнопке сессией
- * установщика Android: она возвращает итог, неудача видна в настройках. На Android 12+ своё
- * обновление ставится без окна (USER_ACTION_NOT_REQUIRED).
+ * установщика Android: она возвращает итог, неудача видна в настройках. Установку человек
+ * подтверждает в системном окне (USER_ACTION_REQUIRED): приложение, которое ставит файлы само,
+ * Play Protect принимает за дроппер.
  */
 class AppUpdate(private val context: Context, private val api: ScheduleApi) {
 
@@ -225,7 +226,7 @@ class AppUpdate(private val context: Context, private val api: ScheduleApi) {
             setAppPackageName(context.packageName)
             setSize(ready.file.length())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
             }
         }
         val id = installer.createSession(params)
