@@ -111,8 +111,11 @@ fun MinimalSwitch(
     )
     val trackOn = MaterialTheme.colorScheme.primary
     val trackOff = MaterialTheme.colorScheme.surfaceVariant
-    // Белый в обеих темах: чёрный onPrimary тёмной темы на треке читался дыркой.
-    val thumbOn = Color.White
+    // Рамка держит форму дорожки там, где её заливка почти совпадает с карточкой: «Стекло»,
+    // тёмная тема и «Vice».
+    val edge = MaterialTheme.colorScheme.outlineVariant
+    // Кружок выключенного читается на любой карточке; включённого — цветом текста на primary.
+    val thumbOn = MaterialTheme.colorScheme.onPrimary
     val thumbOff = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
@@ -124,6 +127,13 @@ fun MinimalSwitch(
                 val corner = CornerRadius(8.dp.toPx())
                 drawRoundRect(color = trackOff, cornerRadius = corner)
                 drawRoundRect(color = trackOn, cornerRadius = corner, alpha = progress)
+                // У включённого дорожку обводит сам primary, рамка ей не нужна.
+                drawRoundRect(
+                    color = edge,
+                    cornerRadius = corner,
+                    alpha = 1f - progress,
+                    style = Stroke(width = 1.dp.toPx()),
+                )
             }
             .then(
                 if (onCheckedChange == null) Modifier

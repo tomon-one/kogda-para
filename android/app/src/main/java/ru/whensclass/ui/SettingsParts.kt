@@ -63,14 +63,13 @@ internal fun Link(text: String, url: String) {
 /** Самый широкий значок группы у названия в разделе «Группа». */
 internal val MARK_IN_ROW = 88.dp
 
-/** Строка группы в разделе «Группа»: название, пометка и одна кнопка. */
+/** Строка группы в разделе «Группа»: название, значок и одна кнопка. */
 @Composable
 internal fun GroupRow(
     name: String,
     action: String,
     onAction: () -> Unit,
     mark: String? = null,
-    note: String? = null,
     /** Ширина слота под значок: одна на все строки, чтобы названия не плавали. */
     slot: Dp = 0.dp,
 ) {
@@ -88,13 +87,6 @@ internal fun GroupRow(
         }
         Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
             Text(name, style = MaterialTheme.typography.bodyLarge)
-            if (note != null) {
-                Text(
-                    note,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
         ActionButton(
             label = action,

@@ -41,7 +41,6 @@ private data class GroupLine(
     val action: String,
     val onAction: () -> Unit,
     val mark: String? = null,
-    val note: String? = null,
 )
 
 /** Раздел «Группы и подгруппы» или «Преподаватель»: своя, другие группы и подгруппы. */
@@ -135,7 +134,6 @@ internal fun GroupSection(
                         GroupLine(
                             id = group.id,
                             name = group.name,
-                            note = "подгруппа вашей группы",
                             action = "Добавить",
                             onAction = { onAddSubgroup(group) },
                         ),
@@ -148,7 +146,6 @@ internal fun GroupSection(
                         GroupRow(
                             name = line.name,
                             mark = line.mark,
-                            note = line.note,
                             action = line.action,
                             onAction = line.onAction,
                             slot = markSlot,

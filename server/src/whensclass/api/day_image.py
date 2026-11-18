@@ -42,7 +42,7 @@ STATES = {
 
 # Версия вида картинки: меняется раскладка — подними, иначе на диске останутся
 # старые файлы с тем же ключом (группа, день, поколение снимка).
-RENDER_VERSION = 3
+RENDER_VERSION = 4
 
 MAX_CARDS = 6
 TIME_LINE = 44
@@ -69,7 +69,7 @@ FONT_PAIRS = BUNDLED + (
      "/usr/share/fonts/adwaita-sans-fonts/AdwaitaSans-Regular.ttf"),
 )
 
-PROFILES = ((22, 10), (16, 6))   # (отступ в карточке, зазор между строками)
+PROFILES = ((24, 16), (18, 10))   # (отступ в карточке, зазор между строками)
 
 
 class NoFont(Exception):
@@ -310,17 +310,12 @@ def render(payload: dict, day: dt.date) -> bytes:
     else:
         parts, pad, gap = _card_plan(draw, lessons[:MAX_CARDS], bells, inner,
                                      bottom - top)
-        # Пустое место внизу растягиваем между карточками, но не в дыры: на четыре
-        # пары иначе под ними остаётся полкадра чёрного.
-        step = gap
-        if len(parts) > 1:
-            spare = bottom - top - sum(_height(item, pad, gap) for item in parts) - gap * (len(parts) - 1)
-            step = gap + max(0, min(spare // (len(parts) - 1), 40))
-        # Карточки идут сразу под шапкой: пустое место внизу честнее дыры посреди кадра.
+        # Карточки идут сразу под шапкой с ровным небольшим зазором: пустое место
+        # остаётся внизу, а не раздувает промежутки между парами.
         y = top
         for item in parts:
             _draw_card(draw, item, y, pad, gap)
-            y += _height(item, pad, gap) + step
+            y += _height(item, pad, gap) + gap
         extra = len(lessons) - MAX_CARDS
         if extra > 0:
             draw.text((left, y + 4), f"и ещё {extra}", font=_font(36), fill=QUIET)
